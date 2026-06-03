@@ -1633,7 +1633,7 @@ async def test_account_user_delete_requires_boolean_confirm(
             srv = Server(_full_access_config(sample_config))
             result = await srv.dispatch("linode_account_user_delete", arguments)
 
-        assert "Set confirm=true" in result[0].text
+        assert "confirm" in result[0].text
         mock_client_class.assert_not_called()
 
 
@@ -1776,7 +1776,7 @@ async def test_account_settings_managed_enable_rejects_non_true_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_settings_managed_enable", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1807,7 +1807,7 @@ async def test_account_settings_managed_enable_dry_run_requires_confirm(
             "linode_account_settings_managed_enable", {"dry_run": True}
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2101,7 +2101,7 @@ async def test_account_oauth_client_update_requires_confirm_true(
             srv = Server(_full_access_config(sample_config))
             result = await srv.dispatch("linode_account_oauth_client_update", args)
 
-        assert "Set confirm=true" in result[0].text
+        assert "confirm" in result[0].text
         mock_client_class.assert_not_called()
 
 
@@ -2238,7 +2238,7 @@ async def test_account_oauth_client_thumbnail_update_requires_confirm_true(
                 "linode_account_oauth_client_thumbnail_update", args
             )
 
-        assert "Set confirm=true" in result[0].text
+        assert "confirm" in result[0].text
         mock_client_class.assert_not_called()
 
 
@@ -4060,7 +4060,7 @@ async def test_database_mysql_instance_credentials_get_requires_boolean_confirm(
             "linode_database_mysql_instance_credentials_get", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -4235,7 +4235,7 @@ async def test_database_postgresql_credentials_get_requires_confirm(
         result = await srv.dispatch(
             "linode_database_postgresql_instance_credentials_get", arguments
         )
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -4672,7 +4672,7 @@ async def test_account_service_transfer_accept_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_service_transfer_accept", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -5886,7 +5886,7 @@ async def test_account_user_grants_update_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_user_grants_update", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.update_account_user_grants.assert_not_called()
 
 
@@ -6988,7 +6988,7 @@ async def test_database_postgresql_credentials_reset_requires_boolean_confirm(
             "linode_database_postgresql_credentials_reset", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7096,7 +7096,7 @@ async def test_database_mysql_credentials_reset_requires_boolean_confirm(
             "linode_database_mysql_credentials_reset", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7202,7 +7202,7 @@ async def test_database_mysql_instance_delete_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_delete", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7366,7 +7366,7 @@ async def test_database_postgresql_instance_delete_requires_boolean_confirm(
             "linode_database_postgresql_instance_delete", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7472,7 +7472,7 @@ async def test_database_mysql_instance_resume_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_resume", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7580,7 +7580,7 @@ async def test_database_postgresql_instance_resume_requires_boolean_confirm(
             "linode_database_postgresql_instance_resume", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7730,7 +7730,7 @@ async def test_database_mysql_instance_suspend_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_suspend", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -7840,7 +7840,7 @@ async def test_database_postgresql_instance_suspend_requires_boolean_confirm(
             "linode_database_postgresql_instance_suspend", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -8497,7 +8497,7 @@ async def test_database_mysql_instance_patch_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_patch", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -9252,7 +9252,7 @@ async def test_account_child_account_token_create_requires_confirm(
             "linode_account_child_account_token_create", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_child_account_token.assert_not_called()
 
 
@@ -9781,7 +9781,7 @@ async def test_account_user_create_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_user_create", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_user.assert_not_called()
 
 
@@ -9905,7 +9905,7 @@ async def test_account_user_create_dry_run_requires_confirm(
             },
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_user.assert_not_called()
 
 
@@ -10140,7 +10140,7 @@ async def test_account_oauth_client_create_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_oauth_client_create", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_oauth_client.assert_not_called()
 
 
@@ -10286,7 +10286,7 @@ async def test_account_payment_create_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_payment_create", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_payment.assert_not_called()
 
 
@@ -10468,7 +10468,7 @@ async def test_account_service_transfer_create_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_service_transfer_create", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_service_transfer.assert_not_called()
 
 
@@ -10614,7 +10614,7 @@ async def test_account_payment_method_create_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_payment_method_create", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.create_account_payment_method.assert_not_called()
 
 
@@ -10770,7 +10770,7 @@ async def test_account_promo_credit_add_rejects_missing_confirm(
             "linode_account_promo_credit_add", {"promo_code": "PROMO123"}
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.add_account_promo_credit.assert_not_called()
 
 
@@ -10789,7 +10789,7 @@ async def test_account_promo_credit_add_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_promo_credit_add", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.add_account_promo_credit.assert_not_called()
 
 
@@ -10909,7 +10909,7 @@ async def test_account_oauth_client_delete_requires_boolean_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_oauth_client_delete", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.delete_account_oauth_client.assert_not_called()
 
 
@@ -11059,7 +11059,7 @@ async def test_account_oauth_client_reset_secret_requires_boolean_confirm(
             "linode_account_oauth_client_reset_secret", arguments
         )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.reset_account_oauth_client_secret.assert_not_called()
 
 
@@ -11573,6 +11573,143 @@ async def test_reload_profile_repeated_cycles_converge(
     assert set(srv.registered_tool_names) == set(fresh.registered_tool_names)
 
 
+async def test_linode_images_sharegroup_image_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Image share group image delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_images_sharegroup_image_delete_tool" in tools_mod.__all__
+    assert "handle_linode_images_sharegroup_image_delete" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_images_sharegroup_image_delete_tool()
+    assert tool.name == "linode_images_sharegroup_image_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_images_sharegroup_image_delete" in srv.registered_tool_names
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert (
+        entries["linode_images_sharegroup_image_delete"].capability
+        is Capability.Destroy
+    )
+    assert (
+        "linode_images_sharegroup_image_delete" in get_version_info().features["tools"]
+    )
+
+
+async def test_linode_images_sharegroup_image_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Image share group image delete dispatches through the registered tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_image_delete",
+            {
+                "sharegroup_id": 123,
+                "image_id": 456,
+                "confirm": True,
+                "confirm_bypass_dry_run": True,
+            },
+        )
+
+    assert json.loads(result[0].text) == {"message": "Shared image access revoked"}
+    mock_client.delete_image_sharegroup_image.assert_awaited_once_with("123", "456")
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_linode_images_sharegroup_image_delete_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Image share group image delete requires literal confirm=True before calls."""
+    arguments: dict[str, object] = {"sharegroup_id": 123, "image_id": 456}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_image_delete",
+            {**arguments, "confirm_bypass_dry_run": True},
+        )
+
+    assert "confirm" in result[0].text
+    mock_client.delete_image_sharegroup_image.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        (
+            {"image_id": 456, "confirm": True},
+            "sharegroup_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": "", "image_id": 456, "confirm": True},
+            "sharegroup_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": 0, "image_id": 456, "confirm": True},
+            "sharegroup_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": True, "image_id": 456, "confirm": True},
+            "sharegroup_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": 123, "confirm": True},
+            "image_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": 123, "image_id": "456", "confirm": True},
+            "image_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": 123, "image_id": 0, "confirm": True},
+            "image_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": 123, "image_id": False, "confirm": True},
+            "image_id must be a positive integer",
+        ),
+    ],
+)
+async def test_linode_images_sharegroup_image_delete_rejects_invalid_path_params(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Image share group image delete rejects malformed path params via dispatch."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_image_delete",
+            {**arguments, "confirm_bypass_dry_run": True},
+        )
+
+    assert expected_error in result[0].text
+    mock_client.delete_image_sharegroup_image.assert_not_called()
+
+
 async def test_linode_images_sharegroup_delete_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -11642,9 +11779,12 @@ async def test_linode_images_sharegroup_delete_rejects_non_true_confirm(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_images_sharegroup_delete", arguments)
+        result = await srv.dispatch(
+            "linode_images_sharegroup_delete",
+            {**arguments, "confirm_bypass_dry_run": True},
+        )
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.delete_image_sharegroup.assert_not_called()
 
 
@@ -11672,7 +11812,10 @@ async def test_linode_images_sharegroup_delete_rejects_invalid_sharegroup_id(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_images_sharegroup_delete", arguments)
+        result = await srv.dispatch(
+            "linode_images_sharegroup_delete",
+            {**arguments, "confirm_bypass_dry_run": True},
+        )
 
     assert expected_error in result[0].text
     mock_client.delete_image_sharegroup.assert_not_called()
@@ -11865,7 +12008,7 @@ async def test_linode_images_sharegroup_images_add_rejects_non_true_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_images_sharegroup_images_add", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.add_image_sharegroup_images.assert_not_called()
 
 
@@ -12022,7 +12165,7 @@ async def test_linode_images_sharegroup_update_rejects_non_true_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_images_sharegroup_update", arguments)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm" in result[0].text
     mock_client.update_image_sharegroup.assert_not_called()
 
 

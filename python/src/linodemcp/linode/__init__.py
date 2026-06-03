@@ -3039,6 +3039,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateImageSharegroupImage", e) from e
 
+    async def delete_image_sharegroup_image(
+        self, sharegroup_id: str, image_id: str
+    ) -> None:
+        """Revoke access to a shared image from an image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        image_id_path = quote(str(image_id), safe="")
+        try:
+            await self.make_request(
+                "DELETE",
+                f"/images/sharegroups/{sharegroup_id_path}/images/{image_id_path}",
+            )
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteImageSharegroupImage", e) from e
+
     async def create_image_sharegroup_token(
         self, valid_for_sharegroup_uuid: str, label: str | None = None
     ) -> dict[str, Any]:
@@ -9357,6 +9371,12 @@ class RetryableClient:
         return await self.client.update_image_sharegroup_image(
             sharegroup_id, image_id, label=label, description=description
         )
+
+    async def delete_image_sharegroup_image(
+        self, sharegroup_id: str, image_id: str
+    ) -> None:
+        """Revoke image share group image access once without retry replay."""
+        await self.client.delete_image_sharegroup_image(sharegroup_id, image_id)
 
     async def create_image_sharegroup_token(
         self, valid_for_sharegroup_uuid: str, label: str | None = None

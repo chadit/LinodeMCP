@@ -281,6 +281,13 @@ def test_image_sharegroup_update_needs_images_write() -> None:
     ]
 
 
+def test_image_sharegroup_image_delete_needs_images_write() -> None:
+    """Revoking shared image access needs image write scope."""
+    assert required_scopes(
+        "linode_images_sharegroup_image_delete", Capability.Destroy
+    ) == [Scope.ImagesReadWrite]
+
+
 def test_image_sharegroup_images_add_needs_images_write() -> None:
     """Adding images to a share group needs image write scope."""
     assert required_scopes("linode_images_sharegroup_images_add", Capability.Write) == [
