@@ -130,6 +130,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_image_sharegroup_create", Capability.Write),
         ToolDescriptor("linode_images_list", Capability.Read),
         ToolDescriptor("linode_images_sharegroup_delete", Capability.Destroy),
+        ToolDescriptor("linode_images_sharegroup_image_delete", Capability.Destroy),
         ToolDescriptor("linode_images_sharegroup_images_add", Capability.Write),
         ToolDescriptor("linode_images_sharegroup_images_list", Capability.Read),
         ToolDescriptor("linode_images_sharegroups_list", Capability.Read),

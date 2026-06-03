@@ -230,6 +230,45 @@ def create_linode_images_sharegroup_images_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_image_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_image_delete tool."""
+    # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
+    # unlike neighboring membership/token routes that use UUIDs.
+    return Tool(
+        name="linode_images_sharegroup_image_delete",
+        description="Revokes access to one shared image from an image share group.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group numeric ID (required)",
+                },
+                "image_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Shared image numeric ID, for example 1234 (required)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["sharegroup_id", "image_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_images_sharegroup_image_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_image_update tool."""
     # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
@@ -1035,6 +1074,52 @@ async def handle_linode_images_sharegroup_images_list(
         }
 
     return await execute_tool(cfg, arguments, "list image share group images", _call)
+
+
+async def handle_linode_images_sharegroup_image_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_image_delete tool request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
+    if sharegroup_error is not None:
+        return error_response(sharegroup_error)
+
+    image_id = arguments.get("image_id")
+    image_error = _image_sharegroup_image_id_error(image_id)
+    if image_error is not None:
+        return error_response(image_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes shared image access. Set confirm=true to proceed."
+        )
+
+    sharegroup_id_str = str(cast("int", sharegroup_id))
+    image_id_str = str(cast("int", image_id))
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_images_sharegroup_image_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            (
+                f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}"
+                f"/images/{quote(image_id_str, safe='')}"
+            ),
+            current_state=None,
+            side_effects=[
+                "The shared image will be removed from the image share group."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image_sharegroup_image(sharegroup_id_str, image_id_str)
+        return {"message": "Shared image access revoked"}
+
+    return await execute_tool(
+        cfg, arguments, "revoke image share group image access", _call
+    )
 
 
 async def handle_linode_images_sharegroup_image_update(
