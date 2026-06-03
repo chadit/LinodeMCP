@@ -2914,6 +2914,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateImageSharegroupToken", e) from e
 
+    async def delete_image_sharegroup_token(self, token_uuid: str) -> None:
+        """Delete an image share group token."""
+        token_uuid_path = quote(token_uuid, safe="")
+        try:
+            await self.make_request(
+                "DELETE", f"/images/sharegroups/tokens/{token_uuid_path}"
+            )
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteImageSharegroupToken", e) from e
+
     async def create_image(
         self,
         disk_id: int,
@@ -9126,6 +9136,10 @@ class RetryableClient:
         return await self.client.update_image_sharegroup_token(
             token_uuid=token_uuid, label=label
         )
+
+    async def delete_image_sharegroup_token(self, token_uuid: str) -> None:
+        """Delete an image share group token without retry replay."""
+        await self.client.delete_image_sharegroup_token(token_uuid=token_uuid)
 
     async def create_image(
         self,

@@ -14,10 +14,12 @@ from linodemcp.profiles import Capability, Scope, required_scopes
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_list_tool,
+    create_linode_images_sharegroups_token_delete_tool,
     create_linode_images_sharegroups_token_get_tool,
     create_linode_images_sharegroups_token_update_tool,
     create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_images_sharegroups_list,
+    handle_linode_images_sharegroups_token_delete,
     handle_linode_images_sharegroups_token_get,
     handle_linode_images_sharegroups_token_update,
     handle_linode_images_sharegroups_tokens_list,
@@ -689,6 +691,216 @@ def test_linode_images_sharegroups_token_update_scopes_to_images_write() -> None
 def test_linode_images_sharegroups_token_update_in_version_features() -> None:
     """Version metadata advertises the token update tool."""
     assert "linode_images_sharegroups_token_update" in FEATURE_TOOLS_LIST.split(",")
+
+
+@pytest.mark.asyncio
+async def test_client_delete_image_sharegroup_token_sends_exact_path() -> None:
+    """Low-level client sends DELETE /images/sharegroups/tokens/{tokenUuid}."""
+    seen: list[httpx.Request] = []
+    token_uuid = "11111111-1111-4111-8111-111111111111"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        await client.delete_image_sharegroup_token(token_uuid=token_uuid)
+    finally:
+        await client.close()
+
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "DELETE"
+    assert request.url.path == f"/v4/images/sharegroups/tokens/{token_uuid}"
+    assert request.url.query == b""
+    assert (await request.aread()) == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+
+
+@pytest.mark.asyncio
+async def test_client_delete_image_sharegroup_token_encodes_path_param() -> None:
+    """Low-level client URL-encodes token_uuid at the path boundary."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        await client.delete_image_sharegroup_token(token_uuid="token/with?separator")
+    finally:
+        await client.close()
+
+    assert seen[0].url.raw_path == (
+        b"/v4/images/sharegroups/tokens/token%2Fwith%3Fseparator"
+    )
+
+
+@pytest.mark.asyncio
+async def test_retryable_client_delete_image_sharegroup_token_delegates_once() -> None:
+    """Retryable delete wrapper should not replay deletes after errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_delete = AsyncMock(side_effect=httpx.HTTPError("temporary"))
+    cast("Any", retryable.client).delete_image_sharegroup_token = mock_delete
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.delete_image_sharegroup_token(
+                token_uuid="11111111-1111-4111-8111-111111111111"
+            )
+    finally:
+        await retryable.close()
+
+    mock_delete.assert_awaited_once_with(
+        token_uuid="11111111-1111-4111-8111-111111111111"
+    )
+
+
+def test_create_linode_images_sharegroups_token_delete_tool_schema() -> None:
+    """Tool schema requires token UUID and confirm."""
+    tool, capability = create_linode_images_sharegroups_token_delete_tool()
+
+    assert tool.name == "linode_images_sharegroups_token_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["token_uuid", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroups_token_delete_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler deletes a token through the client."""
+    token_uuid = "11111111-1111-4111-8111-111111111111"
+
+    result = await handle_linode_images_sharegroups_token_delete(
+        {"token_uuid": f" {token_uuid} ", "confirm": True}, sample_config
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {"message": "Image share group token deleted"}
+    mock_linode_client.delete_image_sharegroup_token.assert_awaited_once_with(
+        token_uuid=token_uuid
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_handle_linode_images_sharegroups_token_delete_requires_true_confirm(
+    bad_confirm: object, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects non-true confirm values before the client call."""
+    arguments: dict[str, Any] = {
+        "token_uuid": "11111111-1111-4111-8111-111111111111",
+    }
+    if bad_confirm is not None:
+        arguments["confirm"] = bad_confirm
+
+    result = await handle_linode_images_sharegroups_token_delete(
+        arguments, sample_config
+    )
+
+    assert result[0].text.startswith("Error: ")
+    assert "confirm=true" in result[0].text
+    mock_linode_client.delete_image_sharegroup_token.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_uuid",
+    [
+        {},
+        {"token_uuid": ""},
+        {"token_uuid": "not-a-uuid"},
+        {"token_uuid": "11111111/1111-4111-8111-111111111111"},
+        {"token_uuid": "11111111?1111-4111-8111-111111111111"},
+        {"token_uuid": ".."},
+        {"token_uuid": 123},
+    ],
+)
+async def test_handle_linode_images_sharegroups_token_delete_rejects_invalid_token_uuid(
+    bad_uuid: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects malformed token UUIDs before the client call."""
+    arguments = {"confirm": True, **bad_uuid}
+
+    result = await handle_linode_images_sharegroups_token_delete(
+        arguments, sample_config
+    )
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.delete_image_sharegroup_token.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_image_sharegroup_token_delete_dry_run_requires_confirm(
+    sample_config: Any,
+) -> None:
+    """Dry-run still requires confirm because the tool schema requires it."""
+    result = await handle_linode_images_sharegroups_token_delete(
+        {
+            "token_uuid": "11111111-1111-4111-8111-111111111111",
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert "confirm=true" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_image_sharegroup_token_delete_dry_run_returns_encoded_preview(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """dry_run=true previews token delete without calling the client."""
+    token_uuid = "11111111-1111-4111-8111-111111111111"
+
+    result = await handle_linode_images_sharegroups_token_delete(
+        {
+            "token_uuid": token_uuid,
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_images_sharegroups_token_delete"
+    assert body["would_execute"]["method"] == "DELETE"
+    assert body["would_execute"]["path"] == f"/images/sharegroups/tokens/{token_uuid}"
+    mock_linode_client.delete_image_sharegroup_token.assert_not_called()
+
+
+def test_linode_images_sharegroups_token_delete_registered() -> None:
+    """Dynamic registry exports the token delete tool and handler pair."""
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_images_sharegroups_token_delete"]
+    assert entry.capability is Capability.Destroy
+    assert entry.tool.name == "linode_images_sharegroups_token_delete"
+    assert entry.handle_fn is handle_linode_images_sharegroups_token_delete
+
+
+def test_linode_images_sharegroups_token_delete_scopes_to_images_write() -> None:
+    """Profile scope mapping keeps the route in the Images write category."""
+    scopes = required_scopes(
+        "linode_images_sharegroups_token_delete", Capability.Destroy
+    )
+
+    assert scopes == [Scope.ImagesReadWrite]
+
+
+def test_linode_images_sharegroups_token_delete_in_version_features() -> None:
+    """Version metadata advertises the token delete tool."""
+    assert "linode_images_sharegroups_token_delete" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
