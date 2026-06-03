@@ -201,6 +201,35 @@ def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_images_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_images_list tool."""
+    return Tool(
+        name="linode_images_sharegroup_images_list",
+        description="Lists images available in an image share group by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "string",
+                    "pattern": (
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
+                        "[0-9a-fA-F]{12}$"
+                    ),
+                    "description": "Image share group UUID (required)",
+                },
+            },
+            "required": ["sharegroup_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_images_sharegroup_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_update tool."""
     return Tool(
@@ -846,6 +875,32 @@ async def handle_linode_images_sharegroup_get(
         }
 
     return await execute_tool(cfg, arguments, "get image share group", _call)
+
+
+async def handle_linode_images_sharegroup_images_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_images_list request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    sharegroup_id_str = cast("str", sharegroup_id).strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_image_sharegroup_images(sharegroup_id_str)
+        images = data.get("data", [])
+        return {
+            "message": "Image share group images retrieved",
+            "count": len(images),
+            "images": images,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list image share group images", _call)
 
 
 async def handle_linode_images_sharegroup_update(
