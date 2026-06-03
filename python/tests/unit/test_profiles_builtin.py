@@ -132,6 +132,9 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_images_sharegroups_token_create", Capability.Write),
         ToolDescriptor("linode_images_sharegroups_token_delete", Capability.Destroy),
         ToolDescriptor("linode_images_sharegroups_token_get", Capability.Read),
+        ToolDescriptor(
+            "linode_images_sharegroups_token_sharegroup_get", Capability.Read
+        ),
         ToolDescriptor("linode_images_sharegroups_token_update", Capability.Write),
         ToolDescriptor("linode_images_sharegroups_tokens_list", Capability.Read),
         ToolDescriptor("linode_stackscripts_list", Capability.Read),
