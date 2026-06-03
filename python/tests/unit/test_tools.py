@@ -193,6 +193,7 @@ from linodemcp.tools import (
     handle_linode_account_tag_objects_list,
     handle_linode_account_tags_list,
     handle_linode_account_update,
+    handle_linode_domain_clone,
     handle_linode_domain_create,
     handle_linode_domain_delete,
     handle_linode_domain_get,
@@ -6756,6 +6757,110 @@ async def test_handle_linode_firewall_settings_update_invalid_default_ids(
 
     assert len(result) == 1
     assert "default_firewall_ids must be" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_domain_clone(sample_config: Config) -> None:
+    """Test linode_domain_clone tool."""
+    mock_domain = Domain(
+        id=23456,
+        domain="clone.example.com",
+        type="master",
+        status="active",
+        soa_email="admin@example.com",
+        description="",
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.clone_domain.return_value = mock_domain
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_clone(
+            {"domain_id": 12345, "domain": "clone.example.com", "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "clone.example.com" in result[0].text
+    mock_client.clone_domain.assert_awaited_once_with(
+        domain_id=12345, domain="clone.example.com"
+    )
+
+
+async def test_domain_clone_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the clone and does not call the client."""
+    result = await handle_linode_domain_clone(
+        {
+            "domain_id": 12345,
+            "domain": "clone.example.com",
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_domain_clone"
+    assert body["would_execute"] == {
+        "method": "POST",
+        "path": "/domains/12345/clone",
+        "body": {"domain": "clone.example.com"},
+    }
+    assert any("clone.example.com" in s for s in body["side_effects"])
+
+
+async def test_domain_clone_requires_literal_confirm(
+    sample_config: Config,
+) -> None:
+    """Clone rejects missing, false, string, and numeric confirm values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        for confirm in (None, False, "true", 1):
+            args: dict[str, Any] = {
+                "domain_id": 12345,
+                "domain": "clone.example.com",
+            }
+            if confirm is not None:
+                args["confirm"] = confirm
+            result = await handle_linode_domain_clone(args, sample_config)
+            assert "Set confirm=true" in result[0].text
+
+    mock_client_class.assert_not_called()
+
+
+async def test_domain_clone_validates_required_arguments(
+    sample_config: Config,
+) -> None:
+    """Clone validates required route/body arguments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_domain_clone(
+            {"domain": "clone.example.com", "confirm": True}, sample_config
+        )
+        assert "domain_id must be a positive integer" in result[0].text
+
+        result = await handle_linode_domain_clone(
+            {"domain_id": 12345, "confirm": True}, sample_config
+        )
+        assert "domain is required" in result[0].text
+
+        for value in ("123/456", "123?x=1", "..", True, 0):
+            result = await handle_linode_domain_clone(
+                {
+                    "domain_id": value,
+                    "domain": "clone.example.com",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+            assert "domain_id must be a positive integer" in result[0].text
+
     mock_client_class.assert_not_called()
 
 

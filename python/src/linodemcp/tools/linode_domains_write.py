@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 import httpx
 from mcp.types import TextContent, Tool
@@ -118,6 +119,98 @@ async def handle_linode_domain_import(
         }
 
     return await execute_tool(cfg, arguments, "import domain", _call)
+
+
+def _domain_id_argument(arguments: dict[str, Any]) -> int | None:
+    value = arguments.get("domain_id")
+    if type(value) is not int or value <= 0:
+        return None
+    return value
+
+
+def create_linode_domain_clone_tool() -> tuple[Tool, Capability]:
+    """Create the linode_domain_clone tool."""
+    return Tool(
+        name="linode_domain_clone",
+        description=(
+            "Clones an existing DNS domain. Pass dry_run=true with confirm=true "
+            "to preview without cloning."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the source domain to clone (required)",
+                },
+                "domain": {
+                    "type": "string",
+                    "description": (
+                        "The new domain name for the cloned domain (required)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["domain_id", "domain", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_domain_clone(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_clone tool request."""
+    domain_id = _domain_id_argument(arguments)
+    domain_name = _required_string_argument(arguments, "domain")
+
+    if domain_id is None:
+        return error_response("domain_id must be a positive integer")
+    if domain_name is None:
+        return error_response("domain is required")
+    try:
+        validate_label(domain_name)
+    except ValueError as exc:
+        return error_response(str(exc))
+    if arguments.get("confirm") is not True:
+        return error_response("This clones a DNS domain. Set confirm=true to proceed.")
+
+    request_body = {"domain": domain_name}
+    encoded_domain_id = quote(str(domain_id), safe="")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_domain_clone",
+            arguments.get("environment", ""),
+            "POST",
+            f"/domains/{encoded_domain_id}/clone",
+            None,
+            request_body=request_body,
+            side_effects=[
+                f"DNS domain ID {domain_id} will be cloned to {domain_name!r}."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        domain = await client.clone_domain(domain_id=domain_id, domain=domain_name)
+        return {
+            "message": (
+                f"Domain '{domain.domain}' (ID: {domain.id}) cloned successfully"
+            ),
+            "domain": {
+                "id": domain.id,
+                "domain": domain.domain,
+                "type": domain.type,
+                "status": domain.status,
+                "created": domain.created,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "clone domain", _call)
 
 
 def create_linode_domain_create_tool() -> tuple[Tool, Capability]:

@@ -249,10 +249,12 @@ from linodemcp.tools.linode_domains import (
     handle_linode_domains_list,
 )
 from linodemcp.tools.linode_domains_write import (
+    create_linode_domain_clone_tool,
     create_linode_domain_create_tool,
     create_linode_domain_delete_tool,
     create_linode_domain_import_tool,
     create_linode_domain_update_tool,
+    handle_linode_domain_clone,
     handle_linode_domain_create,
     handle_linode_domain_delete,
     handle_linode_domain_import,
@@ -887,6 +889,7 @@ __all__ = [
     "create_linode_database_type_get_tool",
     "create_linode_databases_engines_list_tool",
     "create_linode_databases_types_list_tool",
+    "create_linode_domain_clone_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
     "create_linode_domain_get_tool",
@@ -1231,6 +1234,7 @@ __all__ = [
     "handle_linode_database_type_get",
     "handle_linode_databases_engines_list",
     "handle_linode_databases_types_list",
+    "handle_linode_domain_clone",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",
     "handle_linode_domain_get",

@@ -3175,6 +3175,67 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_clone_domain_sends_exact_route_and_body() -> None:
+    """Domain clone sends POST /domains/{domainId}/clone."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "id": 23456,
+        "domain": "clone.example.com",
+        "type": "master",
+        "status": "active",
+        "soa_email": "admin@example.com",
+        "description": "",
+        "tags": [],
+        "created": "2024-01-15T10:00:00",
+        "updated": "2024-01-15T10:00:00",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        domain = await client.clone_domain("123/456", "clone.example.com")
+
+    assert domain.id == 23456
+    assert domain.domain == "clone.example.com"
+    mock_request.assert_called_once_with(
+        "POST", "/domains/123%2F456/clone", {"domain": "clone.example.com"}
+    )
+    await client.close()
+
+
+async def test_clone_domain_wraps_http_errors() -> None:
+    """Domain clone wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.clone_domain(12345, "clone.example.com")
+
+    assert "CloneDomain" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_clone_domain_delegates_once_without_retry() -> None:
+    """RetryableClient does not replay domain clone on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "clone_domain", new_callable=AsyncMock
+    ) as mock_clone:
+        mock_clone.side_effect = httpx.HTTPError("temporary")
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.clone_domain(12345, "clone.example.com")
+
+    mock_clone.assert_awaited_once_with(12345, "clone.example.com")
+    await retryable.close()
+
+
 async def test_list_account_betas_sends_get_to_account_betas_route() -> None:
     """Test listing account betas sends GET /account/betas."""
     client = Client("https://api.linode.com/v4", "test-token")
