@@ -102,6 +102,30 @@ def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_get tool."""
+    return Tool(
+        name="linode_images_sharegroup_get",
+        description="Gets a single image share group by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "string",
+                    "description": "Image share group UUID (required)",
+                },
+            },
+            "required": ["sharegroup_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_token_delete tool."""
     return Tool(
@@ -513,6 +537,11 @@ def _image_sharegroup_token_uuid_error(value: Any, name: str) -> str | None:
     return None
 
 
+def _image_sharegroup_id_error(value: Any) -> str | None:
+    """Validate a sharegroup_id arg."""
+    return _image_sharegroup_token_uuid_error(value, "sharegroup_id")
+
+
 def _image_sharegroup_token_create_uuid_error(value: Any) -> str | None:
     """Validate the valid_for_sharegroup_uuid arg."""
     return _image_sharegroup_token_uuid_error(value, "valid_for_sharegroup_uuid")
@@ -532,6 +561,27 @@ def _image_sharegroup_token_update_label_error(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return "label must be a non-empty string"
     return None
+
+
+async def handle_linode_images_sharegroup_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_get tool request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    sharegroup_id_str = cast("str", sharegroup_id).strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        sharegroup = await client.get_image_sharegroup(sharegroup_id_str)
+        return {
+            "message": "Image share group retrieved",
+            "sharegroup": sharegroup,
+        }
+
+    return await execute_tool(cfg, arguments, "get image share group", _call)
 
 
 async def handle_linode_images_sharegroups_token_get(

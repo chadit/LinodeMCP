@@ -11532,6 +11532,85 @@ async def test_reload_profile_repeated_cycles_converge(
     assert set(srv.registered_tool_names) == set(fresh.registered_tool_names)
 
 
+async def test_linode_images_sharegroup_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Image share group get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_images_sharegroup_get_tool" in tools_mod.__all__
+    assert "handle_linode_images_sharegroup_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_images_sharegroup_get_tool()
+    assert tool.name == "linode_images_sharegroup_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["sharegroup_id"]
+
+    srv = Server(sample_config)
+    assert "linode_images_sharegroup_get" in srv.registered_tool_names
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert entries["linode_images_sharegroup_get"].capability is Capability.Read
+    assert "linode_images_sharegroup_get" in get_version_info().features["tools"]
+
+
+async def test_linode_images_sharegroup_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Image share group get dispatches through the registered tool."""
+    response_data = {"id": "11111111-1111-4111-8111-111111111111"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_image_sharegroup.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_images_sharegroup_get",
+            {"sharegroup_id": "11111111-1111-4111-8111-111111111111"},
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Image share group retrieved",
+        "sharegroup": response_data,
+    }
+    mock_client.get_image_sharegroup.assert_awaited_once_with(
+        "11111111-1111-4111-8111-111111111111"
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "sharegroup_id must be a non-empty string"),
+        ({"sharegroup_id": ""}, "sharegroup_id must be a non-empty string"),
+        ({"sharegroup_id": 123}, "sharegroup_id must be a non-empty string"),
+        ({"sharegroup_id": "12/34"}, "sharegroup_id must be a valid UUID"),
+        ({"sharegroup_id": "12?x=y"}, "sharegroup_id must be a valid UUID"),
+        ({"sharegroup_id": ".."}, "sharegroup_id must be a valid UUID"),
+    ],
+)
+async def test_linode_images_sharegroup_get_rejects_invalid_sharegroup_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Image share group get rejects malformed path params before calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_images_sharegroup_get", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.get_image_sharegroup.assert_not_called()
+
+
 def test_linode_images_sharegroups_token_create_registered() -> None:
     """Image share group token create tool should be registered from exports."""
     from linodemcp.server import get_tool_registry

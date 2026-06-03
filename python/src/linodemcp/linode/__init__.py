@@ -2861,6 +2861,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroups", e) from e
 
+    async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
+        """Get a single image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        try:
+            response = await self.make_request(
+                "GET", f"/images/sharegroups/{sharegroup_id_path}"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetImageSharegroup", e) from e
+
     async def list_image_sharegroup_tokens(self) -> dict[str, Any]:
         """List image share group tokens for the user."""
         try:
@@ -9131,6 +9143,13 @@ class RetryableClient:
         """List image share groups with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_image_sharegroups(page=page, page_size=page_size)
+        )
+        return result
+
+    async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
+        """Get a single image share group with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.get_image_sharegroup(sharegroup_id)
         )
         return result
 

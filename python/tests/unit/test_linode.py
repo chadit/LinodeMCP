@@ -9696,6 +9696,82 @@ async def test_create_stackscript() -> None:
     await client.close()
 
 
+async def test_get_image_sharegroup_sends_get_to_encoded_path() -> None:
+    """Image share group get should issue GET to the encoded share group path."""
+    response_data = {"id": "11111111-1111-4111-8111-111111111111"}
+    response = MagicMock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_image_sharegroup(
+            "11111111-1111-4111-8111-111111111111"
+        )
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "GET", "/images/sharegroups/11111111-1111-4111-8111-111111111111"
+    )
+    await client.close()
+
+
+async def test_get_image_sharegroup_encodes_path_segment() -> None:
+    """Image share group get should encode separator characters."""
+    response = MagicMock()
+    response.json.return_value = {}
+    client = Client("https://api.linode.test/v4", "token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.get_image_sharegroup("12/../?x=1")
+
+    mock_request.assert_awaited_once_with(
+        "GET", "/images/sharegroups/12%2F..%2F%3Fx%3D1"
+    )
+    await client.close()
+
+
+async def test_get_image_sharegroup_wraps_http_errors() -> None:
+    """Image share group get should map HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_image_sharegroup("11111111-1111-4111-8111-111111111111")
+
+    assert "GetImageSharegroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_get_image_sharegroup_uses_retry_wrapper() -> None:
+    """Read-only image share group get delegates through retry."""
+    response_data = {"id": "11111111-1111-4111-8111-111111111111"}
+    retry_client = RetryableClient.__new__(RetryableClient)
+    retry_client.client = MagicMock()
+    retry_client.client.get_image_sharegroup = AsyncMock(return_value=response_data)
+
+    async def _execute(call: Any) -> Any:
+        return await call()
+
+    with patch.object(
+        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
+    ) as execute_with_retry:
+        result = await retry_client.get_image_sharegroup(
+            "11111111-1111-4111-8111-111111111111"
+        )
+
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.get_image_sharegroup.assert_awaited_once_with(
+        "11111111-1111-4111-8111-111111111111"
+    )
+
+
 async def test_create_image_sharegroup_token_sends_post_body() -> None:
     """Image share group token create should POST the documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
