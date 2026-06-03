@@ -44,6 +44,7 @@ def test_meta_returns_empty() -> None:
             [Scope.DatabasesReadOnly],
         ),
         ("linode_domain_delete", Capability.Destroy, [Scope.DomainsReadWrite]),
+        ("linode_domain_import", Capability.Write, [Scope.DomainsReadWrite]),
         ("linode_lke_cluster_regenerate", Capability.Write, [Scope.LKEReadWrite]),
         (
             "linode_object_storage_bucket_create",

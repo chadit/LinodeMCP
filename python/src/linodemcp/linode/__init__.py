@@ -5940,6 +5940,41 @@ class Client:
             logger.exception("HTTP error creating domain: %s", e)
             raise NetworkError("CreateDomain", e) from e
 
+    async def import_domain(self, domain: str, remote_nameserver: str) -> Domain:
+        """Import a domain from a remote nameserver."""
+        if not domain or domain != domain.strip():
+            msg = "domain is required"
+            raise ValueError(msg)
+        validate_label(domain)
+        if not remote_nameserver or remote_nameserver != remote_nameserver.strip():
+            msg = "remote_nameserver is required"
+            raise ValueError(msg)
+
+        logger.info("Importing domain", extra={"domain": domain})
+
+        try:
+            body: dict[str, Any] = {
+                "domain": domain,
+                "remote_nameserver": remote_nameserver,
+            }
+            response = await self.make_request("POST", "/domains/import", body)
+            data = response.json()
+            result = self._parse_domain(data)
+            logger.info("Domain imported", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout importing domain: %s", e)
+            raise NetworkError("ImportDomain", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout importing domain: %s", e)
+            raise NetworkError("ImportDomain", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error importing domain")
+            raise NetworkError("ImportDomain", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error importing domain: %s", e)
+            raise NetworkError("ImportDomain", e) from e
+
     async def update_domain(
         self,
         domain_id: int,
@@ -10230,6 +10265,10 @@ class RetryableClient:
             self.client.create_domain, domain, domain_type, soa_email, description, tags
         )
         return result
+
+    async def import_domain(self, domain: str, remote_nameserver: str) -> Domain:
+        """Import domain without replaying the POST."""
+        return await self.client.import_domain(domain, remote_nameserver)
 
     async def update_domain(
         self,

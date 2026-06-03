@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, validate_label
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -22,6 +22,102 @@ from linodemcp.tools.helpers import (
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+def _required_string_argument(arguments: dict[str, Any], name: str) -> str | None:
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        return None
+    return value
+
+
+def create_linode_domain_import_tool() -> tuple[Tool, Capability]:
+    """Create the linode_domain_import tool."""
+    return Tool(
+        name="linode_domain_import",
+        description=(
+            "Imports a DNS domain from a remote nameserver. Pass dry_run=true "
+            "with confirm=true to preview without importing."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "domain": {
+                    "type": "string",
+                    "description": "The domain name to import (required)",
+                },
+                "remote_nameserver": {
+                    "type": "string",
+                    "description": "The remote nameserver to import from (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["domain", "remote_nameserver", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_domain_import(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_import tool request."""
+    domain_name = _required_string_argument(arguments, "domain")
+    remote_nameserver = _required_string_argument(arguments, "remote_nameserver")
+
+    if domain_name is None:
+        return error_response("domain is required")
+    if remote_nameserver is None:
+        return error_response("remote_nameserver is required")
+    try:
+        validate_label(domain_name)
+    except ValueError as exc:
+        return error_response(str(exc))
+    if arguments.get("confirm") is not True:
+        return error_response("This imports a DNS domain. Set confirm=true to proceed.")
+
+    request_body = {
+        "domain": domain_name,
+        "remote_nameserver": remote_nameserver,
+    }
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_domain_import",
+            arguments.get("environment", ""),
+            "POST",
+            "/domains/import",
+            None,
+            request_body=request_body,
+            side_effects=[
+                f"DNS domain {domain_name!r} will be imported from "
+                f"{remote_nameserver!r}."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        domain = await client.import_domain(
+            domain=domain_name,
+            remote_nameserver=remote_nameserver,
+        )
+        return {
+            "message": (
+                f"Domain '{domain.domain}' (ID: {domain.id}) imported successfully"
+            ),
+            "domain": {
+                "id": domain.id,
+                "domain": domain.domain,
+                "type": domain.type,
+                "status": domain.status,
+                "created": domain.created,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "import domain", _call)
 
 
 def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
