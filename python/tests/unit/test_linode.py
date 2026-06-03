@@ -14,6 +14,7 @@ from linodemcp.linode import (
     CircuitBreaker,
     CircuitOpenError,
     Client,
+    DomainZoneFile,
     Firewall,
     FirewallAddresses,
     FirewallRule,
@@ -6989,6 +6990,67 @@ async def test_get_domain() -> None:
         assert domain.domain == "example.com"
 
     await client.close()
+
+
+async def test_get_domain_zone_file() -> None:
+    """Test getting a domain zone file."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"zone_file": ["$ORIGIN example.com."]}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        zone_file = await client.get_domain_zone_file(1)
+
+    assert zone_file == DomainZoneFile(zone_file=["$ORIGIN example.com."])
+    mock_request.assert_awaited_once_with("GET", "/domains/1/zone-file")
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("domain_id", "message"),
+    [
+        (0, "domain_id must be a positive integer"),
+        (-1, "domain_id must be a positive integer"),
+        (True, "domain_id must be a positive integer"),
+        ("1/2", "domain_id must be a positive integer"),
+        ("1?x=y", "domain_id must be a positive integer"),
+        ("..", "domain_id must be a positive integer"),
+    ],
+)
+async def test_get_domain_zone_file_rejects_invalid_domain_id(
+    domain_id: Any, message: str
+) -> None:
+    """Domain zone file client rejects invalid path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match=message),
+    ):
+        await client.get_domain_zone_file(domain_id)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_get_domain_zone_file_uses_retry() -> None:
+    """RetryableClient wraps domain zone file retrieval in retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable, "_execute_with_retry", new_callable=AsyncMock
+    ) as mock_retry:
+        mock_retry.return_value = DomainZoneFile(zone_file=["$ORIGIN example.com."])
+
+        result = await retryable.get_domain_zone_file(1)
+
+    assert result == DomainZoneFile(zone_file=["$ORIGIN example.com."])
+    mock_retry.assert_awaited_once_with(retryable.client.get_domain_zone_file, 1)
+    await retryable.close()
 
 
 async def test_list_domain_records() -> None:
