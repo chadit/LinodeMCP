@@ -2871,6 +2871,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImageSharegroup", e) from e
 
+    async def create_image_sharegroup(
+        self,
+        label: str,
+        description: str | None = None,
+        images: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        """Create an image share group."""
+        body: dict[str, Any] = {"label": label}
+        if description is not None:
+            body["description"] = description
+        if images is not None:
+            body["images"] = images
+
+        try:
+            response = await self.make_request("POST", "/images/sharegroups", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateImageShareGroup", e) from e
+
     async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
         """Get a single image share group."""
         sharegroup_id_path = quote(str(sharegroup_id), safe="")
@@ -9184,6 +9204,17 @@ class RetryableClient:
     async def delete_image_sharegroup(self, sharegroup_id: str) -> None:
         """Delete a single image share group without retry replay."""
         await self.client.delete_image_sharegroup(sharegroup_id)
+
+    async def create_image_sharegroup(
+        self,
+        label: str,
+        description: str | None = None,
+        images: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        """Create an image share group once without retry replay."""
+        return await self.client.create_image_sharegroup(
+            label=label, description=description, images=images
+        )
 
     async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
         """Get a single image share group with retry."""
