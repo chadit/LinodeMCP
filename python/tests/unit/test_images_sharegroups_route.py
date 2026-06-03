@@ -14,8 +14,11 @@ from linodemcp.profiles import Capability, Scope, required_scopes
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_list_tool,
+    create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_images_sharegroups_list,
+    handle_linode_images_sharegroups_tokens_list,
 )
+from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -206,3 +209,130 @@ def test_linode_images_sharegroups_list_scopes_to_images_read() -> None:
     scopes = required_scopes("linode_images_sharegroups_list", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
+
+
+@pytest.mark.asyncio
+async def test_client_list_image_sharegroup_tokens_sends_exact_path() -> None:
+    """Low-level client sends GET /images/sharegroups/tokens with no query/body."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "sharegroup-record-1",
+                        "created": "2026-01-01T00:00:00",
+                    }
+                ],
+                "page": 1,
+                "pages": 1,
+                "results": 1,
+            },
+        )
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.list_image_sharegroup_tokens()
+    finally:
+        await client.close()
+
+    assert result["data"][0]["id"] == "sharegroup-record-1"
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.path == "/v4/images/sharegroups/tokens"
+    assert request.url.query == b""
+    assert await request.aread() == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+
+
+@pytest.mark.asyncio
+async def test_retryable_client_list_image_sharegroup_tokens_uses_read_retry() -> None:
+    """Read-only image share group tokens list goes through the retry wrapper."""
+    retryable = _CapturingRetryableClient()
+    mock_list = AsyncMock(
+        return_value={"data": [], "page": 1, "pages": 1, "results": 0}
+    )
+    cast("Any", retryable.client).list_image_sharegroup_tokens = mock_list
+
+    try:
+        result = await retryable.list_image_sharegroup_tokens()
+    finally:
+        await retryable.close()
+
+    assert result["results"] == 0
+    assert len(retryable.calls) == 1
+    mock_list.assert_awaited_once_with()
+
+
+def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
+    """Tool schema exposes only the documented environment argument."""
+    tool, capability = create_linode_images_sharegroups_tokens_list_tool()
+
+    assert tool.name == "linode_images_sharegroups_tokens_list"
+    assert capability is Capability.Read
+    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert "required" not in tool.inputSchema
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroups_tokens_list_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler returns image share group tokens and pagination metadata."""
+    mock_linode_client.list_image_sharegroup_tokens.return_value = {
+        "data": [
+            {
+                "id": "sharegroup-record-1",
+                "created": "2026-01-01T00:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    result = await handle_linode_images_sharegroups_tokens_list({}, sample_config)
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Image share group tokens listed",
+        "count": 1,
+        "tokens": [
+            {
+                "id": "sharegroup-record-1",
+                "created": "2026-01-01T00:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    mock_linode_client.list_image_sharegroup_tokens.assert_awaited_once_with()
+
+
+def test_linode_images_sharegroups_tokens_list_registered() -> None:
+    """Dynamic registry exports the token list tool and handler pair."""
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_images_sharegroups_tokens_list"]
+    assert entry.capability is Capability.Read
+    assert entry.tool.name == "linode_images_sharegroups_tokens_list"
+    assert entry.handle_fn is handle_linode_images_sharegroups_tokens_list
+
+
+def test_linode_images_sharegroups_tokens_list_scopes_to_images_read() -> None:
+    """Profile scope mapping keeps the route in the Images read category."""
+    scopes = required_scopes("linode_images_sharegroups_tokens_list", Capability.Read)
+
+    assert scopes == [Scope.ImagesReadOnly]
+
+
+def test_linode_images_sharegroups_tokens_list_in_version_features() -> None:
+    """Version metadata advertises the token list tool."""
+    assert "linode_images_sharegroups_tokens_list" in FEATURE_TOOLS_LIST.split(",")
