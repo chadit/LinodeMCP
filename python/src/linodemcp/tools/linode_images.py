@@ -230,6 +230,35 @@ def create_linode_images_sharegroup_images_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_members_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_members_list tool."""
+    return Tool(
+        name="linode_images_sharegroup_members_list",
+        description="Lists members of an image share group by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "string",
+                    "pattern": (
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
+                        "[0-9a-fA-F]{12}$"
+                    ),
+                    "description": "Image share group UUID (required)",
+                },
+            },
+            "required": ["sharegroup_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_images_sharegroup_image_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_image_delete tool."""
     # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
@@ -1074,6 +1103,32 @@ async def handle_linode_images_sharegroup_images_list(
         }
 
     return await execute_tool(cfg, arguments, "list image share group images", _call)
+
+
+async def handle_linode_images_sharegroup_members_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_members_list request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    sharegroup_id_str = cast("str", sharegroup_id).strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_image_sharegroup_members(sharegroup_id_str)
+        members = data.get("data", [])
+        return {
+            "message": "Image share group members retrieved",
+            "count": len(members),
+            "members": members,
+            "page": data.get("page", 1),
+            "pages": data.get("pages", 1),
+            "results": data.get("results", len(members)),
+        }
+
+    return await execute_tool(cfg, arguments, "list image share group members", _call)
 
 
 async def handle_linode_images_sharegroup_image_delete(

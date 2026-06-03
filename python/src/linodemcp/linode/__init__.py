@@ -2988,6 +2988,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupImages", e) from e
 
+    async def list_image_sharegroup_members(self, sharegroup_id: str) -> dict[str, Any]:
+        """List members of an image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        try:
+            response = await self.make_request(
+                "GET", f"/images/sharegroups/{sharegroup_id_path}/members"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListImageSharegroupMembers", e) from e
+
     async def add_image_sharegroup_images(
         self, sharegroup_id: str, images: list[dict[str, str]]
     ) -> dict[str, Any]:
@@ -9348,6 +9360,13 @@ class RetryableClient:
         """List images by share group with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_image_sharegroup_images(sharegroup_id)
+        )
+        return result
+
+    async def list_image_sharegroup_members(self, sharegroup_id: str) -> dict[str, Any]:
+        """List members by share group with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_image_sharegroup_members(sharegroup_id)
         )
         return result
 
