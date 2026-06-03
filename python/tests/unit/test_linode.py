@@ -9696,6 +9696,107 @@ async def test_create_stackscript() -> None:
     await client.close()
 
 
+async def test_create_image_sharegroup_token_sends_post_body() -> None:
+    """Image share group token create should POST the documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": "sharegroup-record-1",
+        "label": "partner-token",
+        "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.create_image_sharegroup_token(
+            valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
+            label="partner-token",
+        )
+
+        assert result["id"] == "sharegroup-record-1"
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/images/sharegroups/tokens",
+            {
+                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+                "label": "partner-token",
+            },
+        )
+
+    await client.close()
+
+
+async def test_create_image_sharegroup_token_omits_optional_label() -> None:
+    """Image share group token create should not send absent optional fields."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": "sharegroup-record-1",
+        "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.create_image_sharegroup_token(
+            valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111"
+        )
+
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/images/sharegroups/tokens",
+            {"valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111"},
+        )
+
+    await client.close()
+
+
+async def test_create_image_sharegroup_token_wraps_http_errors() -> None:
+    """Image share group token create should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.create_image_sharegroup_token(
+                valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111"
+            )
+
+    assert "CreateImageSharegroupToken" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_create_image_sharegroup_token_delegates_once() -> None:
+    """Retryable create wrapper should not replay token creation after errors."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=3, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "create_image_sharegroup_token",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        mock_create.side_effect = httpx.HTTPError("temporary")
+
+        with pytest.raises(httpx.HTTPError):
+            await client.create_image_sharegroup_token(
+                valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
+                label="partner-token",
+            )
+
+        mock_create.assert_awaited_once_with(
+            valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
+            label="partner-token",
+        )
+
+    await client.close()
+
+
 async def test_create_image_sends_post_to_images_route() -> None:
     """Test creating an image sends POST /images."""
     client = Client("https://api.linode.com/v4", "test-token")

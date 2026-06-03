@@ -68,6 +68,7 @@ from linodemcp.tools import (
     create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
+    create_linode_images_sharegroups_token_create_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
     create_linode_instance_backup_restore_tool,
@@ -215,6 +216,7 @@ from linodemcp.tools import (
     handle_linode_firewalls_list,
     handle_linode_image_create,
     handle_linode_images_list,
+    handle_linode_images_sharegroups_token_create,
     handle_linode_instance_backup_create,
     handle_linode_instance_backup_get,
     handle_linode_instance_backup_restore,
@@ -3661,6 +3663,152 @@ async def test_image_create_dry_run_still_validates_disk_id(
 
     assert len(result) == 1
     assert "disk_id must be a positive integer" in result[0].text
+
+
+async def test_create_linode_images_sharegroups_token_create_tool_def() -> None:
+    """Image share group token create tool should require UUID and confirm."""
+    tool, capability = create_linode_images_sharegroups_token_create_tool()
+
+    assert tool.name == "linode_images_sharegroups_token_create"
+    assert capability.name == "Write"
+    assert tool.inputSchema["required"] == ["valid_for_sharegroup_uuid", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_images_sharegroups_token_create_success(
+    sample_config: Config,
+) -> None:
+    """Image share group token create should call the client once."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_image_sharegroup_token.return_value = {
+            "id": "sharegroup-record-1",
+            "label": "partner-token",
+            "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_images_sharegroups_token_create(
+            {
+                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+                "label": "partner-token",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "sharegroup-record-1" in result[0].text
+        mock_client.create_image_sharegroup_token.assert_awaited_once_with(
+            valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
+            label="partner-token",
+        )
+
+
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_handle_linode_images_sharegroups_token_create_requires_true_confirm(
+    sample_config: Config, bad_confirm: object
+) -> None:
+    """Image share group token create rejects non-true confirm before the client."""
+    arguments: dict[str, Any] = {
+        "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111"
+    }
+    if bad_confirm is not None:
+        arguments["confirm"] = bad_confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_images_sharegroups_token_create(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "bad_uuid", [None, "", "   ", "not-a-uuid", "../", "uuid?x=1", 123, True]
+)
+async def test_handle_linode_images_sharegroups_token_create_validates_uuid(
+    sample_config: Config, bad_uuid: object
+) -> None:
+    """Image share group token create requires the documented UUID body field."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_images_sharegroups_token_create(
+            {"valid_for_sharegroup_uuid": bad_uuid, "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "valid_for_sharegroup_uuid" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_label", ["", "   ", 123, True])
+async def test_handle_linode_images_sharegroups_token_create_validates_label(
+    sample_config: Config, bad_label: object
+) -> None:
+    """Image share group token create rejects malformed optional labels."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_images_sharegroups_token_create(
+            {
+                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+                "label": bad_label,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "label" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_image_sharegroup_token_create_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Dry-run still requires confirm because the tool schema requires it."""
+    result = await handle_linode_images_sharegroups_token_create(
+        {
+            "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_image_sharegroup_token_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews token creation without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_images_sharegroups_token_create(
+            {
+                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+                "label": "partner-token",
+                "confirm": True,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_images_sharegroups_token_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/images/sharegroups/tokens"
+    assert body["would_execute"]["body"] == {
+        "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
+        "label": "partner-token",
+    }
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_images_list(sample_config: Config) -> None:

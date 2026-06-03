@@ -2870,6 +2870,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupTokens", e) from e
 
+    async def create_image_sharegroup_token(
+        self, valid_for_sharegroup_uuid: str, label: str | None = None
+    ) -> dict[str, Any]:
+        """Create an image share group token."""
+        body: dict[str, Any] = {"valid_for_sharegroup_uuid": valid_for_sharegroup_uuid}
+        if label is not None:
+            body["label"] = label
+        try:
+            response = await self.make_request(
+                "POST", "/images/sharegroups/tokens", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateImageSharegroupToken", e) from e
+
     async def create_image(
         self,
         disk_id: int,
@@ -9059,6 +9075,14 @@ class RetryableClient:
             self.client.list_image_sharegroup_tokens
         )
         return result
+
+    async def create_image_sharegroup_token(
+        self, valid_for_sharegroup_uuid: str, label: str | None = None
+    ) -> dict[str, Any]:
+        """Create an image share group token without retry replay."""
+        return await self.client.create_image_sharegroup_token(
+            valid_for_sharegroup_uuid=valid_for_sharegroup_uuid, label=label
+        )
 
     async def create_image(
         self,
