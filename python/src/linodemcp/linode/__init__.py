@@ -2834,6 +2834,33 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImages", e) from e
 
+    async def list_image_sharegroups(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List image share groups."""
+        endpoint = "/images/sharegroups"
+        params: dict[str, int] = {}
+        if page is not None:
+            if type(page) is not int or page < 1:
+                raise ValueError("page must be an integer at least 1")
+            params["page"] = page
+        if page_size is not None:
+            if (
+                type(page_size) is not int
+                or page_size < MIN_PAGE_SIZE
+                or page_size > MAX_PAGE_SIZE
+            ):
+                raise ValueError("page_size must be an integer between 25 and 500")
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListImageSharegroups", e) from e
+
     async def create_image(
         self,
         disk_id: int,
@@ -9006,6 +9033,15 @@ class RetryableClient:
     async def list_images(self) -> list[Image]:
         """List Linode images with retry."""
         result: list[Image] = await self._execute_with_retry(self.client.list_images)
+        return result
+
+    async def list_image_sharegroups(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List image share groups with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_image_sharegroups(page=page, page_size=page_size)
+        )
         return result
 
     async def create_image(
