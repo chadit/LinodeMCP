@@ -11552,6 +11552,20 @@ def test_linode_images_sharegroups_token_delete_registered() -> None:
     )
 
 
+def test_linode_images_sharegroups_token_sharegroup_images_list_registered() -> None:
+    """Images by token tool should be registered from exports."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert "linode_images_sharegroups_token_sharegroup_images_list" in entries
+    assert (
+        entries[
+            "linode_images_sharegroups_token_sharegroup_images_list"
+        ].capability.name
+        == "Read"
+    )
+
+
 def test_linode_images_sharegroups_token_update_registered() -> None:
     """Image share group token update tool should be registered from exports."""
     from linodemcp.server import get_tool_registry
