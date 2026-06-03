@@ -11614,6 +11614,7 @@ async def test_linode_images_sharegroup_delete_dispatches_from_registry(
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "confirm": True,
+                "confirm_bypass_dry_run": True,
             },
         )
 
@@ -11663,6 +11664,7 @@ async def test_linode_images_sharegroup_delete_rejects_invalid_sharegroup_id(
 ) -> None:
     """Image share group delete rejects malformed path params before calls."""
     arguments.setdefault("confirm", True)
+    arguments.setdefault("confirm_bypass_dry_run", True)
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
