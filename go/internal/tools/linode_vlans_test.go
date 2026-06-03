@@ -162,7 +162,7 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -222,17 +222,17 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissingRegion, args: map[string]any{keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDRequired},
-			{name: caseMissingLabel, args: map[string]any{keyRegionID: regionUSEast, keyConfirm: true}, wantMessage: errLabelRequired},
-			{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
-			{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
-			{name: caseFragment, args: map[string]any{keyRegionID: "us-east#frag", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
-			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
-			{name: "region uppercase", args: map[string]any{keyRegionID: "US EAST", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
-			{name: "label slash", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app/vlan", keyConfirm: true}, wantMessage: errLabelNoSeparators},
-			{name: "label query", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app?vlan", keyConfirm: true}, wantMessage: errLabelNoSeparators},
-			{name: "label fragment", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app#vlan", keyConfirm: true}, wantMessage: errLabelNoSeparators},
-			{name: "label traversal", args: map[string]any{keyRegionID: regionUSEast, keyLabel: pathTraversalValue, keyConfirm: true}, wantMessage: errLabelNoSeparators},
+			{name: caseMissingRegion, args: map[string]any{keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errRegionIDRequired},
+			{name: caseMissingLabel, args: map[string]any{keyRegionID: regionUSEast, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errLabelRequired},
+			{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errRegionIDSlug},
+			{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errRegionIDSlug},
+			{name: caseFragment, args: map[string]any{keyRegionID: "us-east#frag", keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errRegionIDSlug},
+			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errRegionIDSlug},
+			{name: "region uppercase", args: map[string]any{keyRegionID: "US EAST", keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errRegionIDSlug},
+			{name: "label slash", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app/vlan", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errLabelNoSeparators},
+			{name: "label query", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app?vlan", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errLabelNoSeparators},
+			{name: "label fragment", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app#vlan", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errLabelNoSeparators},
+			{name: "label traversal", args: map[string]any{keyRegionID: regionUSEast, keyLabel: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errLabelNoSeparators},
 		}
 
 		for _, testCase := range cases {
@@ -264,7 +264,7 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should return tool errors without Go errors")
 		require.NotNil(t, result, "result should not be nil")

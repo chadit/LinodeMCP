@@ -97,7 +97,7 @@ func RunDestructiveAction(
 		return runDestructiveDryRun(ctx, request, cfg, action)
 	}
 
-	if result := RequireConfirm(request, action.ConfirmMessage); result != nil {
+	if result := requireDestroyConfirmation(request, action.ToolName, action.ConfirmMessage); result != nil {
 		return result, nil
 	}
 
@@ -111,6 +111,56 @@ func RunDestructiveAction(
 	}
 
 	return MarshalToolResponse(action.Success())
+}
+
+// requireDestroyConfirmation enforces the Phase 3 bypass-dry-run gate for
+// CapDestroy tools. Beyond the existing confirm:true requirement, a real
+// destructive call must assert one of:
+//
+//   - confirmed_dry_run: true  -- the model previewed the call with dry_run
+//   - confirm_bypass_dry_run: true -- the model is explicitly skipping the preview
+//
+// (A future yolo:true bypasses this entirely; see the yolo composition slice.)
+// Returns a non-nil error result to short-circuit, or nil to proceed.
+func requireDestroyConfirmation(request *mcp.CallToolRequest, toolName, confirmMessage string) *mcp.CallToolResult {
+	args := request.GetArguments()
+	confirm, _ := args[paramConfirm].(bool)
+	confirmedDryRun, _ := args[paramConfirmedDryRun].(bool)
+	bypass, _ := args[paramConfirmBypassDryRun].(bool)
+
+	if bypass && confirmedDryRun {
+		return mcp.NewToolResultError(
+			"Pass either confirm_bypass_dry_run (skip preview) or confirmed_dry_run (preview was done), not both",
+		)
+	}
+
+	if !confirm {
+		if bypass {
+			return mcp.NewToolResultError("confirm_bypass_dry_run only takes effect with confirm: true")
+		}
+
+		return mcp.NewToolResultError(confirmMessage)
+	}
+
+	if !confirmedDryRun && !bypass {
+		return mcp.NewToolResultError(destroyBypassMessage(toolName))
+	}
+
+	return nil
+}
+
+// destroyBypassMessage is the error returned when a CapDestroy tool is called
+// with confirm:true but without a prior dry-run assertion or an explicit
+// bypass. It tells the model the three ways forward.
+func destroyBypassMessage(toolName string) string {
+	return fmt.Sprintf(
+		"%s is destructive. Either:\n"+
+			"  1. Call with dry_run: true first to preview, then call again with\n"+
+			"     confirm: true, confirmed_dry_run: true\n"+
+			"  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n"+
+			"  3. Use yolo: true (only if profile allows)",
+		toolName,
+	)
 }
 
 // DestructiveActionByID configures a single-ID destroy tool. The vast

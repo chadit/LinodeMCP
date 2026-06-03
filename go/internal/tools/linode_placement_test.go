@@ -146,12 +146,12 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingGroupID, args: map[string]any{keyConfirm: true}, wantContains: placementGroupIDRequired},
-		{name: "non-numeric group id", args: map[string]any{keyPlacementGroupID: notANumber, keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: caseSlashGroupID, args: map[string]any{keyPlacementGroupID: placementGroupSlashValue, keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: caseQueryGroupID, args: map[string]any{keyPlacementGroupID: placementGroupQueryValue, keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: caseTraversalGroupID, args: map[string]any{keyPlacementGroupID: pathTraversalValue, keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: "zero group id", args: map[string]any{keyPlacementGroupID: "0", keyConfirm: true}, wantContains: placementGroupIDError},
+		{name: caseMissingGroupID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDRequired},
+		{name: "non-numeric group id", args: map[string]any{keyPlacementGroupID: notANumber, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
+		{name: caseSlashGroupID, args: map[string]any{keyPlacementGroupID: placementGroupSlashValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
+		{name: caseQueryGroupID, args: map[string]any{keyPlacementGroupID: placementGroupQueryValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
+		{name: caseTraversalGroupID, args: map[string]any{keyPlacementGroupID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
+		{name: "zero group id", args: map[string]any{keyPlacementGroupID: "0", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -302,7 +302,7 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")

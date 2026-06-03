@@ -286,7 +286,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 
 	t.Run("missing sshkey id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -309,7 +309,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -770,7 +770,7 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 		},
 		{
 			name:         caseMissingInstanceID,
-			args:         map[string]any{keyConfirm: true},
+			args:         map[string]any{keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: "instance_id is required",
 		},
 	}
@@ -803,7 +803,7 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyInstanceID: float64(123),
-			keyConfirm:    true,
+			keyConfirm:    true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1215,7 +1215,7 @@ func TestLinodeFirewallDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyFirewallID: float64(789),
-			keyConfirm:    true,
+			keyConfirm:    true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1947,7 +1947,7 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
-			keyConfirm:  true,
+			keyConfirm:  true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -2287,12 +2287,12 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 	}{
 		{
 			name:         caseMissingDomainID,
-			args:         map[string]any{keyRecordID: float64(222), keyConfirm: true},
+			args:         map[string]any{keyRecordID: float64(222), keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: errDomainIDRequired,
 		},
 		{
 			name:         "missing record id",
-			args:         map[string]any{keyDomainID: float64(111), keyConfirm: true},
+			args:         map[string]any{keyDomainID: float64(111), keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: "record_id is required",
 		},
 	}
@@ -2326,7 +2326,7 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
 			keyRecordID: float64(222),
-			keyConfirm:  true,
+			keyConfirm:  true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -2856,7 +2856,7 @@ func TestLinodeVolumeDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
-			keyConfirm:  true,
+			keyConfirm:  true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -3181,7 +3181,7 @@ func TestLinodeNodeBalancerDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyNodeBalancerID: float64(444),
-			keyConfirm:        true,
+			keyConfirm:        true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -3993,27 +3993,27 @@ func TestLinodeStackScriptDeleteTool(t *testing.T) {
 		},
 		{
 			name:         caseZero,
-			args:         map[string]any{keyStackScriptID: float64(0), keyConfirm: true},
+			args:         map[string]any{keyStackScriptID: float64(0), keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: "stackscript_id must be an integer greater than or equal to 1",
 		},
 		{
 			name:         "fractional stackscript id",
-			args:         map[string]any{keyStackScriptID: 456.5, keyConfirm: true},
+			args:         map[string]any{keyStackScriptID: 456.5, keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: errStackScriptIDInteger,
 		},
 		{
 			name:         "separator stackscript id",
-			args:         map[string]any{keyStackScriptID: pathSeparatorValue, keyConfirm: true},
+			args:         map[string]any{keyStackScriptID: pathSeparatorValue, keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: errStackScriptIDInteger,
 		},
 		{
 			name:         "query stackscript id",
-			args:         map[string]any{keyStackScriptID: configIDQueryValue, keyConfirm: true},
+			args:         map[string]any{keyStackScriptID: configIDQueryValue, keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: errStackScriptIDInteger,
 		},
 		{
 			name:         "traversal stackscript id",
-			args:         map[string]any{keyStackScriptID: pathTraversalValue, keyConfirm: true},
+			args:         map[string]any{keyStackScriptID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true},
 			wantContains: errStackScriptIDInteger,
 		},
 	}
@@ -4046,7 +4046,7 @@ func TestLinodeStackScriptDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyStackScriptID: testStackScriptID,
-			keyConfirm:       true,
+			keyConfirm:       true, keyConfirmedDryRun: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -4077,7 +4077,7 @@ func TestLinodeStackScriptDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyStackScriptID: testStackScriptID,
-			keyConfirm:       true,
+			keyConfirm:       true, keyConfirmedDryRun: true,
 		})
 		result, err := errHandler(t.Context(), req)
 

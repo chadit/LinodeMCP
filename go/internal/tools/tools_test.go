@@ -2557,7 +2557,7 @@ func TestLinodeProfilePhoneNumberDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -2605,7 +2605,7 @@ func TestLinodeProfilePhoneNumberDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -4023,7 +4023,7 @@ func TestLinodeProfileAppDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -4074,7 +4074,7 @@ func TestLinodeProfileAppDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -4137,12 +4137,12 @@ func TestLinodeProfileAppDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errProfileAppIDRequired},
-			{name: caseZero, args: map[string]any{keyAppID: 0, keyConfirm: true}, want: errProfileAppIDPositive},
-			{name: caseString, args: map[string]any{keyAppID: "12345", keyConfirm: true}, want: errProfileAppIDPositive},
-			{name: caseSlash, args: map[string]any{keyAppID: invalidProfileIDSlash, keyConfirm: true}, want: errProfileAppIDPositive},
-			{name: caseQuery, args: map[string]any{keyAppID: invalidProfileIDQuery, keyConfirm: true}, want: errProfileAppIDPositive},
-			{name: caseDotTraversal, args: map[string]any{keyAppID: pathTraversalValue, keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDRequired},
+			{name: caseZero, args: map[string]any{keyAppID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
+			{name: caseString, args: map[string]any{keyAppID: "12345", keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
+			{name: caseSlash, args: map[string]any{keyAppID: invalidProfileIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
+			{name: caseQuery, args: map[string]any{keyAppID: invalidProfileIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyAppID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
 		}
 
 		for _, testCase := range cases {
@@ -5227,12 +5227,12 @@ func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errClientIDRequired},
-			{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyConfirm: true}, want: errClientIDNonEmpty},
-			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyConfirm: true}, want: errClientIDNonEmpty},
-			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyConfirm: true}, want: errClientIDNoSeparators},
-			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyConfirm: true}, want: errClientIDNoSeparators},
-			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDRequired},
+			{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNoSeparators},
 		}
 
 		for _, testCase := range cases {
@@ -5270,7 +5270,7 @@ func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -5297,7 +5297,7 @@ func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -6173,7 +6173,7 @@ func TestLinodeAccountPaymentMethodDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -6199,7 +6199,7 @@ func TestLinodeAccountPaymentMethodDeleteTool(t *testing.T) {
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true, keyConfirmedDryRun: true})
 
 		result, err := handler(t.Context(), req)
 
@@ -6254,14 +6254,14 @@ func TestLinodeAccountPaymentMethodDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errPaymentMethodIDRequired},
-			{name: caseEmpty, args: map[string]any{keyPaymentMethodID: "", keyConfirm: true}, want: errPaymentMethodIDNonEmpty},
-			{name: caseNumeric, args: map[string]any{keyPaymentMethodID: 123, keyConfirm: true}, want: errPaymentMethodIDNonEmpty},
-			{name: caseSlash, args: map[string]any{keyPaymentMethodID: paymentMethodIDSlash, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-			{name: caseQuery, args: map[string]any{keyPaymentMethodID: paymentMethodIDQuery, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-			{name: caseDotTraversal, args: map[string]any{keyPaymentMethodID: pathTraversalValue, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-			{name: "alpha", args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true}, want: errPaymentMethodIDPositive},
-			{name: "zero", args: map[string]any{keyPaymentMethodID: "0", keyConfirm: true}, want: errPaymentMethodIDPositive},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDRequired},
+			{name: caseEmpty, args: map[string]any{keyPaymentMethodID: "", keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNonEmpty},
+			{name: caseNumeric, args: map[string]any{keyPaymentMethodID: 123, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNonEmpty},
+			{name: caseSlash, args: map[string]any{keyPaymentMethodID: paymentMethodIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNoSeparators},
+			{name: caseQuery, args: map[string]any{keyPaymentMethodID: paymentMethodIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyPaymentMethodID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNoSeparators},
+			{name: "alpha", args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDPositive},
+			{name: "zero", args: map[string]any{keyPaymentMethodID: "0", keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDPositive},
 		}
 
 		for _, testCase := range cases {
@@ -7948,12 +7948,12 @@ func TestLinodeAccountServiceTransferDeleteTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, wantMessage: errTokenRequired},
-			{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true}, wantMessage: errTokenNonEmpty},
-			{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true}, wantMessage: errTokenNonEmpty},
-			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenRequired},
+			{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNonEmpty},
+			{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNonEmpty},
+			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
+			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
 		}
 
 		for _, testCase := range cases {
@@ -8000,7 +8000,7 @@ func TestLinodeAccountServiceTransferDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return transport error")
@@ -8026,7 +8026,7 @@ func TestLinodeAccountServiceTransferDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return transport error")
@@ -8411,12 +8411,12 @@ func TestLinodeAccountEntityTransferDeleteTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, wantMessage: errTokenRequired},
-			{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true}, wantMessage: errTokenNonEmpty},
-			{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true}, wantMessage: errTokenNonEmpty},
-			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenRequired},
+			{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNonEmpty},
+			{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNonEmpty},
+			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
+			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
 		}
 
 		for _, testCase := range cases {
@@ -8463,7 +8463,7 @@ func TestLinodeAccountEntityTransferDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountEntityTransferDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyToken: accountEntityTransferToken, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyToken: accountEntityTransferToken, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return transport error")
@@ -8489,7 +8489,7 @@ func TestLinodeAccountEntityTransferDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeAccountEntityTransferDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyToken: accountEntityTransferToken, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyToken: accountEntityTransferToken, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return transport error")

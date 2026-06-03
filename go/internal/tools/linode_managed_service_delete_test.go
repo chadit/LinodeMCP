@@ -90,15 +90,15 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissingServiceID, args: map[string]any{keyConfirm: true}, wantMessage: errManagedServiceIDRequired},
-			{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944", keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseFractionalServiceID, args: map[string]any{keyManagedServiceID: 9944.5, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseOversizedServiceID, args: map[string]any{keyManagedServiceID: managedServiceOversizedID, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseMissingServiceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDRequired},
+			{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseFractionalServiceID, args: map[string]any{keyManagedServiceID: 9944.5, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseOversizedServiceID, args: map[string]any{keyManagedServiceID: managedServiceOversizedID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+			{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
 		}
 
 		for _, testCase := range cases {
@@ -141,7 +141,7 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -165,7 +165,7 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool
+from mcp.types import TextContent, Tool
 
 import linodemcp.tools as tools_module
 from linodemcp.audit import Capability as AuditCapability
@@ -161,6 +161,48 @@ def _handler_takes_config(handle_fn: Callable[..., Awaitable[list[Any]]]) -> boo
     ]
 
     return len(positional) >= arity_with_config
+
+
+def _destroy_bypass_message(tool_name: str) -> str:
+    """The error a CapDestroy tool returns when confirm:true arrives without a
+    prior dry-run assertion or an explicit bypass. Tells the model the three
+    ways forward. Mirrors the Go destroyBypassMessage exactly."""
+    return (
+        f"{tool_name} is destructive. Either:\n"
+        "  1. Call with dry_run: true first to preview, then call again with\n"
+        "     confirm: true, confirmed_dry_run: true\n"
+        "  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n"
+        "  3. Use yolo: true (only if profile allows)"
+    )
+
+
+def _destroy_bypass_error(tool_name: str, arguments: dict[str, Any]) -> str | None:
+    """Enforce the Phase 3 bypass-dry-run gate for a CapDestroy tool.
+
+    Returns an error message to short-circuit dispatch, or None to let the
+    call proceed to the handler. Returns None for the no-confirm/no-bypass
+    case so the handler's own (tool-specific) confirm message still fires.
+    Mirrors the Go requireDestroyConfirmation logic.
+    """
+    confirm = arguments.get("confirm") is True
+    confirmed = arguments.get("confirmed_dry_run") is True
+    bypass = arguments.get("confirm_bypass_dry_run") is True
+
+    if bypass and confirmed:
+        return (
+            "Pass either confirm_bypass_dry_run (skip preview) or "
+            "confirmed_dry_run (preview was done), not both"
+        )
+
+    if not confirm:
+        if bypass:
+            return "confirm_bypass_dry_run only takes effect with confirm: true"
+        return None
+
+    if not confirmed and not bypass:
+        return _destroy_bypass_message(tool_name)
+
+    return None
 
 
 _TOOL_REGISTRY = _build_tool_registry()
@@ -440,6 +482,11 @@ class Server:
             case "version":
                 return await handle_version(arguments)
             case _ if name in self._config_handlers:
+                if name in self._destroy_tools and arguments.get("dry_run") is not True:
+                    gate_error = _destroy_bypass_error(name, arguments)
+                    if gate_error is not None:
+                        return [TextContent(type="text", text=gate_error)]
+
                 handler = self._config_handlers[name]
                 if self._config_takes_config[name]:
                     return await handler(arguments, self.config)
@@ -479,6 +526,13 @@ class Server:
         self._config_takes_config: dict[str, bool] = {
             entry.name: entry.takes_config for entry in allowed_entries
         }
+        # CapDestroy tools enforce the Phase 3 bypass-dry-run gate at dispatch
+        # (Python has no shared destroy helper, so dispatch is the chokepoint).
+        self._destroy_tools: frozenset[str] = frozenset(
+            entry.name
+            for entry in allowed_entries
+            if entry.capability == Capability.Destroy
+        )
 
     def _register_tools(self) -> None:
         """Wire the MCP server's list_tools and call_tool decorators.

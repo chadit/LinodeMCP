@@ -52,16 +52,16 @@ func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingLinodeID, args: map[string]any{keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: pathQueryValue, keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: "missing disk identifier", args: map[string]any{keyLinodeID: float64(123), keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
-		{name: caseSlash, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathSeparatorValue, keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
-		{name: caseQuery, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathQueryValue, keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
-		{name: caseDotTraversal, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathTraversalValue, keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
-		{name: "missing password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true}, wantContains: managedCredentialsToolPasswordReq},
-		{name: "weak password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: "weak", keyConfirm: true}, wantContains: "root_pass must be at least 12 characters"},
+		{name: caseMissingLinodeID, args: map[string]any{keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: pathQueryValue, keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
+		{name: "missing disk identifier", args: map[string]any{keyLinodeID: float64(123), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+		{name: caseSlash, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathSeparatorValue, keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+		{name: caseQuery, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathQueryValue, keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+		{name: caseDotTraversal, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathTraversalValue, keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+		{name: "missing password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: managedCredentialsToolPasswordReq},
+		{name: "weak password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: "weak", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "root_pass must be at least 12 characters"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -96,7 +96,7 @@ func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeInstanceDiskPasswordResetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true,
+			keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -131,7 +131,7 @@ func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeInstanceDiskPasswordResetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true,
+			keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 

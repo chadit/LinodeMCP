@@ -323,7 +323,7 @@ func TestLinodeFirewallDeviceDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -387,16 +387,16 @@ func TestLinodeFirewallDeviceDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
-			{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
-			{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
-			{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
-			{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
-			{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyConfirm: true}, want: errFirewallDeviceIDPositive},
-			{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0), keyConfirm: true}, want: errFirewallDeviceIDPositive},
-			{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash, keyConfirm: true}, want: errFirewallDeviceIDPositive},
-			{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery, keyConfirm: true}, want: errFirewallDeviceIDPositive},
-			{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue, keyConfirm: true}, want: errFirewallDeviceIDPositive},
+			{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+			{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+			{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+			{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+			{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+			{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+			{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+			{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+			{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+			{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
 		}
 
 		for _, testCase := range cases {
@@ -445,7 +445,7 @@ func TestLinodeFirewallDeviceDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")

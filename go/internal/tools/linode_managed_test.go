@@ -63,7 +63,7 @@ func TestLinodeManagedContactDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{managedContactDeleteIDKey: managedContactDeleteID, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{managedContactDeleteIDKey: managedContactDeleteID, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -150,7 +150,7 @@ func TestLinodeManagedContactDeleteTool(t *testing.T) {
 
 				_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
 
-				args := map[string]any{keyConfirm: true}
+				args := map[string]any{keyConfirm: true, keyConfirmedDryRun: true}
 				if contactID != nil {
 					args[managedContactDeleteIDKey] = contactID
 				}
@@ -179,7 +179,7 @@ func TestLinodeManagedContactDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{managedContactDeleteIDKey: managedContactDeleteID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{managedContactDeleteIDKey: managedContactDeleteID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")

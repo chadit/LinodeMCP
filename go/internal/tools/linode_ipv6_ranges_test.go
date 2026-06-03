@@ -422,7 +422,7 @@ func TestLinodeIPv6RangeDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyIPv6Range: ipv6RangeCIDR, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyIPv6Range: ipv6RangeCIDR, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -480,7 +480,7 @@ func TestLinodeIPv6RangeDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyIPv6Range: ipv6RangeCIDR, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyIPv6Range: ipv6RangeCIDR, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should return tool errors without Go errors")
 		require.NotNil(t, result, "result should not be nil")
@@ -503,13 +503,13 @@ func TestLinodeIPv6RangeDeleteTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: "missing range", args: map[string]any{keyConfirm: true}},
-			{name: "non-string range", args: map[string]any{keyIPv6Range: 123, keyConfirm: true}},
-			{name: "slash only", args: map[string]any{keyIPv6Range: "/", keyConfirm: true}},
-			{name: "query separator", args: map[string]any{keyIPv6Range: "2001:0db8::/64?x=1", keyConfirm: true}},
-			{name: "traversal", args: map[string]any{keyIPv6Range: pathTraversalValue, keyConfirm: true}},
-			{name: "ipv4 prefix", args: map[string]any{keyIPv6Range: "192.0.2.0/24", keyConfirm: true}},
-			{name: "host bits set", args: map[string]any{keyIPv6Range: "2001:0db8::1/64", keyConfirm: true}},
+			{name: "missing range", args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: "non-string range", args: map[string]any{keyIPv6Range: 123, keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: "slash only", args: map[string]any{keyIPv6Range: "/", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: "query separator", args: map[string]any{keyIPv6Range: "2001:0db8::/64?x=1", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: "traversal", args: map[string]any{keyIPv6Range: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: "ipv4 prefix", args: map[string]any{keyIPv6Range: "192.0.2.0/24", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: "host bits set", args: map[string]any{keyIPv6Range: "2001:0db8::1/64", keyConfirm: true, keyConfirmedDryRun: true}},
 		}
 
 		for _, testCase := range cases {

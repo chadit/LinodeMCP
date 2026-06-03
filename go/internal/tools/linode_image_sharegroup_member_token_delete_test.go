@@ -46,18 +46,18 @@ func TestLinodeImageShareGroupMemberTokenDeleteTool(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingShareGroupID, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: pathQueryValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseTraversalShareGroupID, args: map[string]any{keyShareGroupID: pathTraversalValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: "slash token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token/uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "query token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token?uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "fragment token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token#uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "traversal token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token..uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "empty token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: blankString, keyConfirm: true}, wantContains: errTokenUUIDNonEmpty},
-		{name: "numeric token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: 123, keyConfirm: true}, wantContains: errTokenUUIDNonEmpty},
-		{name: "invalid uuid rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: invalidTokenUUID, keyConfirm: true}, wantContains: "token_uuid must be a UUID"},
+		{name: caseMissingShareGroupID, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: pathQueryValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseTraversalShareGroupID, args: map[string]any{keyShareGroupID: pathTraversalValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: "slash token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token/uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "query token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token?uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "fragment token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token#uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "traversal token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: "token..uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "empty token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: blankString, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errTokenUUIDNonEmpty},
+		{name: "numeric token rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: 123, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errTokenUUIDNonEmpty},
+		{name: "invalid uuid rejected", args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: invalidTokenUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "token_uuid must be a UUID"},
 	}
 
 	for _, tt := range validationTests {
@@ -101,7 +101,7 @@ func TestLinodeImageShareGroupMemberTokenDeleteTool(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeImageShareGroupMemberTokenDeleteTool(imageShareGroupMemberTokenDeleteConfig(srv.URL))
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -125,7 +125,7 @@ func TestLinodeImageShareGroupMemberTokenDeleteTool(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeImageShareGroupMemberTokenDeleteTool(imageShareGroupMemberTokenDeleteConfig(srv.URL))
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err)
 		require.NotNil(t, result)

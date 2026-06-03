@@ -21,6 +21,12 @@ const (
 	paramDryRun          = "dry_run"
 	paramDryRunDesc      = "Preview the call without making it: returns the would-be request and current resource state. Default false."
 	paramLinodeID        = "linode_id"
+	// paramConfirmedDryRun / paramConfirmBypassDryRun drive the Phase 3
+	// bypass-dry-run gate on CapDestroy tools (see destroy.go). The model
+	// asserts confirmed_dry_run after running a dry-run, or sets
+	// confirm_bypass_dry_run to skip the preview explicitly.
+	paramConfirmedDryRun     = "confirmed_dry_run"
+	paramConfirmBypassDryRun = "confirm_bypass_dry_run"
 )
 
 // liveConfigSource is the optional hot-reload provider. When set (by

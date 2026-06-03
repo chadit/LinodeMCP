@@ -61,7 +61,7 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 		cfg := profileTokenTestConfig(srv.URL)
 		_, _, handler := tools.NewLinodeProfileTokenDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return a Go error")
 		require.NotNil(t, result, "result should not be nil")
@@ -153,13 +153,13 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: "token_id is required"},
-			{name: caseZero, args: map[string]any{keyProfileTokenID: 0, keyConfirm: true}, want: "token_id must be an integer greater than or equal to 1"},
-			{name: caseString, args: map[string]any{keyProfileTokenID: "12345", keyConfirm: true}, want: profileTokenIDIntegerError},
-			{name: caseFractionalServiceID, args: map[string]any{keyProfileTokenID: 12345.5, keyConfirm: true}, want: profileTokenIDIntegerError},
-			{name: caseSlashServiceID, args: map[string]any{keyProfileTokenID: placementGroupSlashID, keyConfirm: true}, want: profileTokenIDIntegerError},
-			{name: caseQueryServiceID, args: map[string]any{keyProfileTokenID: "12?token=1", keyConfirm: true}, want: profileTokenIDIntegerError},
-			{name: caseTraversalServiceID, args: map[string]any{keyProfileTokenID: pathTraversalValue, keyConfirm: true}, want: profileTokenIDIntegerError},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: "token_id is required"},
+			{name: caseZero, args: map[string]any{keyProfileTokenID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: "token_id must be an integer greater than or equal to 1"},
+			{name: caseString, args: map[string]any{keyProfileTokenID: "12345", keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
+			{name: caseFractionalServiceID, args: map[string]any{keyProfileTokenID: 12345.5, keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
+			{name: caseSlashServiceID, args: map[string]any{keyProfileTokenID: placementGroupSlashID, keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
+			{name: caseQueryServiceID, args: map[string]any{keyProfileTokenID: "12?token=1", keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
+			{name: caseTraversalServiceID, args: map[string]any{keyProfileTokenID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
 		}
 
 		for _, testCase := range cases {
@@ -203,7 +203,7 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 		cfg := profileTokenTestConfig(srv.URL)
 		_, _, handler := tools.NewLinodeProfileTokenDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")

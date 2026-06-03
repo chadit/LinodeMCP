@@ -335,7 +335,7 @@ func TestLinodeLongviewClientDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClientID: 789, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClientID: 789, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -361,7 +361,7 @@ func TestLinodeLongviewClientDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClientID: 789, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClientID: 789, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")
@@ -417,12 +417,12 @@ func TestLinodeLongviewClientDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: "missing client id", args: map[string]any{keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "zero client id", args: map[string]any{keyClientID: 0, keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "slash client id", args: map[string]any{keyClientID: longviewClientSlashID, keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "query client id", args: map[string]any{keyClientID: "789?x=1", keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "traversal client id", args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "missing client id", args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
+			{name: "zero client id", args: map[string]any{keyClientID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
+			{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
+			{name: "slash client id", args: map[string]any{keyClientID: longviewClientSlashID, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
+			{name: "query client id", args: map[string]any{keyClientID: "789?x=1", keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
+			{name: "traversal client id", args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
 		}
 
 		for _, testCase := range cases {

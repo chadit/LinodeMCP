@@ -149,13 +149,13 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissingServiceType, args: map[string]any{monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeRequiredError},
-			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash, monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeInvalidError},
-			{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery, monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeInvalidError},
-			{name: caseTraversalServiceType, args: map[string]any{monitorServiceTypeParam: pathTraversalValue, monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeInvalidError},
-			{name: caseMissingAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, keyConfirm: true}, wantMessage: monitorAlertIDRequiredError},
-			{name: caseZeroAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 0, keyConfirm: true}, wantMessage: monitorAlertIDPositiveError},
-			{name: caseStringAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: "20000", keyConfirm: true}, wantMessage: monitorAlertIDPositiveError},
+			{name: caseMissingServiceType, args: map[string]any{monitorAlertIDParam: 20000, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorServiceTypeRequiredError},
+			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash, monitorAlertIDParam: 20000, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery, monitorAlertIDParam: 20000, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseTraversalServiceType, args: map[string]any{monitorServiceTypeParam: pathTraversalValue, monitorAlertIDParam: 20000, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseMissingAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorAlertIDRequiredError},
+			{name: caseZeroAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 0, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorAlertIDPositiveError},
+			{name: caseStringAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: "20000", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: monitorAlertIDPositiveError},
 		}
 
 		for _, testCase := range cases {

@@ -54,7 +54,7 @@ func TestLinodeTagDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd + "/web", keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd + "/web", keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -106,11 +106,11 @@ func TestLinodeTagDeleteTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: "missing tag", args: map[string]any{keyConfirm: true}, want: tagLabelRequiredMessage},
-			{name: caseEmpty, args: map[string]any{tagLabelParamTest: "", keyConfirm: true}, want: tagLabelRequiredMessage},
-			{name: "query", args: map[string]any{tagLabelParamTest: envProd + "?web", keyConfirm: true}, want: tagLabelPathErrorMessage},
-			{name: caseFragment, args: map[string]any{tagLabelParamTest: envProd + "#web", keyConfirm: true}, want: tagLabelPathErrorMessage},
-			{name: "tag label traversal", args: map[string]any{tagLabelParamTest: pathTraversalValue, keyConfirm: true}, want: tagLabelPathErrorMessage},
+			{name: "missing tag", args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: tagLabelRequiredMessage},
+			{name: caseEmpty, args: map[string]any{tagLabelParamTest: "", keyConfirm: true, keyConfirmedDryRun: true}, want: tagLabelRequiredMessage},
+			{name: "query", args: map[string]any{tagLabelParamTest: envProd + "?web", keyConfirm: true, keyConfirmedDryRun: true}, want: tagLabelPathErrorMessage},
+			{name: caseFragment, args: map[string]any{tagLabelParamTest: envProd + "#web", keyConfirm: true, keyConfirmedDryRun: true}, want: tagLabelPathErrorMessage},
+			{name: "tag label traversal", args: map[string]any{tagLabelParamTest: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: tagLabelPathErrorMessage},
 		}
 
 		for _, testCase := range cases {
@@ -173,7 +173,7 @@ func TestLinodeTagDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should return API failures as tool errors")

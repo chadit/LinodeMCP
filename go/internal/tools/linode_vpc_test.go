@@ -618,7 +618,7 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingVPCID, args: map[string]any{keyConfirm: true}, wantContains: errVPCIDRequired},
+		{name: caseMissingVPCID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errVPCIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -649,7 +649,7 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeVPCDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyVPCID: float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -969,8 +969,8 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123), keySubnetID: float64(10)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingVPCID, args: map[string]any{keySubnetID: float64(10), keyConfirm: true}, wantContains: errVPCIDRequired},
-		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: float64(123), keyConfirm: true}, wantContains: errSubnetIDRequired},
+		{name: caseMissingVPCID, args: map[string]any{keySubnetID: float64(10), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errVPCIDRequired},
+		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errSubnetIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1002,7 +1002,7 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeVPCSubnetDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyVPCID: float64(123), keySubnetID: float64(10), keyConfirm: true,
+			keyVPCID: float64(123), keySubnetID: float64(10), keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 

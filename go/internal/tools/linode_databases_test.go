@@ -2665,7 +2665,7 @@ func TestLinodeDatabaseInstanceDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -2687,11 +2687,11 @@ func TestLinodeDatabaseInstanceDeleteTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
+			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}},
 		}
 
 		for _, testCase := range cases {
@@ -2726,7 +2726,7 @@ func TestLinodeDatabaseInstanceDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "client errors should be returned as tool result errors")
 		require.NotNil(t, result, "result should not be nil")
@@ -2887,7 +2887,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -2909,11 +2909,11 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
+			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true, keyConfirmedDryRun: true}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}},
 		}
 
 		for _, testCase := range cases {
@@ -2948,7 +2948,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "client errors should be returned as tool result errors")
 		require.NotNil(t, result, "result should not be nil")

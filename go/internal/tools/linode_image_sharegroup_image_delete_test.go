@@ -46,16 +46,16 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingShareGroupID, args: map[string]any{keyImageID: 5678, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyImageID: 5678, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyImageID: 5678, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: shareGroupIDQueryValue, keyImageID: 5678, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseTraversalShareGroupID, args: map[string]any{keyShareGroupID: pathTraversalValue, keyImageID: 5678, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: caseMissingImageID, args: map[string]any{keyShareGroupID: 1234, keyConfirm: true}, wantContains: errImageIDPositive},
-		{name: "zero image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: 0, keyConfirm: true}, wantContains: errImageIDPositive},
-		{name: "slash image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: pathSeparatorValue, keyConfirm: true}, wantContains: errImageIDPositive},
-		{name: caseQueryImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: "5?6", keyConfirm: true}, wantContains: errImageIDPositive},
-		{name: caseTraversalImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: pathTraversalValue, keyConfirm: true}, wantContains: errImageIDPositive},
+		{name: caseMissingShareGroupID, args: map[string]any{keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: shareGroupIDQueryValue, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseTraversalShareGroupID, args: map[string]any{keyShareGroupID: pathTraversalValue, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseMissingImageID, args: map[string]any{keyShareGroupID: 1234, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
+		{name: "zero image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: 0, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
+		{name: "slash image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: pathSeparatorValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
+		{name: caseQueryImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: "5?6", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
+		{name: caseTraversalImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
 	}
 
 	for _, tt := range validationTests {
@@ -105,7 +105,7 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeImageShareGroupImageDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -132,7 +132,7 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 		}}
 		_, _, handler := tools.NewLinodeImageShareGroupImageDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err)
 		require.NotNil(t, result)

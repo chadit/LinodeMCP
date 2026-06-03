@@ -260,13 +260,13 @@ func TestLinodeInstanceConfigDeleteTool(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDRequired},
-		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID, keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: tools.ErrConfigIDRequired.Error()},
-		{name: caseSeparatorConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789/..", keyConfirm: true}, want: errConfigIDInteger},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyConfirm: true}, want: errConfigIDInteger},
-		{name: "zero config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyConfirm: true}, want: errConfigIDMin},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDRequired},
+		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID, keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, want: tools.ErrConfigIDRequired.Error()},
+		{name: caseSeparatorConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789/..", keyConfirm: true, keyConfirmedDryRun: true}, want: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errConfigIDInteger},
+		{name: "zero config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errConfigIDMin},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestLinodeInstanceConfigDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceConfigDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -323,7 +323,7 @@ func TestLinodeInstanceConfigDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceConfigDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -880,7 +880,7 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: "123"}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingLinodeID, args: map[string]any{keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -911,7 +911,7 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceBackupsCancelTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1341,7 +1341,7 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceDiskDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1968,7 +1968,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: errAddressRequired},
+		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errAddressRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2000,7 +2000,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeInstanceIPDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true,
+			keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -2261,8 +2261,8 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong}, wantContains: errConfirmEqualsTrue},
-		{name: "missing image", args: map[string]any{keyLinodeID: float64(123), keyRootPass: rootPassStrong, keyConfirm: true}, wantContains: "image is required"},
-		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyConfirm: true}, wantContains: "root_pass is required"},
+		{name: "missing image", args: map[string]any{keyLinodeID: float64(123), keyRootPass: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "image is required"},
+		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "root_pass is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2299,7 +2299,7 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeInstanceRebuildTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong, keyConfirm: true,
+			keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -2503,7 +2503,7 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyRootPass: "NewStr0ngP@ss!"}, wantContains: errConfirmEqualsTrue},
-		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: "root_pass is required"},
+		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "root_pass is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2535,7 +2535,7 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeInstancePasswordResetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyRootPass: "NewStr0ngP@ss!", keyConfirm: true,
+			keyLinodeID: float64(123), keyRootPass: "NewStr0ngP@ss!", keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 

@@ -1467,12 +1467,12 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 			},
 			{
 				name:     caseMissingRegion,
-				args:     map[string]any{keyLabel: bucketTest, keyConfirm: true},
+				args:     map[string]any{keyLabel: bucketTest, keyConfirm: true, keyConfirmedDryRun: true},
 				contains: errRegionRequired,
 			},
 			{
 				name:     caseMissingLabel,
-				args:     map[string]any{keyRegion: regionUSEast1, keyConfirm: true},
+				args:     map[string]any{keyRegion: regionUSEast1, keyConfirm: true, keyConfirmedDryRun: true},
 				contains: errLabelRequired,
 			},
 		}
@@ -1512,7 +1512,7 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
 			keyLabel:   bucketTest,
-			keyConfirm: true,
+			keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -2234,7 +2234,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 			},
 			{
 				name:     "invalid key id",
-				args:     map[string]any{keyKeyID: float64(-1), keyConfirm: true},
+				args:     map[string]any{keyKeyID: float64(-1), keyConfirm: true, keyConfirmedDryRun: true},
 				contains: "key_id is required",
 			},
 		}
@@ -2273,7 +2273,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyKeyID:   float64(42),
-			keyConfirm: true,
+			keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -2296,7 +2296,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyKeyID:   float64(42),
-			keyConfirm: true,
+			keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := emptyHandler(t.Context(), req)
 
@@ -2870,7 +2870,7 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
 			keyLabel:   bucketTest,
-			keyConfirm: true,
+			keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -2894,7 +2894,7 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
 			keyLabel:   bucketTest,
-			keyConfirm: true,
+			keyConfirm: true, keyConfirmedDryRun: true,
 		})
 		result, err := emptyHandler(t.Context(), req)
 

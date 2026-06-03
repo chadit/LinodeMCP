@@ -43,12 +43,12 @@ func TestLinodeImageShareGroupTokenDeleteTool(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: "slash token rejected", args: map[string]any{keyTokenUUID: "token/uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "query token rejected", args: map[string]any{keyTokenUUID: "token?uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "fragment token rejected", args: map[string]any{keyTokenUUID: "token#uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "empty token rejected", args: map[string]any{keyTokenUUID: blankString, keyConfirm: true}, wantContains: errTokenUUIDNonEmpty},
-		{name: "traversal token rejected", args: map[string]any{keyTokenUUID: "token..uuid", keyConfirm: true}, wantContains: errImageShareTokenNoSeparators},
-		{name: "numeric token rejected", args: map[string]any{keyTokenUUID: 123, keyConfirm: true}, wantContains: errTokenUUIDNonEmpty},
+		{name: "slash token rejected", args: map[string]any{keyTokenUUID: "token/uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "query token rejected", args: map[string]any{keyTokenUUID: "token?uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "fragment token rejected", args: map[string]any{keyTokenUUID: "token#uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "empty token rejected", args: map[string]any{keyTokenUUID: blankString, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errTokenUUIDNonEmpty},
+		{name: "traversal token rejected", args: map[string]any{keyTokenUUID: "token..uuid", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageShareTokenNoSeparators},
+		{name: "numeric token rejected", args: map[string]any{keyTokenUUID: 123, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errTokenUUIDNonEmpty},
 	}
 
 	for _, tt := range validationTests {
@@ -108,7 +108,7 @@ func TestLinodeImageShareGroupTokenDeleteTool(t *testing.T) {
 		}
 		_, _, handler := tools.NewLinodeImageShareGroupTokenDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -140,7 +140,7 @@ func TestLinodeImageShareGroupTokenDeleteTool(t *testing.T) {
 		}
 		_, _, handler := tools.NewLinodeImageShareGroupTokenDeleteTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err)
 		require.NotNil(t, result)

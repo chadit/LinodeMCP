@@ -285,16 +285,16 @@ func TestLinodeInstanceInterfaceDeleteTool(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{name: caseMissingLinodeID, args: map[string]any{keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDInteger},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDInteger},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDInteger},
-		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: tools.ErrInterfaceIDRequired.Error()},
-		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyConfirm: true}, want: errInterfaceIDInteger},
-		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: interfaceIDQueryValue, keyConfirm: true}, want: errInterfaceIDInteger},
-		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyConfirm: true}, want: errInterfaceIDInteger},
-		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(-1), keyConfirm: true}, want: errInterfaceIDMinOne},
-		{name: caseZeroInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyConfirm: true}, want: errInterfaceIDMinOne},
+		{name: caseMissingLinodeID, args: map[string]any{keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, want: tools.ErrInterfaceIDRequired.Error()},
+		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDInteger},
+		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: interfaceIDQueryValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDInteger},
+		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDInteger},
+		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(-1), keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDMinOne},
+		{name: caseZeroInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDMinOne},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,7 +326,7 @@ func TestLinodeInstanceInterfaceDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceInterfaceDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -352,7 +352,7 @@ func TestLinodeInstanceInterfaceDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceInterfaceDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")

@@ -63,6 +63,8 @@ const (
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"
+	keyConfirmedDryRun           = "confirmed_dry_run"
+	keyConfirmBypassDryRun       = "confirm_bypass_dry_run"
 	keyOTPCode                   = "otp_code"
 	keyPort                      = "port"
 	keyProtocol                  = "protocol"

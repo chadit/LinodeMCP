@@ -1250,7 +1250,7 @@ async def test_account_payment_method_delete_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_payment_method_delete",
-            {"payment_method_id": 123, "confirm": True},
+            {"payment_method_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
     payload = json.loads(result[0].text)
@@ -1609,7 +1609,7 @@ async def test_account_user_delete_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_user_delete",
-            {"username": "alice", "confirm": True},
+            {"username": "alice", "confirm": True, "confirmed_dry_run": True},
         )
 
     payload = json.loads(result[0].text)
@@ -1655,7 +1655,7 @@ async def test_account_user_delete_validates_username(
         r"alice\ops",
         "..",
     ):
-        arguments: dict[str, object] = {"confirm": True}
+        arguments: dict[str, object] = {"confirm": True, "confirmed_dry_run": True}
         if username is not None:
             arguments["username"] = username
 
@@ -1699,7 +1699,7 @@ async def test_account_user_delete_tool_propagates_client_error(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_user_delete",
-            {"username": "alice", "confirm": True},
+            {"username": "alice", "confirm": True, "confirmed_dry_run": True},
         )
 
     assert "boom" in result[0].text
@@ -4627,7 +4627,7 @@ async def test_account_service_transfer_accept_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_service_transfer_accept",
-            {"token": "transfer-token", "confirm": True},
+            {"token": "transfer-token", "confirm": True, "confirmed_dry_run": True},
         )
 
     assert json.loads(result[0].text) == response_data
@@ -4679,13 +4679,31 @@ async def test_account_service_transfer_accept_requires_boolean_confirm(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"confirm": True}, "token is required"),
-        ({"token": 123, "confirm": True}, "token must be a string"),
-        ({"token": "   ", "confirm": True}, "token is required"),
-        ({"token": " transfer-token", "confirm": True}, "token must not contain"),
-        ({"token": "transfer/token", "confirm": True}, "token must not contain"),
-        ({"token": "transfer?token", "confirm": True}, "token must not contain"),
-        ({"token": "..", "confirm": True}, "token must not contain"),
+        ({"confirm": True, "confirmed_dry_run": True}, "token is required"),
+        (
+            {"token": 123, "confirm": True, "confirmed_dry_run": True},
+            "token must be a string",
+        ),
+        (
+            {"token": "   ", "confirm": True, "confirmed_dry_run": True},
+            "token is required",
+        ),
+        (
+            {"token": " transfer-token", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
+        (
+            {"token": "transfer/token", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
+        (
+            {"token": "transfer?token", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
+        (
+            {"token": "..", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
     ],
 )
 async def test_account_service_transfer_accept_rejects_invalid_token(
@@ -4806,7 +4824,7 @@ async def test_account_service_transfer_delete_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_service_transfer_delete",
-            {"token": "transfer-token", "confirm": True},
+            {"token": "transfer-token", "confirm": True, "confirmed_dry_run": True},
         )
 
     assert json.loads(result[0].text) == {
@@ -4822,12 +4840,30 @@ async def test_account_service_transfer_delete_dispatches_from_registry(
     ("arguments", "message"),
     [
         ({}, "token is required"),
-        ({"token": 123, "confirm": True}, "token must be a string"),
-        ({"token": "   ", "confirm": True}, "token is required"),
-        ({"token": " transfer-token", "confirm": True}, "token must not contain"),
-        ({"token": "transfer/token", "confirm": True}, "token must not contain"),
-        ({"token": "transfer?token", "confirm": True}, "token must not contain"),
-        ({"token": "..", "confirm": True}, "token must not contain"),
+        (
+            {"token": 123, "confirm": True, "confirmed_dry_run": True},
+            "token must be a string",
+        ),
+        (
+            {"token": "   ", "confirm": True, "confirmed_dry_run": True},
+            "token is required",
+        ),
+        (
+            {"token": " transfer-token", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
+        (
+            {"token": "transfer/token", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
+        (
+            {"token": "transfer?token", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
+        (
+            {"token": "..", "confirm": True, "confirmed_dry_run": True},
+            "token must not contain",
+        ),
     ],
 )
 async def test_account_service_transfer_delete_rejects_invalid_token(
@@ -5302,7 +5338,7 @@ async def test_account_payment_method_make_default_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_payment_method_make_default",
-            {"payment_method_id": 123, "confirm": True},
+            {"payment_method_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
     assert json.loads(result[0].text) == {
@@ -7146,7 +7182,7 @@ async def test_database_mysql_instance_delete_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_database_mysql_instance_delete",
-            {"instance_id": 123, "confirm": True},
+            {"instance_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
     assert json.loads(result[0].text) == response_data
@@ -7173,12 +7209,12 @@ async def test_database_mysql_instance_delete_requires_boolean_confirm(
 @pytest.mark.parametrize(
     "arguments",
     [
-        {"confirm": True},
-        {"instance_id": 0, "confirm": True},
-        {"instance_id": True, "confirm": True},
-        {"instance_id": "123/456", "confirm": True},
-        {"instance_id": "123?456", "confirm": True},
-        {"instance_id": "..", "confirm": True},
+        {"confirm": True, "confirmed_dry_run": True},
+        {"instance_id": 0, "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": True, "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": "123/456", "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": "123?456", "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": "..", "confirm": True, "confirmed_dry_run": True},
     ],
 )
 async def test_database_mysql_instance_delete_rejects_invalid_instance_id(
@@ -7308,7 +7344,7 @@ async def test_database_postgresql_instance_delete_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_database_postgresql_instance_delete",
-            {"instance_id": 123, "confirm": True},
+            {"instance_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
     assert json.loads(result[0].text) == response_data
@@ -7337,12 +7373,12 @@ async def test_database_postgresql_instance_delete_requires_boolean_confirm(
 @pytest.mark.parametrize(
     "arguments",
     [
-        {"confirm": True},
-        {"instance_id": 0, "confirm": True},
-        {"instance_id": True, "confirm": True},
-        {"instance_id": "123/456", "confirm": True},
-        {"instance_id": "123?456", "confirm": True},
-        {"instance_id": "..", "confirm": True},
+        {"confirm": True, "confirmed_dry_run": True},
+        {"instance_id": 0, "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": True, "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": "123/456", "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": "123?456", "confirm": True, "confirmed_dry_run": True},
+        {"instance_id": "..", "confirm": True, "confirmed_dry_run": True},
     ],
 )
 async def test_database_postgresql_instance_delete_rejects_invalid_instance_id(
@@ -10849,7 +10885,7 @@ async def test_account_oauth_client_delete_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_oauth_client_delete",
-            {"client_id": "client-123", "confirm": True},
+            {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
     assert json.loads(result[0].text) == {"id": "client-123", "deleted": True}
@@ -10894,7 +10930,7 @@ async def test_account_oauth_client_delete_validates_client_id(
     """OAuth client delete validates client_id before client calls."""
     mock_client = AsyncMock()
     mock_client.delete_account_oauth_client = AsyncMock()
-    arguments: dict[str, object] = {"confirm": True}
+    arguments: dict[str, object] = {"confirm": True, "confirmed_dry_run": True}
     if client_id is not None:
         arguments["client_id"] = client_id
 
@@ -10950,7 +10986,7 @@ async def test_account_oauth_client_delete_tool_propagates_client_error(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_oauth_client_delete",
-            {"client_id": "client-123", "confirm": True},
+            {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
     assert "DeleteAccountOAuthClient" in result[0].text
@@ -10996,7 +11032,7 @@ async def test_account_oauth_client_reset_secret_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_oauth_client_reset_secret",
-            {"client_id": "client-123", "confirm": True},
+            {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
     payload = json.loads(result[0].text)
@@ -11102,7 +11138,7 @@ async def test_account_oauth_client_reset_secret_tool_propagates_client_error(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_oauth_client_reset_secret",
-            {"client_id": "client-123", "confirm": True},
+            {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
     assert "ResetAccountOAuthClientSecret" in result[0].text
@@ -11147,7 +11183,11 @@ async def test_account_cancel_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_cancel",
-            {"comments": "No longer needed", "confirm": True},
+            {
+                "comments": "No longer needed",
+                "confirm": True,
+                "confirmed_dry_run": True,
+            },
         )
 
     assert json.loads(result[0].text) == response_data
@@ -11218,7 +11258,8 @@ async def test_account_cancel_rejects_non_string_comments(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_cancel", {"comments": 123, "confirm": True}
+            "linode_account_cancel",
+            {"comments": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
     assert "comments must be a string" in result[0].text
@@ -13757,6 +13798,7 @@ async def test_networking_ip_update_rejects_malformed_address_before_client(
                 "instance_id": "123",
                 "address": "198.51.100.5?x=1",
                 "confirm": True,
+                "confirmed_dry_run": True,
             },
         ),
     ],
@@ -14611,3 +14653,39 @@ async def test_database_engine_get_rejects_invalid_arguments(
 
     assert expected_error in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_destroy_bypass_dry_run_gate(sample_config: Config) -> None:
+    """The Phase 3 bypass-dry-run gate is enforced at dispatch for CapDestroy
+    tools. volume_delete is representative; all destroy tools route through the
+    same dispatch gate. The error paths short-circuit before the handler runs,
+    so no client is needed."""
+    srv = Server(_full_access_config(sample_config))
+
+    # confirm without a dry-run assertion -> the three-option error.
+    result = await srv.dispatch(
+        "linode_volume_delete", {"volume_id": 789, "confirm": True}
+    )
+    text = result[0].text
+    assert "is destructive" in text
+    assert "confirmed_dry_run" in text
+    assert "confirm_bypass_dry_run" in text
+
+    # bypass without confirm -> rejected.
+    result = await srv.dispatch(
+        "linode_volume_delete",
+        {"volume_id": 789, "confirm_bypass_dry_run": True},
+    )
+    assert "only takes effect with confirm: true" in result[0].text
+
+    # both flags -> rejected.
+    result = await srv.dispatch(
+        "linode_volume_delete",
+        {
+            "volume_id": 789,
+            "confirm": True,
+            "confirmed_dry_run": True,
+            "confirm_bypass_dry_run": True,
+        },
+    )
+    assert "not both" in result[0].text

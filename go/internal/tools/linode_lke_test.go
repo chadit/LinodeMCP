@@ -1088,7 +1088,7 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyClusterID: float64(123)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingClusterID, args: map[string]any{keyConfirm: true}, wantContains: errClusterIDRequired},
+		{name: caseMissingClusterID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errClusterIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1119,7 +1119,7 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEClusterDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1442,7 +1442,7 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEPoolDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1540,7 +1540,7 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123}, wantContains: errConfirmEqualsTrue},
-		{name: "missing node id", args: map[string]any{keyClusterID: float64(123), keyConfirm: true}, wantContains: "node_id is required"},
+		{name: "missing node id", args: map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "node_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1571,7 +1571,7 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKENodeDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1691,7 +1691,7 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEKubeconfigDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1770,7 +1770,7 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEServiceTokenDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1957,7 +1957,7 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEACLDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
