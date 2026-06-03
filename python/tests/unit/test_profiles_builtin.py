@@ -148,6 +148,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_databases_types_list", Capability.Read),
         # DNS.
         ToolDescriptor("linode_domains_list", Capability.Read),
+        ToolDescriptor("linode_domain_clone", Capability.Write),
         ToolDescriptor("linode_domain_create", Capability.Write),
         ToolDescriptor("linode_domain_import", Capability.Write),
         ToolDescriptor("linode_domain_record_create", Capability.Write),
@@ -304,6 +305,7 @@ def test_network_admin_excludes_compute_writes() -> None:
     assert "linode_volume_create" not in network_admin_tools
     # But network mutators are present.
     assert "linode_firewall_create" in network_admin_tools
+    assert "linode_domain_clone" in network_admin_tools
     assert "linode_domain_create" in network_admin_tools
     assert "linode_domain_import" in network_admin_tools
     assert "linode_vpc_create" in network_admin_tools

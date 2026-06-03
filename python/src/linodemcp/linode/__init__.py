@@ -5940,6 +5940,35 @@ class Client:
             logger.exception("HTTP error creating domain: %s", e)
             raise NetworkError("CreateDomain", e) from e
 
+    async def clone_domain(self, domain_id: int | str, domain: str) -> Domain:
+        """Clone a domain."""
+        if not domain or domain != domain.strip():
+            msg = "domain is required"
+            raise ValueError(msg)
+        validate_label(domain)
+        encoded_domain_id = quote(str(domain_id), safe="")
+        endpoint = f"/domains/{encoded_domain_id}/clone"
+        logger.info("Cloning domain", extra={"domain_id": domain_id})
+
+        try:
+            response = await self.make_request("POST", endpoint, {"domain": domain})
+            data = response.json()
+            result = self._parse_domain(data)
+            logger.info("Domain cloned", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout cloning domain: %s", e)
+            raise NetworkError("CloneDomain", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout cloning domain: %s", e)
+            raise NetworkError("CloneDomain", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error cloning domain")
+            raise NetworkError("CloneDomain", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error cloning domain: %s", e)
+            raise NetworkError("CloneDomain", e) from e
+
     async def import_domain(self, domain: str, remote_nameserver: str) -> Domain:
         """Import a domain from a remote nameserver."""
         if not domain or domain != domain.strip():
@@ -10265,6 +10294,10 @@ class RetryableClient:
             self.client.create_domain, domain, domain_type, soa_email, description, tags
         )
         return result
+
+    async def clone_domain(self, domain_id: int, domain: str) -> Domain:
+        """Clone domain without replaying the POST."""
+        return await self.client.clone_domain(domain_id, domain)
 
     async def import_domain(self, domain: str, remote_nameserver: str) -> Domain:
         """Import domain without replaying the POST."""
