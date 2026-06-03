@@ -9772,6 +9772,160 @@ async def test_retryable_get_image_sharegroup_uses_retry_wrapper() -> None:
     )
 
 
+async def test_update_image_sharegroup_sends_put_to_encoded_path() -> None:
+    """Image share group update should PUT documented body fields."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "label": "partner-group",
+        "description": "Shared images",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.update_image_sharegroup(
+            "11111111-1111-4111-8111-111111111111",
+            label="partner-group",
+            description="Shared images",
+        )
+
+        assert result["label"] == "partner-group"
+        mock_request.assert_awaited_once_with(
+            "PUT",
+            "/images/sharegroups/11111111-1111-4111-8111-111111111111",
+            {"label": "partner-group", "description": "Shared images"},
+        )
+
+    await client.close()
+
+
+async def test_update_image_sharegroup_omits_absent_optional_fields() -> None:
+    """Image share group update should omit absent optional fields."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": "sharegroup-record-1", "label": "partner-group"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.update_image_sharegroup(
+            "11111111-1111-4111-8111-111111111111", label="partner-group"
+        )
+
+        mock_request.assert_awaited_once_with(
+            "PUT",
+            "/images/sharegroups/11111111-1111-4111-8111-111111111111",
+            {"label": "partner-group"},
+        )
+
+    await client.close()
+
+
+async def test_update_image_sharegroup_encodes_path_segment() -> None:
+    """Client boundary should encode unsafe sharegroup_id path input."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": "sharegroup-record-1"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.update_image_sharegroup("12/../?x=1", label="partner-group")
+
+        mock_request.assert_awaited_once_with(
+            "PUT",
+            "/images/sharegroups/12%2F..%2F%3Fx%3D1",
+            {"label": "partner-group"},
+        )
+
+    await client.close()
+
+
+async def test_update_image_sharegroup_rejects_empty_body() -> None:
+    """Image share group update should reject no-op bodies before HTTP."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="at least one"),
+    ):
+        await client.update_image_sharegroup("11111111-1111-4111-8111-111111111111")
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_update_image_sharegroup_rejects_empty_body() -> None:
+    """Retryable update wrapper should reject no-op bodies before client calls."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=3, base_delay=0.01),
+    )
+
+    with (
+        patch.object(
+            client.client,
+            "update_image_sharegroup",
+            new_callable=AsyncMock,
+        ) as mock_update,
+        pytest.raises(ValueError, match="at least one"),
+    ):
+        await client.update_image_sharegroup("11111111-1111-4111-8111-111111111111")
+
+    mock_update.assert_not_called()
+    await client.close()
+
+
+async def test_update_image_sharegroup_wraps_http_errors() -> None:
+    """Image share group update should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.update_image_sharegroup(
+                "11111111-1111-4111-8111-111111111111", label="partner-group"
+            )
+
+    assert "UpdateImageSharegroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_update_image_sharegroup_delegates_once() -> None:
+    """Retryable update wrapper should not replay share group updates."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=3, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "update_image_sharegroup",
+        new_callable=AsyncMock,
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("temporary")
+
+        with pytest.raises(httpx.HTTPError):
+            await client.update_image_sharegroup(
+                "11111111-1111-4111-8111-111111111111",
+                label="partner-group",
+                description="Shared images",
+            )
+
+        mock_update.assert_awaited_once_with(
+            "11111111-1111-4111-8111-111111111111",
+            label="partner-group",
+            description="Shared images",
+        )
+
+    await client.close()
+
+
 async def test_create_image_sharegroup_token_sends_post_body() -> None:
     """Image share group token create should POST the documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
