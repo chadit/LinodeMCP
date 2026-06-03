@@ -20,6 +20,22 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
+def _optional_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    """Parse an optional integer argument with range checks."""
+    if name not in arguments or arguments[name] is None:
+        return None
+    value = arguments[name]
+    if type(value) is not int or value < minimum:
+        if maximum is None:
+            raise ValueError(f"{name} must be an integer at least {minimum}")
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    return value
+
+
 def create_linode_images_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_list tool."""
     return Tool(
@@ -48,6 +64,36 @@ def create_linode_images_list_tool() -> tuple[Tool, Capability]:
                 "deprecated": {
                     "type": "string",
                     "description": "Filter by deprecated status (true, false)",
+                },
+            },
+        },
+    ), Capability.Read
+
+
+def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroups_list tool."""
+    return Tool(
+        name="linode_images_sharegroups_list",
+        description="Lists image share groups available to the account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
                 },
             },
         },
@@ -184,6 +230,31 @@ async def handle_linode_image_create(
         }
 
     return await execute_tool(cfg, arguments, "create Linode image", _call)
+
+
+async def handle_linode_images_sharegroups_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroups_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_image_sharegroups(page=page, page_size=page_size)
+        sharegroups = data.get("data", [])
+        return {
+            "message": "Image share groups listed",
+            "count": len(sharegroups),
+            "sharegroups": sharegroups,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list image share groups", _call)
 
 
 async def handle_linode_images_list(
