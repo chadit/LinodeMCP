@@ -129,6 +129,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_mysql_instance_ssl_get", Capability.Read),
         ToolDescriptor("linode_images_list", Capability.Read),
         ToolDescriptor("linode_images_sharegroups_list", Capability.Read),
+        ToolDescriptor("linode_images_sharegroups_token_create", Capability.Write),
         ToolDescriptor("linode_images_sharegroups_tokens_list", Capability.Read),
         ToolDescriptor("linode_stackscripts_list", Capability.Read),
         # Compute deep (backups, disks, ips).

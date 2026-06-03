@@ -304,10 +304,12 @@ from linodemcp.tools.linode_images import (
     create_linode_image_create_tool,
     create_linode_images_list_tool,
     create_linode_images_sharegroups_list_tool,
+    create_linode_images_sharegroups_token_create_tool,
     create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_image_create,
     handle_linode_images_list,
     handle_linode_images_sharegroups_list,
+    handle_linode_images_sharegroups_token_create,
     handle_linode_images_sharegroups_tokens_list,
 )
 from linodemcp.tools.linode_instance_actions import (
@@ -928,6 +930,7 @@ __all__ = [
     "create_linode_image_create_tool",
     "create_linode_images_list_tool",
     "create_linode_images_sharegroups_list_tool",
+    "create_linode_images_sharegroups_token_create_tool",
     "create_linode_images_sharegroups_tokens_list_tool",
     "create_linode_instance_backup_create_tool",
     "create_linode_instance_backup_get_tool",
@@ -1276,6 +1279,7 @@ __all__ = [
     "handle_linode_image_create",
     "handle_linode_images_list",
     "handle_linode_images_sharegroups_list",
+    "handle_linode_images_sharegroups_token_create",
     "handle_linode_images_sharegroups_tokens_list",
     "handle_linode_instance_backup_create",
     "handle_linode_instance_backup_get",
