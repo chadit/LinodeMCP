@@ -126,6 +126,46 @@ def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_update tool."""
+    return Tool(
+        name="linode_images_sharegroup_update",
+        description="Updates an image share group label or description by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "string",
+                    "description": "Image share group UUID (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "New non-empty label for the share group",
+                },
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "New non-empty description for the share group",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["sharegroup_id", "confirm"],
+            "anyOf": [{"required": ["label"]}, {"required": ["description"]}],
+        },
+    ), Capability.Write
+
+
 def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_token_delete tool."""
     return Tool(
@@ -542,6 +582,24 @@ def _image_sharegroup_id_error(value: Any) -> str | None:
     return _image_sharegroup_token_uuid_error(value, "sharegroup_id")
 
 
+def _image_sharegroup_update_body(
+    label: Any, description: Any
+) -> tuple[dict[str, str] | None, str | None]:
+    """Validate update body fields."""
+    body: dict[str, str] = {}
+    if label is not None:
+        if not isinstance(label, str) or not label.strip():
+            return None, "label must be a non-empty string when provided"
+        body["label"] = label.strip()
+    if description is not None:
+        if not isinstance(description, str) or not description.strip():
+            return None, "description must be a non-empty string when provided"
+        body["description"] = description.strip()
+    if not body:
+        return None, "at least one of label or description must be provided"
+    return body, None
+
+
 def _image_sharegroup_token_create_uuid_error(value: Any) -> str | None:
     """Validate the valid_for_sharegroup_uuid arg."""
     return _image_sharegroup_token_uuid_error(value, "valid_for_sharegroup_uuid")
@@ -582,6 +640,56 @@ async def handle_linode_images_sharegroup_get(
         }
 
     return await execute_tool(cfg, arguments, "get image share group", _call)
+
+
+async def handle_linode_images_sharegroup_update(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_update tool request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    body, body_error = _image_sharegroup_update_body(
+        arguments.get("label"), arguments.get("description")
+    )
+    if body_error is not None:
+        return error_response(body_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an image share group. Set confirm=true to proceed."
+        )
+
+    if not isinstance(sharegroup_id, str):
+        return error_response("sharegroup_id must be a non-empty string")
+    sharegroup_id_str = sharegroup_id.strip()
+    body = cast("dict[str, str]", body)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_images_sharegroup_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
+            current_state=None,
+            request_body=body,
+            side_effects=["The image share group will be updated."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        sharegroup = await client.update_image_sharegroup(
+            sharegroup_id_str,
+            label=body.get("label"),
+            description=body.get("description"),
+        )
+        return {
+            "message": "Image share group updated",
+            "sharegroup": sharegroup,
+        }
+
+    return await execute_tool(cfg, arguments, "update image share group", _call)
 
 
 async def handle_linode_images_sharegroups_token_get(

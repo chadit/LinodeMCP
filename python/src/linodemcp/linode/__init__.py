@@ -2873,6 +2873,31 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetImageSharegroup", e) from e
 
+    async def update_image_sharegroup(
+        self,
+        sharegroup_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a single image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        if label is None and description is None:
+            raise ValueError("at least one of label or description must be provided")
+        body: dict[str, Any] = {}
+        if label is not None:
+            body["label"] = label
+        if description is not None:
+            body["description"] = description
+        try:
+            response = await self.make_request(
+                "PUT", f"/images/sharegroups/{sharegroup_id_path}", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateImageSharegroup", e) from e
+
     async def list_image_sharegroup_tokens(self) -> dict[str, Any]:
         """List image share group tokens for the user."""
         try:
@@ -9152,6 +9177,20 @@ class RetryableClient:
             lambda: self.client.get_image_sharegroup(sharegroup_id)
         )
         return result
+
+    async def update_image_sharegroup(
+        self,
+        sharegroup_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a single image share group without retry replay."""
+        if label is None and description is None:
+            raise ValueError("at least one of label or description must be provided")
+        return await self.client.update_image_sharegroup(
+            sharegroup_id, label=label, description=description
+        )
 
     async def list_image_sharegroup_tokens(self) -> dict[str, Any]:
         """List image share group tokens for the user with retry."""
