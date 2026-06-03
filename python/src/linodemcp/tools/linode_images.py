@@ -102,6 +102,35 @@ def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_delete tool."""
+    return Tool(
+        name="linode_images_sharegroup_delete",
+        description="Deletes a single image share group by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "string",
+                    "description": "Image share group UUID (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["sharegroup_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_get tool."""
     return Tool(
@@ -619,6 +648,39 @@ def _image_sharegroup_token_update_label_error(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return "label must be a non-empty string"
     return None
+
+
+async def handle_linode_images_sharegroup_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_delete tool request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an image share group. Set confirm=true to proceed."
+        )
+
+    sharegroup_id_str = cast("str", sharegroup_id).strip()
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_images_sharegroup_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
+            None,
+            side_effects=["The image share group will be deleted."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image_sharegroup(sharegroup_id_str)
+        return {"message": "Image share group deleted"}
+
+    return await execute_tool(cfg, arguments, "delete image share group", _call)
 
 
 async def handle_linode_images_sharegroup_get(
