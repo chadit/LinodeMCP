@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -20,6 +20,42 @@ from linodemcp.tools.helpers import (
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+_ENV_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "Linode environment to use (optional, defaults to 'default')",
+}
+_CLIENT_ID_PROP: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 1,
+    "description": "Longview client ID to update (required)",
+}
+_CONFIRM_PROP: dict[str, Any] = {
+    "type": "boolean",
+    "description": "Set true to confirm this mutating operation.",
+}
+
+
+def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_client_update tool."""
+    return Tool(
+        name="linode_longview_client_update",
+        description=(
+            "Updates a Longview client label. Pass dry_run=true to preview "
+            "without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "client_id": _CLIENT_ID_PROP,
+                "label": {"type": "string", "description": "Longview client label"},
+                "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["client_id", "label", "confirm"],
+        },
+    ), Capability.Write
 
 
 def create_linode_longview_clients_list_tool() -> tuple[Tool, Capability]:
@@ -86,6 +122,31 @@ def _required_positive_int_argument(arguments: dict[str, Any], name: str) -> int
     return value
 
 
+def _longview_client_id_error(value: object) -> str | None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        return "client_id must be a positive integer"
+    return None
+
+
+def _longview_client_update_body(arguments: dict[str, Any]) -> dict[str, str]:
+    label = arguments.get("label")
+    if not isinstance(label, str):
+        return {}
+    return {"label": label}
+
+
+def _longview_client_update_error(
+    arguments: dict[str, Any],
+) -> list[TextContent] | None:
+    id_error = _longview_client_id_error(arguments.get("client_id"))
+    if id_error is not None:
+        return error_response(id_error)
+    label = arguments.get("label")
+    if not isinstance(label, str) or not label:
+        return error_response("label must be a non-empty string")
+    return None
+
+
 def _optional_int_argument(
     arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
 ) -> int | None:
@@ -102,6 +163,42 @@ def _optional_int_argument(
         msg = f"{name} must be at most {maximum}"
         raise ValueError(msg)
     return value
+
+
+async def handle_linode_longview_client_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_longview_client_update tool request."""
+    validation = _longview_client_update_error(arguments)
+    if validation is not None:
+        return validation
+
+    client_id = cast("int", arguments["client_id"])
+    body = _longview_client_update_body(arguments)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Longview client. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_longview_client_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/longview/clients/{client_id}",
+            None,
+            request_body=body,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_longview_client(client_id, label=body["label"])
+        return {
+            "message": f"Longview client {client_id} updated successfully",
+            "longview_client": result,
+        }
+
+    return await execute_tool(cfg, arguments, "update Longview client", _call)
 
 
 async def handle_linode_longview_clients_list(

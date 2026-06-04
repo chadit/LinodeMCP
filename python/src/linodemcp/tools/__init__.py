@@ -580,8 +580,10 @@ from linodemcp.tools.linode_lke_write import (
 )
 from linodemcp.tools.linode_longview import (
     create_linode_longview_client_delete_tool,
+    create_linode_longview_client_update_tool,
     create_linode_longview_clients_list_tool,
     handle_linode_longview_client_delete,
+    handle_linode_longview_client_update,
     handle_linode_longview_clients_list,
 )
 from linodemcp.tools.linode_monitor_write import (
@@ -1193,6 +1195,7 @@ __all__ = [
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
     "create_linode_longview_client_delete_tool",
+    "create_linode_longview_client_update_tool",
     "create_linode_longview_clients_list_tool",
     "create_linode_managed_stats_tool",
     "create_linode_monitor_alert_channels_list_tool",
@@ -1607,6 +1610,7 @@ __all__ = [
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
     "handle_linode_longview_client_delete",
+    "handle_linode_longview_client_update",
     "handle_linode_longview_clients_list",
     "handle_linode_managed_stats",
     "handle_linode_monitor_alert_channels_list",
