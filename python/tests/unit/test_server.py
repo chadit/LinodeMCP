@@ -15151,3 +15151,151 @@ async def test_instance_firewalls_list_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_instance_firewalls_list" in srv.registered_tool_names
+
+
+def test_linode_instance_interface_add_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Instance interface add tool is exported, registered, and full-access enabled."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_interface_add_tool" in tools_mod.__all__
+    assert "handle_linode_instance_interface_add" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert "linode_instance_interface_add" in registry
+    entry = registry["linode_instance_interface_add"]
+    assert entry.capability is Capability.Write
+    assert entry.tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert entry.tool.inputSchema["properties"]["interface"]["type"] == "object"
+    assert entry.tool.inputSchema["required"] == [
+        "linode_id",
+        "interface",
+        "confirm",
+    ]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_interface_add" in srv.registered_tool_names
+
+
+async def test_linode_instance_interface_add_dispatches_happy_path(
+    sample_config: Config,
+) -> None:
+    """Instance interface add dispatch sends validated input to the client."""
+    payload = {"public": {"ipv4": {"addresses": [{"address": "auto"}]}}}
+    response_data: dict[str, Any] = {
+        "id": 7,
+        "public": {"ipv4": {"addresses": []}},
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.add_instance_interface.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_instance_interface_add",
+            {"linode_id": 42, "interface": payload, "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {"interface": response_data}
+    mock_client.add_instance_interface.assert_awaited_once_with(42, payload)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"linode_id": 42, "interface": {"public": {}}},
+        {"linode_id": 42, "interface": {"public": {}}, "confirm": False},
+        {"linode_id": 42, "interface": {"public": {}}, "confirm": "true"},
+        {"linode_id": 42, "interface": {"public": {}}, "confirm": 1},
+    ],
+)
+async def test_linode_instance_interface_add_rejects_non_true_confirm(
+    sample_config: Config, arguments: dict[str, Any]
+) -> None:
+    """Instance interface add requires explicit boolean confirm=true."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_instance_interface_add", arguments)
+
+    assert "confirm must be true" in result[0].text
+    mock_client.add_instance_interface.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({"interface": {"public": {}}, "confirm": True}, "linode_id"),
+        ({"linode_id": 0, "interface": {"public": {}}, "confirm": True}, "linode_id"),
+        (
+            {"linode_id": True, "interface": {"public": {}}, "confirm": True},
+            "linode_id",
+        ),
+        (
+            {"linode_id": "42/43", "interface": {"public": {}}, "confirm": True},
+            "linode_id",
+        ),
+        (
+            {"linode_id": "42?x", "interface": {"public": {}}, "confirm": True},
+            "linode_id",
+        ),
+        (
+            {"linode_id": "..", "interface": {"public": {}}, "confirm": True},
+            "linode_id",
+        ),
+        ({"linode_id": 42, "confirm": True}, "interface"),
+        ({"linode_id": 42, "interface": [], "confirm": True}, "interface"),
+    ],
+)
+async def test_linode_instance_interface_add_rejects_invalid_inputs(
+    sample_config: Config, arguments: dict[str, Any], expected: str
+) -> None:
+    """Instance interface add rejects invalid args before client construction."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_instance_interface_add", arguments)
+
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_linode_instance_interface_add_dry_run_previews_without_client_call(
+    sample_config: Config,
+) -> None:
+    """Instance interface add dry-run returns the POST preview and body."""
+    payload = {"vlan": {"vlan_label": "backend", "ipam_address": "10.0.0.1/24"}}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_instance_interface_add",
+            {
+                "linode_id": 42,
+                "interface": payload,
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["would_execute"] == {
+        "method": "POST",
+        "path": "/linode/instances/42/interfaces",
+        "body": payload,
+    }
+    mock_client.add_instance_interface.assert_not_called()

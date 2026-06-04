@@ -16866,3 +16866,86 @@ async def test_retryable_list_instance_firewalls_delegates_with_retry() -> None:
     assert result["results"] == 1
     mock_list.assert_awaited_once_with(42, page=1, page_size=25)
     await client.close()
+
+
+async def test_add_instance_interface_sends_post_to_instance_interfaces_route() -> None:
+    """Add Linode instance interface sends POST to the exact route and body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {"public": {"ipv4": {"addresses": [{"address": "auto"}]}}}
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "id": 7,
+        "public": {"ipv4": {"addresses": [{"address": "192.0.2.1"}]}},
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.add_instance_interface(123, payload)
+
+    assert result["id"] == 7
+    mock_request.assert_awaited_once_with(
+        "POST", "/linode/instances/123/interfaces", payload
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x", "..", 0, -1, True])
+async def test_add_instance_interface_rejects_malformed_linode_id(
+    linode_id: Any,
+) -> None:
+    """Add Linode instance interface rejects malformed path params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="linode_id must be a positive integer"),
+    ):
+        await client.add_instance_interface(linode_id, {"public": {}})
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_add_instance_interface_rejects_non_object_body() -> None:
+    """Add Linode instance interface rejects non-object request bodies."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(TypeError, match="interface must be an object"),
+    ):
+        await client.add_instance_interface(123, [])
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_add_instance_interface_wraps_http_errors() -> None:
+    """Add Linode instance interface maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.add_instance_interface(42, {"public": {}})
+
+    assert "AddInstanceInterface" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_add_instance_interface_delegates_without_retry() -> None:
+    """Retryable Linode interface add delegates once without replay retry."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    payload = {"vpc": {"subnet_id": 321}}
+
+    with patch.object(
+        client.client, "add_instance_interface", new_callable=AsyncMock
+    ) as mock_add:
+        mock_add.side_effect = [httpx.HTTPError("boom"), {"id": 7}]
+        with pytest.raises(httpx.HTTPError):
+            await client.add_instance_interface(42, payload)
+
+    mock_add.assert_awaited_once_with(42, payload)
+    await client.close()

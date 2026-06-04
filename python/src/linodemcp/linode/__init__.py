@@ -1684,6 +1684,23 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("AddInstanceConfigInterface", e) from e
 
+    async def add_instance_interface(
+        self, linode_id: int, interface: Any
+    ) -> dict[str, Any]:
+        """Add an interface to a Linode instance."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        if not isinstance(interface, dict):
+            raise TypeError("interface must be an object")
+        interface_body = cast("dict[str, Any]", interface)
+        encoded_linode_id = quote(str(linode_id), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces"
+        try:
+            response = await self.make_request("POST", endpoint, interface_body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AddInstanceInterface", e) from e
+
     async def reorder_instance_config_interfaces(
         self, linode_id: int, config_id: int, ids: object
     ) -> dict[str, Any]:
@@ -9236,6 +9253,15 @@ class RetryableClient:
         """Add instance config interface without retry replay."""
         result: dict[str, Any] = await self.client.add_instance_config_interface(
             linode_id, config_id, interface
+        )
+        return result
+
+    async def add_instance_interface(
+        self, linode_id: int, interface: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Add a Linode instance interface without replay retry."""
+        result: dict[str, Any] = await self.client.add_instance_interface(
+            linode_id, interface
         )
         return result
 

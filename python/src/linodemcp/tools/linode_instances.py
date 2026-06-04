@@ -562,6 +562,41 @@ def create_linode_instance_config_interface_add_tool() -> tuple[Tool, Capability
     ), Capability.Write
 
 
+def create_linode_instance_interface_add_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_add tool."""
+    return Tool(
+        name="linode_instance_interface_add",
+        description=(
+            "Adds an interface to a Linode instance using the current Linode "
+            "Interfaces API. Requires confirm because instance networking changes."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "interface": {
+                    "type": "object",
+                    "description": (
+                        "Interface payload matching the Linode API public, VPC, "
+                        "or VLAN interface request body."
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to add the instance interface.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "interface", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_update tool."""
     return Tool(
@@ -621,6 +656,42 @@ def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
             ],
         },
     ), Capability.Write
+
+
+async def handle_linode_instance_interface_add(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_interface_add tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    interface = arguments.get("interface")
+    if not isinstance(interface, dict):
+        return error_response("interface must be an object")
+    interface_body = cast("dict[str, Any]", interface)
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_interface_add",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{linode_id}/interfaces",
+            None,
+            request_body=interface_body,
+            side_effects=[f"An interface will be added to Linode {linode_id}."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        interface_result = await client.add_instance_interface(
+            linode_id, interface_body
+        )
+        return {"interface": interface_result}
+
+    return await execute_tool(cfg, arguments, "add Linode instance interface", _call)
 
 
 async def handle_linode_instance_config_delete(
