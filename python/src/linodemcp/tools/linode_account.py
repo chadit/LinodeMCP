@@ -4112,6 +4112,45 @@ async def handle_linode_account_support_ticket_create(
     return await execute_tool(cfg, arguments, "open Linode support ticket", _call)
 
 
+def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_credential_get tool."""
+    return Tool(
+        name="linode_managed_credential_get",
+        description="Gets a Linode Managed credential by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "credential_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed credential ID to retrieve",
+                },
+            },
+            "required": ["credential_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_credential_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_credential_get tool request."""
+    credential_id = arguments.get("credential_id")
+    if (
+        not isinstance(credential_id, int)
+        or isinstance(credential_id, bool)
+        or credential_id < 1
+    ):
+        return error_response("credential_id must be a positive integer")
+    validated_credential_id = credential_id
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_managed_credential(validated_credential_id)
+
+    return await execute_tool(cfg, arguments, "get Linode Managed credential", _call)
+
+
 def create_linode_managed_contacts_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contacts_list tool."""
     return Tool(

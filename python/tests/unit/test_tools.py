@@ -125,6 +125,7 @@ from linodemcp.tools import (
     create_linode_managed_contact_delete_tool,
     create_linode_managed_contact_get_tool,
     create_linode_managed_contacts_list_tool,
+    create_linode_managed_credential_get_tool,
     create_linode_managed_credentials_list_tool,
     create_linode_managed_ssh_key_get_tool,
     create_linode_managed_stats_tool,
@@ -333,6 +334,7 @@ from linodemcp.tools import (
     handle_linode_managed_contact_delete,
     handle_linode_managed_contact_get,
     handle_linode_managed_contacts_list,
+    handle_linode_managed_credential_get,
     handle_linode_managed_credentials_list,
     handle_linode_managed_ssh_key_get,
     handle_linode_managed_stats,
@@ -1984,6 +1986,50 @@ async def test_handle_linode_managed_contact_delete_dry_run(
     assert payload["tool"] == "linode_managed_contact_delete"
     assert payload["would_execute"]["method"] == "DELETE"
     assert payload["would_execute"]["path"] == "/managed/contacts/123"
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_managed_credential_get_tool() -> None:
+    """Test linode_managed_credential_get tool schema."""
+    tool, capability = create_linode_managed_credential_get_tool()
+
+    assert tool.name == "linode_managed_credential_get"
+    assert capability == Capability.Read
+    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
+    assert tool.inputSchema["required"] == ["credential_id"]
+
+
+async def test_handle_linode_managed_credential_get(sample_config: Config) -> None:
+    """Test linode_managed_credential_get tool."""
+    response_data: dict[str, Any] = {"id": 123, "label": "db-root"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_credential.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_credential_get(
+            {"credential_id": 123}, sample_config
+        )
+
+        assert json.loads(result[0].text) == response_data
+        mock_client.get_managed_credential.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize("credential_id", [None, 0, -1, True, "/", "1?", ".."])
+async def test_handle_linode_managed_credential_get_rejects_invalid_id(
+    sample_config: Config, credential_id: object
+) -> None:
+    """Managed credential get rejects invalid IDs before client construction."""
+    arguments = {} if credential_id is None else {"credential_id": credential_id}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_credential_get(arguments, sample_config)
+
+    assert "credential_id must be a positive integer" in result[0].text
     mock_client_class.assert_not_called()
 
 

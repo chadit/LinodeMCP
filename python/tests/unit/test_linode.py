@@ -5210,6 +5210,70 @@ async def test_retryable_create_support_ticket_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_managed_credential_sends_get_to_managed_credential_route() -> None:
+    """Managed credential get sends GET to the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 123, "label": "db-root"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_managed_credential(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/managed/credentials/123")
+    await client.close()
+
+
+@pytest.mark.parametrize("credential_id", [0, -1, True, "/", "1?", ".."])
+async def test_get_managed_credential_rejects_invalid_credential_id(
+    credential_id: object,
+) -> None:
+    """Managed credential get validates finite integer IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="credential_id must be a positive integer"),
+    ):
+        await client.get_managed_credential(cast("int", credential_id))
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_managed_credential_wraps_http_errors() -> None:
+    """Managed credential get maps HTTP errors to GetManagedCredential."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_managed_credential(123)
+
+    assert "GetManagedCredential" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_managed_credential_delegates_to_client() -> None:
+    """RetryableClient delegates Managed credential retrieval."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_managed_credential", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 123}
+        result = await retryable.get_managed_credential(123)
+
+    mock_get.assert_awaited_once_with(123)
+    assert result == {"id": 123}
+    await retryable.close()
+
+
 async def test_list_managed_contacts_sends_get_to_managed_contacts_route() -> None:
     """Test Managed contacts listing sends documented GET query."""
     client = Client("https://api.linode.com/v4", "test-token")
