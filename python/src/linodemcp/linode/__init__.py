@@ -5032,6 +5032,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateStackScript", e) from e
 
+    async def update_longview_client(
+        self,
+        client_id: object,
+        *,
+        label: str,
+    ) -> dict[str, Any]:
+        """Update a Longview client."""
+        valid_client_id = _validate_positive_path_int(client_id, "client_id")
+        encoded_client_id = quote(str(valid_client_id), safe="")
+        body = {"label": label}
+
+        try:
+            response = await self.make_request(
+                "PUT", f"/longview/clients/{encoded_client_id}", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateLongviewClient", e) from e
+
     # Phase 1: Object Storage read operations
 
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
@@ -11500,6 +11520,15 @@ class RetryableClient:
             is_public=is_public,
             rev_note=rev_note,
         )
+
+    async def update_longview_client(
+        self,
+        client_id: object,
+        *,
+        label: str,
+    ) -> dict[str, Any]:
+        """Update a Longview client without replay retry."""
+        return await self.client.update_longview_client(client_id, label=label)
 
     # Phase 1: Object Storage read operations with retry
 

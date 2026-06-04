@@ -130,9 +130,9 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     ("lke", ("linode_lke_",)),
+    ("longview", ("linode_longview_",)),
     ("vpcs", ("linode_vpc_", "linode_vpcs_")),
     ("security", ("linode_sshkey_", "linode_sshkeys_")),
-    ("longview", ("linode_longview_",)),
     ("monitor", ("linode_monitor_",)),
 )
 
