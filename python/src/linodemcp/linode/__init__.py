@@ -23,6 +23,15 @@ T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
+
+def _validate_positive_path_int(value: object, name: str) -> int:
+    """Validate a finite positive integer path parameter."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        msg = f"{name} must be a positive integer"
+        raise ValueError(msg)
+    return value
+
+
 _PLACEMENT_GROUP_LABEL_PATTERN = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
 )
@@ -1574,6 +1583,25 @@ class Client:
             await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceConfig", e) from e
+
+    async def list_instance_config_interfaces(
+        self, linode_id: int, config_id: int
+    ) -> dict[str, Any]:
+        """List interfaces for a Linode instance configuration profile."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        config_id = _validate_positive_path_int(config_id, "config_id")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/configs/"
+            f"{encoded_config_id}/interfaces"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListInstanceConfigInterfaces", e) from e
 
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance."""
@@ -8906,6 +8934,15 @@ class RetryableClient:
     async def delete_instance_config(self, linode_id: int, config_id: int) -> None:
         """Delete a Linode instance configuration profile without replay retry."""
         await self.client.delete_instance_config(linode_id, config_id)
+
+    async def list_instance_config_interfaces(
+        self, linode_id: int, config_id: int
+    ) -> dict[str, Any]:
+        """List Linode instance configuration profile interfaces with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_instance_config_interfaces, linode_id, config_id
+        )
+        return result
 
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance with retry."""

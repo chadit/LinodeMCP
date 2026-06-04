@@ -12931,6 +12931,30 @@ def test_linode_instance_config_get_registered() -> None:
     assert entry.capability == Capability.Read
 
 
+def test_linode_instance_config_interfaces_list_exported() -> None:
+    """Linode instance config interfaces list tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_config_interfaces_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_config_interfaces_list" in tools_mod.__all__
+
+
+def test_linode_instance_config_interfaces_list_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance config interfaces list tool is registered."""
+    from linodemcp.server import Server, get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_instance_config_interfaces_list" in entries
+    entry = entries["linode_instance_config_interfaces_list"]
+    assert entry.capability == Capability.Read
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_config_interfaces_list" in srv.registered_tool_names
+
+
 def test_linode_instance_configs_list_exported() -> None:
     """Linode instance configs list tool is exported."""
     import linodemcp.tools as tools_mod

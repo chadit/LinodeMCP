@@ -3504,6 +3504,92 @@ async def test_retryable_delete_instance_config_delegates_without_retry() -> Non
     await retryable.close()
 
 
+async def test_list_instance_config_interfaces() -> None:
+    """List Linode instance config interfaces sends GET to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"id": 9, "purpose": "vlan"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_instance_config_interfaces(123, 6)
+
+    assert result["data"][0]["purpose"] == "vlan"
+    mock_request.assert_called_once_with(
+        "GET", "/linode/instances/123/configs/6/interfaces"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("1/2", 6),
+        ("1?x", 6),
+        ("..", 6),
+        (0, 6),
+        (True, 6),
+        (123, "6/7"),
+        (123, "6?x"),
+        (123, ".."),
+        (123, 0),
+        (123, True),
+    ],
+)
+async def test_list_instance_config_interfaces_rejects_malformed_path_params(
+    arguments: tuple[Any, Any],
+) -> None:
+    """Linode instance config interfaces rejects malformed path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    linode_id, config_id = arguments
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="positive integer"),
+    ):
+        await client.list_instance_config_interfaces(linode_id, config_id)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_list_instance_config_interfaces_wraps_http_errors() -> None:
+    """List Linode instance config interfaces wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_instance_config_interfaces(123, 6)
+
+    assert "ListInstanceConfigInterfaces" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_instance_config_interfaces_delegates_to_client() -> None:
+    """RetryableClient delegates Linode instance config interfaces list with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_instance_config_interfaces", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_instance_config_interfaces(123, 6)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(123, 6)
+    await retryable.close()
+
+
 async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     """Test getting specific instance."""
     client = Client("https://api.linode.com/v4", "test-token")
