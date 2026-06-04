@@ -4195,6 +4195,87 @@ async def handle_linode_managed_credentials_list(
 
 
 _MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name", "phone")
+_MANAGED_CREDENTIAL_REQUIRED_FIELDS = ("label", "password")
+
+
+def _managed_credential_body(arguments: dict[str, Any]) -> dict[str, str]:
+    """Collect documented Managed credential create fields from tool arguments."""
+    body = {
+        field: _optional_string_argument(arguments, field)
+        for field in _MANAGED_CREDENTIAL_REQUIRED_FIELDS
+    }
+    missing = [field for field, value in body.items() if value is None]
+    if missing:
+        raise ValueError(f"{', '.join(missing)} required")
+    username = _optional_string_argument(arguments, "username")
+    if username is not None:
+        body["username"] = username
+    return cast("dict[str, str]", body)
+
+
+def create_linode_managed_credential_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_credential_create tool."""
+    return Tool(
+        name="linode_managed_credential_create",
+        description=(
+            "Creates a Managed credential. Pass confirm=true to create it; "
+            "pass dry_run=true to preview without creating it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "label": {"type": "string"},
+                "password": {"type": "string"},
+                "username": {"type": "string"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm creating or previewing "
+                        "the Managed credential."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["label", "password", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_credential_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_credential_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a Managed credential. Set confirm=true to proceed."
+        )
+
+    try:
+        body = _managed_credential_body(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    if is_dry_run(arguments):
+        preview_body = {**body, "password": "<redacted>"}
+        return build_dry_run_response(
+            "linode_managed_credential_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/managed/credentials",
+            None,
+            request_body=preview_body,
+            side_effects=["A Managed credential is created."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_managed_credential(
+            label=body["label"],
+            password=body["password"],
+            username=body.get("username"),
+        )
+
+    return await execute_tool(cfg, arguments, "create Managed credential", _call)
 
 
 def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, str]:

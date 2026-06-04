@@ -9712,6 +9712,161 @@ async def test_managed_contacts_list_rejects_out_of_range_page_size(
     mock_client_class.assert_not_called()
 
 
+async def test_managed_credential_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed credential create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_credential_create_tool" in tools_mod.__all__
+    assert "handle_linode_managed_credential_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_credential_create_tool()
+    assert capability is Capability.Write
+    assert tool.name == "linode_managed_credential_create"
+    assert set(tool.inputSchema["required"]) == {"label", "password", "confirm"}
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    for field in ("label", "password", "username"):
+        assert tool.inputSchema["properties"][field]["type"] == "string"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_credential_create" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_credential_create_rejects_non_true_confirm(
+    sample_config: Config,
+    confirm: object,
+) -> None:
+    """Managed credential create requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {"label": "prod-root", "password": "s3cret"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_credential_create", arguments)
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({"confirm": True, "password": "s3cret"}, "label required"),
+        ({"confirm": True, "label": "prod-root"}, "password required"),
+        (
+            {"confirm": True, "label": 123, "password": "s3cret"},
+            "label must be a non-empty string",
+        ),
+        (
+            {"confirm": True, "label": "prod-root", "password": ""},
+            "password must be a non-empty string",
+        ),
+        (
+            {
+                "confirm": True,
+                "label": "prod-root",
+                "password": "s3cret",
+                "username": 123,
+            },
+            "username must be a non-empty string",
+        ),
+    ],
+)
+async def test_managed_credential_create_rejects_invalid_body_before_client(
+    sample_config: Config,
+    arguments: dict[str, object],
+    expected: str,
+) -> None:
+    """Managed credential create validates body fields before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_credential_create", arguments)
+
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_create_dry_run_includes_body_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed credential create dry run previews body without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_create",
+            {
+                "dry_run": True,
+                "confirm": True,
+                "label": "prod-root",
+                "password": "s3cret",
+                "username": "root",
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/managed/credentials"
+    assert payload["would_execute"]["body"] == {
+        "label": "prod-root",
+        "password": "<redacted>",
+        "username": "root",
+    }
+    assert "s3cret" not in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_create_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Managed credential create dry run still requires the confirm safety gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_create",
+            {"dry_run": True, "label": "prod-root", "password": "s3cret"},
+        )
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed credential create is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 91, "label": "prod-root"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_managed_credential.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_create",
+            {
+                "confirm": True,
+                "label": "prod-root",
+                "password": "s3cret",
+                "username": "root",
+            },
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_managed_credential.assert_awaited_once_with(
+        label="prod-root",
+        password="s3cret",
+        username="root",
+    )
+
+
 async def test_managed_contact_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

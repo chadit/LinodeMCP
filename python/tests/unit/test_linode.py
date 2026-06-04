@@ -5377,6 +5377,87 @@ async def test_create_managed_contact_sends_post_to_managed_contacts_route() -> 
     await client.close()
 
 
+async def test_create_managed_credential_sends_post_to_managed_credentials_route() -> (
+    None
+):
+    """Managed credential create sends POST /managed/credentials."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 91, "label": "prod-root"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_managed_credential(
+            label="prod-root",
+            password="s3cret",
+            username="root",
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST",
+        "/managed/credentials",
+        {"label": "prod-root", "password": "s3cret", "username": "root"},
+    )
+    await client.close()
+
+
+async def test_create_managed_credential_omits_optional_username() -> None:
+    """Managed credential create omits username when not supplied."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 91, "label": "prod-root"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.create_managed_credential(label="prod-root", password="s3cret")
+
+    mock_request.assert_called_once_with(
+        "POST", "/managed/credentials", {"label": "prod-root", "password": "s3cret"}
+    )
+    await client.close()
+
+
+async def test_create_managed_credential_wraps_http_errors() -> None:
+    """Managed credential create maps HTTP errors to CreateManagedCredential."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_managed_credential(label="prod-root", password="s3cret")
+
+    assert "CreateManagedCredential" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_managed_credential_delegates_once_without_retry() -> (
+    None
+):
+    """RetryableClient does not replay Managed credential creation on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_create = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    object.__setattr__(retryable.client, "create_managed_credential", mock_create)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_managed_credential(
+                label="prod-root", password="s3cret", username="root"
+            )
+    finally:
+        await retryable.close()
+
+    mock_create.assert_awaited_once_with(
+        label="prod-root", password="s3cret", username="root"
+    )
+
+
 async def test_create_managed_contact_wraps_http_errors() -> None:
     """Managed contact create maps HTTP errors to CreateManagedContact."""
     client = Client("https://api.linode.com/v4", "test-token")

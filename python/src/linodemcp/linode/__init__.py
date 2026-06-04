@@ -4482,6 +4482,24 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateManagedContact", e) from e
 
+    async def create_managed_credential(
+        self,
+        *,
+        label: str,
+        password: str,
+        username: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Managed credential."""
+        body = {"label": label, "password": password}
+        if username is not None:
+            body["username"] = username
+        try:
+            response = await self.make_request("POST", "/managed/credentials", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateManagedCredential", e) from e
+
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Delete a Managed contact by contact ID."""
         validated_contact_id = _validate_positive_path_int(contact_id, "contact_id")
@@ -11568,6 +11586,20 @@ class RetryableClient:
             group=group,
             name=name,
             phone=phone,
+        )
+
+    async def create_managed_credential(
+        self,
+        *,
+        label: str,
+        password: str,
+        username: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Managed credential by delegating once without retry."""
+        return await self.client.create_managed_credential(
+            label=label,
+            password=password,
+            username=username,
         )
 
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
