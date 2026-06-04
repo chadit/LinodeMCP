@@ -3328,6 +3328,76 @@ async def test_retryable_get_instance_stats_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_instance_transfer() -> None:
+    """Get Linode instance transfer stats sends GET to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "billable": 1,
+        "quota": 1000,
+        "used": 123,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_instance_transfer(123)
+
+    assert result == {"billable": 1, "quota": 1000, "used": 123}
+    mock_request.assert_called_once_with("GET", "/linode/instances/123/transfer")
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x", "..", True, 0, -1])
+async def test_get_instance_transfer_rejects_invalid_path_params(
+    linode_id: object,
+) -> None:
+    """Linode instance transfer rejects invalid finite ID path params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(
+            (TypeError, ValueError), match="linode_id must be a positive integer"
+        ),
+    ):
+        await client.get_instance_transfer(cast("Any", linode_id))
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_instance_transfer_wraps_http_errors() -> None:
+    """Get Linode instance transfer stats wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_instance_transfer(123)
+
+    assert "GetInstanceTransfer" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_instance_transfer_delegates_to_client() -> None:
+    """RetryableClient delegates Linode instance transfer with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_instance_transfer", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"used": 123}
+        result = await retryable.get_instance_transfer(123)
+
+    assert result == {"used": 123}
+    mock_get.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_list_instance_configs() -> None:
     """List Linode instance configs sends GET to the exact route."""
     client = Client("https://api.linode.com/v4", "test-token")

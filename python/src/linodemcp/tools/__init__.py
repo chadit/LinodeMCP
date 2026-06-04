@@ -478,6 +478,7 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_nodebalancers_list_tool,
     create_linode_instance_stats_month_get_tool,
     create_linode_instance_stats_tool,
+    create_linode_instance_transfer_get_tool,
     create_linode_instances_list_tool,
     handle_linode_instance_config_delete,
     handle_linode_instance_config_get,
@@ -500,6 +501,7 @@ from linodemcp.tools.linode_instances import (
     handle_linode_instance_nodebalancers_list,
     handle_linode_instance_stats,
     handle_linode_instance_stats_month_get,
+    handle_linode_instance_transfer_get,
     handle_linode_instances_list,
 )
 from linodemcp.tools.linode_lke import (
@@ -1118,6 +1120,7 @@ __all__ = [
     "create_linode_instance_shutdown_tool",
     "create_linode_instance_stats_month_get_tool",
     "create_linode_instance_stats_tool",
+    "create_linode_instance_transfer_get_tool",
     "create_linode_instance_update_tool",
     "create_linode_instances_list_tool",
     "create_linode_ipv4_assign_tool",
@@ -1519,6 +1522,7 @@ __all__ = [
     "handle_linode_instance_shutdown",
     "handle_linode_instance_stats",
     "handle_linode_instance_stats_month_get",
+    "handle_linode_instance_transfer_get",
     "handle_linode_instance_update",
     "handle_linode_instances_list",
     "handle_linode_ipv4_assign",
