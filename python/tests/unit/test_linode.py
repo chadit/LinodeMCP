@@ -18345,6 +18345,63 @@ async def test_list_longview_clients_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_delete_longview_client_sends_delete_to_longview_client_route() -> None:
+    """Longview client delete sends DELETE /longview/clients/{client_id}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = httpx.Response(200, json={})
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.delete_longview_client(123)
+
+    mock_request.assert_awaited_once_with("DELETE", "/longview/clients/123")
+    await client.close()
+
+
+@pytest.mark.parametrize("client_id", [0, -1, True, "123", "1/2", "1?x=2", ".."])
+async def test_delete_longview_client_rejects_invalid_client_id(
+    client_id: object,
+) -> None:
+    """Longview client delete rejects invalid IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="client_id must be a positive integer"),
+    ):
+        await client.delete_longview_client(cast("Any", client_id))
+
+    mock_request.assert_not_awaited()
+    await client.close()
+
+
+async def test_delete_longview_client_wraps_http_errors() -> None:
+    """Longview client delete maps HTTP errors to DeleteLongviewClient."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError, match="DeleteLongviewClient"):
+            await client.delete_longview_client(123)
+
+    await client.close()
+
+
+async def test_retryable_client_delete_longview_client_delegates_once() -> None:
+    """RetryableClient does not replay destructive Longview client deletion."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_delete = AsyncMock(side_effect=httpx.ReadTimeout("timeout"))
+    object.__setattr__(client.client, "delete_longview_client", mock_delete)
+
+    try:
+        with pytest.raises(httpx.ReadTimeout, match="timeout"):
+            await client.delete_longview_client(123)
+    finally:
+        await client.close()
+
+    mock_delete.assert_awaited_once_with(123)
+
+
 async def test_retryable_client_list_longview_clients_delegates() -> None:
     """RetryableClient delegates Longview clients listing to Client."""
     client = RetryableClient("https://api.linode.com/v4", "test-token")

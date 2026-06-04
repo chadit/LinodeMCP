@@ -6066,6 +6066,26 @@ class Client:
             logger.exception("HTTP error listing Longview clients: %s", e)
             raise NetworkError("ListLongviewClients", e) from e
 
+    async def delete_longview_client(self, client_id: int) -> None:
+        """Delete a Longview client."""
+        valid_client_id = _validate_positive_path_int(client_id, "client_id")
+        encoded_client_id = quote(str(valid_client_id), safe="")
+        endpoint = f"/longview/clients/{encoded_client_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting Longview client: %s", e)
+            raise NetworkError("DeleteLongviewClient", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting Longview client: %s", e)
+            raise NetworkError("DeleteLongviewClient", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting Longview client")
+            raise NetworkError("DeleteLongviewClient", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting Longview client: %s", e)
+            raise NetworkError("DeleteLongviewClient", e) from e
+
     async def list_profile_apps(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -11909,6 +11929,10 @@ class RetryableClient:
             lambda: self.client.list_longview_clients(page=page, page_size=page_size)
         )
         return result
+
+    async def delete_longview_client(self, client_id: int) -> None:
+        """Delete a Longview client once without retry replay."""
+        await self.client.delete_longview_client(client_id)
 
     async def list_profile_apps(
         self, page: int | None = None, page_size: int | None = None

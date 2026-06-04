@@ -100,6 +100,7 @@ _CAT_FIREWALL = "firewall"
 _CAT_IMAGES = "images"
 _CAT_LINODES = "linodes"
 _CAT_LKE = "lke"
+_CAT_LONGVIEW = "longview"
 _CAT_NODEBALANCERS = "nodebalancers"
 _CAT_OBJECT_STORAGE = "object_storage"
 _CAT_STACKSCRIPTS = "stackscripts"
@@ -122,6 +123,7 @@ def _scope_matrix() -> dict[str, tuple[Scope, Scope]]:
         _CAT_IMAGES: (Scope.ImagesReadOnly, Scope.ImagesReadWrite),
         _CAT_LINODES: (Scope.LinodesReadOnly, Scope.LinodesReadWrite),
         _CAT_LKE: (Scope.LKEReadOnly, Scope.LKEReadWrite),
+        _CAT_LONGVIEW: (Scope.LongviewReadOnly, Scope.LongviewReadWrite),
         _CAT_NODEBALANCERS: (
             Scope.NodeBalancersReadOnly,
             Scope.NodeBalancersReadWrite,
@@ -152,6 +154,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
         (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
         (("linode_lke_",), _CAT_LKE),
+        (("linode_longview_",), _CAT_LONGVIEW),
         (("linode_nodebalancer_", "linode_nodebalancers_"), _CAT_NODEBALANCERS),
         (("linode_firewall_settings_",), _CAT_ACCOUNT),
         (("linode_firewall_", "linode_firewalls_"), _CAT_FIREWALL),

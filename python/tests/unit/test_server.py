@@ -15565,6 +15565,20 @@ async def test_lke_tier_versions_list_tool_is_exported_and_registered(
     assert "linode_lke_tier_versions_list" in srv.registered_tool_names
 
 
+async def test_longview_client_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    import linodemcp.tools as tools_mod
+
+    srv = Server(_full_access_config(sample_config))
+    registry_names = {entry.name for entry in get_tool_registry()}
+
+    assert "create_linode_longview_client_delete_tool" in tools_mod.__all__
+    assert "handle_linode_longview_client_delete" in tools_mod.__all__
+    assert "linode_longview_client_delete" in registry_names
+    assert "linode_longview_client_delete" in srv.registered_tool_names
+
+
 async def test_longview_clients_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
