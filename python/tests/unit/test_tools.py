@@ -80,6 +80,7 @@ from linodemcp.tools import (
     create_linode_instance_backups_enable_tool,
     create_linode_instance_backups_list_tool,
     create_linode_instance_clone_tool,
+    create_linode_instance_config_create_tool,
     create_linode_instance_config_get_tool,
     create_linode_instance_configs_list_tool,
     create_linode_instance_disk_clone_tool,
@@ -235,6 +236,7 @@ from linodemcp.tools import (
     handle_linode_instance_backups_list,
     handle_linode_instance_boot,
     handle_linode_instance_clone,
+    handle_linode_instance_config_create,
     handle_linode_instance_config_get,
     handle_linode_instance_configs_list,
     handle_linode_instance_create,
@@ -21684,3 +21686,181 @@ async def test_lke_cluster_delete_dry_run_dependency_walk(
         assert all(dep["action"] == "cascade_deleted" for dep in deps)
         assert any("5 node(s)" in warning for warning in body["warnings"])
         mock_client.delete_lke_cluster.assert_not_called()
+
+
+def test_create_linode_instance_config_create_tool_schema() -> None:
+    """Instance config create tool exposes required body and confirm fields."""
+    tool, capability = create_linode_instance_config_create_tool()
+
+    assert tool.name == "linode_instance_config_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "string"
+    assert tool.inputSchema["properties"]["label"]["type"] == "string"
+    assert tool.inputSchema["properties"]["devices"]["type"] == "object"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert set(tool.inputSchema["required"]) == {
+        "instance_id",
+        "label",
+        "devices",
+        "confirm",
+    }
+
+
+async def test_handle_linode_instance_config_create_success(
+    sample_config: Config,
+) -> None:
+    """Instance config create handler calls the client with validated inputs."""
+    devices = {"sda": {"disk_id": 123}}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_instance_config.return_value = {
+            "id": 987,
+            "label": "boot-config",
+            "devices": devices,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_create(
+            {
+                "instance_id": "456",
+                "label": "boot-config",
+                "devices": devices,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["id"] == 987
+    assert body["label"] == "boot-config"
+    mock_client.create_instance_config.assert_awaited_once_with(
+        456, label="boot-config", devices=devices
+    )
+
+
+async def test_handle_linode_instance_config_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the config create without requiring confirm or mutating."""
+    devices = {"sda": {"disk_id": 123}}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = {"id": 456, "label": "vm"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_create(
+            {
+                "instance_id": "456",
+                "label": "boot-config",
+                "devices": devices,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_config_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/456/configs"
+    assert body["current_state"]["id"] == 456
+    assert "boot-config" in body["side_effects"][0]
+    mock_client.get_instance.assert_awaited_once_with(456)
+    mock_client.create_instance_config.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_instance_config_create_requires_boolean_confirm(
+    sample_config: Config,
+    confirm: Any,
+) -> None:
+    """Missing, false, string, and numeric confirms fail before client calls."""
+    arguments: dict[str, Any] = {
+        "instance_id": "456",
+        "label": "boot-config",
+        "devices": {"sda": {"disk_id": 123}},
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_config_create(arguments, sample_config)
+
+    assert result[0].text == "Error: Set confirm=true to proceed."
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("instance_id", ["12/34", "12?bad", ".."])
+async def test_handle_linode_instance_config_create_rejects_malformed_instance_id(
+    sample_config: Config,
+    instance_id: str,
+) -> None:
+    """Malformed path parameters are rejected before the client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_config_create(
+            {
+                "instance_id": instance_id,
+                "label": "boot-config",
+                "devices": {"sda": {"disk_id": 123}},
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"instance_id": "456", "devices": {"sda": {}}, "confirm": True}, "label"),
+        (
+            {
+                "instance_id": "456",
+                "label": {"not": "string"},
+                "devices": {"sda": {}},
+                "confirm": True,
+            },
+            "label",
+        ),
+        (
+            {"instance_id": "456", "label": "boot-config", "confirm": True},
+            "devices",
+        ),
+        (
+            {
+                "instance_id": "456",
+                "label": "boot-config",
+                "devices": {},
+                "confirm": True,
+            },
+            "devices",
+        ),
+        (
+            {
+                "instance_id": "456",
+                "label": "boot-config",
+                "devices": [],
+                "confirm": True,
+            },
+            "devices",
+        ),
+    ],
+)
+async def test_handle_linode_instance_config_create_validates_required_arguments(
+    sample_config: Config,
+    arguments: dict[str, Any],
+    message: str,
+) -> None:
+    """Required body arguments are validated before the client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_config_create(arguments, sample_config)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()

@@ -7861,6 +7861,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateInstanceDisk", e) from e
 
+    async def create_instance_config(
+        self,
+        instance_id: int,
+        label: str,
+        devices: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create a configuration profile for an instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/linode/instances/{encoded_instance_id}/configs"
+        try:
+            response = await self.make_request(
+                "POST",
+                endpoint,
+                {"label": label, "devices": devices},
+            )
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateInstanceConfig", e) from e
+
     async def update_instance_disk(
         self,
         instance_id: int,
@@ -11793,6 +11813,15 @@ class RetryableClient:
             root_pass,
         )
         return result
+
+    async def create_instance_config(
+        self,
+        instance_id: int,
+        label: str,
+        devices: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create instance config without retrying the non-idempotent POST."""
+        return await self.client.create_instance_config(instance_id, label, devices)
 
     async def update_instance_disk(
         self,

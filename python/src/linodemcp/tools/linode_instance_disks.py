@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
 
@@ -75,6 +75,14 @@ def _parse_instance_and_disk_ids(
     return iid, disk_id
 
 
+def _is_non_empty_dict(value: Any) -> TypeGuard[dict[str, Any]]:
+    """Return whether a value is a non-empty dictionary."""
+    if not isinstance(value, dict):
+        return False
+    candidate = cast("dict[str, Any]", value)
+    return len(candidate) > 0
+
+
 def create_linode_instance_disks_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disks_list tool."""
     return Tool(
@@ -140,6 +148,85 @@ async def handle_linode_instance_disk_get(
         return await client.get_instance_disk(instance_id, disk_id)
 
     return await execute_tool(cfg, arguments, "get instance disk", _call)
+
+
+def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_create tool."""
+    return Tool(
+        name="linode_instance_config_create",
+        description="Creates a configuration profile on a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": "Label for the configuration profile",
+                },
+                "devices": {
+                    "type": "object",
+                    "description": "Config devices mapping, such as sda/sdb entries",
+                },
+                "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "label", "devices", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_config_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_config_create tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    label = arguments.get("label", "")
+    if not isinstance(label, str) or not label:
+        return _error_response("label is required")
+
+    devices = arguments.get("devices")
+    if not _is_non_empty_dict(devices):
+        return _error_response("devices must be a non-empty object")
+    devices_payload = devices
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    f"A new config profile {label!r} will be created on instance {iid}."
+                ]
+            }
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_config_create",
+            "POST",
+            f"/linode/instances/{iid}/configs",
+            _fetch,
+            _walk,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if confirm is not True:
+        return _error_response("Set confirm=true to proceed.")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.create_instance_config(
+            iid, label=label, devices=devices_payload
+        )
+
+    return await execute_tool(cfg, arguments, "create instance config", _call)
 
 
 def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
