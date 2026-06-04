@@ -899,6 +899,53 @@ def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_image_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_update tool."""
+    return Tool(
+        name="linode_image_update",
+        description="Updates a private image label, description, or tags.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "image_id": {
+                    "type": "string",
+                    "description": (
+                        "Private image ID to update, for example private/12345"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Short title for the image",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed description for the image",
+                },
+                "tags": {
+                    "type": "array",
+                    "description": "Tags to apply to the image",
+                    "items": {"type": "string"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["image_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def _image_sharegroup_image_payload(
     image_arg: object,
 ) -> tuple[dict[str, str] | None, str | None]:
@@ -1061,6 +1108,49 @@ def _image_create_tags(tags_arg: Any) -> tuple[list[str] | None, str | None]:
             return None, "tags must contain non-empty strings"
         tags.append(tag)
     return tags, None
+
+
+def _image_update_id_error(image_id: Any) -> str | None:
+    """Validate the image update path parameter."""
+    if not isinstance(image_id, str) or not image_id.strip():
+        return "image_id must be a non-empty string"
+    if "?" in image_id or ".." in image_id:
+        return "image_id must not contain query or traversal segments"
+    if (
+        not image_id.startswith("private/")
+        or not image_id.removeprefix("private/").isdigit()
+    ):
+        return "image_id must match private/<numeric_id>"
+    return None
+
+
+def _image_update_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Build and validate the image update request body."""
+    payload: dict[str, Any] = {}
+
+    label = arguments.get("label")
+    if label is not None:
+        if not isinstance(label, str) or not label.strip():
+            return None, "label must be a non-empty string when provided"
+        payload["label"] = label
+
+    description = arguments.get("description")
+    if description is not None:
+        if not isinstance(description, str):
+            return None, "description must be a string"
+        payload["description"] = description
+
+    tags, tags_err = _image_create_tags(arguments.get("tags"))
+    if tags_err is not None:
+        return None, tags_err
+    if tags is not None:
+        payload["tags"] = tags
+
+    if not payload:
+        return None, "at least one of label, description, or tags must be provided"
+    return payload, None
 
 
 async def handle_linode_image_sharegroup_create(
@@ -2008,6 +2098,60 @@ async def handle_linode_images_sharegroups_token_create(
         }
 
     return await execute_tool(cfg, arguments, "create image share group token", _call)
+
+
+async def handle_linode_image_update(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_update tool request."""
+    image_id = arguments.get("image_id")
+    image_id_err = _image_update_id_error(image_id)
+    if image_id_err is not None:
+        return error_response(image_id_err)
+    image_id = cast("str", image_id)
+
+    payload, payload_err = _image_update_payload(arguments)
+    if payload_err is not None:
+        return error_response(payload_err)
+    payload = cast("dict[str, Any]", payload)
+
+    if is_dry_run(arguments):
+        image_id_path = quote(image_id, safe="")
+        return build_dry_run_response(
+            "linode_image_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/images/{image_id_path}",
+            None,
+            side_effects=[f"Image {image_id!r} will be updated."],
+            request_body=payload,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response("This updates an image. Set confirm=true to proceed.")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        image = await client.update_image(
+            image_id=image_id,
+            label=cast("str | None", payload.get("label")),
+            description=cast("str | None", payload.get("description")),
+            tags=cast("list[str] | None", payload.get("tags")),
+        )
+        return {
+            "message": f"Image '{image.label}' ({image.id}) updated successfully",
+            "image": {
+                "id": image.id,
+                "label": image.label,
+                "description": image.description,
+                "type": image.type,
+                "status": image.status,
+                "size": image.size,
+                "is_public": image.is_public,
+                "created": image.created,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "update Linode image", _call)
 
 
 async def handle_linode_images_list(

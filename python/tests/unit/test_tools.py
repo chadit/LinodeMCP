@@ -68,6 +68,7 @@ from linodemcp.tools import (
     create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
+    create_linode_image_update_tool,
     create_linode_image_upload_tool,
     create_linode_images_sharegroups_token_create_tool,
     create_linode_images_sharegroups_token_update_tool,
@@ -217,6 +218,7 @@ from linodemcp.tools import (
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
+    handle_linode_image_update,
     handle_linode_image_upload,
     handle_linode_images_list,
     handle_linode_images_sharegroups_token_create,
@@ -3692,6 +3694,148 @@ async def test_image_upload_dry_run_returns_preview(sample_config: Config) -> No
         "tags": ["prod"],
     }
     assert "confirm=true" not in result[0].text
+
+
+async def test_create_linode_image_update_tool_def() -> None:
+    """Image update tool should require image_id and confirm."""
+    tool, capability = create_linode_image_update_tool()
+    assert tool.name == "linode_image_update"
+    assert capability.name == "Write"
+    assert tool.inputSchema["required"] == ["image_id", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_image_update_success(sample_config: Config) -> None:
+    """Image update tool should call the client and return image details."""
+    mock_image = Image(
+        id="private/12345",
+        label="renamed-image",
+        description="Updated image",
+        type="manual",
+        is_public=False,
+        deprecated=False,
+        size=2048,
+        vendor="",
+        status="available",
+        created="2024-01-01T00:00:00",
+        created_by="testuser",
+        expiry=None,
+        eol=None,
+        capabilities=["cloud-init"],
+        tags=["prod"],
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_image.return_value = mock_image
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_image_update(
+            {
+                "image_id": "private/12345",
+                "label": "renamed-image",
+                "description": "Updated image",
+                "tags": ["prod"],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "private/12345" in result[0].text
+    mock_client.update_image.assert_awaited_once_with(
+        image_id="private/12345",
+        label="renamed-image",
+        description="Updated image",
+        tags=["prod"],
+    )
+
+
+async def test_handle_linode_image_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """Image update dry-run should preview the PUT without requiring confirm."""
+    result = await handle_linode_image_update(
+        {"image_id": "private/12345", "label": "renamed", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_image_update"
+    assert body["would_execute"]["method"] == "PUT"
+    assert body["would_execute"]["path"] == "/images/private%2F12345"
+    assert body["would_execute"]["body"] == {"label": "renamed"}
+    assert "confirm=true" not in result[0].text
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_image_update_confirm_required(
+    sample_config: Config, confirm: object
+) -> None:
+    """Image update should require literal confirm=true before client call."""
+    arguments: dict[str, object] = {"image_id": "private/12345", "label": "renamed"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_image_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("image_id", "message"),
+    [
+        ("", "image_id must be a non-empty string"),
+        ("private/12345?x=1", "image_id must not contain"),
+        ("../private/12345", "image_id must not contain"),
+        ("private/123/extra", "image_id must match private/<numeric_id>"),
+        ("private//123", "image_id must match private/<numeric_id>"),
+        ("/private/123", "image_id must match private/<numeric_id>"),
+    ],
+)
+async def test_handle_linode_image_update_rejects_bad_image_ids(
+    sample_config: Config, image_id: str, message: str
+) -> None:
+    """Image update rejects malformed image IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_image_update(
+            {"image_id": image_id, "label": "renamed", "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"image_id": "private/12345", "confirm": True}, "at least one"),
+        ({"image_id": "private/12345", "label": "", "confirm": True}, "label"),
+        (
+            {"image_id": "private/12345", "description": 123, "confirm": True},
+            "description",
+        ),
+        ({"image_id": "private/12345", "tags": "prod", "confirm": True}, "tags"),
+    ],
+)
+async def test_handle_linode_image_update_validation_errors(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Image update validates writable request fields before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_image_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_create_linode_image_create_tool_def() -> None:
