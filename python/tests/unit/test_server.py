@@ -10242,6 +10242,46 @@ async def test_managed_credentials_list_rejects_out_of_range_page_size(
     mock_client_class.assert_not_called()
 
 
+async def test_managed_ssh_key_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed SSH key get tool is exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_managed_ssh_key_get_tool" in tools_mod.__all__
+    assert "handle_linode_managed_ssh_key_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_ssh_key_get_tool()
+    assert tool.name == "linode_managed_ssh_key_get"
+    assert capability == Capability.Read
+
+    srv = Server(sample_config)
+    assert "linode_managed_ssh_key_get" in srv.registered_tool_names
+
+
+async def test_managed_ssh_key_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed SSH key get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "ssh_key": "ssh-rsa AAAAmanagedkey linode-managed"
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_ssh_key.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_ssh_key_get", {})
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_managed_ssh_key.assert_awaited_once_with()
+
+
 async def test_managed_stats_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

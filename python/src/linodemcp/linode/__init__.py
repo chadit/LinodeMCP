@@ -4440,6 +4440,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListManagedCredentials", e) from e
 
+    async def get_managed_ssh_key(self) -> dict[str, Any]:
+        """Get the Managed SSH public key for this account."""
+        try:
+            response = await self.make_request("GET", "/managed/credentials/sshkey")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetManagedSSHKey", e) from e
+
     async def list_managed_contacts(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -11560,6 +11569,13 @@ class RetryableClient:
         """List Managed credentials with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_managed_credentials(page=page, page_size=page_size)
+        )
+        return result
+
+    async def get_managed_ssh_key(self) -> dict[str, Any]:
+        """Get the Managed SSH public key with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_managed_ssh_key
         )
         return result
 

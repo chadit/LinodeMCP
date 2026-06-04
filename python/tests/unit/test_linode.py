@@ -5325,6 +5325,39 @@ async def test_list_managed_credentials_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_get_managed_ssh_key_sends_get_to_managed_sshkey_route() -> None:
+    """Test Managed SSH key retrieval sends documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {"ssh_key": "ssh-rsa AAAAmanagedkey linode-managed"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_managed_ssh_key()
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/managed/credentials/sshkey")
+    await client.close()
+
+
+async def test_get_managed_ssh_key_wraps_http_errors() -> None:
+    """Test Managed SSH key retrieval wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_managed_ssh_key()
+
+    assert "GetManagedSSHKey" in str(excinfo.value)
+    await client.close()
+
+
 async def test_retryable_list_managed_credentials_delegates_to_client() -> None:
     """Test RetryableClient delegates Managed credentials listing."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
@@ -5337,6 +5370,21 @@ async def test_retryable_list_managed_credentials_delegates_to_client() -> None:
 
     assert result == {"data": [], "page": 1, "pages": 1, "results": 0}
     mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
+async def test_retryable_get_managed_ssh_key_delegates_to_client() -> None:
+    """Test RetryableClient delegates Managed SSH key retrieval."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_managed_ssh_key", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"ssh_key": "ssh-rsa AAAAmanagedkey"}
+        result = await retryable.get_managed_ssh_key()
+
+    assert result == {"ssh_key": "ssh-rsa AAAAmanagedkey"}
+    mock_get.assert_awaited_once_with()
     await retryable.close()
 
 
