@@ -307,3 +307,295 @@ def test_linode_instance_config_update_registered_and_exported() -> None:
     assert entry.tool.name == "linode_instance_config_update"
     assert entry.handle_fn is handle_linode_instance_config_update
     assert "linode_instance_config_update" in FEATURE_TOOLS_LIST
+
+
+@pytest.mark.asyncio
+async def test_client_reorder_interfaces_sends_exact_request() -> None:
+    """Low-level client sends the exact reorder request."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"ids": [789, 790]})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.reorder_instance_config_interfaces(123, 456, [789, 790])
+    finally:
+        await client.close()
+
+    assert result == {"ids": [789, 790]}
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "POST"
+    assert request.url.path == "/v4/linode/instances/123/configs/456/interfaces/order"
+    assert request.url.query == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+    assert json.loads(request.content) == {"ids": [789, 790]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, True])
+async def test_client_reorder_interfaces_rejects_invalid_linode_id(
+    linode_id: Any,
+) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
+            await client.reorder_instance_config_interfaces(linode_id, 456, [789])
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("config_id", ["4/5", "4?x=5", "..", 0, False])
+async def test_client_reorder_interfaces_rejects_invalid_config_id(
+    config_id: Any,
+) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="config_id must be a positive integer"):
+            await client.reorder_instance_config_interfaces(123, config_id, [789])
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ids", [{"ids": [789]}, [], [0], [True], ["789"]])
+async def test_client_reorder_interfaces_rejects_invalid_ids(ids: Any) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="ids must be a non-empty list"):
+            await client.reorder_instance_config_interfaces(123, 456, ids)
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_retryable_client_reorder_instance_config_interfaces_no_replay() -> None:
+    """Mutating reorder delegates once and does not use generic replay retry."""
+    retryable = _FailingRetryableClient()
+    transient = httpx.ReadTimeout("timeout")
+    mock_reorder = AsyncMock(
+        side_effect=NetworkError("ReorderInstanceConfigInterfaces", transient)
+    )
+    cast("Any", retryable.client).reorder_instance_config_interfaces = mock_reorder
+
+    try:
+        with pytest.raises(NetworkError):
+            await retryable.reorder_instance_config_interfaces(123, 456, [789, 790])
+    finally:
+        await retryable.close()
+
+    assert retryable.retry_calls == 0
+    mock_reorder.assert_awaited_once_with(123, 456, [789, 790])
+
+
+def test_create_linode_instance_config_interfaces_order_tool_schema() -> None:
+    from linodemcp.tools.linode_instances import (
+        create_linode_instance_config_interfaces_order_tool,
+    )
+
+    tool, capability = create_linode_instance_config_interfaces_order_tool()
+
+    assert tool.name == "linode_instance_config_interfaces_order"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["linode_id", "config_id", "ids", "confirm"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["ids"]["type"] == "array"
+    assert tool.inputSchema["properties"]["ids"]["items"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_config_interfaces_order_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interfaces_order,
+    )
+
+    mock_linode_client.reorder_instance_config_interfaces.return_value = {
+        "ids": [789, 790]
+    }
+
+    result = await handle_linode_instance_config_interfaces_order(
+        {"linode_id": 123, "config_id": 456, "ids": [789, 790], "confirm": True},
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {"ids": [789, 790]}
+    mock_linode_client.reorder_instance_config_interfaces.assert_awaited_once_with(
+        123, 456, [789, 790]
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_config_interfaces_order_dry_run_skips_client(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interfaces_order,
+    )
+
+    result = await handle_linode_instance_config_interfaces_order(
+        {
+            "linode_id": 123,
+            "config_id": 456,
+            "ids": [789, 790],
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_config_interfaces_order"
+    assert body["dry_run"] is True
+    assert body["would_execute"]["method"] == "POST"
+    assert (
+        body["would_execute"]["path"]
+        == "/linode/instances/123/configs/456/interfaces/order"
+    )
+    assert body["would_execute"]["body"] == {"ids": [789, 790]}
+    mock_linode_client.reorder_instance_config_interfaces.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_config_interfaces_order_requires_confirm_true(
+    confirm: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interfaces_order,
+    )
+
+    arguments: dict[str, Any] = {"linode_id": 123, "config_id": 456, "ids": [789]}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    result = await handle_linode_instance_config_interfaces_order(
+        arguments, sample_config
+    )
+
+    assert result[0].text == "Error: confirm must be true"
+    mock_linode_client.reorder_instance_config_interfaces.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"linode_id": "1/2", "config_id": 456, "ids": [789], "confirm": True},
+        {"linode_id": "1?x=2", "config_id": 456, "ids": [789], "confirm": True},
+        {"linode_id": "..", "config_id": 456, "ids": [789], "confirm": True},
+        {"linode_id": 0, "config_id": 456, "ids": [789], "confirm": True},
+        {"linode_id": 123, "config_id": "4/5", "ids": [789], "confirm": True},
+        {"linode_id": 123, "config_id": "4?x=5", "ids": [789], "confirm": True},
+        {"linode_id": 123, "config_id": "..", "ids": [789], "confirm": True},
+        {"linode_id": 123, "config_id": 0, "ids": [789], "confirm": True},
+    ],
+)
+async def test_handle_config_interfaces_order_rejects_path_params(
+    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interfaces_order,
+    )
+
+    result = await handle_linode_instance_config_interfaces_order(
+        arguments, sample_config
+    )
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.reorder_instance_config_interfaces.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ids", [None, [], [0], [True], ["789"]])
+async def test_handle_linode_instance_config_interfaces_order_requires_ids(
+    ids: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interfaces_order,
+    )
+
+    arguments: dict[str, Any] = {"linode_id": 123, "config_id": 456, "confirm": True}
+    if ids is not None:
+        arguments["ids"] = ids
+
+    result = await handle_linode_instance_config_interfaces_order(
+        arguments, sample_config
+    )
+
+    assert result[0].text == "Error: ids must be a non-empty list of positive integers"
+    mock_linode_client.reorder_instance_config_interfaces.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_client_reorder_instance_config_interfaces_translates_http_errors() -> (
+    None
+):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timeout")
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="ReorderInstanceConfigInterfaces"):
+            await client.reorder_instance_config_interfaces(123, 456, [789])
+    finally:
+        await client.close()
+
+
+def test_linode_instance_config_interfaces_order_registered_and_exported() -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interfaces_order,
+    )
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_instance_config_interfaces_order"]
+    assert entry.capability is Capability.Write
+    assert entry.tool.name == "linode_instance_config_interfaces_order"
+    assert entry.handle_fn is handle_linode_instance_config_interfaces_order
+    assert "linode_instance_config_interfaces_order" in FEATURE_TOOLS_LIST
