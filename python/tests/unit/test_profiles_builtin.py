@@ -401,6 +401,10 @@ def test_managed_tools_are_account_scoped() -> None:
     assert required_scopes("linode_managed_credentials_list", Capability.Read) == [
         Scope.AccountReadOnly
     ]
+    assert categories("linode_managed_credential_update") == ["account"]
+    assert required_scopes("linode_managed_credential_update", Capability.Write) == [
+        Scope.AccountReadWrite
+    ]
 
 
 def test_managed_contact_delete_is_account_scoped() -> None:

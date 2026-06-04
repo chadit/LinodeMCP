@@ -5846,6 +5846,92 @@ async def test_retryable_get_managed_stats_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_update_managed_credential_sends_put_to_credential_route() -> None:
+    """Test Managed credential update sends documented PUT route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {"id": 42, "label": "prod-root"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_managed_credential(42, label="prod-root")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "PUT", "/managed/credentials/42", {"label": "prod-root"}
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("bad_credential_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_update_managed_credential_rejects_bad_credential_id(
+    bad_credential_id: object,
+) -> None:
+    """Test Managed credential update rejects malformed credential IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    update_managed_credential = cast("Any", client.update_managed_credential)
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="credential_id must be a positive integer"),
+    ):
+        await update_managed_credential(bad_credential_id, label="prod-root")
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+@pytest.mark.parametrize("bad_label", [None, "", "  ", 123])
+async def test_update_managed_credential_rejects_bad_label(
+    bad_label: object,
+) -> None:
+    """Test Managed credential update rejects invalid label bodies."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    update_managed_credential = cast("Any", client.update_managed_credential)
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="label must be a non-empty string"),
+    ):
+        await update_managed_credential(42, label=bad_label)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_managed_credential_wraps_http_errors() -> None:
+    """Test Managed credential update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_managed_credential(42, label="prod-root")
+
+    assert "UpdateManagedCredential" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_managed_credential_delegates_once() -> None:
+    """Test RetryableClient does not retry Managed credential update."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    mock_update = AsyncMock(side_effect=httpx.ConnectError("boom"))
+    object.__setattr__(retryable.client, "update_managed_credential", mock_update)
+    try:
+        with pytest.raises(httpx.ConnectError):
+            await retryable.update_managed_credential(42, label="prod-root")
+    finally:
+        await retryable.close()
+
+    mock_update.assert_awaited_once_with(42, label="prod-root")
+
+
 async def test_get_managed_contact_sends_get_to_contact_route() -> None:
     """Test Managed contact retrieval sends documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")

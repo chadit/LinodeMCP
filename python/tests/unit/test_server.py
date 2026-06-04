@@ -9867,6 +9867,113 @@ async def test_managed_credential_create_dispatches_from_registry(
     )
 
 
+async def test_managed_credential_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed credential update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_credential_update_tool" in tools_mod.__all__
+    assert "handle_linode_managed_credential_update" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_credential_update_tool()
+    assert capability is Capability.Write
+    assert tool.name == "linode_managed_credential_update"
+    assert set(tool.inputSchema["required"]) == {"credential_id", "label", "confirm"}
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_credential_update" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_credential_update_rejects_non_true_confirm(
+    sample_config: Config,
+    confirm: object,
+) -> None:
+    """Managed credential update requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {"credential_id": 42, "label": "prod-root"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_credential_update", arguments)
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_update_rejects_invalid_body_before_client(
+    sample_config: Config,
+) -> None:
+    """Managed credential update rejects read-only body fields."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_update",
+            {
+                "credential_id": 42,
+                "label": "prod-root",
+                "last_decrypted": "2024-01-01T00:00:00",
+                "confirm": True,
+            },
+        )
+
+    assert "Read-only fields are not accepted: last_decrypted" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_update_dry_run_includes_body_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed credential update dry run previews body without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_update",
+            {
+                "dry_run": True,
+                "confirm": True,
+                "credential_id": 42,
+                "label": "prod-root",
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "PUT"
+    assert payload["would_execute"]["path"] == "/managed/credentials/42"
+    assert payload["would_execute"]["body"] == {"label": "prod-root"}
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed credential update is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 42, "label": "prod-root"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_managed_credential.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_update",
+            {"confirm": True, "credential_id": 42, "label": "prod-root"},
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_managed_credential.assert_awaited_once_with(
+        42, label="prod-root"
+    )
+
+
 async def test_managed_contact_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

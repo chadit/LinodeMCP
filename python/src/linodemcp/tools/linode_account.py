@@ -4340,6 +4340,105 @@ async def handle_linode_managed_credential_create(
     return await execute_tool(cfg, arguments, "create Managed credential", _call)
 
 
+def _managed_credential_id(arguments: dict[str, Any]) -> int | list[TextContent]:
+    """Parse a positive managed credential ID, or return an error response."""
+    credential_id = arguments.get("credential_id")
+    if (
+        not isinstance(credential_id, int)
+        or isinstance(credential_id, bool)
+        or credential_id < 1
+    ):
+        return error_response("credential_id must be a positive integer")
+    return credential_id
+
+
+def _managed_credential_update_body(
+    arguments: dict[str, Any],
+) -> dict[str, str] | list[TextContent]:
+    """Build a Managed credential update body from writable fields."""
+    read_only_fields = sorted({"id", "last_decrypted"}.intersection(arguments))
+    if read_only_fields:
+        return error_response(
+            "Read-only fields are not accepted: " + ", ".join(read_only_fields)
+        )
+    if "label" not in arguments:
+        return error_response("label is required")
+    label = arguments.get("label")
+    if not isinstance(label, str) or not label.strip():
+        return error_response("label must be a non-empty string")
+    return {"label": label.strip()}
+
+
+def create_linode_managed_credential_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_credential_update tool."""
+    return Tool(
+        name="linode_managed_credential_update",
+        description=(
+            "Updates a Managed credential label. Requires confirm=true; pass "
+            "dry_run=true with confirm=true to preview without changing it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "credential_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed credential ID to update",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Managed credential label",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm update.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["credential_id", "label", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_credential_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_credential_update tool request."""
+    credential_id = _managed_credential_id(arguments)
+    if isinstance(credential_id, list):
+        return credential_id
+
+    body = _managed_credential_update_body(arguments)
+    if isinstance(body, list):
+        return body
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed credential. Set confirm=true to proceed."
+        )
+
+    dry_run_path = f"/managed/credentials/{quote(str(credential_id), safe='')}"
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_credential_update",
+            arguments.get("environment", ""),
+            "PUT",
+            dry_run_path,
+            None,
+            side_effects=[f"Managed credential {credential_id} will be updated."],
+            request_body=body,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_managed_credential(
+            credential_id,
+            label=body["label"],
+        )
+
+    return await execute_tool(cfg, arguments, "update Linode Managed credential", _call)
+
+
 def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, str]:
     """Collect documented Managed contact body fields from tool arguments."""
     body = {

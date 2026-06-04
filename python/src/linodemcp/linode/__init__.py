@@ -4524,6 +4524,30 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateManagedCredential", e) from e
 
+    async def update_managed_credential(
+        self,
+        credential_id: int,
+        *,
+        label: object,
+    ) -> dict[str, Any]:
+        """Update a Managed credential label."""
+        validated_credential_id = _validate_positive_path_int(
+            credential_id, "credential_id"
+        )
+        if not isinstance(label, str) or not label.strip():
+            msg = "label must be a non-empty string"
+            raise ValueError(msg)
+        encoded_credential_id = quote(str(validated_credential_id), safe="")
+        body = {"label": label.strip()}
+        try:
+            response = await self.make_request(
+                "PUT", f"/managed/credentials/{encoded_credential_id}", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateManagedCredential", e) from e
+
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Delete a Managed contact by contact ID."""
         validated_contact_id = _validate_positive_path_int(contact_id, "contact_id")
@@ -11638,6 +11662,18 @@ class RetryableClient:
             label=label,
             password=password,
             username=username,
+        )
+
+    async def update_managed_credential(
+        self,
+        credential_id: int,
+        *,
+        label: str,
+    ) -> dict[str, Any]:
+        """Update a Managed credential by delegating once without retry."""
+        return await self.client.update_managed_credential(
+            credential_id,
+            label=label,
         )
 
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
