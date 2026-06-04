@@ -4462,6 +4462,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateManagedContact", e) from e
 
+    async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
+        """Delete a Managed contact by contact ID."""
+        validated_contact_id = _validate_positive_path_int(contact_id, "contact_id")
+        encoded_contact_id = quote(str(validated_contact_id), safe="")
+        try:
+            response = await self.make_request(
+                "DELETE", f"/managed/contacts/{encoded_contact_id}"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteManagedContact", e) from e
+
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics from the last 24 hours."""
         try:
@@ -11480,6 +11493,10 @@ class RetryableClient:
             name=name,
             phone=phone,
         )
+
+    async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
+        """Delete a Managed contact by delegating once without retry."""
+        return await self.client.delete_managed_contact(contact_id)
 
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics with retry."""

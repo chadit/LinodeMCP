@@ -4234,6 +4234,68 @@ async def handle_linode_managed_contact_create(
     return await execute_tool(cfg, arguments, "create Managed contact", _call)
 
 
+def create_linode_managed_contact_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_contact_delete tool."""
+    return Tool(
+        name="linode_managed_contact_delete",
+        description=(
+            "Deletes a Managed contact by contact ID. "
+            "Pass dry_run=true to preview without deleting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "contact_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed contact ID to delete",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm Managed contact deletion.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["contact_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_managed_contact_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_contact_delete tool request."""
+    try:
+        contact_id = _optional_int_argument(arguments, "contact_id", 1)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if contact_id is None:
+        return error_response("contact_id is required")
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Managed contact. Set confirm=true to proceed."
+        )
+
+    encoded_contact_id = quote(str(contact_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_contact_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/managed/contacts/{encoded_contact_id}",
+            None,
+            side_effects=["The selected Managed contact is deleted."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.delete_managed_contact(contact_id)
+        return {"message": "Managed contact deleted successfully", "result": result}
+
+    return await execute_tool(cfg, arguments, "delete Managed contact", _call)
+
+
 def create_linode_managed_stats_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_stats tool."""
     return Tool(

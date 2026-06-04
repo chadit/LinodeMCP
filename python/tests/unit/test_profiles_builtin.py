@@ -395,6 +395,14 @@ def test_managed_contact_create_is_account_scoped() -> None:
     ]
 
 
+def test_managed_contact_delete_is_account_scoped() -> None:
+    """Managed contact delete belongs to the account category and scope."""
+    assert categories("linode_managed_contact_delete") == ["account"]
+    assert required_scopes("linode_managed_contact_delete", Capability.Destroy) == [
+        Scope.AccountReadWrite
+    ]
+
+
 def test_database_tools_require_database_read_scope() -> None:
     """Managed Database tools require the database token scope."""
     assert required_scopes("linode_database_instances_list", Capability.Read) == [
