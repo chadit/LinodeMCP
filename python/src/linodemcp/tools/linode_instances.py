@@ -312,6 +312,26 @@ def create_linode_instance_interfaces_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_instance_interface_settings_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_settings_get tool."""
+    return Tool(
+        name="linode_instance_interface_settings_get",
+        description="Lists interface settings for a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+            },
+            "required": ["linode_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_instance_config_interfaces_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_interfaces_list tool."""
     return Tool(
@@ -870,6 +890,22 @@ async def handle_linode_instance_interfaces_list(
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance interfaces", _call
+    )
+
+
+async def handle_linode_instance_interface_settings_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_interface_settings_get tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_instance_interface_settings(linode_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance interface settings", _call
     )
 
 
