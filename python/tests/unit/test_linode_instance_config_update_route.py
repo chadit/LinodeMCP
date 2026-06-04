@@ -16,12 +16,14 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_config_interface_add_tool,
     create_linode_instance_config_interface_delete_tool,
     create_linode_instance_config_update_tool,
+    create_linode_instance_interface_delete_tool,
     create_linode_instance_interface_get_tool,
     create_linode_instance_interface_settings_get_tool,
     create_linode_instance_interfaces_list_tool,
     handle_linode_instance_config_interface_add,
     handle_linode_instance_config_interface_delete,
     handle_linode_instance_config_update,
+    handle_linode_instance_interface_delete,
     handle_linode_instance_interface_get,
     handle_linode_instance_interface_settings_get,
     handle_linode_instance_interfaces_list,
@@ -1444,6 +1446,222 @@ def test_linode_instance_config_interfaces_order_registered_and_exported() -> No
     assert entry.tool.name == "linode_instance_config_interfaces_order"
     assert entry.handle_fn is handle_linode_instance_config_interfaces_order
     assert "linode_instance_config_interfaces_order" in FEATURE_TOOLS_LIST
+
+
+@pytest.mark.asyncio
+async def test_client_delete_instance_interface_sends_exact_request() -> None:
+    """Low-level client sends DELETE for the documented instance interface path."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        await client.delete_instance_interface(123, 789)
+    finally:
+        await client.close()
+
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "DELETE"
+    assert request.url.path == "/v4/linode/instances/123/interfaces/789"
+    assert request.url.query == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+    assert request.content == b""
+
+
+@pytest.mark.asyncio
+async def test_client_delete_instance_interface_translates_http_errors() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timeout")
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="DeleteInstanceInterface"):
+            await client.delete_instance_interface(123, 789)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, True])
+async def test_client_delete_instance_interface_rejects_invalid_linode_id(
+    linode_id: Any,
+) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
+            await client.delete_instance_interface(linode_id, 789)
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("interface_id", ["7/8", "7?x=8", "..", 0, True])
+async def test_client_delete_instance_interface_rejects_invalid_interface_id(
+    interface_id: Any,
+) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="interface_id must be a positive integer"):
+            await client.delete_instance_interface(123, interface_id)
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_retryable_client_delete_instance_interface_no_replay() -> None:
+    """Mutating delete delegates once and does not use generic replay retry."""
+    retryable = _FailingRetryableClient()
+    transient = httpx.ReadTimeout("timeout")
+    mock_delete = AsyncMock(
+        side_effect=NetworkError("DeleteInstanceInterface", transient)
+    )
+    cast("Any", retryable.client).delete_instance_interface = mock_delete
+
+    try:
+        with pytest.raises(NetworkError):
+            await retryable.delete_instance_interface(123, 789)
+    finally:
+        await retryable.close()
+
+    assert retryable.retry_calls == 0
+    mock_delete.assert_awaited_once_with(123, 789)
+
+
+def test_create_linode_instance_interface_delete_tool_schema() -> None:
+    tool, capability = create_linode_instance_interface_delete_tool()
+
+    assert tool.name == "linode_instance_interface_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == [
+        "linode_id",
+        "interface_id",
+        "confirm",
+    ]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_interface_delete_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    result = await handle_linode_instance_interface_delete(
+        {"linode_id": 123, "interface_id": 789, "confirm": True},
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body == {
+        "message": "Linode instance interface 789 deleted from Linode 123",
+        "linode_id": 123,
+        "interface_id": 789,
+    }
+    mock_linode_client.delete_instance_interface.assert_awaited_once_with(123, 789)
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_interface_delete_dry_run_skips_client(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    result = await handle_linode_instance_interface_delete(
+        {
+            "linode_id": 123,
+            "interface_id": 789,
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_interface_delete"
+    assert body["dry_run"] is True
+    assert body["would_execute"]["method"] == "DELETE"
+    assert body["would_execute"]["path"] == "/linode/instances/123/interfaces/789"
+    assert "body" not in body["would_execute"]
+    mock_linode_client.delete_instance_interface.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_instance_interface_delete_requires_confirm_true(
+    confirm: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    arguments: dict[str, Any] = {"linode_id": 123, "interface_id": 789}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    result = await handle_linode_instance_interface_delete(arguments, sample_config)
+
+    assert result[0].text == "Error: confirm must be true"
+    mock_linode_client.delete_instance_interface.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"linode_id": "1/2", "interface_id": 789, "confirm": True},
+        {"linode_id": "1?x=2", "interface_id": 789, "confirm": True},
+        {"linode_id": "..", "interface_id": 789, "confirm": True},
+        {"linode_id": 0, "interface_id": 789, "confirm": True},
+        {"linode_id": True, "interface_id": 789, "confirm": True},
+        {"linode_id": 123, "interface_id": "7/8", "confirm": True},
+        {"linode_id": 123, "interface_id": "7?x=8", "confirm": True},
+        {"linode_id": 123, "interface_id": "..", "confirm": True},
+        {"linode_id": 123, "interface_id": 0, "confirm": True},
+        {"linode_id": 123, "interface_id": True, "confirm": True},
+    ],
+)
+async def test_handle_instance_interface_delete_rejects_path_params(
+    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    result = await handle_linode_instance_interface_delete(arguments, sample_config)
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.delete_instance_interface.assert_not_called()
+
+
+def test_linode_instance_interface_delete_registered_and_exported() -> None:
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_instance_interface_delete"]
+    assert entry.capability is Capability.Destroy
+    assert entry.tool.name == "linode_instance_interface_delete"
+    assert entry.handle_fn is handle_linode_instance_interface_delete
+    assert "linode_instance_interface_delete" in FEATURE_TOOLS_LIST
 
 
 @pytest.mark.asyncio
