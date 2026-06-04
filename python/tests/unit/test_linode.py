@@ -11,7 +11,9 @@ import pytest
 from linodemcp.config import Config, EnvironmentConfig, LinodeConfig
 from linodemcp.linode import (
     Account,
+    Addons,
     APIError,
+    BackupsAddon,
     CircuitBreaker,
     CircuitOpenError,
     Client,
@@ -23,8 +25,10 @@ from linodemcp.linode import (
     Grant,
     Grants,
     Image,
+    InstanceType,
     LinodeError,
     NetworkError,
+    Price,
     Profile,
     RateLimiter,
     Region,
@@ -1280,6 +1284,109 @@ async def test_retryable_list_account_invoices_delegates_to_client() -> None:
 
     mock_list.assert_awaited_once_with(page=1, page_size=100)
     assert result == {"data": [], "page": 1, "pages": 1, "results": 0}
+    await retryable.close()
+
+
+async def test_get_type_sends_get_to_encoded_linode_type_route() -> None:
+    """Getting a Linode type sends GET /linode/types/{typeId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "id": "g6-nanode-1",
+        "label": "Nanode 1GB",
+        "class": "nanode",
+        "disk": 25600,
+        "memory": 1024,
+        "vcpus": 1,
+        "gpus": 0,
+        "network_out": 1000,
+        "transfer": 1000,
+        "price": {"hourly": 0.0075, "monthly": 5.0},
+        "addons": {"backups": {"price": {"hourly": 0.003, "monthly": 2.0}}},
+        "successor": None,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_type("g6-nanode-1")
+
+    assert result.id == "g6-nanode-1"
+    assert result.label == "Nanode 1GB"
+    mock_request.assert_called_once_with("GET", "/linode/types/g6-nanode-1")
+    await client.close()
+
+
+async def test_get_type_url_encodes_type_id_at_client_boundary() -> None:
+    """Client URL-encodes type_id path segments."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "bad/type?x=1"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_type("bad/type?x=1")
+
+    assert result.id == "bad/type?x=1"
+    mock_request.assert_called_once_with("GET", "/linode/types/bad%2Ftype%3Fx%3D1")
+    await client.close()
+
+
+async def test_get_type_requires_type_id_before_request() -> None:
+    """Client rejects empty type IDs before request dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="type_id is required"),
+    ):
+        await client.get_type("")
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_type_wraps_http_errors() -> None:
+    """Getting a Linode type wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_type("g6-nanode-1")
+
+    assert "GetType" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_type_delegates_to_client() -> None:
+    """RetryableClient delegates Linode type get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(retryable.client, "get_type", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = InstanceType(
+            id="g6-nanode-1",
+            label="Nanode 1GB",
+            class_="nanode",
+            disk=25600,
+            memory=1024,
+            vcpus=1,
+            gpus=0,
+            network_out=1000,
+            transfer=1000,
+            price=Price(hourly=0.0075, monthly=5.0),
+            addons=Addons(backups=BackupsAddon(price=Price(hourly=0.003, monthly=2.0))),
+            successor=None,
+        )
+        result = await retryable.get_type("g6-nanode-1")
+
+    mock_get.assert_awaited_once_with("g6-nanode-1")
+    assert result.id == "g6-nanode-1"
     await retryable.close()
 
 

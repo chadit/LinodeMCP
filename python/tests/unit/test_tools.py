@@ -419,6 +419,7 @@ from linodemcp.tools import (
     handle_linode_sshkeys_list,
     handle_linode_stackscript_create,
     handle_linode_stackscripts_list,
+    handle_linode_type_get,
     handle_linode_types_list,
     handle_linode_vlan_delete,
     handle_linode_vlans_list,
@@ -4051,6 +4052,82 @@ async def test_handle_linode_types_list_filter_class(sample_config: Config) -> N
         assert "g6-standard-2" in result[0].text
         assert "g6-nanode-1" not in result[0].text
         assert '"count": 1' in result[0].text
+
+
+async def test_handle_linode_type_get(sample_config: Config) -> None:
+    """Test linode_type_get tool."""
+    mock_type = InstanceType(
+        id="g6-nanode-1",
+        label="Nanode 1GB",
+        class_="nanode",
+        disk=25600,
+        memory=1024,
+        vcpus=1,
+        gpus=0,
+        network_out=1000,
+        transfer=1000,
+        price=Price(hourly=0.0075, monthly=5.0),
+        addons=Addons(backups=BackupsAddon(price=Price(hourly=0.003, monthly=2.0))),
+        successor=None,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_type.return_value = mock_type
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_type_get({"type_id": "g6-nanode-1"}, sample_config)
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["id"] == "g6-nanode-1"
+        assert data["label"] == "Nanode 1GB"
+        assert data["price"] == {"hourly": 0.0075, "monthly": 5.0}
+        mock_client.get_type.assert_awaited_once_with("g6-nanode-1")
+
+
+async def test_handle_linode_type_get_rejects_malformed_type_id(
+    sample_config: Config,
+) -> None:
+    """Type get rejects separators in type_id before client creation."""
+    for type_id in ("g6/nanode-1", "g6-nanode-1?x=1", "../g6-nanode-1"):
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            result = await handle_linode_type_get({"type_id": type_id}, sample_config)
+
+        assert len(result) == 1
+        assert "letters, numbers, and hyphens" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_type_id", [None, "", "   ", 123, True])
+async def test_handle_linode_type_get_requires_string_type_id(
+    sample_config: Config, bad_type_id: Any
+) -> None:
+    """Type get requires a non-empty string type_id."""
+    arguments = {} if bad_type_id is None else {"type_id": bad_type_id}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_type_get(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "type_id is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_type_get_error(sample_config: Config) -> None:
+    """Test linode_type_get tool error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_type.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_type_get({"type_id": "g6-nanode-1"}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed to retrieve Linode type g6-nanode-1" in result[0].text
 
 
 async def test_handle_linode_volume_get(sample_config: Config) -> None:

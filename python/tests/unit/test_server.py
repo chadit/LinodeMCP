@@ -1100,6 +1100,19 @@ async def test_firewall_template_get_tool_is_exported_and_registered(
     assert "linode_firewall_template_get" in srv.registered_tool_names
 
 
+async def test_linode_type_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode type get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_type_get_tool" in tools_mod.__all__
+    assert "handle_linode_type_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_type_get" in srv.registered_tool_names
+
+
 async def test_volume_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

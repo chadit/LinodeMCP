@@ -122,6 +122,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_regions_availability_get", Capability.Read),
         ToolDescriptor("linode_kernels_list", Capability.Read),
         ToolDescriptor("linode_types_list", Capability.Read),
+        ToolDescriptor("linode_type_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_config_get", Capability.Read),
         ToolDescriptor("linode_database_postgresql_config_get", Capability.Read),
         ToolDescriptor("linode_database_postgresql_instance_create", Capability.Write),
