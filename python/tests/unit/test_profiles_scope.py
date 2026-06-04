@@ -58,6 +58,11 @@ def test_meta_returns_empty() -> None:
         ),
         ("linode_vpcs_list", Capability.Read, [Scope.VPCReadOnly]),
         ("linode_instance_config_get", Capability.Read, [Scope.LinodesReadOnly]),
+        (
+            "linode_instance_config_interface_get",
+            Capability.Read,
+            [Scope.LinodesReadOnly],
+        ),
         ("linode_instance_config_delete", Capability.Destroy, [Scope.LinodesReadWrite]),
         (
             "linode_instance_config_interfaces_list",

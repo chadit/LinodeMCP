@@ -1584,6 +1584,27 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceConfig", e) from e
 
+    async def get_instance_config_interface(
+        self, linode_id: int, config_id: int, interface_id: int
+    ) -> dict[str, Any]:
+        """Get an interface for a Linode instance configuration profile."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        config_id = _validate_positive_path_int(config_id, "config_id")
+        interface_id = _validate_positive_path_int(interface_id, "interface_id")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        encoded_interface_id = quote(str(interface_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/configs/"
+            f"{encoded_config_id}/interfaces/{encoded_interface_id}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceConfigInterface", e) from e
+
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
     ) -> dict[str, Any]:
@@ -8934,6 +8955,18 @@ class RetryableClient:
     async def delete_instance_config(self, linode_id: int, config_id: int) -> None:
         """Delete a Linode instance configuration profile without replay retry."""
         await self.client.delete_instance_config(linode_id, config_id)
+
+    async def get_instance_config_interface(
+        self, linode_id: int, config_id: int, interface_id: int
+    ) -> dict[str, Any]:
+        """Get a Linode instance configuration profile interface with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_config_interface,
+            linode_id,
+            config_id,
+            interface_id,
+        )
+        return result
 
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int

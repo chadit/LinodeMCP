@@ -3504,6 +3504,92 @@ async def test_retryable_delete_instance_config_delegates_without_retry() -> Non
     await retryable.close()
 
 
+async def test_get_instance_config_interface() -> None:
+    """Get Linode instance config interface sends GET to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 9, "purpose": "vlan"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_instance_config_interface(123, 6, 9)
+
+    assert result["purpose"] == "vlan"
+    mock_request.assert_called_once_with(
+        "GET", "/linode/instances/123/configs/6/interfaces/9"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("1/2", 6, 9),
+        ("1?x", 6, 9),
+        ("..", 6, 9),
+        (0, 6, 9),
+        (True, 6, 9),
+        (123, "6/7", 9),
+        (123, "6?x", 9),
+        (123, "..", 9),
+        (123, 0, 9),
+        (123, True, 9),
+        (123, 6, "9/10"),
+        (123, 6, "9?x"),
+        (123, 6, ".."),
+        (123, 6, 0),
+        (123, 6, True),
+    ],
+)
+async def test_get_instance_config_interface_rejects_malformed_path_params(
+    arguments: tuple[Any, Any, Any],
+) -> None:
+    """Linode instance config interface get rejects malformed path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    linode_id, config_id, interface_id = arguments
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="positive integer"),
+    ):
+        await client.get_instance_config_interface(linode_id, config_id, interface_id)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_instance_config_interface_wraps_http_errors() -> None:
+    """Get Linode instance config interface wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_instance_config_interface(123, 6, 9)
+
+    assert "GetInstanceConfigInterface" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_instance_config_interface_delegates_to_client() -> None:
+    """RetryableClient delegates Linode instance config interface get with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_instance_config_interface", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 9, "purpose": "vlan"}
+        result = await retryable.get_instance_config_interface(123, 6, 9)
+
+    assert result["id"] == 9
+    mock_get.assert_awaited_once_with(123, 6, 9)
+    await retryable.close()
+
+
 async def test_list_instance_config_interfaces() -> None:
     """List Linode instance config interfaces sends GET to the exact route."""
     client = Client("https://api.linode.com/v4", "test-token")
