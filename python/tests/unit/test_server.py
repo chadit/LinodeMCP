@@ -1884,6 +1884,19 @@ async def test_account_maintenance_list_tool_is_exported_and_registered(
     assert "linode_account_maintenance_list" in srv.registered_tool_names
 
 
+async def test_linode_instance_firewalls_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance firewalls update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_instance_firewalls_update_tool" in tools_mod.__all__
+    assert "handle_linode_instance_firewalls_update" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_firewalls_update" in srv.registered_tool_names
+
+
 async def test_account_maintenance_list_dispatches_from_registry(
     sample_config: Config,
 ) -> None:

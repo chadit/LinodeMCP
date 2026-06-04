@@ -27,6 +27,41 @@ def _error_response(message: str) -> list[TextContent]:
     return [TextContent(type="text", text=f"Error: {message}")]
 
 
+def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
+    value = arguments.get(name)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return value
+
+
+def _optional_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be at most {maximum}")
+    return value
+
+
+def _firewall_ids_argument(arguments: dict[str, Any]) -> list[int] | None:
+    raw_value: object = arguments.get("firewall_ids")
+    if not isinstance(raw_value, list):
+        return None
+
+    firewall_ids: list[int] = []
+    for item in cast("list[object]", raw_value):
+        if isinstance(item, bool) or not isinstance(item, int) or item < 1:
+            return None
+        firewall_ids.append(item)
+    return firewall_ids
+
+
 def create_linode_instance_boot_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_boot tool."""
     return Tool(
@@ -234,6 +269,116 @@ async def handle_linode_instance_shutdown(
         }
 
     return await execute_tool(cfg, arguments, "shutdown instance", _call)
+
+
+def create_linode_instance_firewalls_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_firewalls_update tool."""
+    return Tool(
+        name="linode_instance_firewalls_update",
+        description=(
+            "Replaces the firewall assignments for a Linode instance. "
+            "Pass an empty firewall_ids list to remove all assignments."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "firewall_ids": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": (
+                        "Complete list of Firewall IDs to assign. Use [] to remove all."
+                    ),
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of assigned Firewall results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of assigned Firewall results per page",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to replace Linode firewall assignments. "
+                        "Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "firewall_ids", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_firewalls_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_firewalls_update tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return _error_response("linode_id must be a positive integer")
+
+    firewall_ids = _firewall_ids_argument(arguments)
+    if firewall_ids is None:
+        return _error_response("firewall_ids must be a list of positive integers")
+
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return _error_response(str(exc))
+
+    request_body = {"firewall_ids": firewall_ids}
+    dry_run_path = f"/linode/instances/{linode_id}/firewalls"
+    dry_run_query: dict[str, int] = {}
+    if page is not None:
+        dry_run_query["page"] = page
+    if page_size is not None:
+        dry_run_query["page_size"] = page_size
+    if dry_run_query:
+        dry_run_path += "?" + "&".join(
+            f"{name}={value}" for name, value in dry_run_query.items()
+        )
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_firewalls_update",
+            arguments.get("environment", ""),
+            "PUT",
+            dry_run_path,
+            None,
+            side_effects=[
+                f"Firewall assignments for Linode {linode_id} will be replaced."
+            ],
+            request_body=request_body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return _error_response("confirm must be true")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_instance_firewalls(
+            linode_id, firewall_ids, page=page, page_size=page_size
+        )
+
+    return await execute_tool(
+        cfg, arguments, "update Linode firewall assignments", _call
+    )
 
 
 def create_linode_instance_create_tool() -> tuple[Tool, Capability]:

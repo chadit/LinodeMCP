@@ -95,6 +95,7 @@ from linodemcp.tools import (
     create_linode_instance_disk_update_tool,
     create_linode_instance_disks_list_tool,
     create_linode_instance_firewalls_list_tool,
+    create_linode_instance_firewalls_update_tool,
     create_linode_instance_ip_allocate_tool,
     create_linode_instance_ip_delete_tool,
     create_linode_instance_ip_get_tool,
@@ -258,6 +259,7 @@ from linodemcp.tools import (
     handle_linode_instance_disk_update,
     handle_linode_instance_disks_list,
     handle_linode_instance_firewalls_list,
+    handle_linode_instance_firewalls_update,
     handle_linode_instance_get,
     handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
@@ -7089,6 +7091,189 @@ async def test_handle_linode_instance_update_no_confirm(sample_config: Config) -
 
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_instance_firewalls_update_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Confirm must be exactly true before the client is called."""
+    arguments: dict[str, Any] = {"linode_id": 42, "firewall_ids": [123]}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
+async def test_handle_linode_instance_firewalls_update_rejects_invalid_linode_id(
+    sample_config: Config, linode_id: object
+) -> None:
+    """Malformed Linode IDs are rejected before the client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_update(
+            {"linode_id": linode_id, "firewall_ids": [123], "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "linode_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("firewall_ids", ["123", [0], [-1], [True], ["123"]])
+async def test_handle_linode_instance_firewalls_update_rejects_invalid_firewall_ids(
+    sample_config: Config, firewall_ids: object
+) -> None:
+    """Invalid firewall_ids are rejected before the client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_update(
+            {"linode_id": 42, "firewall_ids": firewall_ids, "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "firewall_ids must be a list of positive integers" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("page", "2", "page must be an integer"),
+        ("page", 0, "page must be at least 1"),
+        ("page_size", "25", "page_size must be an integer"),
+        ("page_size", 24, "page_size must be at least 25"),
+        ("page_size", 501, "page_size must be at most 500"),
+    ],
+)
+async def test_handle_linode_instance_firewalls_update_rejects_invalid_pagination(
+    sample_config: Config, field: str, value: object, message: str
+) -> None:
+    """Invalid pagination values are rejected before the client call."""
+    arguments: dict[str, Any] = {
+        "linode_id": 42,
+        "firewall_ids": [123],
+        "confirm": True,
+        field: value,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+def test_linode_instance_firewalls_update_tool_schema() -> None:
+    """The Linode firewall assignment update schema exposes safety controls."""
+    tool, capability = create_linode_instance_firewalls_update_tool()
+    props: dict[str, Any] = tool.inputSchema["properties"]
+
+    assert tool.name == "linode_instance_firewalls_update"
+    assert capability.name == "Write"
+    assert "linode_id" in tool.inputSchema["required"]
+    assert "firewall_ids" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+    assert "dry_run" not in tool.inputSchema["required"]
+    assert props["dry_run"]["type"] == "boolean"
+    assert props["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_instance_firewalls_update(
+    sample_config: Config,
+) -> None:
+    """Test linode_instance_firewalls_update tool."""
+    response_data = {"data": [{"id": 123}], "page": 1, "pages": 1, "results": 1}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_instance_firewalls.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_firewalls_update(
+            {
+                "linode_id": 42,
+                "firewall_ids": [123],
+                "page": 2,
+                "page_size": 25,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_instance_firewalls.assert_awaited_once_with(
+        42, [123], page=2, page_size=25
+    )
+
+
+async def test_handle_linode_instance_firewalls_update_allows_empty_firewall_ids(
+    sample_config: Config,
+) -> None:
+    """An empty firewall_ids list is forwarded as the documented removal path."""
+    response_data: dict[str, Any] = {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_instance_firewalls.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_firewalls_update(
+            {"linode_id": 42, "firewall_ids": [], "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_instance_firewalls.assert_awaited_once_with(
+        42, [], page=None, page_size=None
+    )
+
+
+async def test_instance_firewalls_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the PUT body/query and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_update(
+            {
+                "linode_id": 42,
+                "firewall_ids": [123],
+                "page": 2,
+                "page_size": 25,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_firewalls_update"
+    assert body["would_execute"]["method"] == "PUT"
+    assert (
+        body["would_execute"]["path"]
+        == "/linode/instances/42/firewalls?page=2&page_size=25"
+    )
+    assert body["would_execute"]["body"] == {"firewall_ids": [123]}
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_instance_update_missing_field(
