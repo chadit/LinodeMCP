@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
@@ -32,6 +33,19 @@ _CLUSTER_ID_PROP: dict[str, Any] = {
     "type": "string",
     "description": "The ID of the LKE cluster (required)",
 }
+
+_LKE_TIER_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "The LKE tier ID, such as 'standard' or 'enterprise' (required)",
+}
+_LKE_TIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+def _validate_lke_tier(value: object) -> str | None:
+    """Return a safe LKE tier path segment or None when invalid."""
+    if not isinstance(value, str) or not _LKE_TIER_PATTERN.fullmatch(value):
+        return None
+    return value
 
 
 def create_linode_lke_clusters_list_tool() -> tuple[Tool, Capability]:
@@ -441,12 +455,14 @@ def create_linode_lke_tier_versions_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_tier_versions_list tool."""
     return Tool(
         name="linode_lke_tier_versions_list",
-        description="Lists LKE tier versions",
+        description="Lists LKE Kubernetes versions for a tier",
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
+                "tier": _LKE_TIER_ID_PROP,
             },
+            "required": ["tier"],
         },
     ), Capability.Read
 
@@ -455,9 +471,12 @@ async def handle_linode_lke_tier_versions_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_tier_versions_list tool request."""
+    tier = _validate_lke_tier(arguments.get("tier"))
+    if tier is None:
+        return error_response("tier must be a non-empty path segment")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        versions = await client.list_lke_tier_versions()
+        versions = await client.list_lke_tier_versions(tier)
         return {"count": len(versions), "tier_versions": versions}
 
     return await execute_tool(cfg, arguments, "list LKE tier versions", _call)

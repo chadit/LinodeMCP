@@ -14513,10 +14513,50 @@ async def test_lke_tier_versions_list(sample_config: Config) -> None:
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
 
-        result = list(await handle_linode_lke_tier_versions_list({}, sample_config))
+        result = list(
+            await handle_linode_lke_tier_versions_list(
+                {"tier": "standard"}, sample_config
+            )
+        )
 
         assert len(result) == 1
         assert "1.29" in result[0].text
+        mock_client.list_lke_tier_versions.assert_awaited_once_with("standard")
+
+
+async def test_lke_tier_versions_list_requires_tier(sample_config: Config) -> None:
+    """LKE tier versions list requires tier before client dispatch."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        result = list(await handle_linode_lke_tier_versions_list({}, sample_config))
+
+    assert "tier must be a non-empty path segment" in result[0].text
+    mock_cls.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "tier",
+    [
+        "",
+        "standard/enterprise",
+        "standard?tier",
+        "..",
+        "#bad",
+        "bad&",
+        "bad tier",
+        "standard%2F..",
+    ],
+)
+async def test_lke_tier_versions_list_rejects_malformed_tier(
+    sample_config: Config, tier: object
+) -> None:
+    """LKE tier versions list rejects malformed tier path segments."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        result = list(
+            await handle_linode_lke_tier_versions_list({"tier": tier}, sample_config)
+        )
+
+    assert "tier must be a non-empty path segment" in result[0].text
+    mock_cls.assert_not_called()
 
 
 # VPC tool definition tests

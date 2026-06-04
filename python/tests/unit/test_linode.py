@@ -18185,3 +18185,92 @@ async def test_linode_instance_interface_settings_update_schema_has_dry_run() ->
     assert capability is Capability.Write
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "dry_run" not in tool.inputSchema["required"]
+
+
+async def test_list_lke_tier_versions_sends_tier_route() -> None:
+    """LKE tier versions list uses the documented tier route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"id": "1.31", "tier": "standard"}],
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        versions = await client.list_lke_tier_versions("standard")
+
+        assert versions == [{"id": "1.31", "tier": "standard"}]
+        mock_request.assert_awaited_once_with("GET", "/lke/tiers/standard/versions")
+
+    await client.close()
+
+
+async def test_list_lke_tier_versions_encodes_tier_path_param() -> None:
+    """LKE tier versions list URL-encodes the tier path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.list_lke_tier_versions("standard/../?tier")
+
+        mock_request.assert_awaited_once_with(
+            "GET", "/lke/tiers/standard%2F..%2F%3Ftier/versions"
+        )
+
+    await client.close()
+
+
+async def test_list_lke_tier_versions_wraps_http_errors() -> None:
+    """LKE tier versions list wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "bad", request=MagicMock(), response=MagicMock()
+        )
+
+        with pytest.raises(NetworkError):
+            await client.list_lke_tier_versions("standard")
+
+    await client.close()
+
+
+async def test_retryable_list_lke_tier_versions_delegates_to_client() -> None:
+    """RetryableClient delegates LKE tier versions list to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    mock_versions = [{"id": "1.31", "tier": "standard"}]
+    with patch.object(
+        retryable.client, "list_lke_tier_versions", new_callable=AsyncMock
+    ) as mock_method:
+        mock_method.return_value = mock_versions
+
+        result = await retryable.list_lke_tier_versions("standard")
+
+        assert result is mock_versions
+        mock_method.assert_awaited_once_with("standard")
+
+    await retryable.close()
+
+
+async def test_retryable_lke_tier_versions_forwards_tier_argument() -> None:
+    """Retryable LKE tier version route forwards tier through retry dispatch."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_method = AsyncMock(return_value=[{"id": "1.31", "tier": "standard"}])
+    object.__setattr__(retryable.client, "list_lke_tier_versions", mock_method)
+
+    try:
+        result = await retryable.list_lke_tier_versions("standard")
+
+        assert result == [{"id": "1.31", "tier": "standard"}]
+        mock_method.assert_awaited_once_with("standard")
+    finally:
+        await retryable.close()
