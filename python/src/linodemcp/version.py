@@ -81,7 +81,7 @@ FEATURE_TOOLS_LIST = (
     "linode_lke_service_token_delete,linode_lke_acl_get,"
     "linode_lke_acl_update,linode_lke_acl_delete,"
     "linode_lke_versions_list,linode_lke_version_get,"
-    "linode_lke_types_list,linode_lke_tier_versions_list,"
+    "linode_lke_types_list,linode_lke_tier_versions_list,linode_lke_tier_version_get,"
     "linode_vlan_delete,linode_vlans_list,linode_vpcs_list,linode_vpc_get,linode_vpc_create,"
     "linode_vpc_update,linode_vpc_delete,linode_vpc_ips_list,"
     "linode_vpc_ip_list,linode_vpc_subnets_list,linode_vpc_subnet_get,"
