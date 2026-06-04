@@ -133,6 +133,34 @@ def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def create_linode_image_sharegroups_by_image_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroups_by_image_list tool."""
+    return Tool(
+        name="linode_image_sharegroups_by_image_list",
+        description="Lists share groups for a Linode image.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "image_id": {
+                    "type": "string",
+                    "pattern": r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$",
+                    "description": (
+                        "Image ID such as linode/ubuntu24.04 or private/12345 "
+                        "(required)"
+                    ),
+                },
+            },
+            "required": ["image_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_list tool."""
     return Tool(
@@ -1469,6 +1497,33 @@ async def handle_linode_image_create(
         }
 
     return await execute_tool(cfg, arguments, "create Linode image", _call)
+
+
+async def handle_linode_image_sharegroups_by_image_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_sharegroups_by_image_list tool request."""
+    image_id = arguments.get("image_id")
+    image_err = _image_id_error(image_id)
+    if image_err is not None:
+        return error_response(image_err)
+
+    image_id_str = cast("str", image_id).strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_image_sharegroups_by_image(image_id_str)
+        sharegroups = data.get("data", [])
+        return {
+            "message": "Image share groups listed for image",
+            "count": len(sharegroups),
+            "image_id": image_id_str,
+            "sharegroups": sharegroups,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list image share groups by image", _call)
 
 
 async def handle_linode_images_sharegroups_list(

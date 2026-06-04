@@ -15,6 +15,7 @@ from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
     create_linode_image_delete_tool,
     create_linode_image_sharegroup_create_tool,
+    create_linode_image_sharegroups_by_image_list_tool,
     create_linode_images_sharegroup_image_delete_tool,
     create_linode_images_sharegroup_image_update_tool,
     create_linode_images_sharegroup_images_add_tool,
@@ -33,6 +34,7 @@ from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_image_delete,
     handle_linode_image_sharegroup_create,
+    handle_linode_image_sharegroups_by_image_list,
     handle_linode_images_sharegroup_image_delete,
     handle_linode_images_sharegroup_image_update,
     handle_linode_images_sharegroup_images_add,
@@ -85,6 +87,97 @@ class _CapturingRetryableClient(RetryableClient):
     ) -> T:
         self.calls.append(func)
         return await func(*args)
+
+
+@pytest.mark.asyncio
+async def test_client_list_image_sharegroups_by_image_sends_exact_path() -> None:
+    """Low-level client sends GET /images/{imageId}/sharegroups."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"id": "share-1", "label": "shared images"}],
+                "page": 1,
+                "pages": 1,
+                "results": 1,
+            },
+        )
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.list_image_sharegroups_by_image("private/12345")
+    finally:
+        await client.close()
+
+    assert result["data"][0]["id"] == "share-1"
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.path == "/v4/images/private/12345/sharegroups"
+    assert request.url.raw_path == b"/v4/images/private%2F12345/sharegroups"
+    assert request.url.query == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("image_id", "expected_raw_path"),
+    [
+        ("linode/ubuntu/24.04", b"/v4/images/linode%2Fubuntu%2F24.04/sharegroups"),
+    ],
+)
+async def test_client_list_image_sharegroups_by_image_encodes_path_param(
+    image_id: str, expected_raw_path: bytes
+) -> None:
+    """Low-level client encodes the image ID as one path segment."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200, json={"data": [], "page": 1, "pages": 1, "results": 0}
+        )
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.list_image_sharegroups_by_image(image_id)
+    finally:
+        await client.close()
+
+    assert result["results"] == 0
+    assert len(seen) == 1
+    assert seen[0].method == "GET"
+    assert seen[0].url.raw_path == expected_raw_path
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "image_id", ["", " ", 12345, ["linode/ubuntu"], "linode/..", "linode/ubuntu?x=1"]
+)
+async def test_client_list_image_sharegroups_by_image_rejects_malformed_path_param(
+    image_id: object,
+) -> None:
+    """Low-level client rejects non-string, empty, query, and traversal image IDs."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("client should reject malformed image_id before request")
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        bad_image_id: Any = image_id
+        with pytest.raises(ValueError, match="image_id"):
+            await client.list_image_sharegroups_by_image(bad_image_id)
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -181,6 +274,25 @@ async def test_client_list_image_sharegroups_validates_pagination_before_request
 
 
 @pytest.mark.asyncio
+async def test_retryable_list_image_sharegroups_by_image_uses_retry() -> None:
+    """Read-only image share groups by image list goes through retry wrapper."""
+    retryable = _CapturingRetryableClient()
+    mock_list = AsyncMock(
+        return_value={"data": [], "page": 1, "pages": 1, "results": 0}
+    )
+    cast("Any", retryable.client).list_image_sharegroups_by_image = mock_list
+
+    try:
+        result = await retryable.list_image_sharegroups_by_image("private/12345")
+    finally:
+        await retryable.close()
+
+    assert result["results"] == 0
+    assert len(retryable.calls) == 1
+    mock_list.assert_awaited_once_with("private/12345")
+
+
+@pytest.mark.asyncio
 async def test_retryable_client_list_image_sharegroups_uses_read_retry() -> None:
     """Read-only image share groups list goes through the retry wrapper."""
     retryable = _CapturingRetryableClient()
@@ -197,6 +309,92 @@ async def test_retryable_client_list_image_sharegroups_uses_read_retry() -> None
     assert result["results"] == 0
     assert len(retryable.calls) == 1
     mock_list.assert_awaited_once_with(page=1, page_size=25)
+
+
+def test_create_linode_image_sharegroups_by_image_list_tool_schema() -> None:
+    """Tool schema exposes the documented image_id path param."""
+    tool, capability = create_linode_image_sharegroups_by_image_list_tool()
+
+    assert tool.name == "linode_image_sharegroups_by_image_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["image_id"]
+    assert tool.inputSchema["properties"]["image_id"]["pattern"] == (
+        r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$"
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_image_sharegroups_by_image_list_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler returns share groups for an image."""
+    mock_linode_client.list_image_sharegroups_by_image.return_value = {
+        "data": [{"id": "share-1", "label": "shared images"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    result = await handle_linode_image_sharegroups_by_image_list(
+        {"image_id": "private/12345"}, sample_config
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Image share groups listed for image",
+        "count": 1,
+        "image_id": "private/12345",
+        "sharegroups": [{"id": "share-1", "label": "shared images"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    mock_linode_client.list_image_sharegroups_by_image.assert_awaited_once_with(
+        "private/12345"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "image_id",
+    [
+        None,
+        "",
+        "ubuntu24.04",
+        "linode/",
+        "linode/../ubuntu",
+        "linode/ubuntu?x=1",
+        "linode/ubuntu/24.04",
+    ],
+)
+async def test_handle_linode_image_sharegroups_by_image_list_rejects_bad_image_id(
+    image_id: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects malformed image IDs before client calls."""
+    result = await handle_linode_image_sharegroups_by_image_list(
+        {"image_id": image_id}, sample_config
+    )
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.list_image_sharegroups_by_image.assert_not_called()
+
+
+def test_linode_image_sharegroups_by_image_list_registered() -> None:
+    """Dynamic registry exports the by-image sharegroups tool and handler pair."""
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_image_sharegroups_by_image_list"]
+    assert entry.capability is Capability.Read
+    assert entry.tool.name == "linode_image_sharegroups_by_image_list"
+    assert entry.handle_fn is handle_linode_image_sharegroups_by_image_list
+
+
+def test_linode_image_sharegroups_by_image_list_scopes_to_images_read() -> None:
+    """Profile scope mapping keeps the route in the Images read category."""
+    scopes = required_scopes("linode_image_sharegroups_by_image_list", Capability.Read)
+
+    assert scopes == [Scope.ImagesReadOnly]
+    assert "linode_image_sharegroups_by_image_list" in FEATURE_TOOLS_LIST
 
 
 def test_create_linode_images_sharegroups_list_tool_schema() -> None:
