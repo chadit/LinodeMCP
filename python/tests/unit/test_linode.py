@@ -1,6 +1,7 @@
 """Unit tests for Linode client."""
 
 import asyncio
+import json
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16949,3 +16950,345 @@ async def test_retryable_add_instance_interface_delegates_without_retry() -> Non
 
     mock_add.assert_awaited_once_with(42, payload)
     await client.close()
+
+
+async def test_update_instance_interface_settings_sends_exact_route() -> None:
+    """Interface settings update sends the exact PUT route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, object] = {
+        "network_helper": True,
+        "default_route": {
+            "ipv4_interface_id": 4527,
+            "ipv6_interface_id": 4541,
+        },
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_instance_interface_settings(
+            123,
+            default_route={
+                "ipv4_interface_id": 4527,
+                "ipv6_interface_id": 4541,
+            },
+            network_helper=True,
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/linode/instances/123/interfaces/settings",
+        {
+            "default_route": {
+                "ipv4_interface_id": 4527,
+                "ipv6_interface_id": 4541,
+            },
+            "network_helper": True,
+        },
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x", "..", True, 0, -1])
+async def test_update_instance_interface_settings_rejects_invalid_linode_id(
+    bad_linode_id: object,
+) -> None:
+    """Interface settings update validates the finite Linode ID path param."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
+            await client.update_instance_interface_settings(
+                cast("Any", bad_linode_id),
+                network_helper=True,
+            )
+
+        mock_request.assert_not_called()
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({}, "network_helper or default_route is required"),
+        ({"network_helper": "true"}, "network_helper must be a boolean"),
+        ({"default_route": "bad"}, "default_route must be an object"),
+        (
+            {"default_route": {}},
+            "default_route must include ipv4_interface_id or ipv6_interface_id",
+        ),
+        (
+            {"default_route": {"ipv4_eligible_interface_ids": [1]}},
+            "default_route supports only ipv4_interface_id and ipv6_interface_id",
+        ),
+        (
+            {"default_route": {"ipv4_interface_id": True}},
+            "default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+        (
+            {"default_route": {"ipv4_interface_id": 0}},
+            "default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+        (
+            {"default_route": {"ipv4_interface_id": -1}},
+            "default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+        (
+            {"default_route": {"ipv4_interface_id": "1"}},
+            "default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+    ],
+)
+async def test_update_instance_interface_settings_rejects_invalid_body(
+    kwargs: dict[str, Any], match: str
+) -> None:
+    """Interface settings client validates request body fields."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        with pytest.raises(ValueError, match=match):
+            await client.update_instance_interface_settings(42, **kwargs)
+
+        mock_request.assert_not_called()
+
+    await client.close()
+
+
+async def test_update_instance_interface_settings_wraps_http_errors() -> None:
+    """Interface settings update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("network error")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_instance_interface_settings(42, network_helper=True)
+
+    assert "UpdateInstanceInterfaceSettings" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_instance_interface_settings_does_not_replay() -> None:
+    """RetryableClient delegates interface settings updates once."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_instance_interface_settings", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_instance_interface_settings(42, network_helper=True)
+
+        mock_update.assert_awaited_once_with(
+            42, default_route=None, network_helper=True
+        )
+
+    await retryable.close()
+
+
+async def test_linode_instance_interface_settings_update_handler_success(
+    sample_config: Config,
+) -> None:
+    """Interface settings update handler returns the client response."""
+    from linodemcp.tools.linode_instance_write import (
+        handle_linode_instance_interface_settings_update,
+    )
+
+    response_data: dict[str, object] = {
+        "network_helper": False,
+        "default_route": {"ipv4_interface_id": 5527},
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_instance_interface_settings.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_interface_settings_update(
+            {
+                "linode_id": 42,
+                "network_helper": False,
+                "default_route": {"ipv4_interface_id": 5527},
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_instance_interface_settings.assert_awaited_once_with(
+        42,
+        default_route={"ipv4_interface_id": 5527},
+        network_helper=False,
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_linode_instance_interface_settings_update_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Interface settings update requires boolean confirm before client call."""
+    from linodemcp.tools.linode_instance_write import (
+        handle_linode_instance_interface_settings_update,
+    )
+
+    arguments: dict[str, object] = {"linode_id": 42, "network_helper": True}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_interface_settings_update(
+            arguments, sample_config
+        )
+
+    assert result[0].text == "Error: confirm must be true"
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x", "..", True, 0, -1])
+async def test_linode_instance_interface_settings_update_rejects_bad_linode_id(
+    sample_config: Config, bad_linode_id: object
+) -> None:
+    """Interface settings update handler rejects malformed Linode IDs."""
+    from linodemcp.tools.linode_instance_write import (
+        handle_linode_instance_interface_settings_update,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_interface_settings_update(
+            {"linode_id": bad_linode_id, "network_helper": True, "confirm": True},
+            sample_config,
+        )
+
+    assert result[0].text == "Error: linode_id must be a positive integer"
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            {"linode_id": 42, "network_helper": "true", "confirm": True},
+            "Error: network_helper must be a boolean",
+        ),
+        (
+            {"linode_id": 42, "confirm": True},
+            "Error: network_helper or default_route is required",
+        ),
+        (
+            {"linode_id": 42, "default_route": "bad", "confirm": True},
+            "Error: default_route must be an object",
+        ),
+        (
+            {"linode_id": 42, "default_route": {}, "confirm": True},
+            "Error: default_route must include ipv4_interface_id or ipv6_interface_id",
+        ),
+        (
+            {
+                "linode_id": 42,
+                "default_route": {"ipv4_eligible_interface_ids": [1]},
+                "confirm": True,
+            },
+            "Error: default_route supports only ipv4_interface_id "
+            "and ipv6_interface_id",
+        ),
+        (
+            {
+                "linode_id": 42,
+                "default_route": {"ipv4_interface_id": True},
+                "confirm": True,
+            },
+            "Error: default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+        (
+            {
+                "linode_id": 42,
+                "default_route": {"ipv4_interface_id": 0},
+                "confirm": True,
+            },
+            "Error: default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+        (
+            {
+                "linode_id": 42,
+                "default_route": {"ipv4_interface_id": -1},
+                "confirm": True,
+            },
+            "Error: default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+        (
+            {
+                "linode_id": 42,
+                "default_route": {"ipv4_interface_id": "1"},
+                "confirm": True,
+            },
+            "Error: default_route.ipv4_interface_id must be a positive integer or null",
+        ),
+    ],
+)
+async def test_linode_instance_interface_settings_update_rejects_bad_body(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Interface settings update rejects invalid body fields before client calls."""
+    from linodemcp.tools.linode_instance_write import (
+        handle_linode_instance_interface_settings_update,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_interface_settings_update(
+            arguments,
+            sample_config,
+        )
+
+    assert result[0].text == message
+    mock_client_class.assert_not_called()
+
+
+async def test_linode_instance_interface_settings_update_dry_run_skips_client(
+    sample_config: Config,
+) -> None:
+    """Interface settings dry run previews the exact route and body."""
+    from linodemcp.tools.linode_instance_write import (
+        handle_linode_instance_interface_settings_update,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_interface_settings_update(
+            {
+                "linode_id": 42,
+                "network_helper": True,
+                "default_route": {"ipv6_interface_id": None},
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "PUT",
+        "path": "/linode/instances/42/interfaces/settings",
+        "body": {
+            "default_route": {"ipv6_interface_id": None},
+            "network_helper": True,
+        },
+    }
+    mock_client_class.assert_not_called()
+
+
+async def test_linode_instance_interface_settings_update_schema_has_dry_run() -> None:
+    """Interface settings update schema exposes dry_run and keeps it optional."""
+    from linodemcp.tools.linode_instance_write import (
+        create_linode_instance_interface_settings_update_tool,
+    )
+
+    tool, capability = create_linode_instance_interface_settings_update_tool()
+
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "dry_run" not in tool.inputSchema["required"]

@@ -381,6 +381,166 @@ async def handle_linode_instance_firewalls_update(
     )
 
 
+def create_linode_instance_interface_settings_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_settings_update tool."""
+    return Tool(
+        name="linode_instance_interface_settings_update",
+        description=(
+            "Updates Network Helper and default route settings on a Linode. "
+            "Power off the Linode before enabling or disabling Network Helper."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode to update (required)",
+                },
+                "network_helper": {
+                    "type": "boolean",
+                    "description": "Enable or disable Network Helper (optional)",
+                },
+                "default_route": {
+                    "type": "object",
+                    "description": (
+                        "Default route interface IDs. Supports ipv4_interface_id "
+                        "and ipv6_interface_id values, each integer or null."
+                    ),
+                    "additionalProperties": False,
+                    "minProperties": 1,
+                    "properties": {
+                        "ipv4_interface_id": {
+                            "type": ["integer", "null"],
+                            "minimum": 1,
+                        },
+                        "ipv6_interface_id": {
+                            "type": ["integer", "null"],
+                            "minimum": 1,
+                        },
+                    },
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to update interface settings. "
+                        "Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _interface_settings_update_error(
+    arguments: dict[str, Any],
+    linode_id: int | None,
+    network_helper: object,
+    default_route: dict[str, int | None] | None,
+) -> str | None:
+    """Validate interface settings update arguments."""
+    if linode_id is None:
+        return "linode_id must be a positive integer"
+    if "network_helper" in arguments and not isinstance(network_helper, bool):
+        return "network_helper must be a boolean"
+    if "network_helper" not in arguments and default_route is None:
+        return "network_helper or default_route is required"
+    return None
+
+
+def _interface_settings_default_route_argument(
+    arguments: dict[str, Any],
+) -> dict[str, int | None] | None:
+    if "default_route" not in arguments:
+        return None
+    raw_default_route = arguments["default_route"]
+    if not isinstance(raw_default_route, dict):
+        raise TypeError("default_route must be an object")
+
+    default_route_input = cast("dict[str, Any]", raw_default_route)
+    allowed_fields = {"ipv4_interface_id", "ipv6_interface_id"}
+    unknown_fields = set(default_route_input) - allowed_fields
+    if unknown_fields:
+        raise ValueError(
+            "default_route supports only ipv4_interface_id and ipv6_interface_id"
+        )
+
+    default_route: dict[str, int | None] = {}
+    for key in sorted(allowed_fields):
+        if key not in default_route_input:
+            continue
+        value = default_route_input[key]
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+        ):
+            raise ValueError(f"default_route.{key} must be a positive integer or null")
+        default_route[key] = value
+    if not default_route:
+        raise ValueError(
+            "default_route must include ipv4_interface_id or ipv6_interface_id"
+        )
+    return default_route
+
+
+async def handle_linode_instance_interface_settings_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_interface_settings_update tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    network_helper = arguments.get("network_helper")
+
+    try:
+        default_route = _interface_settings_default_route_argument(arguments)
+    except (TypeError, ValueError) as exc:
+        return _error_response(str(exc))
+
+    validation_error = _interface_settings_update_error(
+        arguments, linode_id, network_helper, default_route
+    )
+    if validation_error is not None:
+        return _error_response(validation_error)
+    linode_id_int = cast("int", linode_id)
+
+    request_body: dict[str, Any] = {}
+    if default_route is not None:
+        request_body["default_route"] = default_route
+    if "network_helper" in arguments:
+        request_body["network_helper"] = network_helper
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_interface_settings_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/linode/instances/{linode_id_int}/interfaces/settings",
+            None,
+            side_effects=[
+                f"Interface settings for Linode {linode_id_int} will be updated."
+            ],
+            request_body=request_body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return _error_response("confirm must be true")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_instance_interface_settings(
+            linode_id_int,
+            default_route=default_route,
+            network_helper=network_helper if "network_helper" in arguments else None,
+        )
+
+    return await execute_tool(cfg, arguments, "update Linode interface settings", _call)
+
+
 def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_create tool."""
     return Tool(
