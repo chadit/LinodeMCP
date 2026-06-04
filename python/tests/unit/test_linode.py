@@ -6494,6 +6494,88 @@ async def test_retryable_list_placement_groups_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_longview_subscriptions_sends_get_with_pagination() -> None:
+    """Longview subscriptions list sends query pagination params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "data": [{"id": "longview-3", "label": "Longview Pro"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_longview_subscriptions(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "GET", "/longview/subscriptions?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_longview_subscriptions_wraps_http_errors() -> None:
+    """Longview subscriptions list wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_longview_subscriptions()
+
+    assert "ListLongviewSubscriptions" in str(exc_info.value)
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"page": 0}, "page must be a positive integer"),
+        ({"page": True}, "page must be a positive integer"),
+        ({"page": "2"}, "page must be a positive integer"),
+        ({"page_size": 24}, "page_size must be between 25 and 500"),
+        ({"page_size": 501}, "page_size must be between 25 and 500"),
+        ({"page_size": True}, "page_size must be between 25 and 500"),
+        ({"page_size": "50"}, "page_size must be between 25 and 500"),
+    ],
+)
+async def test_list_longview_subscriptions_rejects_invalid_pagination(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    """Longview subscriptions list validates pagination before HTTP calls."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match=message),
+    ):
+        await client.list_longview_subscriptions(**kwargs)
+
+    mock_request.assert_not_awaited()
+    await client.close()
+
+
+async def test_retryable_list_longview_subscriptions_delegates_to_client() -> None:
+    """Retryable client delegates Longview subscription list calls."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_longview_subscriptions", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
+        result = await retryable.list_longview_subscriptions(page=1, page_size=100)
+
+    assert result == {"data": []}
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_create_placement_group_posts_required_body() -> None:
     """Creating a placement group should POST the documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
