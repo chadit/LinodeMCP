@@ -21,6 +21,7 @@ from linodemcp.linode import (
     FirewallRules,
     Grant,
     Grants,
+    Image,
     NetworkError,
     Profile,
     RateLimiter,
@@ -10212,6 +10213,108 @@ async def test_retryable_create_image_sharegroup_token_delegates_once() -> None:
             valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
             label="partner-token",
         )
+
+    await client.close()
+
+
+async def test_get_image_sends_get_to_encoded_image_route() -> None:
+    """Getting an image sends GET to the encoded image route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": "linode/ubuntu24.04",
+        "label": "Ubuntu 24.04 LTS",
+        "description": "Ubuntu image",
+        "type": "manual",
+        "is_public": True,
+        "deprecated": False,
+        "size": 2500,
+        "vendor": "Ubuntu",
+        "status": "available",
+        "created": "2024-04-25T00:00:00",
+        "created_by": "linode",
+        "capabilities": ["cloud-init"],
+        "tags": [],
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_image("linode/ubuntu24.04")
+
+        mock_request.assert_awaited_once_with("GET", "/images/linode%2Fubuntu24.04")
+        assert result.id == "linode/ubuntu24.04"
+        assert result.label == "Ubuntu 24.04 LTS"
+
+    await client.close()
+
+
+async def test_get_image_encodes_separator_characters() -> None:
+    """Getting an image encodes untrusted separators at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.get_image("private/../?x=1")
+
+        mock_request.assert_awaited_once_with("GET", "/images/private%2F..%2F%3Fx%3D1")
+
+    await client.close()
+
+
+async def test_get_image_wraps_http_errors() -> None:
+    """Getting an image should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_image("linode/ubuntu24.04")
+
+    assert "GetImage" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_get_image_delegates_to_client() -> None:
+    """Retryable client should delegate image get."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    response_image = Image(
+        id="linode/ubuntu24.04",
+        label="Ubuntu 24.04 LTS",
+        description="",
+        type="manual",
+        is_public=True,
+        deprecated=False,
+        size=0,
+        vendor="Ubuntu",
+        status="available",
+        created="2024-04-25T00:00:00",
+        created_by="linode",
+        expiry=None,
+        eol=None,
+        capabilities=[],
+        tags=[],
+    )
+
+    with patch.object(
+        client.client,
+        "get_image",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.return_value = response_image
+
+        result = await client.get_image("linode/ubuntu24.04")
+
+        assert result.id == "linode/ubuntu24.04"
+        mock_get.assert_awaited_once_with("linode/ubuntu24.04")
 
     await client.close()
 

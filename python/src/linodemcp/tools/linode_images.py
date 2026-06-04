@@ -72,6 +72,34 @@ def create_linode_images_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_image_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_get tool."""
+    return Tool(
+        name="linode_image_get",
+        description="Gets a single Linode image by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "image_id": {
+                    "type": "string",
+                    "pattern": r"^(linode|private)/[A-Za-z0-9._-]+$",
+                    "description": (
+                        "Image ID such as linode/ubuntu24.04 or private/12345 "
+                        "(required)"
+                    ),
+                },
+            },
+            "required": ["image_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_list tool."""
     return Tool(
@@ -2152,6 +2180,66 @@ async def handle_linode_image_update(
         }
 
     return await execute_tool(cfg, arguments, "update Linode image", _call)
+
+
+IMAGE_ID_PARTS = 2
+IMAGE_ID_NAME_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"
+)
+
+
+def _image_id_error(value: object) -> str | None:
+    """Validate an image ID path parameter."""
+    if not isinstance(value, str) or not value.strip():
+        return "image_id is required"
+    image_id = value.strip()
+    if "?" in image_id or ".." in image_id:
+        return "image_id must be a valid Linode image ID"
+    parts = image_id.split("/")
+    if (
+        len(parts) != IMAGE_ID_PARTS
+        or parts[0] not in {"linode", "private"}
+        or not parts[1]
+    ):
+        return "image_id must be a valid Linode image ID"
+    if any(ch not in IMAGE_ID_NAME_CHARS for ch in parts[1]):
+        return "image_id must be a valid Linode image ID"
+    return None
+
+
+async def handle_linode_image_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_get tool request."""
+    image_id = arguments.get("image_id")
+    image_id_err = _image_id_error(image_id)
+    if image_id_err is not None:
+        return error_response(image_id_err)
+    image_id_str = cast("str", image_id).strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        image = await client.get_image(image_id_str)
+        return {
+            "image": {
+                "id": image.id,
+                "label": image.label,
+                "description": image.description,
+                "type": image.type,
+                "status": image.status,
+                "is_public": image.is_public,
+                "deprecated": image.deprecated,
+                "size": image.size,
+                "vendor": image.vendor,
+                "created": image.created,
+                "created_by": image.created_by,
+                "expiry": image.expiry,
+                "eol": image.eol,
+                "capabilities": image.capabilities,
+                "tags": image.tags,
+            }
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve Linode image", _call)
 
 
 async def handle_linode_images_list(

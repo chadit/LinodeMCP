@@ -3208,6 +3208,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImageSharegroupToken", e) from e
 
+    async def get_image(self, image_id: str) -> Image:
+        """Get a single Linode image."""
+        encoded_image_id = quote(str(image_id), safe="")
+        try:
+            response = await self.make_request("GET", f"/images/{encoded_image_id}")
+            data = response.json()
+            return self._parse_image(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetImage", e) from e
+
     async def create_image(
         self,
         disk_id: int,
@@ -9593,6 +9603,13 @@ class RetryableClient:
             description=description,
             tags=tags,
         )
+
+    async def get_image(self, image_id: str) -> Image:
+        """Get a single Linode image with retry."""
+        result: Image = await self._execute_with_retry(
+            lambda: self.client.get_image(image_id)
+        )
+        return result
 
     async def create_image(
         self,
