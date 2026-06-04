@@ -10016,6 +10016,77 @@ async def test_managed_contacts_update_dispatches_from_registry(
     )
 
 
+async def test_managed_credentials_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed credentials list tool is exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_managed_credentials_list_tool" in tools_mod.__all__
+    assert "handle_linode_managed_credentials_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_credentials_list_tool()
+    assert tool.name == "linode_managed_credentials_list"
+    assert capability == Capability.Read
+
+    srv = Server(sample_config)
+    assert "linode_managed_credentials_list" in srv.registered_tool_names
+
+
+async def test_managed_credentials_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed credentials list is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "data": [{"id": 1, "label": "credential"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_managed_credentials.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_managed_credentials_list", {"page": 2, "page_size": 25}
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_managed_credentials.assert_awaited_once_with(page=2, page_size=25)
+
+
+async def test_managed_credentials_list_rejects_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Managed credentials list validates page before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_credentials_list", {"page": 0})
+
+    assert "page must be at least 1" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credentials_list_rejects_out_of_range_page_size(
+    sample_config: Config,
+) -> None:
+    """Managed credentials list validates page_size before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_managed_credentials_list", {"page_size": 24}
+        )
+
+    assert "page_size must be at least 25" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_managed_stats_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
