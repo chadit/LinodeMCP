@@ -669,6 +669,29 @@ async def handle_linode_account_maintenance_list(
     return await execute_tool(cfg, arguments, "list Linode account maintenance", _call)
 
 
+def create_linode_maintenance_policies_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_maintenance_policies_list tool."""
+    return Tool(
+        name="linode_maintenance_policies_list",
+        description="Lists available maintenance policies.",
+        inputSchema={
+            "type": "object",
+            "properties": ENV_PARAM_SCHEMA,
+        },
+    ), Capability.Read
+
+
+async def handle_linode_maintenance_policies_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_maintenance_policies_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_maintenance_policies()
+
+    return await execute_tool(cfg, arguments, "list Linode maintenance policies", _call)
+
+
 def create_linode_account_oauth_clients_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_oauth_clients_list tool."""
     return Tool(

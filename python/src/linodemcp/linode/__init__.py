@@ -2251,6 +2251,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountMaintenance", e) from e
 
+    async def list_maintenance_policies(self) -> dict[str, Any]:
+        """List maintenance policies."""
+        try:
+            response = await self.make_request("GET", "/maintenance/policies")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListMaintenancePolicies", e) from e
+
     async def list_account_oauth_clients(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -10224,6 +10233,13 @@ class RetryableClient:
         """List account maintenance with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_account_maintenance
+        )
+        return result
+
+    async def list_maintenance_policies(self) -> dict[str, Any]:
+        """List maintenance policies with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_maintenance_policies
         )
         return result
 
