@@ -18549,6 +18549,82 @@ async def test_retryable_client_delete_longview_client_delegates_once() -> None:
     mock_delete.assert_awaited_once_with(123)
 
 
+async def test_update_longview_plan_sends_put_to_longview_plan_route() -> None:
+    """Longview plan update sends PUT /longview/plan."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = httpx.Response(200, json={"longview_subscription": "longview-10"})
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.update_longview_plan("longview-10")
+
+    assert result == {"longview_subscription": "longview-10"}
+    mock_request.assert_awaited_once_with(
+        "PUT", "/longview/plan", {"longview_subscription": "longview-10"}
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    "longview_subscription",
+    [
+        "",
+        "   ",
+        "longview-0",
+        "longview-free",
+        "longview/10",
+        "longview?10",
+        "longview-\uff11",
+        "longview-\u0661",
+        "..",
+        None,
+        123,
+        True,
+    ],
+)
+async def test_update_longview_plan_rejects_invalid_subscription(
+    longview_subscription: object,
+) -> None:
+    """Longview plan update validates the finite plan ID before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match="longview_subscription"),
+    ):
+        await client.update_longview_plan(longview_subscription)
+
+    mock_request.assert_not_awaited()
+    await client.close()
+
+
+async def test_update_longview_plan_wraps_http_errors() -> None:
+    """Longview plan update maps HTTP errors to UpdateLongviewPlan."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError, match="UpdateLongviewPlan"):
+            await client.update_longview_plan("longview-10")
+
+    await client.close()
+
+
+async def test_retryable_client_update_longview_plan_delegates_once() -> None:
+    """RetryableClient does not replay mutating Longview plan updates."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_update = AsyncMock(side_effect=httpx.ReadTimeout("timeout"))
+    object.__setattr__(client.client, "update_longview_plan", mock_update)
+
+    try:
+        with pytest.raises(httpx.ReadTimeout, match="timeout"):
+            await client.update_longview_plan("longview-10")
+    finally:
+        await client.close()
+
+    mock_update.assert_awaited_once_with("longview-10")
+
+
 async def test_retryable_client_list_longview_clients_delegates() -> None:
     """RetryableClient delegates Longview clients listing to Client."""
     client = RetryableClient("https://api.linode.com/v4", "test-token")

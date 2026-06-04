@@ -6162,6 +6162,44 @@ class Client:
             logger.exception("HTTP error deleting Longview client: %s", e)
             raise NetworkError("DeleteLongviewClient", e) from e
 
+    async def update_longview_plan(
+        self, longview_subscription: object
+    ) -> dict[str, Any]:
+        """Update the account Longview plan."""
+        prefix = "longview-"
+        if not isinstance(longview_subscription, str):
+            msg = "longview_subscription must be a Longview plan ID like longview-10"
+            raise TypeError(msg)
+        if not longview_subscription.startswith(prefix):
+            msg = "longview_subscription must be a Longview plan ID like longview-10"
+            raise ValueError(msg)
+        plan_suffix = longview_subscription.removeprefix(prefix)
+        if (
+            not plan_suffix
+            or plan_suffix.startswith("0")
+            or not all("0" <= char <= "9" for char in plan_suffix)
+        ):
+            msg = "longview_subscription must be a Longview plan ID like longview-10"
+            raise ValueError(msg)
+        body: dict[str, Any] = {"longview_subscription": longview_subscription}
+
+        try:
+            response = await self.make_request("PUT", "/longview/plan", body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating Longview plan: %s", e)
+            raise NetworkError("UpdateLongviewPlan", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating Longview plan: %s", e)
+            raise NetworkError("UpdateLongviewPlan", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating Longview plan")
+            raise NetworkError("UpdateLongviewPlan", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error updating Longview plan: %s", e)
+            raise NetworkError("UpdateLongviewPlan", e) from e
+
     async def list_profile_apps(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -12036,6 +12074,12 @@ class RetryableClient:
     async def delete_longview_client(self, client_id: int) -> None:
         """Delete a Longview client once without retry replay."""
         await self.client.delete_longview_client(client_id)
+
+    async def update_longview_plan(
+        self, longview_subscription: object
+    ) -> dict[str, Any]:
+        """Update the account Longview plan once without retry replay."""
+        return await self.client.update_longview_plan(longview_subscription)
 
     async def list_profile_apps(
         self, page: int | None = None, page_size: int | None = None

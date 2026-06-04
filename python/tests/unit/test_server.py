@@ -15565,6 +15565,189 @@ async def test_lke_tier_versions_list_tool_is_exported_and_registered(
     assert "linode_lke_tier_versions_list" in srv.registered_tool_names
 
 
+async def test_longview_plan_update_tool_is_exported_registered_and_categorized(
+    sample_config: Config,
+) -> None:
+    """Longview plan update tool is exported, registered, and categorized."""
+    import linodemcp.tools as tools_mod
+    from linodemcp.profiles.builtin import categories
+    from linodemcp.profiles.scope import Scope, required_scopes
+
+    default_srv = Server(sample_config)
+    srv = Server(_full_access_config(sample_config))
+    registry_names = {entry.name for entry in get_tool_registry()}
+
+    assert "linode_longview_plan_update" not in default_srv.registered_tool_names
+    assert "create_linode_longview_plan_update_tool" in tools_mod.__all__
+    assert "handle_linode_longview_plan_update" in tools_mod.__all__
+    assert "linode_longview_plan_update" in registry_names
+    assert "linode_longview_plan_update" in srv.registered_tool_names
+    assert categories("linode_longview_plan_update") == ["longview"]
+    assert required_scopes("linode_longview_plan_update", Capability.Write) == [
+        Scope.LongviewReadWrite
+    ]
+
+    tool, capability = tools_mod.create_linode_longview_plan_update_tool()
+    assert tool.name == "linode_longview_plan_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["longview_subscription", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_longview_plan_update_handler_returns_client_response(
+    sample_config: Config,
+) -> None:
+    """Longview plan update handler returns the client response."""
+    mock_client = AsyncMock()
+    mock_client.update_longview_plan = AsyncMock(
+        return_value={"longview_subscription": "longview-10"}
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_longview_plan_update",
+            {"longview_subscription": "longview-10", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {"longview_subscription": "longview-10"}
+    mock_client.update_longview_plan.assert_awaited_once_with("longview-10")
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_longview_plan_update_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Longview plan update rejects missing/non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.update_longview_plan = AsyncMock()
+    arguments: dict[str, object] = {"longview_subscription": "longview-10"}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_longview_plan_update", arguments)
+
+    assert "confirm" in result[0].text
+    mock_client.update_longview_plan.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("longview_subscription", "message"),
+    [
+        (None, "longview_subscription is required and must be a string"),
+        (123, "longview_subscription is required and must be a string"),
+        ("", "longview_subscription must be a Longview plan ID"),
+        ("   ", "longview_subscription must be a Longview plan ID"),
+        ("longview-0", "longview_subscription must be a Longview plan ID"),
+        ("longview-free", "longview_subscription must be a Longview plan ID"),
+        ("longview/10", "longview_subscription must be a Longview plan ID"),
+        ("longview?10", "longview_subscription must be a Longview plan ID"),
+        ("..", "longview_subscription must be a Longview plan ID"),
+    ],
+)
+async def test_longview_plan_update_rejects_invalid_subscription(
+    sample_config: Config, longview_subscription: object, message: str
+) -> None:
+    """Longview plan update validates the plan ID before dispatch."""
+    mock_client = AsyncMock()
+    mock_client.update_longview_plan = AsyncMock()
+    arguments: dict[str, object] = {"confirm": True}
+    if longview_subscription is not None:
+        arguments["longview_subscription"] = longview_subscription
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_longview_plan_update", arguments)
+
+    assert message in result[0].text
+    mock_client.update_longview_plan.assert_not_called()
+
+
+async def test_longview_plan_update_dry_run_requires_confirm_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Longview plan update dry-run still requires confirm before preview."""
+    mock_client = AsyncMock()
+    mock_client.update_longview_plan = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_longview_plan_update",
+            {"longview_subscription": "longview-10", "dry_run": True},
+        )
+
+    assert "confirm" in result[0].text
+    mock_client.update_longview_plan.assert_not_called()
+
+
+async def test_longview_plan_update_dry_run_includes_body_without_client_call(
+    sample_config: Config,
+) -> None:
+    """Longview plan update dry-run previews the exact request body."""
+    mock_client = AsyncMock()
+    mock_client.update_longview_plan = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_longview_plan_update",
+            {
+                "longview_subscription": "longview-10",
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_longview_plan_update"
+    assert payload["would_execute"] == {
+        "method": "PUT",
+        "path": "/longview/plan",
+        "body": {"longview_subscription": "longview-10"},
+    }
+    mock_client.update_longview_plan.assert_not_called()
+
+
+async def test_longview_plan_update_handler_returns_error_response_on_client_failure(
+    sample_config: Config,
+) -> None:
+    """Longview plan update returns a tool error response on client failure."""
+    mock_client = AsyncMock()
+    mock_client.update_longview_plan = AsyncMock(
+        side_effect=NetworkError("UpdateLongviewPlan", httpx.ReadTimeout("timeout"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_longview_plan_update",
+            {"longview_subscription": "longview-10", "confirm": True},
+        )
+
+    assert "UpdateLongviewPlan" in result[0].text
+    mock_client.update_longview_plan.assert_awaited_once_with("longview-10")
+
+
 async def test_longview_client_delete_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
