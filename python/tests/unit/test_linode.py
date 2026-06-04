@@ -6315,6 +6315,33 @@ async def test_retryable_list_ipv6_pools_delegates_to_client() -> None:
     await client.close()
 
 
+async def test_retryable_upload_image_does_not_replay() -> None:
+    """Retryable client delegates image uploads once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "upload_image", new_callable=AsyncMock
+    ) as mock_upload:
+        mock_upload.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.upload_image(
+                label="upload-image",
+                region="us-east",
+                cloud_init=True,
+                description="Uploaded image",
+                tags=["prod"],
+            )
+
+    mock_upload.assert_awaited_once_with(
+        label="upload-image",
+        region="us-east",
+        cloud_init=True,
+        description="Uploaded image",
+        tags=["prod"],
+    )
+    await retryable.close()
+
+
 async def test_retryable_create_image_delegates_to_client() -> None:
     """Retryable client should delegate image creation."""
     client = RetryableClient(
@@ -10141,6 +10168,57 @@ async def test_create_image_sends_post_to_images_route() -> None:
         assert image.id == "private/12345"
         assert image.label == "app-image"
 
+    await client.close()
+
+
+async def test_upload_image_sends_post_to_upload_route() -> None:
+    """Image upload creation sends POST /images/upload with documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "image": {"id": "private/98765", "label": "upload-image"},
+        "upload_to": "https://uploads.example.invalid/image",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.upload_image(
+            label="upload-image",
+            region="us-east",
+            cloud_init=True,
+            description="Uploaded image",
+            tags=["prod"],
+        )
+
+    mock_request.assert_awaited_once_with(
+        "POST",
+        "/images/upload",
+        {
+            "label": "upload-image",
+            "region": "us-east",
+            "cloud_init": True,
+            "description": "Uploaded image",
+            "tags": ["prod"],
+        },
+    )
+    assert result["image"]["id"] == "private/98765"
+    assert result["upload_to"] == "https://uploads.example.invalid/image"
+    await client.close()
+
+
+async def test_upload_image_wraps_http_errors() -> None:
+    """Image upload creation wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.upload_image(label="upload-image", region="us-east")
+
+    assert "UploadImage" in str(excinfo.value)
     await client.close()
 
 

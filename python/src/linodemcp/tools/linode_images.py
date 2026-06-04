@@ -799,6 +799,57 @@ def create_linode_images_sharegroups_token_create_tool() -> tuple[Tool, Capabili
     ), Capability.Write
 
 
+def create_linode_image_upload_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_upload tool."""
+    return Tool(
+        name="linode_image_upload",
+        description="Creates a pending private image upload for a region.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Short title for the uploaded image (required)",
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the image upload is created (required)"
+                    ),
+                },
+                "cloud_init": {
+                    "type": "boolean",
+                    "description": "Whether the image supports cloud-init",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed description for the image",
+                },
+                "tags": {
+                    "type": "array",
+                    "description": "Tags to apply to the image",
+                    "items": {"type": "string"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["label", "region", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_create tool."""
     return Tool(
@@ -941,6 +992,62 @@ def _image_create_disk_id_error(disk_id: Any) -> str | None:
     return None
 
 
+def _required_string_argument(
+    arguments: dict[str, Any], name: str
+) -> tuple[str | None, str | None]:
+    """Parse a required non-empty string argument."""
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip():
+        return None, f"{name} must be a non-empty string"
+    return value, None
+
+
+def _optional_bool_argument(
+    arguments: dict[str, Any], name: str
+) -> tuple[bool | None, str | None]:
+    """Parse an optional boolean argument."""
+    if name not in arguments or arguments[name] is None:
+        return None, None
+    value = arguments[name]
+    if type(value) is not bool:
+        return None, f"{name} must be a boolean"
+    return value, None
+
+
+def _image_upload_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Build and validate the image upload request body."""
+    label, label_err = _required_string_argument(arguments, "label")
+    if label_err is not None:
+        return None, label_err
+    region, region_err = _required_string_argument(arguments, "region")
+    if region_err is not None:
+        return None, region_err
+
+    payload: dict[str, Any] = {"label": label, "region": region}
+
+    cloud_init, cloud_init_err = _optional_bool_argument(arguments, "cloud_init")
+    if cloud_init_err is not None:
+        return None, cloud_init_err
+    if cloud_init is not None:
+        payload["cloud_init"] = cloud_init
+
+    description = arguments.get("description")
+    if description is not None:
+        if not isinstance(description, str):
+            return None, "description must be a string"
+        payload["description"] = description
+
+    tags, tags_err = _image_create_tags(arguments.get("tags"))
+    if tags_err is not None:
+        return None, tags_err
+    if tags is not None:
+        payload["tags"] = tags
+
+    return payload, None
+
+
 def _image_create_tags(tags_arg: Any) -> tuple[list[str] | None, str | None]:
     """Parse+validate the tags arg; return (tags, error message)."""
     if tags_arg is None:
@@ -997,6 +1104,52 @@ async def handle_linode_image_sharegroup_create(
         }
 
     return await execute_tool(cfg, arguments, "create image share group", _call)
+
+
+async def handle_linode_image_upload(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_upload tool request."""
+    payload, payload_err = _image_upload_payload(arguments)
+    if payload_err is not None:
+        return error_response(payload_err)
+    payload = cast("dict[str, Any]", payload)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_image_upload",
+            arguments.get("environment", ""),
+            "POST",
+            "/images/upload",
+            None,
+            side_effects=[
+                (
+                    f"A pending image upload labeled {payload['label']!r} "
+                    f"will be created in {payload['region']!r}."
+                )
+            ],
+            request_body=payload,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a pending image upload. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        upload = await client.upload_image(
+            label=cast("str", payload["label"]),
+            region=cast("str", payload["region"]),
+            cloud_init=cast("bool | None", payload.get("cloud_init")),
+            description=cast("str | None", payload.get("description")),
+            tags=cast("list[str] | None", payload.get("tags")),
+        )
+        return {
+            "message": f"Image upload '{payload['label']}' created successfully",
+            "upload": upload,
+        }
+
+    return await execute_tool(cfg, arguments, "upload Linode image", _call)
 
 
 async def handle_linode_image_create(

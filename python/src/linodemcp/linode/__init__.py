@@ -3202,6 +3202,31 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateImage", e) from e
 
+    async def upload_image(
+        self,
+        *,
+        label: str,
+        region: str,
+        cloud_init: bool | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a pending image upload and return upload details."""
+        body: dict[str, Any] = {"label": label, "region": region}
+        if cloud_init is not None:
+            body["cloud_init"] = cloud_init
+        if description is not None:
+            body["description"] = description
+        if tags is not None:
+            body["tags"] = tags
+
+        try:
+            response = await self.make_request("POST", "/images/upload", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UploadImage", e) from e
+
     # Stage 3: Extended read operations
 
     async def list_ssh_keys(self) -> list[SSHKey]:
@@ -9540,6 +9565,24 @@ class RetryableClient:
             )
         )
         return result
+
+    async def upload_image(
+        self,
+        *,
+        label: str,
+        region: str,
+        cloud_init: bool | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a pending image upload once without retry replay."""
+        return await self.client.upload_image(
+            label=label,
+            region=region,
+            cloud_init=cloud_init,
+            description=description,
+            tags=tags,
+        )
 
     # Stage 3: Extended read operations
 

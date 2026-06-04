@@ -12325,6 +12325,15 @@ def test_linode_images_sharegroups_token_update_registered() -> None:
     assert entries["linode_images_sharegroups_token_update"].capability.name == "Write"
 
 
+def test_linode_image_upload_registered() -> None:
+    """Image upload tool should be registered from tools exports."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert "linode_image_upload" in entries
+    assert entries["linode_image_upload"].capability.name == "Write"
+
+
 def test_linode_image_create_registered() -> None:
     """Image create tool should be registered from tools exports."""
     from linodemcp.server import get_tool_registry
