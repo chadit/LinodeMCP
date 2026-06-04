@@ -79,6 +79,7 @@ from linodemcp.tools.linode_account import (
     create_linode_managed_contact_create_tool,
     create_linode_managed_contact_delete_tool,
     create_linode_managed_contacts_list_tool,
+    create_linode_managed_contacts_update_tool,
     create_linode_managed_stats_tool,
     handle_linode_account,
     handle_linode_account_agreements_acknowledge,
@@ -152,6 +153,7 @@ from linodemcp.tools.linode_account import (
     handle_linode_managed_contact_create,
     handle_linode_managed_contact_delete,
     handle_linode_managed_contacts_list,
+    handle_linode_managed_contacts_update,
     handle_linode_managed_stats,
 )
 from linodemcp.tools.linode_audit_export import (
@@ -1230,6 +1232,7 @@ __all__ = [
     "create_linode_managed_contact_create_tool",
     "create_linode_managed_contact_delete_tool",
     "create_linode_managed_contacts_list_tool",
+    "create_linode_managed_contacts_update_tool",
     "create_linode_managed_stats_tool",
     "create_linode_monitor_alert_channels_list_tool",
     "create_linode_monitor_alert_definition_update_tool",
@@ -1656,6 +1659,7 @@ __all__ = [
     "handle_linode_managed_contact_create",
     "handle_linode_managed_contact_delete",
     "handle_linode_managed_contacts_list",
+    "handle_linode_managed_contacts_update",
     "handle_linode_managed_stats",
     "handle_linode_monitor_alert_channels_list",
     "handle_linode_monitor_alert_definition_update",

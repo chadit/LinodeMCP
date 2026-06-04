@@ -24,6 +24,7 @@ T = TypeVar("T")
 LINODE_STATS_MIN_YEAR = 1970
 LINODE_STATS_MAX_YEAR = 9999
 LINODE_STATS_MAX_MONTH = 12
+_UNSET: Any = object()
 
 logger = logging.getLogger(__name__)
 
@@ -4474,6 +4475,40 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("DeleteManagedContact", e) from e
+
+    async def update_managed_contact(
+        self,
+        contact_id: int,
+        *,
+        email: str | None = None,
+        group: Any = _UNSET,
+        name: str | None = None,
+        phone: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Update a Managed contact on the Linode account."""
+        validated_contact_id = _validate_positive_path_int(contact_id, "contact_id")
+        body: dict[str, Any] = {}
+        if email is not None:
+            body["email"] = email
+        if group is not _UNSET:
+            body["group"] = group
+        if name is not None:
+            body["name"] = name
+        if phone is not None:
+            body["phone"] = phone
+        if not body:
+            msg = "At least one managed contact field is required"
+            raise ValueError(msg)
+
+        encoded_contact_id = quote(str(validated_contact_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT", f"/managed/contacts/{encoded_contact_id}", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateManagedContact", e) from e
 
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics from the last 24 hours."""
@@ -11497,6 +11532,27 @@ class RetryableClient:
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Delete a Managed contact by delegating once without retry."""
         return await self.client.delete_managed_contact(contact_id)
+
+    async def update_managed_contact(
+        self,
+        contact_id: int,
+        *,
+        email: str | None = None,
+        group: Any = _UNSET,
+        name: str | None = None,
+        phone: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Update a Managed contact without retrying the mutating request."""
+        kwargs: dict[str, Any] = {}
+        if email is not None:
+            kwargs["email"] = email
+        if group is not _UNSET:
+            kwargs["group"] = group
+        if name is not None:
+            kwargs["name"] = name
+        if phone is not None:
+            kwargs["phone"] = phone
+        return await self.client.update_managed_contact(contact_id, **kwargs)
 
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics with retry."""

@@ -4296,6 +4296,195 @@ async def handle_linode_managed_contact_delete(
     return await execute_tool(cfg, arguments, "delete Managed contact", _call)
 
 
+def create_linode_managed_contacts_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_contacts_update tool."""
+    return Tool(
+        name="linode_managed_contacts_update",
+        description=(
+            "Updates a Managed contact. Requires confirm=true; pass "
+            "dry_run=true with confirm=true to preview without changing it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "contact_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed contact ID to update",
+                },
+                "email": {
+                    "type": "string",
+                    "description": "Email address for issue alerts",
+                },
+                "group": {
+                    "type": ["string", "null"],
+                    "description": "Display grouping for this contact",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Managed contact name",
+                },
+                "phone": {
+                    "type": "object",
+                    "description": "Phone contact details",
+                    "properties": {
+                        "primary": {"type": ["string", "null"]},
+                        "secondary": {"type": ["string", "null"]},
+                    },
+                    "additionalProperties": False,
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm update.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["contact_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _managed_contact_id(arguments: dict[str, Any]) -> int | list[TextContent]:
+    """Parse a positive managed contact ID, or return an error response."""
+    contact_id = arguments.get("contact_id")
+    if (
+        not isinstance(contact_id, int)
+        or isinstance(contact_id, bool)
+        or contact_id < 1
+    ):
+        return error_response("contact_id must be a positive integer")
+    return contact_id
+
+
+def _managed_contact_string_fields(
+    arguments: dict[str, Any], body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy non-empty string update fields into the request body."""
+    for field in ("email", "name"):
+        if field not in arguments:
+            continue
+        value = arguments.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return error_response(f"{field} must be a non-empty string")
+        body[field] = value.strip()
+    return None
+
+
+def _managed_contact_group_field(
+    arguments: dict[str, Any], body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy the nullable group field into the request body."""
+    if "group" not in arguments:
+        return None
+    group = arguments.get("group")
+    if group is None:
+        body["group"] = None
+        return None
+    if isinstance(group, str) and group.strip():
+        body["group"] = group.strip()
+        return None
+    return error_response("group must be a non-empty string or null")
+
+
+def _managed_contact_phone_body(phone: object) -> dict[str, str | None] | str:
+    """Build the nested phone object, or return an error string."""
+    if not isinstance(phone, dict):
+        return "phone must be an object"
+    typed_phone = cast("dict[str, Any]", phone)
+    unknown_phone_fields = sorted(set(typed_phone) - {"primary", "secondary"})
+    if unknown_phone_fields:
+        return "phone has unknown fields: " + ", ".join(unknown_phone_fields)
+
+    phone_body: dict[str, str | None] = {}
+    for field in ("primary", "secondary"):
+        if field not in typed_phone:
+            continue
+        value = typed_phone.get(field)
+        if value is None:
+            phone_body[field] = None
+        elif isinstance(value, str) and value.strip():
+            phone_body[field] = value.strip()
+        else:
+            return f"phone.{field} must be a non-empty string or null"
+    if not phone_body:
+        return "phone must include primary or secondary"
+    return phone_body
+
+
+def _managed_contact_phone_field(
+    arguments: dict[str, Any], body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy the nested phone field into the request body."""
+    if "phone" not in arguments:
+        return None
+    phone_body = _managed_contact_phone_body(arguments.get("phone"))
+    if isinstance(phone_body, str):
+        return error_response(phone_body)
+    body["phone"] = phone_body
+    return None
+
+
+def _managed_contact_update_body(
+    arguments: dict[str, Any],
+) -> dict[str, Any] | list[TextContent]:
+    """Build a Managed contact update body from writable fields."""
+    read_only_fields = sorted({"id", "updated"}.intersection(arguments))
+    if read_only_fields:
+        return error_response(
+            "Read-only fields are not accepted: " + ", ".join(read_only_fields)
+        )
+
+    body: dict[str, Any] = {}
+    for validator in (
+        _managed_contact_string_fields,
+        _managed_contact_group_field,
+        _managed_contact_phone_field,
+    ):
+        error = validator(arguments, body)
+        if error is not None:
+            return error
+
+    if not body:
+        return error_response("At least one managed contact field is required")
+    return body
+
+
+async def handle_linode_managed_contacts_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_contacts_update tool request."""
+    contact_id = _managed_contact_id(arguments)
+    if isinstance(contact_id, list):
+        return contact_id
+
+    body = _managed_contact_update_body(arguments)
+    if isinstance(body, list):
+        return body
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed contact. Set confirm=true to proceed."
+        )
+
+    dry_run_path = f"/managed/contacts/{quote(str(contact_id), safe='')}"
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_contacts_update",
+            arguments.get("environment", ""),
+            "PUT",
+            dry_run_path,
+            None,
+            side_effects=[f"Managed contact {contact_id} will be updated."],
+            request_body=body,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_managed_contact(contact_id, **body)
+
+    return await execute_tool(cfg, arguments, "update Linode Managed contact", _call)
+
+
 def create_linode_managed_stats_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_stats tool."""
     return Tool(
