@@ -1097,6 +1097,101 @@ async def handle_linode_instance_mutate(
     return await execute_tool(cfg, arguments, "mutate Linode instance", _call)
 
 
+def create_linode_instance_upgrade_interfaces_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_upgrade_interfaces tool."""
+    return Tool(
+        name="linode_instance_upgrade_interfaces",
+        description="Upgrades a Linode to Linode Interfaces.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode to upgrade (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Config profile ID to upgrade (optional)",
+                },
+                "api_dry_run": {
+                    "type": "boolean",
+                    "description": (
+                        "Pass dry_run to the Linode API to validate the upgrade "
+                        "without applying it (optional)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to upgrade instance interfaces. "
+                        "Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_upgrade_interfaces(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_upgrade_interfaces tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return _error_response("linode_id must be a positive integer")
+
+    try:
+        config_id = _optional_int_argument(arguments, "config_id", 1)
+    except (TypeError, ValueError) as exc:
+        return _error_response(str(exc))
+
+    api_dry_run = arguments.get("api_dry_run")
+    if "api_dry_run" in arguments and not isinstance(api_dry_run, bool):
+        return _error_response("api_dry_run must be a boolean")
+
+    request_body: dict[str, Any] = {}
+    if config_id is not None:
+        request_body["config_id"] = config_id
+    if "api_dry_run" in arguments:
+        request_body["dry_run"] = api_dry_run
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_upgrade_interfaces",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{linode_id}/upgrade-interfaces",
+            None,
+            side_effects=[f"Linode {linode_id} will be upgraded to Linode Interfaces."],
+            request_body=request_body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return _error_response("confirm must be true")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.upgrade_instance_interfaces(
+            linode_id, config_id=config_id, dry_run=api_dry_run
+        )
+        return {
+            "message": f"Linode {linode_id} interface upgrade initiated",
+            "linode_id": linode_id,
+            "response": result,
+        }
+
+    return await execute_tool(cfg, arguments, "upgrade Linode interfaces", _call)
+
+
 def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_resize tool."""
     return Tool(

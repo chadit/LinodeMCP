@@ -1916,6 +1916,19 @@ async def test_linode_instance_mutate_tool_is_exported_and_registered(
     assert "linode_instance_mutate" in srv.registered_tool_names
 
 
+async def test_linode_instance_upgrade_interfaces_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance upgrade interfaces tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_instance_upgrade_interfaces_tool" in tools_mod.__all__
+    assert "handle_linode_instance_upgrade_interfaces" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_upgrade_interfaces" in srv.registered_tool_names
+
+
 async def test_linode_instance_firewalls_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

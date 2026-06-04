@@ -110,6 +110,7 @@ from linodemcp.tools import (
     create_linode_instance_rescue_tool,
     create_linode_instance_stats_tool,
     create_linode_instance_update_tool,
+    create_linode_instance_upgrade_interfaces_tool,
     create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
     create_linode_ipv6_range_get_tool,
@@ -282,6 +283,7 @@ from linodemcp.tools import (
     handle_linode_instance_shutdown,
     handle_linode_instance_stats,
     handle_linode_instance_update,
+    handle_linode_instance_upgrade_interfaces,
     handle_linode_instances_list,
     handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
@@ -7550,6 +7552,124 @@ async def test_instance_mutate_dry_run_returns_preview_without_mutating(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/linode/instances/123/mutate"
     assert body["would_execute"]["body"] == {"allow_auto_disk_resize": False}
+    mock_client_class.assert_not_called()
+
+
+def test_linode_instance_upgrade_interfaces_tool_schema_requires_confirm() -> None:
+    """Upgrade interfaces tool schema requires explicit confirmation."""
+    tool, capability = create_linode_instance_upgrade_interfaces_tool()
+
+    assert tool.name == "linode_instance_upgrade_interfaces"
+    assert capability is Capability.Write
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["api_dry_run"]["type"] == "boolean"
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_confirm(
+    confirm: object, sample_config: Config
+) -> None:
+    """Upgrade interfaces rejects missing or non-true confirmation before calls."""
+    arguments: dict[str, Any] = {"linode_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_upgrade_interfaces(
+            arguments, sample_config
+        )
+
+    assert "confirm must be true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
+async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_linode_id(
+    bad_linode_id: object, sample_config: Config
+) -> None:
+    """Upgrade interfaces rejects malformed Linode IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_upgrade_interfaces(
+            {"linode_id": bad_linode_id, "confirm": True}, sample_config
+        )
+
+    assert "linode_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            {"linode_id": 123, "config_id": "1", "confirm": True},
+            "config_id must be an integer",
+        ),
+        (
+            {"linode_id": 123, "config_id": 0, "confirm": True},
+            "config_id must be at least 1",
+        ),
+        (
+            {"linode_id": 123, "api_dry_run": "true", "confirm": True},
+            "api_dry_run must be a boolean",
+        ),
+    ],
+)
+async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_body_fields(
+    arguments: dict[str, Any], message: str, sample_config: Config
+) -> None:
+    """Upgrade interfaces validates optional body fields before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_upgrade_interfaces(
+            arguments, sample_config
+        )
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_upgrade_interfaces(sample_config: Config) -> None:
+    """Test linode_instance_upgrade_interfaces tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.upgrade_instance_interfaces.return_value = {"dry_run": False}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_upgrade_interfaces(
+            {
+                "linode_id": 123,
+                "config_id": 456,
+                "api_dry_run": False,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "interface upgrade" in result[0].text.lower()
+        mock_client.upgrade_instance_interfaces.assert_awaited_once_with(
+            123, config_id=456, dry_run=False
+        )
+
+
+async def test_instance_upgrade_interfaces_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews interface upgrade without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_upgrade_interfaces(
+            {"linode_id": 123, "config_id": 456, "api_dry_run": True, "dry_run": True},
+            sample_config,
+        )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_upgrade_interfaces"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/upgrade-interfaces"
+    assert body["would_execute"]["body"] == {"config_id": 456, "dry_run": True}
     mock_client_class.assert_not_called()
 
 

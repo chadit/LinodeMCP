@@ -11569,6 +11569,133 @@ class TestMakeRequestBody:
         mock_mutate.assert_awaited_once_with(123, False)
         await retryable.close()
 
+    async def test_upgrade_instance_interfaces_posts_body_to_route(self) -> None:
+        """POST /linode/instances/{linode_id}/upgrade-interfaces sends body."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"dry_run": False}
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            result = await client.upgrade_instance_interfaces(
+                123, config_id=456, dry_run=False
+            )
+
+        assert result == {"dry_run": False}
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/linode/instances/123/upgrade-interfaces",
+            {"config_id": 456, "dry_run": False},
+        )
+        await client.close()
+
+    async def test_upgrade_instance_interfaces_omits_absent_body_fields(self) -> None:
+        """Upgrade interfaces sends an empty body when optional fields are absent."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {}
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            result = await client.upgrade_instance_interfaces(123)
+
+        assert result == {}
+        mock_request.assert_awaited_once_with(
+            "POST", "/linode/instances/123/upgrade-interfaces", {}
+        )
+        await client.close()
+
+    @pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
+    async def test_upgrade_instance_interfaces_rejects_invalid_linode_id(
+        self, bad_linode_id: object
+    ) -> None:
+        """Upgrade interfaces validates finite positive Linode IDs before dispatch."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with (
+            patch.object(
+                client, "make_request", new_callable=AsyncMock
+            ) as mock_request,
+            pytest.raises(ValueError, match="linode_id must be a positive integer"),
+        ):
+            await client.upgrade_instance_interfaces(cast("Any", bad_linode_id))
+
+        mock_request.assert_not_called()
+        await client.close()
+
+    @pytest.mark.parametrize("bad_config_id", ["1/2", "1?x=2", "..", True, 0, -1])
+    async def test_upgrade_instance_interfaces_rejects_invalid_config_id(
+        self, bad_config_id: object
+    ) -> None:
+        """Upgrade interfaces validates finite positive config IDs before dispatch."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with (
+            patch.object(
+                client, "make_request", new_callable=AsyncMock
+            ) as mock_request,
+            pytest.raises(ValueError, match="config_id must be a positive integer"),
+        ):
+            await client.upgrade_instance_interfaces(
+                123, config_id=cast("Any", bad_config_id)
+            )
+
+        mock_request.assert_not_called()
+        await client.close()
+
+    async def test_upgrade_instance_interfaces_rejects_invalid_dry_run(self) -> None:
+        """Upgrade interfaces validates dry_run before dispatch."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with (
+            patch.object(
+                client, "make_request", new_callable=AsyncMock
+            ) as mock_request,
+            pytest.raises(TypeError, match="dry_run must be a boolean"),
+        ):
+            await client.upgrade_instance_interfaces(123, dry_run=cast("Any", "true"))
+
+        mock_request.assert_not_called()
+        await client.close()
+
+    async def test_upgrade_instance_interfaces_wraps_http_errors(self) -> None:
+        """Upgrade interfaces wraps HTTP errors."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.HTTPError("boom")
+            with pytest.raises(NetworkError, match="UpgradeInstanceInterfaces"):
+                await client.upgrade_instance_interfaces(123)
+
+        await client.close()
+
+    async def test_retryable_upgrade_instance_interfaces_delegates_once_without_retry(
+        self,
+    ) -> None:
+        """RetryableClient does not replay interface upgrades on transient errors."""
+        retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            retryable.client, "upgrade_instance_interfaces", new_callable=AsyncMock
+        ) as mock_upgrade:
+            mock_upgrade.side_effect = httpx.HTTPError("boom")
+
+            with pytest.raises(httpx.HTTPError):
+                await retryable.upgrade_instance_interfaces(
+                    123, config_id=456, dry_run=False
+                )
+
+        mock_upgrade.assert_awaited_once_with(123, config_id=456, dry_run=False)
+        await retryable.close()
+
     async def test_list_monitor_services_get_shape(self) -> None:
         """GET /monitor/services returns the paginated services payload."""
         client = Client("https://api.linode.com/v4", "test-token")
