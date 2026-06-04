@@ -4153,6 +4153,87 @@ async def handle_linode_managed_contacts_list(
     return await execute_tool(cfg, arguments, "list Linode Managed contacts", _call)
 
 
+_MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name", "phone")
+
+
+def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, str]:
+    """Collect documented Managed contact body fields from tool arguments."""
+    body = {
+        field: value
+        for field in _MANAGED_CONTACT_BODY_FIELDS
+        if (value := _optional_string_argument(arguments, field)) is not None
+    }
+    if not body:
+        raise ValueError("At least one of email, group, name, or phone is required")
+    return body
+
+
+def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_contact_create tool."""
+    body_properties = {
+        field: {"type": "string"} for field in _MANAGED_CONTACT_BODY_FIELDS
+    }
+    return Tool(
+        name="linode_managed_contact_create",
+        description=(
+            "Creates a Managed contact. Pass confirm=true to create it; "
+            "pass dry_run=true to preview without creating it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                **body_properties,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm creating or previewing "
+                        "the Managed contact."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_contact_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_contact_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a Managed contact. Set confirm=true to proceed."
+        )
+
+    try:
+        body = _managed_contact_body(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_contact_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/managed/contacts",
+            None,
+            request_body=body,
+            side_effects=["A Managed contact is created."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_managed_contact(
+            email=body.get("email"),
+            group=body.get("group"),
+            name=body.get("name"),
+            phone=body.get("phone"),
+        )
+
+    return await execute_tool(cfg, arguments, "create Managed contact", _call)
+
+
 def create_linode_managed_stats_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_stats tool."""
     return Tool(

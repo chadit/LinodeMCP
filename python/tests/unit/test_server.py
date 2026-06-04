@@ -9711,6 +9711,149 @@ async def test_managed_contacts_list_rejects_out_of_range_page_size(
     mock_client_class.assert_not_called()
 
 
+async def test_managed_contact_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed contact create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_contact_create_tool" in tools_mod.__all__
+    assert "handle_linode_managed_contact_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_contact_create_tool()
+    assert capability is Capability.Write
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    for field in ("email", "group", "name", "phone"):
+        assert tool.inputSchema["properties"][field]["type"] == "string"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_contact_create" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_contact_create_rejects_non_true_confirm(
+    sample_config: Config,
+    confirm: object,
+) -> None:
+    """Managed contact create requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {"name": "Ops"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_contact_create", arguments)
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_contact_create_rejects_non_string_body_before_client(
+    sample_config: Config,
+) -> None:
+    """Managed contact body fields must be non-empty strings."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_contact_create",
+            {"confirm": True, "email": 123},
+        )
+
+    assert "email must be a non-empty string" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_contact_create_rejects_empty_body_before_client(
+    sample_config: Config,
+) -> None:
+    """Managed contact create requires at least one create field."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_contact_create", {"confirm": True})
+
+    assert "At least one of email, group, name, or phone is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_contact_create_dry_run_includes_body_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed contact create dry run previews body without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_contact_create",
+            {
+                "dry_run": True,
+                "confirm": True,
+                "email": "ops@example.com",
+                "group": "support",
+                "name": "Ops",
+                "phone": "555-0100",
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/managed/contacts"
+    assert payload["would_execute"]["body"] == {
+        "email": "ops@example.com",
+        "group": "support",
+        "name": "Ops",
+        "phone": "555-0100",
+    }
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_contact_create_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Managed contact create dry run still requires the confirm safety gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_contact_create", {"dry_run": True, "name": "Ops"}
+        )
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_contact_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed contact create is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 123, "name": "Ops"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_managed_contact.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_contact_create",
+            {
+                "confirm": True,
+                "email": "ops@example.com",
+                "name": "Ops",
+            },
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_managed_contact.assert_awaited_once_with(
+        email="ops@example.com",
+        group=None,
+        name="Ops",
+        phone=None,
+    )
+
+
 async def test_managed_stats_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

@@ -150,7 +150,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
     list per call so the data doesn't sit as module-level mutable.
     """
     return [
-        (("linode_account_",), _CAT_ACCOUNT),
+        (("linode_account_", "linode_managed_"), _CAT_ACCOUNT),
         (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
         (("linode_lke_",), _CAT_LKE),
