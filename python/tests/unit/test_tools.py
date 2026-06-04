@@ -68,6 +68,7 @@ from linodemcp.tools import (
     create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
+    create_linode_image_get_tool,
     create_linode_image_update_tool,
     create_linode_image_upload_tool,
     create_linode_images_sharegroups_token_create_tool,
@@ -218,6 +219,7 @@ from linodemcp.tools import (
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
+    handle_linode_image_get,
     handle_linode_image_update,
     handle_linode_image_upload,
     handle_linode_images_list,
@@ -3835,6 +3837,83 @@ async def test_handle_linode_image_update_validation_errors(
 
     assert len(result) == 1
     assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_image_get_tool_def() -> None:
+    """Image get tool should require image_id."""
+    tool, capability = create_linode_image_get_tool()
+    assert tool.name == "linode_image_get"
+    assert capability.name == "Read"
+    assert tool.inputSchema["required"] == ["image_id"]
+    assert tool.inputSchema["properties"]["image_id"]["pattern"] == (
+        r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$"
+    )
+
+
+async def test_handle_linode_image_get_success(sample_config: Config) -> None:
+    """Image get should return a single image."""
+    mock_image = Image(
+        id="linode/ubuntu24.04",
+        label="Ubuntu 24.04 LTS",
+        description="Ubuntu image",
+        type="manual",
+        is_public=True,
+        deprecated=False,
+        size=2500,
+        vendor="Ubuntu",
+        status="available",
+        created="2024-04-25T00:00:00",
+        created_by="linode",
+        expiry=None,
+        eol=None,
+        capabilities=["cloud-init"],
+        tags=[],
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_image.return_value = mock_image
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_image_get(
+            {"image_id": "linode/ubuntu24.04"},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["image"]["id"] == "linode/ubuntu24.04"
+        assert body["image"]["label"] == "Ubuntu 24.04 LTS"
+        mock_client.get_image.assert_awaited_once_with("linode/ubuntu24.04")
+
+
+@pytest.mark.parametrize(
+    "bad_image_id",
+    [
+        None,
+        "",
+        "/",
+        "linode/..",
+        "linode/../x",
+        "private/v2..backup",
+        "linode/ubuntu?x=1",
+        "linode/ubuntu/extra",
+    ],
+)
+async def test_handle_linode_image_get_rejects_malformed_image_id(
+    sample_config: Config, bad_image_id: object
+) -> None:
+    """Image get should reject malformed path parameters before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_image_get(
+            {"image_id": bad_image_id}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "image_id" in result[0].text
     mock_client_class.assert_not_called()
 
 
