@@ -88,7 +88,7 @@ def create_linode_image_get_tool() -> tuple[Tool, Capability]:
                 },
                 "image_id": {
                     "type": "string",
-                    "pattern": r"^(linode|private)/[A-Za-z0-9._-]+$",
+                    "pattern": r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$",
                     "description": (
                         "Image ID such as linode/ubuntu24.04 or private/12345 "
                         "(required)"

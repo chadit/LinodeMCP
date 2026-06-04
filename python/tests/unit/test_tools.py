@@ -3849,7 +3849,7 @@ async def test_create_linode_image_get_tool_def() -> None:
     assert capability.name == "Read"
     assert tool.inputSchema["required"] == ["image_id"]
     assert tool.inputSchema["properties"]["image_id"]["pattern"] == (
-        r"^(linode|private)/[A-Za-z0-9._-]+$"
+        r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$"
     )
 
 
@@ -3894,7 +3894,16 @@ async def test_handle_linode_image_get_success(sample_config: Config) -> None:
 
 @pytest.mark.parametrize(
     "bad_image_id",
-    [None, "", "/", "linode/../x", "linode/ubuntu?x=1", "linode/ubuntu/extra"],
+    [
+        None,
+        "",
+        "/",
+        "linode/..",
+        "linode/../x",
+        "private/v2..backup",
+        "linode/ubuntu?x=1",
+        "linode/ubuntu/extra",
+    ],
 )
 async def test_handle_linode_image_get_rejects_malformed_image_id(
     sample_config: Config, bad_image_id: object
