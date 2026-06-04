@@ -94,6 +94,7 @@ from linodemcp.tools import (
     create_linode_instance_disk_resize_tool,
     create_linode_instance_disk_update_tool,
     create_linode_instance_disks_list_tool,
+    create_linode_instance_firewalls_list_tool,
     create_linode_instance_ip_allocate_tool,
     create_linode_instance_ip_delete_tool,
     create_linode_instance_ip_get_tool,
@@ -256,6 +257,7 @@ from linodemcp.tools import (
     handle_linode_instance_disk_resize,
     handle_linode_instance_disk_update,
     handle_linode_instance_disks_list,
+    handle_linode_instance_firewalls_list,
     handle_linode_instance_get,
     handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
@@ -22314,3 +22316,69 @@ async def test_instance_disk_password_reset_dry_run_returns_preview(
     assert body["warnings"]
     mock_linode_client.get_instance_disk.assert_awaited_once_with(123, 10)
     mock_linode_client.reset_instance_disk_password.assert_not_called()
+
+
+async def test_instance_firewalls_list_tool_def() -> None:
+    """Linode firewalls list tool should require instance_id and expose pagination."""
+    tool, _ = create_linode_instance_firewalls_list_tool()
+    assert tool.name == "linode_instance_firewalls_list"
+    required: list[str] = tool.inputSchema.get("required") or []
+    assert "instance_id" in required
+    props = tool.inputSchema["properties"]
+    assert props["page"]["minimum"] == 1
+    assert props["page_size"]["minimum"] == 25
+    assert props["page_size"]["maximum"] == 500
+
+
+async def test_instance_firewalls_list_success(sample_config: Config) -> None:
+    """Linode firewalls list handler returns API result."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
+        mock_client = AsyncMock()
+        mock_client.list_instance_firewalls.return_value = {
+            "data": [{"id": 123, "label": "web"}],
+            "results": 1,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mc.return_value = mock_client
+
+        result = list(
+            await handle_linode_instance_firewalls_list(
+                {"instance_id": 42, "page": 1, "page_size": 25}, sample_config
+            )
+        )
+
+    assert len(result) == 1
+    assert "web" in result[0].text
+    mock_client.list_instance_firewalls.assert_awaited_once_with(
+        42, page=1, page_size=25
+    )
+
+
+@pytest.mark.parametrize("instance_id", ["bad/id", "bad?query", "..", True, 0, -1])
+async def test_instance_firewalls_list_rejects_invalid_instance_id(
+    sample_config: Config, instance_id: object
+) -> None:
+    """Linode firewalls list handler rejects malformed instance IDs."""
+    result = list(
+        await handle_linode_instance_firewalls_list(
+            {"instance_id": instance_id}, sample_config
+        )
+    )
+
+    assert len(result) == 1
+    assert "instance_id" in result[0].text.lower()
+
+
+async def test_instance_firewalls_list_rejects_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Linode firewalls list handler validates pagination before client call."""
+    result = list(
+        await handle_linode_instance_firewalls_list(
+            {"instance_id": 42, "page_size": 24}, sample_config
+        )
+    )
+
+    assert len(result) == 1
+    assert "page_size" in result[0].text

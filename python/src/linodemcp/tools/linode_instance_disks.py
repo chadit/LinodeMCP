@@ -50,12 +50,40 @@ def _parse_instance_id(
 ) -> int | list[TextContent]:
     """Parse and validate instance_id from arguments."""
     raw = arguments.get("instance_id", "")
-    if not raw:
+    if raw is None or raw == "":
         return _error_response("instance_id is required")
+    if isinstance(raw, bool):
+        return _error_response("instance_id must be a positive integer")
     try:
-        return int(raw)
+        instance_id = int(raw)
     except (ValueError, TypeError):
         return _error_response("instance_id must be a valid integer")
+    if instance_id < 1:
+        return _error_response("instance_id must be a positive integer")
+    return instance_id
+
+
+def _parse_optional_page_args(
+    arguments: dict[str, Any],
+) -> tuple[int | None, int | None] | list[TextContent]:
+    """Parse optional page and page_size arguments."""
+    values: dict[str, int | None] = {"page": None, "page_size": None}
+    for name, minimum, maximum in (("page", 1, None), ("page_size", 25, 500)):
+        raw = arguments.get(name)
+        if raw is None:
+            continue
+        if isinstance(raw, bool):
+            return _error_response(f"{name} must be an integer")
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return _error_response(f"{name} must be an integer")
+        if value < minimum:
+            return _error_response(f"{name} must be at least {minimum}")
+        if maximum is not None and value > maximum:
+            return _error_response(f"{name} must be at most {maximum}")
+        values[name] = value
+    return values["page"], values["page_size"]
 
 
 def _parse_instance_and_disk_ids(
@@ -114,6 +142,53 @@ async def handle_linode_instance_disks_list(
         return {"count": len(disks), "disks": disks}
 
     return await execute_tool(cfg, arguments, "list instance disks", _call)
+
+
+def create_linode_instance_firewalls_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_firewalls_list tool."""
+    return Tool(
+        name="linode_instance_firewalls_list",
+        description="Lists firewalls assigned to a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["instance_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_instance_firewalls_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_firewalls_list tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+    pagination = _parse_optional_page_args(arguments)
+    if isinstance(pagination, list):
+        return pagination
+    page, page_size = pagination
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.list_instance_firewalls(iid, page=page, page_size=page_size)
+
+    return await execute_tool(cfg, arguments, "list instance firewalls", _call)
 
 
 def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
