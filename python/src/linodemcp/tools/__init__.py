@@ -832,10 +832,12 @@ from linodemcp.tools.linode_sshkeys_write import (
 )
 from linodemcp.tools.linode_stackscripts import (
     create_linode_stackscript_create_tool,
+    create_linode_stackscript_delete_tool,
     create_linode_stackscript_get_tool,
     create_linode_stackscript_update_tool,
     create_linode_stackscripts_list_tool,
     handle_linode_stackscript_create,
+    handle_linode_stackscript_delete,
     handle_linode_stackscript_get,
     handle_linode_stackscript_update,
     handle_linode_stackscripts_list,
@@ -1298,6 +1300,7 @@ __all__ = [
     "create_linode_sshkey_update_tool",
     "create_linode_sshkeys_list_tool",
     "create_linode_stackscript_create_tool",
+    "create_linode_stackscript_delete_tool",
     "create_linode_stackscript_get_tool",
     "create_linode_stackscript_update_tool",
     "create_linode_stackscripts_list_tool",
@@ -1709,6 +1712,7 @@ __all__ = [
     "handle_linode_sshkey_update",
     "handle_linode_sshkeys_list",
     "handle_linode_stackscript_create",
+    "handle_linode_stackscript_delete",
     "handle_linode_stackscript_get",
     "handle_linode_stackscript_update",
     "handle_linode_stackscripts_list",

@@ -181,6 +181,7 @@ from linodemcp.tools import (
     create_linode_regions_availability_list_tool,
     create_linode_regions_get_tool,
     create_linode_stackscript_create_tool,
+    create_linode_stackscript_delete_tool,
     create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
     create_linode_vpc_create_tool,
@@ -418,6 +419,7 @@ from linodemcp.tools import (
     handle_linode_sshkey_update,
     handle_linode_sshkeys_list,
     handle_linode_stackscript_create,
+    handle_linode_stackscript_delete,
     handle_linode_stackscripts_list,
     handle_linode_type_get,
     handle_linode_types_list,
@@ -6897,6 +6899,110 @@ async def test_handle_linode_stackscripts_list_error(sample_config: Config) -> N
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+async def test_linode_stackscript_delete_tool_schema() -> None:
+    """Test linode_stackscript_delete tool schema."""
+    tool, capability = create_linode_stackscript_delete_tool()
+
+    assert tool.name == "linode_stackscript_delete"
+    assert capability == Capability.Write
+    assert tool.inputSchema["properties"]["stackscript_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == ["stackscript_id", "confirm"]
+
+
+async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -> None:
+    """Dry-run previews the DELETE route without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_stackscript_delete(
+            {"stackscript_id": 12345, "confirm": False, "dry_run": True},
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["tool"] == "linode_stackscript_delete"
+    assert payload["would_execute"]["method"] == "DELETE"
+    assert payload["would_execute"]["path"] == "/linode/stackscripts/12345"
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_stackscript_delete(sample_config: Config) -> None:
+    """Test linode_stackscript_delete tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_stackscript.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_stackscript_delete(
+            {"stackscript_id": 12345, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "12345" in result[0].text
+    assert "deleted" in result[0].text.lower()
+    mock_client.delete_stackscript.assert_awaited_once_with(12345)
+
+
+@pytest.mark.parametrize(
+    "confirm",
+    [None, False, "true", 1],
+)
+async def test_handle_linode_stackscript_delete_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """StackScript delete rejects missing/non-true confirm before dispatch."""
+    arguments: dict[str, Any] = {"stackscript_id": 12345}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_stackscript_delete(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "stackscript_id",
+    [None, 0, -1, True, "1/2", "1?x=y", ".."],
+)
+async def test_handle_linode_stackscript_delete_rejects_invalid_stackscript_id(
+    sample_config: Config, stackscript_id: object
+) -> None:
+    """StackScript delete rejects malformed path parameters before dispatch."""
+    arguments: dict[str, Any] = {"confirm": True}
+    if stackscript_id is not None:
+        arguments["stackscript_id"] = stackscript_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_stackscript_delete(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "stackscript_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_stackscript_delete_error(sample_config: Config) -> None:
+    """Test linode_stackscript_delete error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_stackscript.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_stackscript_delete(
+            {"stackscript_id": 12345, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed" in result[0].text or "error" in result[0].text.lower()
 
 
 async def test_linode_stackscript_create_tool_schema() -> None:

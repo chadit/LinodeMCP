@@ -4951,6 +4951,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetStackScript", e) from e
 
+    async def delete_stackscript(self, stackscript_id: int) -> dict[str, Any]:
+        """Delete a StackScript by ID."""
+        valid_stackscript_id = _validate_positive_path_int(
+            stackscript_id, "stackscript_id"
+        )
+        encoded_stackscript_id = quote(str(valid_stackscript_id), safe="")
+        endpoint = f"/linode/stackscripts/{encoded_stackscript_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+            return {}
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteStackScript", e) from e
+
     async def create_stackscript(
         self,
         label: str,
@@ -11372,6 +11385,10 @@ class RetryableClient:
             lambda: self.client.get_stackscript(stackscript_id)
         )
         return result
+
+    async def delete_stackscript(self, stackscript_id: int) -> dict[str, Any]:
+        """Delete a StackScript without retrying the destructive request."""
+        return await self.client.delete_stackscript(stackscript_id)
 
     async def create_stackscript(
         self,

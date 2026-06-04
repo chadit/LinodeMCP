@@ -10699,6 +10699,129 @@ async def test_list_stackscripts() -> None:
     await client.close()
 
 
+async def test_get_stackscript_url_encodes_stackscript_id() -> None:
+    """Getting a StackScript URL-encodes the path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "id": 1,
+        "username": "testuser",
+        "user_gravatar_id": "abc123",
+        "label": "encoded",
+        "description": "Encoded",
+        "images": [],
+        "deployments_total": 0,
+        "deployments_active": 0,
+        "is_public": False,
+        "mine": True,
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-01T00:00:00",
+        "script": "#!/bin/bash",
+        "user_defined_fields": [],
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_stackscript("1/2?x=..")
+
+    assert result.id == 1
+    mock_request.assert_called_once_with("GET", "/linode/stackscripts/1%2F2%3Fx%3D..")
+    await client.close()
+
+
+async def test_delete_stackscript_sends_delete_to_exact_route() -> None:
+    """Deleting a StackScript sends DELETE /linode/stackscripts/{stackscriptId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.delete_stackscript(12345)
+
+    assert result == {}
+    mock_response.json.assert_not_called()
+    mock_request.assert_called_once_with("DELETE", "/linode/stackscripts/12345")
+    await client.close()
+
+
+async def test_delete_stackscript_accepts_empty_success_response() -> None:
+    """Deleting a StackScript succeeds without parsing an empty response body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 204
+    mock_response.json.side_effect = ValueError("no body")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.delete_stackscript(12345)
+
+    assert result == {}
+    mock_response.json.assert_not_called()
+    mock_request.assert_called_once_with("DELETE", "/linode/stackscripts/12345")
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    "stackscript_id",
+    [0, -1, True, "1", "1/2", "1?x=y", ".."],
+)
+async def test_delete_stackscript_rejects_invalid_id_before_request(
+    stackscript_id: object,
+) -> None:
+    """Deleting a StackScript validates the finite ID at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    expected_error = "stackscript_id must be a positive integer"
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match=expected_error),
+    ):
+        await client.delete_stackscript(cast("Any", stackscript_id))
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_delete_stackscript_wraps_http_errors() -> None:
+    """Deleting a StackScript wraps HTTP transport errors with route context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.delete_stackscript(12345)
+
+    assert exc_info.value.operation == "DeleteStackScript"
+    await client.close()
+
+
+async def test_retryable_delete_stackscript_delegates_once_without_retry() -> None:
+    """StackScript delete is delegated once to avoid replaying side effects."""
+    retryable = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        retry_config=RetryConfig(max_retries=3),
+    )
+
+    with patch.object(
+        retryable.client, "delete_stackscript", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.side_effect = NetworkError(
+            "DeleteStackScript", httpx.HTTPError("boom")
+        )
+
+        with pytest.raises(NetworkError):
+            await retryable.delete_stackscript(12345)
+
+    mock_delete.assert_awaited_once_with(12345)
+    await retryable.close()
+
+
 async def test_create_stackscript() -> None:
     """Test creating a StackScript."""
     client = Client("https://api.linode.com/v4", "test-token")
