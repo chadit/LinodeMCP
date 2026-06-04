@@ -187,6 +187,18 @@ def _validate_firewall_rules_update_request(
         raise TypeError(msg)
 
 
+def validate_image_sharegroups_image_id(image_id: Any) -> str:
+    """Validate an image ID used for the image sharegroups route."""
+    if not isinstance(image_id, str) or not image_id.strip():
+        msg = "image_id must be a non-empty string"
+        raise ValueError(msg)
+    image_id_value = image_id.strip()
+    if "?" in image_id_value or ".." in image_id_value:
+        msg = "image_id must not contain query or traversal segments"
+        raise ValueError(msg)
+    return image_id_value
+
+
 def validate_label(label: str | None) -> None:
     """Validate resource label."""
     if not label:
@@ -2891,6 +2903,19 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroups", e) from e
+
+    async def list_image_sharegroups_by_image(self, image_id: str) -> dict[str, Any]:
+        """List share groups for a Linode image."""
+        image_id_value = validate_image_sharegroups_image_id(image_id)
+        image_id_path = quote(image_id_value, safe="")
+        try:
+            response = await self.make_request(
+                "GET", f"/images/{image_id_path}/sharegroups"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListImageSharegroupsByImage", e) from e
 
     async def delete_image_sharegroup(self, sharegroup_id: str) -> None:
         """Delete a single image share group."""
@@ -9488,6 +9513,13 @@ class RetryableClient:
     async def delete_image_sharegroup(self, sharegroup_id: str) -> None:
         """Delete a single image share group without retry replay."""
         await self.client.delete_image_sharegroup(sharegroup_id)
+
+    async def list_image_sharegroups_by_image(self, image_id: str) -> dict[str, Any]:
+        """List share groups for a Linode image with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_image_sharegroups_by_image(image_id)
+        )
+        return result
 
     async def create_image_sharegroup(
         self,
