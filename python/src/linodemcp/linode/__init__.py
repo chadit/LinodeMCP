@@ -4967,6 +4967,45 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateStackScript", e) from e
 
+    async def update_stackscript(
+        self,
+        stackscript_id: object,
+        *,
+        label: str | None = None,
+        images: list[str] | None = None,
+        script: str | None = None,
+        description: str | None = None,
+        is_public: bool | None = None,
+        rev_note: str | None = None,
+    ) -> StackScript:
+        """Update a StackScript."""
+        valid_stackscript_id = _validate_positive_path_int(
+            stackscript_id, "stackscript_id"
+        )
+        encoded_stackscript_id = quote(str(valid_stackscript_id), safe="")
+        body: dict[str, Any] = {}
+        if label is not None:
+            body["label"] = label
+        if images is not None:
+            body["images"] = images
+        if script is not None:
+            body["script"] = script
+        if description is not None:
+            body["description"] = description
+        if is_public is not None:
+            body["is_public"] = is_public
+        if rev_note is not None:
+            body["rev_note"] = rev_note
+
+        try:
+            response = await self.make_request(
+                "PUT", f"/linode/stackscripts/{encoded_stackscript_id}", body
+            )
+            data = response.json()
+            return self._parse_stackscript(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateStackScript", e) from e
+
     # Phase 1: Object Storage read operations
 
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
@@ -11323,6 +11362,28 @@ class RetryableClient:
             )
         )
         return result
+
+    async def update_stackscript(
+        self,
+        stackscript_id: object,
+        *,
+        label: str | None = None,
+        images: list[str] | None = None,
+        script: str | None = None,
+        description: str | None = None,
+        is_public: bool | None = None,
+        rev_note: str | None = None,
+    ) -> StackScript:
+        """Update a StackScript without replay retry."""
+        return await self.client.update_stackscript(
+            stackscript_id,
+            label=label,
+            images=images,
+            script=script,
+            description=description,
+            is_public=is_public,
+            rev_note=rev_note,
+        )
 
     # Phase 1: Object Storage read operations with retry
 
