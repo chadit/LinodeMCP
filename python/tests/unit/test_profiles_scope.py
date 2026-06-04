@@ -80,6 +80,11 @@ def test_meta_returns_empty() -> None:
             [Scope.LinodesReadOnly],
         ),
         (
+            "linode_instance_interfaces_history_list",
+            Capability.Read,
+            [Scope.LinodesReadOnly],
+        ),
+        (
             "linode_nodebalancer_vpc_configs_list",
             Capability.Read,
             [Scope.NodeBalancersReadOnly],
