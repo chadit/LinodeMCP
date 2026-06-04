@@ -6687,6 +6687,27 @@ class Client:
             logger.exception("HTTP error resizing instance: %s", e)
             raise NetworkError("ResizeInstance", e) from e
 
+    async def mutate_instance(
+        self, linode_id: int, allow_auto_disk_resize: bool = True
+    ) -> dict[str, Any]:
+        """Upgrade a Linode with the mutate endpoint."""
+        linode_id_value = _validate_positive_path_int(linode_id, "linode_id")
+        encoded_linode_id = quote(str(linode_id_value), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/mutate"
+        logger.info("Mutating instance", extra={"linode_id": linode_id_value})
+
+        try:
+            response = await self.make_request(
+                "POST",
+                endpoint,
+                {"allow_auto_disk_resize": allow_auto_disk_resize},
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error mutating instance: %s", e)
+            raise NetworkError("MutateInstance", e) from e
+
     async def create_firewall(
         self,
         label: str,
@@ -11685,6 +11706,15 @@ class RetryableClient:
             allow_auto_disk_resize,
             migration_type,
         )
+
+    async def mutate_instance(
+        self, linode_id: int, allow_auto_disk_resize: bool = True
+    ) -> dict[str, Any]:
+        """Delegate mutate without retry because POST mutations must not replay."""
+        result: dict[str, Any] = await self.client.mutate_instance(
+            linode_id, allow_auto_disk_resize
+        )
+        return result
 
     async def create_firewall(
         self,
