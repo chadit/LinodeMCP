@@ -562,6 +562,26 @@ def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_instance_stats_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_stats tool."""
+    return Tool(
+        name="linode_instance_stats",
+        description="Gets daily statistics for a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+            },
+            "required": ["linode_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_instance_nodebalancers_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_nodebalancers_list tool."""
     return Tool(
@@ -1377,6 +1397,22 @@ async def handle_linode_instances_list(
         return response
 
     return await execute_tool(cfg, arguments, "retrieve Linode instances", _call)
+
+
+async def handle_linode_instance_stats(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_stats tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_instance_stats(linode_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance statistics", _call
+    )
 
 
 async def handle_linode_instance_nodebalancers_list(

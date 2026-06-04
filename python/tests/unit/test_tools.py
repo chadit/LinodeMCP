@@ -108,6 +108,7 @@ from linodemcp.tools import (
     create_linode_instance_password_reset_tool,
     create_linode_instance_rebuild_tool,
     create_linode_instance_rescue_tool,
+    create_linode_instance_stats_tool,
     create_linode_instance_update_tool,
     create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
@@ -279,6 +280,7 @@ from linodemcp.tools import (
     handle_linode_instance_rescue,
     handle_linode_instance_resize,
     handle_linode_instance_shutdown,
+    handle_linode_instance_stats,
     handle_linode_instance_update,
     handle_linode_instances_list,
     handle_linode_ipv6_range_create,
@@ -1151,6 +1153,60 @@ async def test_linode_instance_configs_list_tool_definition() -> None:
     assert tool.inputSchema["required"] == ["linode_id"]
     assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+
+def test_create_linode_instance_stats_tool_schema() -> None:
+    """Linode instance stats tool requires a positive Linode ID."""
+    tool, capability = create_linode_instance_stats_tool()
+
+    assert tool.name == "linode_instance_stats"
+    assert capability == Capability.Read
+    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+
+
+async def test_handle_linode_instance_stats(sample_config: Config) -> None:
+    """Test linode_instance_stats tool."""
+    stats_payload = {
+        "data": {
+            "cpu": [[1715731200000, 1.5]],
+            "io": {"io": [[1715731200000, 8.0]], "swap": [[1715731200000, 0]]},
+            "netv4": {"in": [[1715731200000, 100.0]], "out": [[1715731200000, 42.0]]},
+            "netv6": {"in": [[1715731200000, 10.0]], "out": [[1715731200000, 4.0]]},
+        },
+        "title": "linode123 - day (5 min avg)",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_instance_stats.return_value = stats_payload
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_stats(
+            {"linode_id": 123456}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "linode123" in result[0].text
+    assert "1715731200000" in result[0].text
+    mock_client.get_instance_stats.assert_awaited_once_with(123456)
+
+
+@pytest.mark.parametrize("linode_id", [None, 0, -1, True, "1", "1/2", "1?x", ".."])
+async def test_handle_linode_instance_stats_rejects_invalid_linode_id(
+    sample_config: Config, linode_id: object
+) -> None:
+    """Malformed Linode IDs are rejected before the client call."""
+    arguments = {} if linode_id is None else {"linode_id": linode_id}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_stats(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "linode_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_instance_configs_list(sample_config: Config) -> None:

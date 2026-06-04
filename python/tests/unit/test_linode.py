@@ -3258,6 +3258,76 @@ async def test_list_instances(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_get_instance_stats_sends_get_to_stats_route() -> None:
+    """Linode instance stats sends the documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": {
+            "cpu": [[1715731200000, 1.5]],
+            "io": {"io": [[1715731200000, 8.0]], "swap": [[1715731200000, 0]]},
+            "netv4": {"in": [[1715731200000, 100.0]], "out": [[1715731200000, 42.0]]},
+            "netv6": {"in": [[1715731200000, 10.0]], "out": [[1715731200000, 4.0]]},
+        },
+        "title": "linode123 - day (5 min avg)",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        stats = await client.get_instance_stats(123456)
+
+    assert stats["data"]["cpu"] == [[1715731200000, 1.5]]
+    mock_request.assert_awaited_once_with("GET", "/linode/instances/123456/stats")
+
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x", "..", True, 0, -1])
+async def test_get_instance_stats_rejects_invalid_linode_id(linode_id: object) -> None:
+    """Linode instance stats rejects malformed path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match="linode_id"),
+    ):
+        await client.get_instance_stats(linode_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_instance_stats_wraps_http_errors() -> None:
+    """Linode instance stats wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ConnectTimeout("timeout")
+
+        with pytest.raises(NetworkError, match="GetInstanceStats"):
+            await client.get_instance_stats(123456)
+
+    await client.close()
+
+
+async def test_retryable_get_instance_stats_delegates_to_client() -> None:
+    """RetryableClient delegates Linode instance stats retrieval."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_instance_stats", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"data": {"cpu": []}}
+        result = await retryable.get_instance_stats(123456)
+
+    assert result == {"data": {"cpu": []}}
+    mock_get.assert_awaited_once_with(123456)
+    await retryable.close()
+
+
 async def test_list_instance_configs() -> None:
     """List Linode instance configs sends GET to the exact route."""
     client = Client("https://api.linode.com/v4", "test-token")
