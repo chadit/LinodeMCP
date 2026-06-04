@@ -3269,6 +3269,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UploadImage", e) from e
 
+    async def replicate_image(
+        self, image_id: str, regions: list[str]
+    ) -> dict[str, Any]:
+        """Replicate an image to one or more regions."""
+        image_id_path = quote(str(image_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST", f"/images/{image_id_path}/regions", {"regions": regions}
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ReplicateImage", e) from e
+
     # Stage 3: Extended read operations
 
     async def list_ssh_keys(self) -> list[SSHKey]:
@@ -9648,6 +9662,12 @@ class RetryableClient:
             description=description,
             tags=tags,
         )
+
+    async def replicate_image(
+        self, image_id: str, regions: list[str]
+    ) -> dict[str, Any]:
+        """Replicate an image once without retry replay."""
+        return await self.client.replicate_image(image_id, regions)
 
     # Stage 3: Extended read operations
 

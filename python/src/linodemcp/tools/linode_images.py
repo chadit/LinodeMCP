@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 from uuid import UUID
@@ -20,6 +21,9 @@ from linodemcp.tools.helpers import (
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
+
+
+_IMAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+/[A-Za-z0-9._-]+$")
 
 
 def _optional_int_argument(
@@ -878,6 +882,43 @@ def create_linode_image_upload_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_image_replicate_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_replicate tool."""
+    return Tool(
+        name="linode_image_replicate",
+        description="Replicates a private or public image to one or more regions.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "image_id": {
+                    "type": "string",
+                    "description": "Image ID to replicate, for example private/123.",
+                },
+                "regions": {
+                    "type": "array",
+                    "description": "Region slugs to replicate the image to.",
+                    "items": {"type": "string"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["image_id", "regions", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_create tool."""
     return Tool(
@@ -1065,6 +1106,33 @@ def _image_create_disk_id_error(disk_id: Any) -> str | None:
     if not isinstance(disk_id, int) or isinstance(disk_id, bool) or disk_id <= 0:
         return "disk_id must be a positive integer"
     return None
+
+
+def _replicate_image_id_error(value: object) -> str | None:
+    """Validate image IDs before using them as path parameters."""
+    if not isinstance(value, str) or not value.strip():
+        return "image_id must be a non-empty string"
+    image_id = value.strip()
+    if ".." in image_id or "?" in image_id:
+        return "image_id must not contain traversal or query separators"
+    if not _IMAGE_ID_PATTERN.fullmatch(image_id):
+        return "image_id must look like private/123 or linode/debian12"
+    return None
+
+
+def _image_regions_payload(value: object) -> tuple[list[str] | None, str | None]:
+    """Validate replicate-image regions."""
+    if not isinstance(value, list) or not value:
+        return None, "regions must be a non-empty list of region slugs"
+    region_values = cast("list[object]", value)
+    regions: list[str] = []
+    for region in region_values:
+        if not isinstance(region, str) or not region.strip():
+            return None, "regions must contain non-empty strings"
+        if "/" in region or "?" in region or ".." in region:
+            return None, "regions must not contain path or query separators"
+        regions.append(region.strip())
+    return regions, None
 
 
 def _required_string_argument(
@@ -1268,6 +1336,49 @@ async def handle_linode_image_upload(
         }
 
     return await execute_tool(cfg, arguments, "upload Linode image", _call)
+
+
+async def handle_linode_image_replicate(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_replicate tool request."""
+    image_id = arguments.get("image_id")
+    image_err = _replicate_image_id_error(image_id)
+    if image_err is not None:
+        return error_response(image_err)
+
+    regions, regions_err = _image_regions_payload(arguments.get("regions"))
+    if regions_err is not None:
+        return error_response(regions_err)
+    regions = cast("list[str]", regions)
+    image_id = cast("str", image_id).strip()
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_image_replicate",
+            arguments.get("environment", ""),
+            "POST",
+            f"/images/{quote(image_id, safe='')}/regions",
+            None,
+            side_effects=[
+                f"Image {image_id!r} will be replicated to {', '.join(regions)}."
+            ],
+            request_body={"regions": regions},
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This replicates an image to regions. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        image = await client.replicate_image(image_id, regions)
+        return {
+            "message": f"Image {image_id!r} replicated successfully",
+            "image": image,
+        }
+
+    return await execute_tool(cfg, arguments, "replicate Linode image", _call)
 
 
 async def handle_linode_image_create(
