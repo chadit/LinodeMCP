@@ -5653,6 +5653,76 @@ async def test_retryable_get_managed_stats_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_managed_contact_sends_get_to_contact_route() -> None:
+    """Test Managed contact retrieval sends documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "id": 42,
+        "name": "Primary on-call",
+        "email": "ops@example.com",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_managed_contact(42)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/managed/contacts/42")
+    await client.close()
+
+
+@pytest.mark.parametrize("bad_contact_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_get_managed_contact_rejects_bad_contact_id(
+    bad_contact_id: object,
+) -> None:
+    """Test Managed contact retrieval rejects malformed contact IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    get_managed_contact = cast("Any", client.get_managed_contact)
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="contact_id must be a positive integer"),
+    ):
+        await get_managed_contact(bad_contact_id)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_managed_contact_wraps_http_errors() -> None:
+    """Test Managed contact retrieval wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_managed_contact(42)
+
+    assert "GetManagedContact" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_managed_contact_delegates_to_client() -> None:
+    """Test RetryableClient delegates Managed contact retrieval."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_managed_contact", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 42}
+        result = await retryable.get_managed_contact(42)
+
+    assert result == {"id": 42}
+    mock_get.assert_awaited_once_with(42)
+    await retryable.close()
+
+
 async def test_list_support_tickets_sends_get_to_tickets_route() -> None:
     """Test support ticket listing sends documented GET query."""
     client = Client("https://api.linode.com/v4", "test-token")

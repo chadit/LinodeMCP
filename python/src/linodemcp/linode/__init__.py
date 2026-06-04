@@ -4538,6 +4538,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetManagedStats", e) from e
 
+    async def get_managed_contact(self, contact_id: int) -> dict[str, Any]:
+        """Get a Managed contact."""
+        valid_contact_id = _validate_positive_path_int(contact_id, "contact_id")
+        # Keep URL construction encoded at the client boundary for path-param safety.
+        encoded_contact_id = quote(str(valid_contact_id), safe="")
+        endpoint = f"/managed/contacts/{encoded_contact_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetManagedContact", e) from e
+
     async def list_support_tickets(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -11586,6 +11599,13 @@ class RetryableClient:
         """List Managed statistics with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_managed_stats
+        )
+        return result
+
+    async def get_managed_contact(self, contact_id: int) -> dict[str, Any]:
+        """Get a Managed contact with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_managed_contact, contact_id
         )
         return result
 
