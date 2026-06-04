@@ -16869,6 +16869,87 @@ async def test_retryable_list_instance_firewalls_delegates_with_retry() -> None:
     await client.close()
 
 
+async def test_list_instance_interface_firewalls_sends_exact_method_path() -> None:
+    """Linode interface firewalls list sends documented method and path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"data": [{"id": 123}], "page": 1, "results": 1}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.list_instance_interface_firewalls(42, 7)
+
+    assert result["data"][0]["id"] == 123
+    mock_request.assert_awaited_once_with(
+        "GET", "/linode/instances/42/interfaces/7/firewalls"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["bad/id", "bad?query", "..", True, 0, -1])
+async def test_list_instance_interface_firewalls_rejects_malformed_linode_id(
+    linode_id: object,
+) -> None:
+    """Linode interface firewalls list rejects malformed Linode IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="linode_id must be a positive integer"),
+    ):
+        await client.list_instance_interface_firewalls(linode_id, 7)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+@pytest.mark.parametrize("interface_id", ["bad/id", "bad?query", "..", True, 0, -1])
+async def test_list_instance_interface_firewalls_rejects_malformed_interface_id(
+    interface_id: object,
+) -> None:
+    """Linode interface firewalls list rejects malformed interface IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="interface_id must be a positive integer"),
+    ):
+        await client.list_instance_interface_firewalls(42, interface_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_list_instance_interface_firewalls_wraps_http_errors() -> None:
+    """Linode interface firewalls list maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_instance_interface_firewalls(42, 7)
+
+    assert "ListInstanceInterfaceFirewalls" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_list_instance_interface_firewalls_delegates_with_retry() -> (
+    None
+):
+    """Retryable Linode interface firewalls list delegates through retry wrapper."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_instance_interface_firewalls", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [{"id": 123}], "results": 1}
+        result = await client.list_instance_interface_firewalls(42, 7)
+
+    assert result["results"] == 1
+    mock_list.assert_awaited_once_with(42, 7)
+    await client.close()
+
+
 async def test_add_instance_interface_sends_post_to_instance_interfaces_route() -> None:
     """Add Linode instance interface sends POST to the exact route and body."""
     client = Client("https://api.linode.com/v4", "test-token")

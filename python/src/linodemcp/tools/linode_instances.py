@@ -390,6 +390,50 @@ def create_linode_instance_interface_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_instance_interface_firewalls_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_firewalls_list tool."""
+    return Tool(
+        name="linode_instance_interface_firewalls_list",
+        description="Lists firewalls assigned to a Linode instance interface.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "interface_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance interface (required)",
+                },
+            },
+            "required": ["linode_id", "interface_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_instance_interface_firewalls_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_interface_firewalls_list tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    interface_id = _positive_int_argument(arguments, "interface_id")
+    if interface_id is None:
+        return error_response("interface_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_instance_interface_firewalls(linode_id, interface_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance interface firewalls", _call
+    )
+
+
 def create_linode_instance_config_interfaces_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_interfaces_list tool."""
     return Tool(
