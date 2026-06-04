@@ -2834,6 +2834,14 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImages", e) from e
 
+    async def delete_image(self, image_id: str) -> None:
+        """Delete a private image by ID."""
+        image_id_path = quote(str(image_id), safe="")
+        try:
+            await self.make_request("DELETE", f"/images/{image_id_path}")
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteImage", e) from e
+
     async def list_image_sharegroups(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -9530,6 +9538,10 @@ class RetryableClient:
             )
         )
         return result
+
+    async def delete_image(self, image_id: str) -> None:
+        """Delete a private image once without retry replay."""
+        await self.client.delete_image(image_id)
 
     async def delete_image_sharegroup_member_token(
         self, sharegroup_id: str, token_uuid: str

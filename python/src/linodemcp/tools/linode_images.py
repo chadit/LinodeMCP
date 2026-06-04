@@ -104,6 +104,35 @@ def create_linode_image_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_delete tool."""
+    return Tool(
+        name="linode_image_delete",
+        description="Deletes a private Linode image by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "image_id": {
+                    "type": "string",
+                    "description": "Private image ID to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["image_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_list tool."""
     return Tool(
@@ -1520,6 +1549,19 @@ async def handle_linode_images_sharegroups_tokens_list(
     return await execute_tool(cfg, arguments, "list image share group tokens", _call)
 
 
+def _private_image_id_error(value: Any) -> str | None:
+    """Validate a private image ID path argument."""
+    if not isinstance(value, str) or not value.strip():
+        return "image_id must be a non-empty string"
+    image_id = value.strip()
+    if not image_id.startswith("private/"):
+        return "image_id must be a private image ID like private/<id>"
+    suffix = image_id.removeprefix("private/")
+    if not suffix or "/" in suffix or "?" in suffix or ".." in suffix:
+        return "image_id must be a private image ID like private/<id>"
+    return None
+
+
 def _image_sharegroup_token_uuid_error(value: Any, name: str) -> str | None:
     """Validate an image share group UUID argument."""
     if not isinstance(value, str) or not value.strip():
@@ -2351,6 +2393,39 @@ async def handle_linode_image_get(
         }
 
     return await execute_tool(cfg, arguments, "retrieve Linode image", _call)
+
+
+async def handle_linode_image_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_delete tool request."""
+    image_id = arguments.get("image_id")
+    image_id_error = _private_image_id_error(image_id)
+    if image_id_error is not None:
+        return error_response(image_id_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a private image. Set confirm=true to proceed."
+        )
+
+    image_id_str = cast("str", image_id).strip()
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_image_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/images/{quote(image_id_str, safe='')}",
+            None,
+            side_effects=["The private image will be deleted."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image(image_id_str)
+        return {"message": "Private image deleted"}
+
+    return await execute_tool(cfg, arguments, "delete private image", _call)
 
 
 async def handle_linode_images_list(

@@ -9,10 +9,11 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient
+from linodemcp.linode import APIError, Client, NetworkError, RetryableClient
 from linodemcp.profiles import Capability, Scope, required_scopes
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
+    create_linode_image_delete_tool,
     create_linode_image_sharegroup_create_tool,
     create_linode_images_sharegroup_image_delete_tool,
     create_linode_images_sharegroup_image_update_tool,
@@ -30,6 +31,7 @@ from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_token_sharegroup_images_list_tool,
     create_linode_images_sharegroups_token_update_tool,
     create_linode_images_sharegroups_tokens_list_tool,
+    handle_linode_image_delete,
     handle_linode_image_sharegroup_create,
     handle_linode_images_sharegroup_image_delete,
     handle_linode_images_sharegroup_image_update,
@@ -4071,3 +4073,158 @@ def test_linode_images_sharegroup_image_update_scopes_to_images_write() -> None:
 def test_linode_images_sharegroup_image_update_in_version_features() -> None:
     """Version metadata advertises the shared-image update tool."""
     assert "linode_images_sharegroup_image_update" in FEATURE_TOOLS_LIST.split(",")
+
+
+@pytest.mark.asyncio
+async def test_client_delete_image_sends_exact_path() -> None:
+    """Low-level client sends DELETE to the documented image path."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        await client.delete_image("private/123")
+    finally:
+        await client.close()
+
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "DELETE"
+    assert request.url.raw_path == b"/v4/images/private%2F123"
+    assert request.url.query == b""
+    assert await request.aread() == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+
+
+@pytest.mark.asyncio
+async def test_client_delete_image_raises_api_error() -> None:
+    """Low-level client raises APIError for DELETE image HTTP failures."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"errors": [{"reason": "Not found"}]})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(APIError):
+            await client.delete_image("private/404")
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_retryable_delete_image_delegates_once() -> None:
+    """Destructive image delete delegates once without retry replay."""
+    client = _CapturingRetryableClient()
+    client.client.delete_image = AsyncMock()  # type: ignore[method-assign]
+
+    await client.delete_image("private/123")
+
+    client.client.delete_image.assert_awaited_once_with("private/123")
+    assert client.calls == []
+
+
+def test_linode_image_delete_tool_schema_requires_confirm() -> None:
+    """Tool schema requires image_id and explicit confirm."""
+    tool, capability = create_linode_image_delete_tool()
+
+    assert tool.name == "linode_image_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["image_id", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_image_delete_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler deletes a private image after validation and confirmation."""
+    result = await handle_linode_image_delete(
+        {"image_id": "private/123", "confirm": True}, sample_config
+    )
+
+    assert json.loads(result[0].text) == {"message": "Private image deleted"}
+    mock_linode_client.delete_image.assert_awaited_once_with("private/123")
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+@pytest.mark.asyncio
+async def test_handle_linode_image_delete_requires_literal_confirm(
+    confirm_value: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Missing, false, string, and numeric confirm stop before client calls."""
+    arguments: dict[str, Any] = {"image_id": "private/123"}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    result = await handle_linode_image_delete(arguments, sample_config)
+
+    assert result[0].text == (
+        "Error: This deletes a private image. Set confirm=true to proceed."
+    )
+    mock_linode_client.delete_image.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("image_id", "message"),
+    [
+        (None, "image_id must be a non-empty string"),
+        ("", "image_id must be a non-empty string"),
+        ("public/debian", "image_id must be a private image ID like private/<id>"),
+        ("foo/bar/baz", "image_id must be a private image ID like private/<id>"),
+        ("private/", "image_id must be a private image ID like private/<id>"),
+        ("/private/123", "image_id must be a private image ID like private/<id>"),
+        ("private/123/extra", "image_id must be a private image ID like private/<id>"),
+        ("private?123", "image_id must be a private image ID like private/<id>"),
+        ("private/..", "image_id must be a private image ID like private/<id>"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_handle_linode_image_delete_rejects_malformed_image_id(
+    image_id: Any, message: str, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects malformed image IDs before the client call."""
+    result = await handle_linode_image_delete(
+        {"image_id": image_id, "confirm": True}, sample_config
+    )
+
+    assert result[0].text == f"Error: {message}"
+    mock_linode_client.delete_image.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_image_delete_dry_run(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Dry-run reports exact DELETE path without calling the client."""
+    result = await handle_linode_image_delete(
+        {"image_id": "private/123", "confirm": True, "dry_run": True},
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_image_delete"
+    assert payload["would_execute"] == {
+        "method": "DELETE",
+        "path": "/images/private%2F123",
+    }
+    mock_linode_client.delete_image.assert_not_called()
+
+
+def test_linode_image_delete_is_registered() -> None:
+    """Server registry includes the image delete tool."""
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_image_delete" in entries
+    assert entries["linode_image_delete"].capability is Capability.Destroy
+
+
+def test_linode_image_delete_in_feature_list() -> None:
+    """Version feature list includes the image delete tool."""
+    assert "linode_image_delete" in FEATURE_TOOLS_LIST.split(",")

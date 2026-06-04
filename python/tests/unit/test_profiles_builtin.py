@@ -127,6 +127,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_postgresql_instance_ssl_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_instance_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_instance_ssl_get", Capability.Read),
+        ToolDescriptor("linode_image_delete", Capability.Destroy),
         ToolDescriptor("linode_image_sharegroup_create", Capability.Write),
         ToolDescriptor("linode_images_list", Capability.Read),
         ToolDescriptor("linode_images_sharegroup_delete", Capability.Destroy),
