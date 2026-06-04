@@ -3874,6 +3874,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetImage", e) from e
 
+    async def get_kernel(self, kernel_id: str) -> dict[str, Any]:
+        """Get a single Linode kernel."""
+        encoded_kernel_id = quote(str(kernel_id), safe="")
+        try:
+            response = await self.make_request(
+                "GET", f"/linode/kernels/{encoded_kernel_id}"
+            )
+            data: Any = response.json()
+            if not isinstance(data, dict):
+                raise LinodeError("GetKernel returned a non-object response")
+            return cast("dict[str, Any]", data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetKernel", e) from e
+
     async def create_image(
         self,
         disk_id: int,
@@ -10698,6 +10712,13 @@ class RetryableClient:
         """Get a single Linode image with retry."""
         result: Image = await self._execute_with_retry(
             lambda: self.client.get_image(image_id)
+        )
+        return result
+
+    async def get_kernel(self, kernel_id: str) -> dict[str, Any]:
+        """Get a single Linode kernel with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.get_kernel(kernel_id)
         )
         return result
 

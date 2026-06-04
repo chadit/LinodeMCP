@@ -115,6 +115,7 @@ from linodemcp.tools import (
     create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
     create_linode_ipv6_range_get_tool,
+    create_linode_kernel_get_tool,
     create_linode_kernels_list_tool,
     create_linode_lke_cluster_create_tool,
     create_linode_lke_cluster_delete_tool,
@@ -291,6 +292,7 @@ from linodemcp.tools import (
     handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
     handle_linode_ipv6_range_get,
+    handle_linode_kernel_get,
     handle_linode_kernels_list,
     handle_linode_lke_acl_delete,
     handle_linode_lke_acl_get,
@@ -4489,6 +4491,106 @@ async def test_handle_linode_image_update_validation_errors(
 
     assert len(result) == 1
     assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_kernel_get_tool_def() -> None:
+    """Kernel get tool should require kernel_id."""
+    tool, capability = create_linode_kernel_get_tool()
+    assert tool.name == "linode_kernel_get"
+    assert capability.name == "Read"
+    assert tool.inputSchema["required"] == ["kernel_id"]
+    assert tool.inputSchema["properties"]["kernel_id"]["pattern"] == (
+        r"^(?!.*\.\.)linode/[A-Za-z0-9._-]+$"
+    )
+
+
+async def test_handle_linode_kernel_get_success(sample_config: Config) -> None:
+    """Kernel get should return a single kernel."""
+    kernel = {
+        "id": "linode/latest-64bit",
+        "label": "Latest 64 bit",
+        "version": "6.6.0",
+        "architecture": "x86_64",
+        "kvm": True,
+        "xen": False,
+        "pvops": False,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_kernel.return_value = kernel
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_kernel_get(
+            {"kernel_id": "linode/latest-64bit"},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["kernel"] == kernel
+        mock_client.get_kernel.assert_awaited_once_with("linode/latest-64bit")
+
+
+@pytest.mark.parametrize(
+    "kernel_id",
+    [
+        "linode/latest-64bit",
+        "linode/grub2",
+        "linode/6.12.1-x86_64",
+    ],
+)
+async def test_handle_linode_kernel_get_accepts_valid_kernel_ids(
+    sample_config: Config, kernel_id: str
+) -> None:
+    """Kernel get should accept documented linode/<slug> kernel ID shapes."""
+    kernel = {"id": kernel_id, "label": "Kernel"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_kernel.return_value = kernel
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_kernel_get(
+            {"kernel_id": kernel_id},
+            sample_config,
+        )
+
+    assert json.loads(result[0].text)["kernel"]["id"] == kernel_id
+    mock_client.get_kernel.assert_awaited_once_with(kernel_id)
+
+
+@pytest.mark.parametrize(
+    "bad_kernel_id",
+    [
+        None,
+        "",
+        "/",
+        "linode/..",
+        "linode/../x",
+        "linode/latest?x=1",
+        "linode/latest%3Fx=1",
+        "linode/latest%2Fextra",
+        "private/latest-64bit",
+        "linode/latest/extra",
+    ],
+)
+async def test_handle_linode_kernel_get_rejects_malformed_kernel_id(
+    sample_config: Config, bad_kernel_id: object
+) -> None:
+    """Kernel get should reject malformed path parameters before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_kernel_get(
+            {"kernel_id": bad_kernel_id}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "kernel_id" in result[0].text
     mock_client_class.assert_not_called()
 
 
