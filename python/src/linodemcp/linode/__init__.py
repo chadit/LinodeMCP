@@ -1892,6 +1892,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetInstanceInterface", e) from e
 
+    async def update_instance_interface(
+        self, linode_id: int, interface_id: int, fields: Any
+    ) -> dict[str, Any]:
+        """Update a Linode interface."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        interface_id = _validate_positive_path_int(interface_id, "interface_id")
+        if not isinstance(fields, dict):
+            raise TypeError("fields must be an object")
+        fields_body = cast("dict[str, Any]", fields)
+        if not fields_body:
+            raise ValueError("at least one update field is required")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_interface_id = quote(str(interface_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/interfaces/{encoded_interface_id}"
+        )
+        try:
+            response = await self.make_request("PUT", endpoint, fields_body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstanceInterface", e) from e
+
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
     ) -> dict[str, Any]:
@@ -9446,6 +9469,14 @@ class RetryableClient:
             self.client.list_instance_config_interfaces, linode_id, config_id
         )
         return result
+
+    async def update_instance_interface(
+        self, linode_id: int, interface_id: int, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a Linode interface without replay retry."""
+        return await self.client.update_instance_interface(
+            linode_id, interface_id, fields
+        )
 
     async def update_instance_config_interface(
         self,
