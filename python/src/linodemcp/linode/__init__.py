@@ -1572,6 +1572,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstances", e) from e
 
+    async def get_instance_stats(self, linode_id: int) -> dict[str, Any]:
+        """Get daily statistics for a Linode instance."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/stats"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceStats", e) from e
+
     async def list_instance_nodebalancers(self, linode_id: int) -> dict[str, Any]:
         """List NodeBalancers assigned to a Linode instance."""
         valid_linode_id = _validate_positive_path_int(linode_id, "linode_id")
@@ -9402,6 +9414,13 @@ class RetryableClient:
         """List Linode instances with retry."""
         result: list[Instance] = await self._execute_with_retry(
             self.client.list_instances
+        )
+        return result
+
+    async def get_instance_stats(self, linode_id: int) -> dict[str, Any]:
+        """Get daily Linode instance statistics with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_stats, linode_id
         )
         return result
 
