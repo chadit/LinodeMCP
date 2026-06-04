@@ -6064,6 +6064,88 @@ async def test_retryable_list_regions_availability_delegates() -> None:
     await client.close()
 
 
+async def test_list_kernels_sends_exact_route() -> None:
+    """Listing kernels sends GET /linode/kernels with pagination."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "data": [{"id": "linode/latest-64bit", "label": "Latest 64 bit"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.list_kernels(page=2, page_size=25)
+
+    assert result["data"][0]["id"] == "linode/latest-64bit"
+    mock_request.assert_called_once_with("GET", "/linode/kernels?page=2&page_size=25")
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"page": 0},
+        {"page": True},
+        {"page": "2"},
+        {"page_size": 24},
+        {"page_size": 501},
+        {"page_size": True},
+        {"page_size": "25"},
+    ],
+)
+async def test_list_kernels_rejects_invalid_pagination(
+    kwargs: dict[str, object],
+) -> None:
+    """Invalid pagination values are rejected before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="page"),
+    ):
+        await client.list_kernels(**kwargs)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_list_kernels_wraps_http_error() -> None:
+    """Kernels list wraps client HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_kernels()
+
+    assert "ListKernels" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_retryable_list_kernels_delegates() -> None:
+    """Retryable client delegates kernels list to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_kernels", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [{"id": "linode/latest-64bit"}]}
+
+        result = await client.list_kernels(page=2, page_size=25)
+
+    assert result == {"data": [{"id": "linode/latest-64bit"}]}
+    mock_list.assert_awaited_once_with(page=2, page_size=25)
+
+    await client.close()
+
+
 async def test_network_error() -> None:
     """Test network error handling."""
     client = Client("https://api.linode.com/v4", "test-token")

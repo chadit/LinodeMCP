@@ -120,6 +120,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_regions_list", Capability.Read),
         ToolDescriptor("linode_regions_availability_list", Capability.Read),
         ToolDescriptor("linode_regions_availability_get", Capability.Read),
+        ToolDescriptor("linode_kernels_list", Capability.Read),
         ToolDescriptor("linode_types_list", Capability.Read),
         ToolDescriptor("linode_database_mysql_config_get", Capability.Read),
         ToolDescriptor("linode_database_postgresql_config_get", Capability.Read),
@@ -363,6 +364,14 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
     assert "linode_object_storage_bucket_create" in storage_tools
     # No general compute write access.
     assert "linode_instance_create" not in storage_tools
+
+
+def test_linode_kernels_list_requires_linodes_read_scope() -> None:
+    """Kernels list requires the Linodes read token scope."""
+    assert required_scopes("linode_kernels_list", Capability.Read) == [
+        Scope.LinodesReadOnly
+    ]
+    assert categories("linode_kernels_list") == ["compute"]
 
 
 def test_database_tools_require_database_read_scope() -> None:

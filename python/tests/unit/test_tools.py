@@ -115,6 +115,7 @@ from linodemcp.tools import (
     create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
     create_linode_ipv6_range_get_tool,
+    create_linode_kernels_list_tool,
     create_linode_lke_cluster_create_tool,
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
@@ -290,6 +291,7 @@ from linodemcp.tools import (
     handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
     handle_linode_ipv6_range_get,
+    handle_linode_kernels_list,
     handle_linode_lke_acl_delete,
     handle_linode_lke_acl_get,
     handle_linode_lke_acl_update,
@@ -3883,6 +3885,74 @@ async def test_handle_linode_regions_list_filter_country(sample_config: Config) 
         assert "us-west" in result[0].text
         assert "eu-west" not in result[0].text
         assert '"count": 2' in result[0].text
+
+
+def test_linode_kernels_list_tool_schema() -> None:
+    """The kernels list tool exposes pagination fields."""
+    tool, capability = create_linode_kernels_list_tool()
+    assert tool.name == "linode_kernels_list"
+    assert capability is Capability.Read
+    props: dict[str, Any] = tool.inputSchema["properties"]
+    assert props["page"]["minimum"] == 1
+    assert props["page_size"]["minimum"] == 25
+    assert props["page_size"]["maximum"] == 500
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_kernels_list(sample_config: Config) -> None:
+    """Test linode_kernels_list tool."""
+    response = {
+        "data": [
+            {
+                "id": "linode/latest-64bit",
+                "label": "Latest 64 bit",
+                "version": "6.8.0",
+                "architecture": "x86_64",
+            }
+        ],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_kernels.return_value = response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_kernels_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["data"][0]["id"] == "linode/latest-64bit"
+    assert body["page"] == 2
+    mock_client.list_kernels.assert_awaited_once_with(page=2, page_size=25)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"page": 0},
+        {"page": True},
+        {"page_size": 24},
+        {"page_size": 501},
+        {"page_size": "25"},
+    ],
+)
+async def test_handle_linode_kernels_list_rejects_invalid_pagination(
+    sample_config: Config, arguments: dict[str, object]
+) -> None:
+    """Invalid pagination arguments are rejected before the client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_kernels_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "page" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_types_list(sample_config: Config) -> None:

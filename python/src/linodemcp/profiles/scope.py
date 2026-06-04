@@ -171,6 +171,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
                 "linode_placement_group_",
                 "linode_placement_groups_",
                 "linode_regions_",
+                "linode_kernels_",
                 "linode_types_",
             ),
             _CAT_LINODES,

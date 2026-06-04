@@ -1591,6 +1591,40 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstances", e) from e
 
+    async def list_kernels(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Linode kernels."""
+        min_page_size = 25
+        max_page_size = 500
+        if page is not None and (
+            isinstance(page, bool) or type(page) is not int or page <= 0
+        ):
+            msg = "page must be a positive integer"
+            raise ValueError(msg)
+        if page_size is not None and (
+            isinstance(page_size, bool)
+            or type(page_size) is not int
+            or page_size < min_page_size
+            or page_size > max_page_size
+        ):
+            msg = "page_size must be between 25 and 500"
+            raise ValueError(msg)
+        endpoint = "/linode/kernels"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListKernels", e) from e
+
     async def get_instance_stats(self, linode_id: int) -> dict[str, Any]:
         """Get daily statistics for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
@@ -10386,6 +10420,15 @@ class RetryableClient:
         """List Linode instance types with retry."""
         result: list[InstanceType] = await self._execute_with_retry(
             self.client.list_types
+        )
+        return result
+
+    async def list_kernels(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Linode kernels with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_kernels(page=page, page_size=page_size)
         )
         return result
 
