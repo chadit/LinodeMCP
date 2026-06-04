@@ -1628,6 +1628,59 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateInstanceFirewalls", e) from e
 
+    async def update_instance_interface_settings(
+        self,
+        linode_id: int,
+        *,
+        default_route: object | None = None,
+        network_helper: object | None = None,
+    ) -> dict[str, Any]:
+        """Update Linode interface Network Helper and default route settings."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        if default_route is None and network_helper is None:
+            raise ValueError("network_helper or default_route is required")
+        if network_helper is not None and not isinstance(network_helper, bool):
+            raise ValueError("network_helper must be a boolean")
+        body: dict[str, Any] = {}
+        if default_route is not None:
+            if not isinstance(default_route, dict):
+                raise ValueError("default_route must be an object")
+            default_route_input = cast("dict[str, Any]", default_route)
+            allowed_fields = {"ipv4_interface_id", "ipv6_interface_id"}
+            unknown_fields = set(default_route_input) - allowed_fields
+            if unknown_fields:
+                raise ValueError(
+                    "default_route supports only ipv4_interface_id "
+                    "and ipv6_interface_id"
+                )
+            clean_default_route: dict[str, int | None] = {}
+            for key in sorted(allowed_fields):
+                if key not in default_route_input:
+                    continue
+                value = default_route_input[key]
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int) or value < 1
+                ):
+                    raise ValueError(
+                        f"default_route.{key} must be a positive integer or null"
+                    )
+                clean_default_route[key] = value
+            if not clean_default_route:
+                raise ValueError(
+                    "default_route must include ipv4_interface_id or ipv6_interface_id"
+                )
+            body["default_route"] = clean_default_route
+        if network_helper is not None:
+            body["network_helper"] = network_helper
+        encoded_linode_id = quote(str(linode_id), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces/settings"
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstanceInterfaceSettings", e) from e
+
     async def update_instance_config(
         self, linode_id: int, config_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
@@ -9263,6 +9316,20 @@ class RetryableClient:
         """Update Linode instance firewall assignments without replay retry."""
         return await self.client.update_instance_firewalls(
             linode_id, firewall_ids, page=page, page_size=page_size
+        )
+
+    async def update_instance_interface_settings(
+        self,
+        linode_id: int,
+        *,
+        default_route: object | None = None,
+        network_helper: object | None = None,
+    ) -> dict[str, Any]:
+        """Update Linode interface settings without replay retry."""
+        return await self.client.update_instance_interface_settings(
+            linode_id,
+            default_route=default_route,
+            network_helper=network_helper,
         )
 
     async def update_instance_config(
