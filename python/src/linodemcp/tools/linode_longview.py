@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
@@ -229,6 +230,96 @@ async def handle_linode_longview_clients_list(
         return await client.list_longview_clients(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Longview clients", _call)
+
+
+LABEL_MIN_LENGTH = 3
+LABEL_MAX_LENGTH = 32
+LABEL_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def create_linode_longview_client_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_client_create tool."""
+    return Tool(
+        name="linode_longview_client_create",
+        description=(
+            "Creates a Longview client. Pass dry_run=true to preview without "
+            "creating the client."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "label": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 32,
+                    "pattern": "^[A-Za-z0-9_-]{3,32}$",
+                    "description": "Unique Longview client label.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm Longview client creation "
+                        "or preview it with dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["label", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _validate_longview_client_label(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("label is required")
+    label = value.strip()
+    if len(label) < LABEL_MIN_LENGTH or len(label) > LABEL_MAX_LENGTH:
+        raise ValueError("label must be 3 to 32 characters")
+    if LABEL_PATTERN.fullmatch(label) is None:
+        raise ValueError(
+            "label may only contain letters, numbers, hyphens, and underscores"
+        )
+    return label
+
+
+async def handle_linode_longview_client_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_longview_client_create tool request."""
+    try:
+        label = _validate_longview_client_label(arguments.get("label"))
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    confirm = arguments.get("confirm")
+    if not isinstance(confirm, bool) or confirm is not True:
+        return error_response(
+            "This creates a Longview client. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        environment = arguments.get("environment")
+        if not isinstance(environment, str):
+            environment = ""
+        return build_dry_run_response(
+            "linode_longview_client_create",
+            environment,
+            "POST",
+            "/longview/clients",
+            None,
+            side_effects=[f"A Longview client labeled {label!r} will be created."],
+            request_body={"label": label},
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        client_data = await client.create_longview_client(label)
+        return {
+            "message": f"Longview client {label!r} created successfully",
+            "longview_client": client_data,
+        }
+
+    return await execute_tool(cfg, arguments, "create Longview client", _call)
 
 
 async def handle_linode_longview_client_delete(

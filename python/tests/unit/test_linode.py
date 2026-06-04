@@ -46,6 +46,7 @@ from linodemcp.linode import (
     validate_volume_size,
 )
 from linodemcp.profiles import Capability
+from linodemcp.tools.linode_longview import handle_linode_longview_client_create
 from linodemcp.tools.linode_monitor_write import (
     create_linode_monitor_alert_channels_list_tool,
     create_linode_monitor_alert_definitions_list_tool,
@@ -18456,3 +18457,133 @@ async def test_retryable_client_list_longview_clients_delegates() -> None:
     assert result == {"data": [{"id": 123}]}
     mock_list.assert_awaited_once_with(page=2, page_size=50)
     await client.close()
+
+
+async def test_create_longview_client_sends_post_to_clients_route() -> None:
+    """Longview client creation sends the documented POST body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "id": 123,
+        "label": "web-01",
+        "api_key": "[REDACTED]",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.create_longview_client("web-01")
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "POST", "/longview/clients", {"label": "web-01"}
+    )
+    await client.close()
+
+
+async def test_create_longview_client_wraps_http_errors() -> None:
+    """Longview client creation wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_longview_client("web-01")
+
+    assert "CreateLongviewClient" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_longview_client_does_not_replay() -> None:
+    """RetryableClient delegates Longview client creation once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_create = AsyncMock(side_effect=httpx.HTTPError("transient"))
+    object.__setattr__(retryable.client, "create_longview_client", mock_create)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_longview_client("web-01")
+    finally:
+        await retryable.close()
+
+    mock_create.assert_awaited_once_with("web-01")
+
+
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_longview_client_create_requires_boolean_confirm(
+    sample_config: Config, bad_confirm: object
+) -> None:
+    """Handler rejects missing/non-true confirm before client construction."""
+    args: dict[str, Any] = {"label": "web-01"}
+    if bad_confirm is not None:
+        args["confirm"] = bad_confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_retryable:
+        result = await handle_linode_longview_client_create(args, sample_config)
+
+    assert (
+        result[0].text
+        == "Error: This creates a Longview client. Set confirm=true to proceed."
+    )
+    mock_retryable.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "bad_label",
+    [None, "", "ab", "bad label", "åbc", "x" * 33, "foo/bar", "foo?bar", "../foo"],
+)
+async def test_longview_client_create_rejects_invalid_label(
+    sample_config: Config, bad_label: object
+) -> None:
+    """Handler rejects malformed labels before client construction."""
+    args: dict[str, Any] = {"label": bad_label, "confirm": True}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_retryable:
+        result = await handle_linode_longview_client_create(args, sample_config)
+
+    assert result[0].text.startswith("Error: ")
+    mock_retryable.assert_not_called()
+
+
+async def test_longview_client_create_handler_returns_success(
+    sample_config: Config,
+) -> None:
+    """Handler returns the created Longview client data."""
+    response_data = {"id": 123, "label": "web-01", "install_code": "abc"}
+    mock_client = AsyncMock()
+    mock_client.create_longview_client.return_value = response_data
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_client
+    mock_cm.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient", return_value=mock_cm):
+        result = await handle_linode_longview_client_create(
+            {"label": "web-01", "confirm": True}, sample_config
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Longview client 'web-01' created successfully",
+        "longview_client": response_data,
+    }
+    mock_client.create_longview_client.assert_awaited_once_with("web-01")
+
+
+async def test_longview_client_create_dry_run_includes_request_body(
+    sample_config: Config,
+) -> None:
+    """Dry-run previews the Longview client create request without a client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_retryable:
+        result = await handle_linode_longview_client_create(
+            {"label": "web-01", "confirm": True, "dry_run": True}, sample_config
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/longview/clients",
+        "body": {"label": "web-01"},
+    }
+    assert payload["current_state"] is None
+    mock_retryable.assert_not_called()

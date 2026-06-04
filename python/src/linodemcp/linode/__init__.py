@@ -4341,6 +4341,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateTag", e) from e
 
+    async def create_longview_client(self, label: str) -> dict[str, Any]:
+        """Create a Longview client."""
+        body = {"label": label}
+        try:
+            response = await self.make_request("POST", "/longview/clients", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateLongviewClient", e) from e
+
     async def delete_tag(self, tag_label: str) -> None:
         """Delete a tag."""
         encoded_label = quote(tag_label, safe="")
@@ -11185,6 +11195,10 @@ class RetryableClient:
             )
         )
         return result
+
+    async def create_longview_client(self, label: str) -> dict[str, Any]:
+        """Create Longview client without generic retry replay."""
+        return await self.client.create_longview_client(label)
 
     async def delete_tag(self, tag_label: str) -> None:
         """Delete tag with retry."""
