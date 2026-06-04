@@ -15579,6 +15579,22 @@ async def test_longview_client_delete_tool_is_exported_and_registered(
     assert "linode_longview_client_delete" in srv.registered_tool_names
 
 
+async def test_longview_subscription_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Longview subscription get tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    registry = get_tool_registry()
+    registry_names = {descriptor.tool.name for descriptor in registry}
+    srv = Server(sample_config)
+
+    assert "create_linode_longview_subscription_get_tool" in tools_mod.__all__
+    assert "handle_linode_longview_subscription_get" in tools_mod.__all__
+    assert "linode_longview_subscription_get" in registry_names
+    assert "linode_longview_subscription_get" in srv.registered_tool_names
+
+
 async def test_longview_clients_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

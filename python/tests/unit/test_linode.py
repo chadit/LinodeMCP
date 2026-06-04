@@ -18277,6 +18277,111 @@ async def test_retryable_lke_tier_versions_forwards_tier_argument() -> None:
         await retryable.close()
 
 
+async def test_get_longview_subscription_sends_get_to_subscription_route() -> None:
+    """Longview subscription get sends GET /longview/subscriptions/{id}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": 12345, "label": "Longview Pro"}
+    response = MagicMock()
+    response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.get_longview_subscription(12345)
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with("GET", "/longview/subscriptions/12345")
+    await client.close()
+
+
+@pytest.mark.parametrize("subscription_id", [0, -1, True, "123/../x", "123?x=1"])
+async def test_get_longview_subscription_rejects_invalid_subscription_id(
+    subscription_id: Any,
+) -> None:
+    """Longview subscription get rejects invalid IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match="subscription_id"),
+    ):
+        await client.get_longview_subscription(subscription_id)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_client_get_longview_subscription_delegates() -> None:
+    """RetryableClient delegates Longview subscription GET through retry."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_method = AsyncMock(return_value={"id": 12345})
+    object.__setattr__(client.client, "get_longview_subscription", mock_method)
+    try:
+        result = await client.get_longview_subscription(12345)
+    finally:
+        await client.close()
+
+    assert result == {"id": 12345}
+    mock_method.assert_awaited_once_with(12345)
+
+
+async def test_handle_linode_longview_subscription_get_success(
+    sample_config: Config,
+) -> None:
+    """Longview subscription handler returns the client result."""
+    from linodemcp.tools.linode_longview import (
+        handle_linode_longview_subscription_get,
+    )
+
+    mock_client = AsyncMock()
+    mock_client.get_longview_subscription.return_value = {
+        "id": 12345,
+        "label": "Longview Pro",
+    }
+
+    async def fake_execute_tool(
+        _cfg: Config,
+        _arguments: dict[str, Any],
+        _error_action: str,
+        callback: Any,
+    ) -> list[Any]:
+        return [type("Text", (), {"text": json.dumps(await callback(mock_client))})()]
+
+    with patch(
+        "linodemcp.tools.linode_longview.execute_tool",
+        side_effect=fake_execute_tool,
+    ):
+        result = await handle_linode_longview_subscription_get(
+            {"subscription_id": 12345}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {
+        "subscription": {"id": 12345, "label": "Longview Pro"}
+    }
+    mock_client.get_longview_subscription.assert_awaited_once_with(12345)
+
+
+@pytest.mark.parametrize("subscription_id", [None, 0, -1, True, "123/../x", "123?x=1"])
+async def test_handle_linode_longview_subscription_get_rejects_bad_id(
+    sample_config: Config, subscription_id: object
+) -> None:
+    """Longview subscription handler rejects bad IDs before client dispatch."""
+    from linodemcp.tools.linode_longview import (
+        handle_linode_longview_subscription_get,
+    )
+
+    arguments = {} if subscription_id is None else {"subscription_id": subscription_id}
+    with patch("linodemcp.tools.linode_longview.execute_tool") as execute_tool:
+        result = await handle_linode_longview_subscription_get(arguments, sample_config)
+
+    expected = (
+        "Error: subscription_id is required"
+        if subscription_id is None
+        else "Error: subscription_id must be a positive integer"
+    )
+    assert result[0].text == expected
+    execute_tool.assert_not_called()
+
+
 async def test_get_longview_plan_sends_get_to_longview_plan_route() -> None:
     """Longview plan get sends GET /longview/plan."""
     client = Client("https://api.linode.com/v4", "test-token")

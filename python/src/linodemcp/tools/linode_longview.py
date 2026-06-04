@@ -59,6 +59,26 @@ def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_longview_subscription_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_subscription_get tool."""
+    return Tool(
+        name="linode_longview_subscription_get",
+        description="Gets details for a single Longview subscription by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "subscription_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Longview subscription ID to retrieve",
+                },
+            },
+            "required": ["subscription_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_longview_plan_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_longview_plan_get tool."""
     return Tool(
@@ -357,6 +377,27 @@ async def handle_linode_longview_client_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete Longview client", _call)
+
+
+async def handle_linode_longview_subscription_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_longview_subscription_get tool request."""
+    try:
+        subscription_id = _required_positive_int_argument(arguments, "subscription_id")
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        subscription = await client.get_longview_subscription(subscription_id)
+        return {"subscription": subscription}
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"get Longview subscription {subscription_id}",
+        _call,
+    )
 
 
 async def handle_linode_longview_plan_get(
