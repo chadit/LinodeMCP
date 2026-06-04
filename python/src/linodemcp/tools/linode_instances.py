@@ -662,6 +662,53 @@ def create_linode_instance_interface_add_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_instance_interface_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_update tool."""
+    section_schema = {
+        "type": ["object", "null"],
+        "description": "Documented Linode interface update section.",
+    }
+    return Tool(
+        name="linode_instance_interface_update",
+        description=(
+            "Updates a Linode interface using explicit documented body sections. "
+            "Requires confirm because instance networking changes."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "interface_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode interface (required)",
+                },
+                "default_route": section_schema,
+                "public": section_schema,
+                "vlan": section_schema,
+                "vpc": section_schema,
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to update the instance interface.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "interface_id", "confirm"],
+            "anyOf": [
+                {"required": ["default_route"]},
+                {"required": ["public"]},
+                {"required": ["vlan"]},
+                {"required": ["vpc"]},
+            ],
+        },
+    ), Capability.Write
+
+
 def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_update tool."""
     return Tool(
@@ -757,6 +804,70 @@ async def handle_linode_instance_interface_add(
         return {"interface": interface_result}
 
     return await execute_tool(cfg, arguments, "add Linode instance interface", _call)
+
+
+def _instance_interface_update_fields(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    fields: dict[str, Any] = {}
+    for name in ("default_route", "public", "vlan", "vpc"):
+        if name not in arguments:
+            continue
+        value = arguments[name]
+        if value is not None and not isinstance(value, dict):
+            return None, f"{name} must be an object or null"
+        fields[name] = value
+
+    if not fields:
+        return None, "at least one update field is required"
+    return fields, None
+
+
+async def handle_linode_instance_interface_update(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_interface_update tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    interface_id = _positive_int_argument(arguments, "interface_id")
+    if interface_id is None:
+        return error_response("interface_id must be a positive integer")
+
+    fields, fields_error = _instance_interface_update_fields(arguments)
+    if fields is None:
+        return error_response(fields_error or "at least one update field is required")
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_interface_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/linode/instances/{linode_id}/interfaces/{interface_id}",
+            None,
+            side_effects=[
+                f"Interface {interface_id} on Linode {linode_id} will be updated."
+            ],
+            request_body=fields,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_instance_interface(linode_id, interface_id, fields)
+        if result:
+            return result
+        return {
+            "message": (
+                f"Linode instance interface {interface_id} update requested "
+                f"for Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "interface_id": interface_id,
+        }
+
+    return await execute_tool(cfg, arguments, "update Linode instance interface", _call)
 
 
 async def handle_linode_instance_config_delete(
