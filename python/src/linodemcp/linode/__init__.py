@@ -4439,6 +4439,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListManagedContacts", e) from e
 
+    async def create_managed_contact(
+        self,
+        *,
+        email: str | None = None,
+        group: str | None = None,
+        name: str | None = None,
+        phone: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Managed contact."""
+        body = {
+            "email": email,
+            "group": group,
+            "name": name,
+            "phone": phone,
+        }
+        payload = {key: value for key, value in body.items() if value is not None}
+        try:
+            response = await self.make_request("POST", "/managed/contacts", payload)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateManagedContact", e) from e
+
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics from the last 24 hours."""
         try:
@@ -11419,6 +11442,22 @@ class RetryableClient:
             lambda: self.client.list_managed_contacts(page=page, page_size=page_size)
         )
         return result
+
+    async def create_managed_contact(
+        self,
+        *,
+        email: str | None = None,
+        group: str | None = None,
+        name: str | None = None,
+        phone: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Managed contact by delegating once without retry."""
+        return await self.client.create_managed_contact(
+            email=email,
+            group=group,
+            name=name,
+            phone=phone,
+        )
 
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics with retry."""

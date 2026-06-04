@@ -5263,6 +5263,78 @@ async def test_retryable_list_managed_contacts_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_create_managed_contact_sends_post_to_managed_contacts_route() -> None:
+    """Managed contact create sends POST /managed/contacts with documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "name": "Ops",
+        "email": "ops@example.com",
+        "phone": "555-0100",
+        "group": "support",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_managed_contact(
+            email="ops@example.com",
+            group="support",
+            name="Ops",
+            phone="555-0100",
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST",
+        "/managed/contacts",
+        {
+            "email": "ops@example.com",
+            "group": "support",
+            "name": "Ops",
+            "phone": "555-0100",
+        },
+    )
+    await client.close()
+
+
+async def test_create_managed_contact_wraps_http_errors() -> None:
+    """Managed contact create maps HTTP errors to CreateManagedContact."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_managed_contact(name="Ops")
+
+    assert "CreateManagedContact" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_managed_contact_delegates_once_without_retry() -> None:
+    """RetryableClient does not replay Managed contact creation on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_managed_contact", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_managed_contact(name="Ops")
+
+    mock_create.assert_awaited_once_with(
+        email=None,
+        group=None,
+        name="Ops",
+        phone=None,
+    )
+    await retryable.close()
+
+
 async def test_get_managed_stats_sends_get_to_managed_stats_route() -> None:
     """Test Managed stats sends documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")

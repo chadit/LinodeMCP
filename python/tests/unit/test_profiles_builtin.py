@@ -64,6 +64,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_users_list", Capability.Read),
         ToolDescriptor("linode_account_settings_get", Capability.Read),
         ToolDescriptor("linode_account_settings_managed_enable", Capability.Write),
+        ToolDescriptor("linode_managed_contact_create", Capability.Write),
         ToolDescriptor("linode_account_transfer_get", Capability.Read),
         ToolDescriptor("linode_account_notifications_list", Capability.Read),
         ToolDescriptor("linode_account_oauth_client_get", Capability.Read),
@@ -383,6 +384,14 @@ def test_longview_tools_map_to_one_longview_category() -> None:
     assert categories("linode_longview_client_delete") == ["longview"]
     assert required_scopes("linode_longview_client_create", Capability.Write) == [
         Scope.LongviewReadWrite
+    ]
+
+
+def test_managed_contact_create_is_account_scoped() -> None:
+    """Managed contact create belongs to the account category and scope."""
+    assert categories("linode_managed_contact_create") == ["account"]
+    assert required_scopes("linode_managed_contact_create", Capability.Write) == [
+        Scope.AccountReadWrite
     ]
 
 
