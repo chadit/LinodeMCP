@@ -118,6 +118,34 @@ def create_linode_longview_clients_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_longview_plan_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_plan_update tool."""
+    return Tool(
+        name="linode_longview_plan_update",
+        description=(
+            "Updates the account Longview plan."
+            " Requires confirm=true and supports dry_run=true to preview."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "longview_subscription": {
+                    "type": "string",
+                    "pattern": r"^longview-[1-9][0-9]*$",
+                    "description": "Longview subscription plan identifier",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to update the Longview plan",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["longview_subscription", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_longview_client_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_longview_client_delete tool."""
     return Tool(
@@ -340,6 +368,46 @@ async def handle_linode_longview_client_create(
         }
 
     return await execute_tool(cfg, arguments, "create Longview client", _call)
+
+
+async def handle_linode_longview_plan_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_longview_plan_update tool request."""
+    longview_subscription_value = arguments.get("longview_subscription")
+    if not isinstance(longview_subscription_value, str):
+        return error_response("longview_subscription is required and must be a string")
+    longview_subscription = longview_subscription_value
+    if not re.fullmatch(r"longview-[1-9][0-9]*", longview_subscription):
+        return error_response(
+            "longview_subscription must be a Longview plan ID like longview-10"
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates the account Longview plan. Set confirm=true to proceed."
+        )
+
+    request_body: dict[str, Any] = {"longview_subscription": longview_subscription}
+
+    if is_dry_run(arguments):
+        environment = arguments.get("environment")
+        if not isinstance(environment, str):
+            environment = ""
+        return build_dry_run_response(
+            "linode_longview_plan_update",
+            environment,
+            "PUT",
+            "/longview/plan",
+            None,
+            request_body=request_body,
+            side_effects=["The account Longview plan would be updated."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_longview_plan(longview_subscription)
+
+    return await execute_tool(cfg, arguments, "update Longview plan", _call)
 
 
 async def handle_linode_longview_client_delete(
