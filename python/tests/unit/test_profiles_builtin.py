@@ -154,6 +154,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Compute deep (backups, disks, ips).
         ToolDescriptor("linode_instance_backups_list", Capability.Read),
         ToolDescriptor("linode_instance_backup_create", Capability.Write),
+        ToolDescriptor("linode_instance_config_create", Capability.Write),
         ToolDescriptor("linode_instance_disk_create", Capability.Write),
         ToolDescriptor("linode_instance_ip_allocate", Capability.Write),
         # Block storage.

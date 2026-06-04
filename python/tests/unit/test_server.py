@@ -14976,3 +14976,20 @@ async def test_yolo_ignored_when_profile_disallows(sample_config: Config) -> Non
         {"volume_id": 789, "yolo": True, "confirm": True},
     )
     assert "is destructive" in result[0].text
+
+
+def test_linode_instance_config_create_exported() -> None:
+    """Instance config create tool is exported."""
+    from linodemcp import tools
+
+    assert hasattr(tools, "create_linode_instance_config_create_tool")
+    assert hasattr(tools, "handle_linode_instance_config_create")
+
+
+async def test_linode_instance_config_create_registered(sample_config: Config) -> None:
+    """Instance config create tool is registered."""
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_instance_config_create"].capability is Capability.Write
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_config_create" in srv.registered_tool_names

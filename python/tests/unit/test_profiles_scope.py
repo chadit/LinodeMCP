@@ -354,6 +354,7 @@ def test_unknown_tool_returns_empty() -> None:
     "tool_name",
     [
         "linode_instance_backups_list",
+        "linode_instance_config_create",
         "linode_instance_disk_create",
         "linode_instance_ip_allocate",
     ],

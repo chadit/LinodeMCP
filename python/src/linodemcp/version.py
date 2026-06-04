@@ -90,7 +90,7 @@ FEATURE_TOOLS_LIST = (
     "linode_instance_backups_list,linode_instance_backup_get,"
     "linode_instance_backup_create,linode_instance_backup_restore,"
     "linode_instance_backups_enable,linode_instance_backups_cancel,"
-    "linode_instance_disks_list,linode_instance_disk_get,"
+    "linode_instance_config_create,linode_instance_disks_list,linode_instance_disk_get,"
     "linode_instance_disk_create,linode_instance_disk_update,"
     "linode_instance_disk_delete,linode_instance_disk_clone,"
     "linode_instance_disk_resize,"

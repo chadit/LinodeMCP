@@ -16241,3 +16241,75 @@ async def test_retryable_get_database_engine_delegates_with_retry() -> None:
         "postgres/17", page=1, page_size=50
     )
     await retry_client.close()
+
+
+async def test_create_instance_config_sends_post_with_body() -> None:
+    """Creating an instance config sends POST with the documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {"id": 987, "label": "boot-config"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = payload
+    devices = {"sda": {"disk_id": 123}}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_instance_config(456, "boot-config", devices)
+
+    assert result == payload
+    mock_request.assert_called_once_with(
+        "POST",
+        "/linode/instances/456/configs",
+        {"label": "boot-config", "devices": devices},
+    )
+    await client.close()
+
+
+async def test_create_instance_config_encodes_instance_id_path() -> None:
+    """Instance config create URL-encodes the path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 987}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.create_instance_config("12/34?bad", "boot-config", {"sda": {}})  # type: ignore[arg-type]
+
+    mock_request.assert_called_once_with(
+        "POST",
+        "/linode/instances/12%2F34%3Fbad/configs",
+        {"label": "boot-config", "devices": {"sda": {}}},
+    )
+    await client.close()
+
+
+async def test_create_instance_config_wraps_http_errors() -> None:
+    """HTTP errors from instance config create are wrapped."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_instance_config(456, "boot-config", {"sda": {}})
+
+    assert "CreateInstanceConfig" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_instance_config_delegates_once_without_retry() -> None:
+    """The non-idempotent create config POST is not replayed by RetryableClient."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    with patch.object(
+        client.client, "create_instance_config", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = httpx.TransportError("transient")
+
+        with pytest.raises(httpx.TransportError):
+            await client.create_instance_config(456, "boot-config", {"sda": {}})
+
+    mock_create.assert_awaited_once_with(456, "boot-config", {"sda": {}})
+    await client.close()
