@@ -13096,6 +13096,53 @@ def test_linode_instance_config_interfaces_list_registered(
     assert "linode_instance_config_interfaces_list" in srv.registered_tool_names
 
 
+async def test_linode_instance_transfer_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance transfer get tool should be exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_transfer_get_tool" in tools_mod.__all__
+    assert "handle_linode_instance_transfer_get" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_transfer_get" in srv.registered_tool_names
+
+
+async def test_linode_instance_transfer_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Linode instance transfer get is callable through server dispatch."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_instance_transfer.return_value = {"used": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_instance_transfer_get", {"linode_id": 123})
+
+    mock_client.get_instance_transfer.assert_awaited_once_with(123)
+    assert json.loads(result[0].text) == {"used": 123}
+
+
+@pytest.mark.parametrize("linode_id", [None, "1/2", "1?x", "..", True, 0, -1])
+async def test_linode_instance_transfer_get_rejects_bad_linode_id(
+    sample_config: Config, linode_id: object
+) -> None:
+    """Linode instance transfer get rejects malformed linode_id values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        arguments: dict[str, object] = {}
+        if linode_id is not None:
+            arguments["linode_id"] = linode_id
+        result = await srv.dispatch("linode_instance_transfer_get", arguments)
+
+    mock_client_class.assert_not_called()
+    assert "linode_id must be a positive integer" in result[0].text
+
+
 def test_linode_instance_configs_list_exported() -> None:
     """Linode instance configs list tool is exported."""
     import linodemcp.tools as tools_mod

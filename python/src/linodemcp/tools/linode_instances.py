@@ -636,6 +636,26 @@ def create_linode_instance_stats_month_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_instance_transfer_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_transfer_get tool."""
+    return Tool(
+        name="linode_instance_transfer_get",
+        description="Gets this month's network transfer stats for a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+            },
+            "required": ["linode_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_configs_list tool."""
     return Tool(
@@ -1489,6 +1509,22 @@ async def handle_linode_instance_stats_month_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance monthly statistics", _call
+    )
+
+
+async def handle_linode_instance_transfer_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_transfer_get tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_instance_transfer(linode_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance network transfer stats", _call
     )
 
 
