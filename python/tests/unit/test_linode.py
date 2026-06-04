@@ -5210,6 +5210,59 @@ async def test_retryable_create_support_ticket_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_managed_contacts_sends_get_to_managed_contacts_route() -> None:
+    """Test Managed contacts listing sends documented GET query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [{"id": 1, "name": "Primary", "email": "ops@example.com"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_managed_contacts(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/managed/contacts?page=2&page_size=25")
+    await client.close()
+
+
+async def test_list_managed_contacts_wraps_http_errors() -> None:
+    """Test Managed contacts listing wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_managed_contacts()
+
+    assert "ListManagedContacts" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_managed_contacts_delegates_to_client() -> None:
+    """Test RetryableClient delegates Managed contacts listing."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_managed_contacts", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_managed_contacts(page=1, page_size=100)
+
+    assert result == {"data": [], "page": 1, "pages": 1, "results": 0}
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_get_managed_stats_sends_get_to_managed_stats_route() -> None:
     """Test Managed stats sends documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")
