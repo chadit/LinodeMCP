@@ -4192,6 +4192,47 @@ async def handle_linode_managed_contacts_list(
     return await execute_tool(cfg, arguments, "list Linode Managed contacts", _call)
 
 
+def create_linode_managed_issues_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_issues_list tool."""
+    return Tool(
+        name="linode_managed_issues_list",
+        description="Lists open Managed issues on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_issues_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_issues_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_managed_issues(page=page, page_size=page_size)
+
+    return await execute_tool(cfg, arguments, "list Linode Managed issues", _call)
+
+
 def create_linode_managed_credentials_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_credentials_list tool."""
     return Tool(
