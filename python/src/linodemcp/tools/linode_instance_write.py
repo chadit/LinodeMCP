@@ -1014,6 +1014,89 @@ async def handle_linode_instance_delete(
     return await execute_tool(cfg, arguments, "delete instance", _call)
 
 
+def create_linode_instance_mutate_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_mutate tool."""
+    return Tool(
+        name="linode_instance_mutate",
+        description=(
+            "Upgrades a Linode using the mutate endpoint. "
+            "WARNING: This changes instance state and may resize disks."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode to mutate (required)",
+                },
+                "allow_auto_disk_resize": {
+                    "type": "boolean",
+                    "description": (
+                        "Automatically resize disks when resizing a Linode "
+                        "(optional, default: true)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm upgrade. Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_mutate(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_mutate tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return _error_response("linode_id must be a positive integer")
+
+    allow_auto_disk_resize = arguments.get("allow_auto_disk_resize", True)
+    if not isinstance(allow_auto_disk_resize, bool):
+        return _error_response("allow_auto_disk_resize must be a boolean")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_mutate",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{linode_id}/mutate",
+            None,
+            side_effects=[f"Linode {linode_id} will be upgraded."],
+            warnings=["The Linode may be unavailable during the upgrade."],
+            request_body={"allow_auto_disk_resize": allow_auto_disk_resize},
+        )
+
+    if arguments.get("confirm") is not True:
+        return _error_response("confirm must be true")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.mutate_instance(
+            linode_id, allow_auto_disk_resize=allow_auto_disk_resize
+        )
+        return {
+            "message": f"Linode {linode_id} upgrade initiated",
+            "linode_id": linode_id,
+            "allow_auto_disk_resize": allow_auto_disk_resize,
+            "response": result,
+        }
+
+    return await execute_tool(cfg, arguments, "mutate Linode instance", _call)
+
+
 def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_resize tool."""
     return Tool(

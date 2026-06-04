@@ -104,6 +104,7 @@ from linodemcp.tools import (
     create_linode_instance_ip_update_tool,
     create_linode_instance_ips_list_tool,
     create_linode_instance_migrate_tool,
+    create_linode_instance_mutate_tool,
     create_linode_instance_password_reset_tool,
     create_linode_instance_rebuild_tool,
     create_linode_instance_rescue_tool,
@@ -271,6 +272,7 @@ from linodemcp.tools import (
     handle_linode_instance_ip_update,
     handle_linode_instance_ips_list,
     handle_linode_instance_migrate,
+    handle_linode_instance_mutate,
     handle_linode_instance_password_reset,
     handle_linode_instance_reboot,
     handle_linode_instance_rebuild,
@@ -7392,6 +7394,107 @@ async def test_handle_linode_instance_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+def test_linode_instance_mutate_tool_schema_requires_confirm() -> None:
+    """Mutate tool schema requires explicit confirmation."""
+    tool, capability = create_linode_instance_mutate_tool()
+
+    assert tool.name == "linode_instance_mutate"
+    assert capability is Capability.Write
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["allow_auto_disk_resize"]["type"] == "boolean"
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_instance_mutate_rejects_bad_confirm(
+    confirm: object, sample_config: Config
+) -> None:
+    """Mutate rejects missing or non-true confirmation before client calls."""
+    arguments: dict[str, Any] = {"linode_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_mutate(arguments, sample_config)
+
+    assert "confirm must be true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
+async def test_handle_linode_instance_mutate_rejects_bad_linode_id(
+    bad_linode_id: object, sample_config: Config
+) -> None:
+    """Mutate rejects malformed Linode IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_mutate(
+            {"linode_id": bad_linode_id, "confirm": True}, sample_config
+        )
+
+    assert "linode_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_mutate_rejects_bad_disk_resize(
+    sample_config: Config,
+) -> None:
+    """Mutate rejects non-boolean allow_auto_disk_resize before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_mutate(
+            {
+                "linode_id": 123,
+                "allow_auto_disk_resize": "true",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "allow_auto_disk_resize must be a boolean" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_mutate(sample_config: Config) -> None:
+    """Test linode_instance_mutate tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.mutate_instance.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_mutate(
+            {
+                "linode_id": 123,
+                "allow_auto_disk_resize": False,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "upgrade" in result[0].text.lower()
+        mock_client.mutate_instance.assert_awaited_once_with(
+            123, allow_auto_disk_resize=False
+        )
+
+
+async def test_instance_mutate_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must preview mutate without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_mutate(
+            {"linode_id": 123, "allow_auto_disk_resize": False, "dry_run": True},
+            sample_config,
+        )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_mutate"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/mutate"
+    assert body["would_execute"]["body"] == {"allow_auto_disk_resize": False}
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_instance_resize_no_confirm(sample_config: Config) -> None:

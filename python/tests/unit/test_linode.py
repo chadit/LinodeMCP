@@ -11362,6 +11362,73 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_mutate_instance_posts_body_to_mutate_route(self) -> None:
+        """POST /linode/instances/{linode_id}/mutate sends the documented body."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {}
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            result = await client.mutate_instance(123, allow_auto_disk_resize=False)
+
+        assert result == {}
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/linode/instances/123/mutate",
+            {"allow_auto_disk_resize": False},
+        )
+        await client.close()
+
+    @pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
+    async def test_mutate_instance_rejects_invalid_linode_id(
+        self, bad_linode_id: object
+    ) -> None:
+        """Mutate validates finite positive Linode IDs before dispatch."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with (
+            patch.object(
+                client, "make_request", new_callable=AsyncMock
+            ) as mock_request,
+            pytest.raises(ValueError, match="linode_id must be a positive integer"),
+        ):
+            await client.mutate_instance(cast("Any", bad_linode_id))
+
+        mock_request.assert_not_called()
+        await client.close()
+
+    async def test_mutate_instance_wraps_http_errors(self) -> None:
+        """Mutate wraps HTTP errors."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.HTTPError("boom")
+            with pytest.raises(NetworkError, match="MutateInstance"):
+                await client.mutate_instance(123)
+
+        await client.close()
+
+    async def test_retryable_mutate_instance_delegates_once_without_retry(self) -> None:
+        """RetryableClient does not replay mutate on transient errors."""
+        retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            retryable.client, "mutate_instance", new_callable=AsyncMock
+        ) as mock_mutate:
+            mock_mutate.side_effect = httpx.HTTPError("boom")
+
+            with pytest.raises(httpx.HTTPError):
+                await retryable.mutate_instance(123, allow_auto_disk_resize=False)
+
+        mock_mutate.assert_awaited_once_with(123, False)
+        await retryable.close()
+
     async def test_list_monitor_services_get_shape(self) -> None:
         """GET /monitor/services returns the paginated services payload."""
         client = Client("https://api.linode.com/v4", "test-token")
