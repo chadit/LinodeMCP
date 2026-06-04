@@ -15847,12 +15847,16 @@ async def test_longview_clients_list_tool_is_exported_and_registered(
 
     assert "create_linode_longview_clients_list_tool" in tools_mod.__all__
     assert "create_linode_longview_plan_get_tool" in tools_mod.__all__
+    assert "create_linode_longview_types_list_tool" in tools_mod.__all__
     assert "handle_linode_longview_clients_list" in tools_mod.__all__
     assert "handle_linode_longview_plan_get" in tools_mod.__all__
+    assert "handle_linode_longview_types_list" in tools_mod.__all__
     assert "linode_longview_clients_list" in registry_names
     assert "linode_longview_plan_get" in registry_names
+    assert "linode_longview_types_list" in registry_names
     assert "linode_longview_clients_list" in srv.registered_tool_names
     assert "linode_longview_plan_get" in srv.registered_tool_names
+    assert "linode_longview_types_list" in srv.registered_tool_names
 
 
 async def test_longview_client_create_tool_is_exported_registered_and_schema(
@@ -15903,6 +15907,9 @@ def test_longview_tools_map_to_longview_scopes() -> None:
     from linodemcp.profiles.scope import Scope, required_scopes
 
     assert required_scopes("linode_longview_clients_list", Capability.Read) == [
+        Scope.LongviewReadOnly
+    ]
+    assert required_scopes("linode_longview_types_list", Capability.Read) == [
         Scope.LongviewReadOnly
     ]
     assert required_scopes("linode_longview_client_create", Capability.Write) == [

@@ -6142,6 +6142,28 @@ class Client:
             logger.exception("HTTP error listing Longview subscriptions: %s", e)
             raise NetworkError("ListLongviewSubscriptions", e) from e
 
+    async def list_longview_types(self) -> dict[str, Any]:
+        """List Longview types."""
+        logger.info("Listing Longview types")
+
+        try:
+            response = await self.make_request("GET", "/longview/types")
+            result: dict[str, Any] = response.json()
+            logger.info("Longview types listed")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout listing Longview types: %s", e)
+            raise NetworkError("ListLongviewTypes", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing Longview types: %s", e)
+            raise NetworkError("ListLongviewTypes", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing Longview types")
+            raise NetworkError("ListLongviewTypes", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing Longview types: %s", e)
+            raise NetworkError("ListLongviewTypes", e) from e
+
     async def list_longview_clients(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -12115,6 +12137,13 @@ class RetryableClient:
             lambda: self.client.list_longview_subscriptions(
                 page=page, page_size=page_size
             )
+        )
+        return result
+
+    async def list_longview_types(self) -> dict[str, Any]:
+        """List Longview types with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_longview_types
         )
         return result
 
