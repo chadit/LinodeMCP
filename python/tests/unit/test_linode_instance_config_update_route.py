@@ -16,10 +16,12 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_config_interface_add_tool,
     create_linode_instance_config_interface_delete_tool,
     create_linode_instance_config_update_tool,
+    create_linode_instance_interface_settings_get_tool,
     create_linode_instance_interfaces_list_tool,
     handle_linode_instance_config_interface_add,
     handle_linode_instance_config_interface_delete,
     handle_linode_instance_config_update,
+    handle_linode_instance_interface_settings_get,
     handle_linode_instance_interfaces_list,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
@@ -159,6 +161,139 @@ async def test_handle_linode_instance_interfaces_list_rejects_invalid_linode_id(
 
     assert result[0].text.startswith("Error: linode_id must be a positive integer")
     mock_linode_client.list_instance_interfaces.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_client_get_instance_interface_settings_sends_exact_request() -> None:
+    """Low-level client sends GET for the documented interface settings path."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"default_route": {"ipv4": True}})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.get_instance_interface_settings(123)
+    finally:
+        await client.close()
+
+    assert result == {"default_route": {"ipv4": True}}
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.path == "/v4/linode/instances/123/interfaces/settings"
+    assert request.url.query == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+    assert request.content == b""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, -1, True])
+async def test_client_get_instance_interface_settings_rejects_invalid_linode_id(
+    linode_id: Any,
+) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
+            await client.get_instance_interface_settings(linode_id)
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_client_get_instance_interface_settings_translates_http_errors() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timeout")
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="GetInstanceInterfaceSettings"):
+            await client.get_instance_interface_settings(123)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_retryable_get_instance_interface_settings_uses_retry() -> None:
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    retryable = cast("Any", client)
+    retryable.client.get_instance_interface_settings = AsyncMock(
+        return_value={"default_route": {"ipv4": True}}
+    )
+    retryable._execute_with_retry = AsyncMock(
+        return_value={"default_route": {"ipv4": True}}
+    )
+
+    result = await client.get_instance_interface_settings(123)
+
+    assert result == {"default_route": {"ipv4": True}}
+    retryable._execute_with_retry.assert_awaited_once_with(
+        client.client.get_instance_interface_settings, 123
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_interface_settings_get_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    mock_linode_client.get_instance_interface_settings.return_value = {
+        "default_route": {"ipv4": True}
+    }
+
+    result = await handle_linode_instance_interface_settings_get(
+        {"linode_id": 123}, sample_config
+    )
+
+    assert json.loads(result[0].text) == {"default_route": {"ipv4": True}}
+    mock_linode_client.get_instance_interface_settings.assert_awaited_once_with(123)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, -1, True])
+async def test_handle_linode_instance_interface_settings_get_rejects_invalid_linode_id(
+    linode_id: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    result = await handle_linode_instance_interface_settings_get(
+        {"linode_id": linode_id}, sample_config
+    )
+
+    assert result[0].text.startswith("Error: linode_id must be a positive integer")
+    mock_linode_client.get_instance_interface_settings.assert_not_called()
+
+
+def test_create_linode_instance_interface_settings_get_tool_schema() -> None:
+    tool, capability = create_linode_instance_interface_settings_get_tool()
+
+    assert capability is Capability.Read
+    assert tool.name == "linode_instance_interface_settings_get"
+    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+
+
+def test_linode_instance_interface_settings_get_registered_and_exported() -> None:
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_instance_interface_settings_get"]
+    assert entry.capability is Capability.Read
+    assert entry.tool.name == "linode_instance_interface_settings_get"
+    assert entry.handle_fn is handle_linode_instance_interface_settings_get
+    assert "linode_instance_interface_settings_get" in FEATURE_TOOLS_LIST
 
 
 def test_create_linode_instance_interfaces_list_tool_schema() -> None:
