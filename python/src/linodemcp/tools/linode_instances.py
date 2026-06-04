@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
 
@@ -27,6 +27,17 @@ def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         return None
     return value
+
+
+def _is_positive_int_list(value: object) -> TypeGuard[list[int]]:
+    """Return whether value is a non-empty list of positive integers."""
+    if not isinstance(value, list) or not value:
+        return False
+    items = cast("list[object]", value)
+    return all(
+        isinstance(item, int) and not isinstance(item, bool) and item >= 1
+        for item in items
+    )
 
 
 def _optional_int_argument(
@@ -215,6 +226,45 @@ def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
             "required": ["linode_id"],
         },
     ), Capability.Read
+
+
+def create_linode_instance_config_interfaces_order_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_interfaces_order tool."""
+    return Tool(
+        name="linode_instance_config_interfaces_order",
+        description=(
+            "Reorders interfaces on a Linode instance configuration profile. "
+            "Requires confirm because the active interface order can change."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+                "ids": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "minItems": 1,
+                    "description": "Interface IDs in the desired order.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to reorder configuration interfaces.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "config_id", "ids", "confirm"],
+        },
+    ), Capability.Write
 
 
 def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
@@ -463,6 +513,60 @@ async def handle_linode_instance_configs_list(
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance configuration profiles", _call
+    )
+
+
+async def handle_linode_instance_config_interfaces_order(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_interfaces_order tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    ids = arguments.get("ids")
+    if not _is_positive_int_list(ids):
+        return error_response("ids must be a non-empty list of positive integers")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_config_interfaces_order",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{linode_id}/configs/{config_id}/interfaces/order",
+            None,
+            side_effects=[
+                f"Interfaces on configuration profile {config_id} for Linode "
+                f"{linode_id} will be reordered."
+            ],
+            request_body={"ids": ids},
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.reorder_instance_config_interfaces(
+            linode_id, config_id, ids
+        )
+        if result:
+            return result
+        return {
+            "message": (
+                f"Linode instance config {config_id} interface reorder requested "
+                f"for Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "config_id": config_id,
+            "ids": ids,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "reorder Linode instance config interfaces", _call
     )
 
 

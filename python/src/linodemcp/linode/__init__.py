@@ -32,6 +32,17 @@ def _validate_positive_path_int(value: object, name: str) -> int:
     return value
 
 
+def _is_positive_int_list(value: object) -> TypeGuard[list[int]]:
+    """Return whether value is a non-empty list of positive integers."""
+    if not isinstance(value, list) or not value:
+        return False
+    items = cast("list[object]", value)
+    return all(
+        isinstance(item, int) and not isinstance(item, bool) and item >= 1
+        for item in items
+    )
+
+
 _PLACEMENT_GROUP_LABEL_PATTERN = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
 )
@@ -1559,6 +1570,38 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("UpdateInstanceConfig", e) from e
+
+    async def reorder_instance_config_interfaces(
+        self, linode_id: int, config_id: int, ids: object
+    ) -> dict[str, Any]:
+        """Reorder interfaces on a Linode configuration profile."""
+        if (
+            not isinstance(linode_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(linode_id, bool)
+            or linode_id < 1
+        ):
+            raise ValueError("linode_id must be a positive integer")
+        if (
+            not isinstance(config_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(config_id, bool)
+            or config_id < 1
+        ):
+            raise ValueError("config_id must be a positive integer")
+        if not _is_positive_int_list(ids):
+            raise ValueError("ids must be a non-empty list of positive integers")
+
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}"
+            f"/configs/{encoded_config_id}/interfaces/order"
+        )
+        try:
+            response = await self.make_request("POST", endpoint, {"ids": ids})
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ReorderInstanceConfigInterfaces", e) from e
 
     async def get_instance_config(
         self, linode_id: int, config_id: int
@@ -8942,6 +8985,14 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Update a Linode instance config without replay retry."""
         return await self.client.update_instance_config(linode_id, config_id, fields)
+
+    async def reorder_instance_config_interfaces(
+        self, linode_id: int, config_id: int, ids: list[int]
+    ) -> dict[str, Any]:
+        """Reorder interfaces on a Linode instance config without replay retry."""
+        return await self.client.reorder_instance_config_interfaces(
+            linode_id, config_id, ids
+        )
 
     async def get_instance_config(
         self, linode_id: int, config_id: int
