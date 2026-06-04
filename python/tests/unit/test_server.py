@@ -16183,3 +16183,16 @@ def test_longview_tools_map_to_longview_scopes() -> None:
     assert required_scopes("linode_longview_client_create", Capability.Write) == [
         Scope.LongviewReadWrite
     ]
+
+
+async def test_linode_longview_client_get_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Longview client get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_longview_client_get_tool" in tools_mod.__all__
+    assert "handle_linode_longview_client_get" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_longview_client_get" in srv.registered_tool_names

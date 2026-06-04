@@ -17,6 +17,14 @@ class _FakeClient:
         self.list_longview_clients = AsyncMock(
             return_value={"data": [{"id": 123}], "page": 2, "pages": 3}
         )
+        self.get_longview_client = AsyncMock(
+            return_value={
+                "id": 123,
+                "label": "prod-longview",
+                "api_key": "secret",
+                "install_code": "install",
+            }
+        )
         self.list_longview_subscriptions = AsyncMock(
             return_value={"data": [{"id": "longview-3"}], "page": 2, "pages": 3}
         )
@@ -122,6 +130,62 @@ async def test_longview_client_delete_handler_dry_run_does_not_call_client() -> 
     assert "linode_longview_client_delete" in text
     assert "DELETE" in text
     assert "/longview/clients/123" in text
+
+
+def test_longview_client_get_tool_schema() -> None:
+    tool, capability = linode_longview.create_linode_longview_client_get_tool()
+
+    assert tool.name == "linode_longview_client_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["client_id"]
+    assert tool.inputSchema["properties"]["client_id"]["minimum"] == 1
+
+
+@pytest.mark.asyncio
+async def test_longview_client_get_handler_sanitizes_sensitive_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeClient()
+
+    async def fake_execute_tool(
+        cfg: object, arguments: dict[str, Any], action: str, call: Any
+    ) -> list[Any]:
+        assert action == "retrieve Longview client"
+        payload = await call(fake)
+        return [type("Text", (), {"text": str(payload)})()]
+
+    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
+    result = await linode_longview.handle_linode_longview_client_get(
+        {"client_id": 123}, cast("Any", object())
+    )
+
+    fake.get_longview_client.assert_awaited_once_with(123)
+    text = _text(result)
+    assert "prod-longview" in text
+    assert "api_key" not in text
+    assert "install_code" not in text
+    assert "secret" not in text
+    assert "install" not in text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("client_id", [None, 0, -1, True, "123", "1/2", "1?x=2", ".."])
+async def test_longview_client_get_handler_rejects_invalid_client_id(
+    monkeypatch: pytest.MonkeyPatch, client_id: object
+) -> None:
+    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
+        raise AssertionError("execute_tool should not be called")
+
+    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
+    arguments: dict[str, Any] = {}
+    if client_id is not None:
+        arguments["client_id"] = client_id
+
+    result = await linode_longview.handle_linode_longview_client_get(
+        arguments, cast("Any", object())
+    )
+
+    assert "client_id" in _text(result)
 
 
 def test_longview_plan_get_tool_schema() -> None:

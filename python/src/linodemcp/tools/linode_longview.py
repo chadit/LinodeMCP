@@ -35,6 +35,7 @@ _CONFIRM_PROP: dict[str, Any] = {
     "type": "boolean",
     "description": "Set true to confirm this mutating operation.",
 }
+_SENSITIVE_LONGVIEW_CLIENT_FIELDS = frozenset({"api_key", "install_code"})
 
 
 def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
@@ -128,6 +129,26 @@ def create_linode_longview_clients_list_tool() -> tuple[Tool, Capability]:
                     "description": "Number of results per page",
                 },
             },
+        },
+    ), Capability.Read
+
+
+def create_linode_longview_client_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_client_get tool."""
+    return Tool(
+        name="linode_longview_client_get",
+        description="Gets a Longview client by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Longview client ID to retrieve",
+                },
+            },
+            "required": ["client_id"],
         },
     ), Capability.Read
 
@@ -228,6 +249,15 @@ def _longview_client_id_error(value: object) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         return "client_id must be a positive integer"
     return None
+
+
+def _sanitize_longview_client_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return Longview client data without credential-like fields."""
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in _SENSITIVE_LONGVIEW_CLIENT_FIELDS
+    }
 
 
 def _longview_client_update_body(arguments: dict[str, Any]) -> dict[str, str]:
@@ -379,6 +409,22 @@ def _validate_longview_client_label(value: object) -> str:
             "label may only contain letters, numbers, hyphens, and underscores"
         )
     return label
+
+
+async def handle_linode_longview_client_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_longview_client_get tool request."""
+    try:
+        client_id = _required_positive_int_argument(arguments, "client_id")
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        payload = await client.get_longview_client(client_id)
+        return _sanitize_longview_client_payload(payload)
+
+    return await execute_tool(cfg, arguments, "retrieve Longview client", _call)
 
 
 async def handle_linode_longview_client_create(
