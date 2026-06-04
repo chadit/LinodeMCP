@@ -1595,6 +1595,39 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigs", e) from e
 
+    async def update_instance_firewalls(
+        self,
+        linode_id: int,
+        firewall_ids: object,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """Update firewall assignments for a Linode instance."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        if not isinstance(firewall_ids, list) or any(
+            isinstance(item, bool) or not isinstance(item, int) or item < 1
+            for item in cast("list[object]", firewall_ids)
+        ):
+            raise ValueError("firewall_ids must be a list of positive integers")
+        valid_firewall_ids = cast("list[int]", firewall_ids)
+        encoded_linode_id = quote(str(linode_id), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/firewalls"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request(
+                "PUT", endpoint, {"firewall_ids": valid_firewall_ids}
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstanceFirewalls", e) from e
+
     async def update_instance_config(
         self, linode_id: int, config_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
@@ -9149,6 +9182,18 @@ class RetryableClient:
             )
         )
         return result
+
+    async def update_instance_firewalls(
+        self,
+        linode_id: int,
+        firewall_ids: list[int],
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """Update Linode instance firewall assignments without replay retry."""
+        return await self.client.update_instance_firewalls(
+            linode_id, firewall_ids, page=page, page_size=page_size
+        )
 
     async def update_instance_config(
         self, linode_id: int, config_id: int, fields: dict[str, Any]

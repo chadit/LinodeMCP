@@ -9078,6 +9078,121 @@ async def test_update_nodebalancer_firewalls() -> None:
     await client.close()
 
 
+async def test_update_instance_firewalls() -> None:
+    """Test updating Linode instance firewall assignments."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"id": 123, "label": "web-fw"}],
+        "page": 2,
+        "pages": 3,
+        "results": 6,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_instance_firewalls(
+            42, [123, 456], page=2, page_size=25
+        )
+
+        assert result["data"][0]["id"] == 123
+        assert result["results"] == 6
+        mock_request.assert_called_once_with(
+            "PUT",
+            "/linode/instances/42/firewalls?page=2&page_size=25",
+            {"firewall_ids": [123, 456]},
+        )
+
+    await client.close()
+
+
+async def test_update_instance_firewalls_allows_empty_firewall_ids() -> None:
+    """An empty firewall_ids list removes all Linode firewall assignments."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_instance_firewalls(42, [])
+
+        assert result["data"] == []
+        mock_request.assert_called_once_with(
+            "PUT", "/linode/instances/42/firewalls", {"firewall_ids": []}
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
+async def test_update_instance_firewalls_rejects_invalid_linode_id(
+    linode_id: object,
+) -> None:
+    """Invalid finite Linode IDs are rejected before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
+            await client.update_instance_firewalls(linode_id, [123])  # type: ignore[arg-type]
+
+        mock_request.assert_not_called()
+
+    await client.close()
+
+
+@pytest.mark.parametrize("firewall_ids", ["123", [0], [-1], [True], ["123"]])
+async def test_update_instance_firewalls_rejects_invalid_firewall_ids(
+    firewall_ids: object,
+) -> None:
+    """Invalid firewall_ids are rejected before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        with pytest.raises(
+            ValueError, match="firewall_ids must be a list of positive integers"
+        ):
+            await client.update_instance_firewalls(42, firewall_ids)
+
+        mock_request.assert_not_called()
+
+    await client.close()
+
+
+async def test_update_instance_firewalls_wraps_http_errors() -> None:
+    """Test updating Linode firewalls wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("network error")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_instance_firewalls(42, [123])
+
+    assert "UpdateInstanceFirewalls" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_instance_firewalls_does_not_replay() -> None:
+    """RetryableClient delegates Linode firewall assignment updates once."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_instance_firewalls", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_instance_firewalls(42, [123], page=1, page_size=100)
+
+        mock_update.assert_awaited_once_with(42, [123], page=1, page_size=100)
+
+    await retryable.close()
+
+
 @pytest.mark.parametrize(
     ("nodebalancer_id", "encoded"),
     [

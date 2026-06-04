@@ -29,6 +29,11 @@ def test_meta_returns_empty() -> None:
     [
         ("linode_instances_list", Capability.Read, [Scope.LinodesReadOnly]),
         ("linode_instance_delete", Capability.Destroy, [Scope.LinodesReadWrite]),
+        (
+            "linode_instance_firewalls_update",
+            Capability.Write,
+            [Scope.LinodesReadWrite],
+        ),
         ("linode_volume_clone", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volume_create", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volumes_list", Capability.Read, [Scope.VolumesReadOnly]),
