@@ -1667,6 +1667,31 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigInterfaces", e) from e
 
+    async def update_instance_config_interface(
+        self,
+        linode_id: int,
+        config_id: int,
+        interface_id: int,
+        fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update an interface for a Linode instance configuration profile."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        config_id = _validate_positive_path_int(config_id, "config_id")
+        interface_id = _validate_positive_path_int(interface_id, "interface_id")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        encoded_interface_id = quote(str(interface_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/configs/"
+            f"{encoded_config_id}/interfaces/{encoded_interface_id}"
+        )
+        try:
+            response = await self.make_request("PUT", endpoint, fields)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstanceConfigInterface", e) from e
+
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance."""
         endpoint = f"/linode/instances/{instance_id}"
@@ -9027,6 +9052,18 @@ class RetryableClient:
             self.client.list_instance_config_interfaces, linode_id, config_id
         )
         return result
+
+    async def update_instance_config_interface(
+        self,
+        linode_id: int,
+        config_id: int,
+        interface_id: int,
+        fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update a Linode instance config interface without replay retry."""
+        return await self.client.update_instance_config_interface(
+            linode_id, config_id, interface_id, fields
+        )
 
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance with retry."""
