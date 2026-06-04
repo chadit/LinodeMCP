@@ -510,6 +510,10 @@ from linodemcp.tools.linode_instances import (
     handle_linode_instance_transfer_month_get,
     handle_linode_instances_list,
 )
+from linodemcp.tools.linode_kernels import (
+    create_linode_kernels_list_tool,
+    handle_linode_kernels_list,
+)
 from linodemcp.tools.linode_lke import (
     create_linode_lke_acl_get_tool,
     create_linode_lke_api_endpoints_list_tool,
@@ -1139,6 +1143,7 @@ __all__ = [
     "create_linode_ipv6_range_delete_tool",
     "create_linode_ipv6_range_get_tool",
     "create_linode_ipv6_ranges_list_tool",
+    "create_linode_kernels_list_tool",
     "create_linode_lke_acl_delete_tool",
     "create_linode_lke_acl_get_tool",
     "create_linode_lke_acl_update_tool",
@@ -1544,6 +1549,7 @@ __all__ = [
     "handle_linode_ipv6_range_delete",
     "handle_linode_ipv6_range_get",
     "handle_linode_ipv6_ranges_list",
+    "handle_linode_kernels_list",
     "handle_linode_lke_acl_delete",
     "handle_linode_lke_acl_get",
     "handle_linode_lke_acl_update",
