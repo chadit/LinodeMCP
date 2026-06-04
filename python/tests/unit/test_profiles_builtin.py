@@ -387,11 +387,15 @@ def test_longview_tools_map_to_one_longview_category() -> None:
     ]
 
 
-def test_managed_contact_create_is_account_scoped() -> None:
-    """Managed contact create belongs to the account category and scope."""
+def test_managed_tools_are_account_scoped() -> None:
+    """Managed tools belong to the account category and scopes."""
     assert categories("linode_managed_contact_create") == ["account"]
     assert required_scopes("linode_managed_contact_create", Capability.Write) == [
         Scope.AccountReadWrite
+    ]
+    assert categories("linode_managed_credentials_list") == ["account"]
+    assert required_scopes("linode_managed_credentials_list", Capability.Read) == [
+        Scope.AccountReadOnly
     ]
 
 

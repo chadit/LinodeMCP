@@ -4421,6 +4421,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateSupportTicket", e) from e
 
+    async def list_managed_credentials(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List Managed credentials on the Linode account."""
+        endpoint = "/managed/credentials"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListManagedCredentials", e) from e
+
     async def list_managed_contacts(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -11501,6 +11520,15 @@ class RetryableClient:
                 volume_id=volume_id,
                 vpc_id=vpc_id,
             )
+        )
+        return result
+
+    async def list_managed_credentials(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List Managed credentials with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_managed_credentials(page=page, page_size=page_size)
         )
         return result
 
