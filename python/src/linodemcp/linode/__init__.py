@@ -8058,6 +8058,27 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ResizeInstanceDisk", e) from e
 
+    async def reset_instance_disk_password(
+        self, instance_id: int, disk_id: int, password: str
+    ) -> None:
+        """Reset the root password for an instance disk."""
+        if not password:
+            msg = "password is required"
+            raise ValueError(msg)
+        encoded_instance_id = quote(
+            str(_validate_positive_path_int(instance_id, "instance_id")), safe=""
+        )
+        encoded_disk_id = quote(
+            str(_validate_positive_path_int(disk_id, "disk_id")), safe=""
+        )
+        endpoint = (
+            f"/linode/instances/{encoded_instance_id}/disks/{encoded_disk_id}/password"
+        )
+        try:
+            await self.make_request("POST", endpoint, {"password": password})
+        except httpx.HTTPError as e:
+            raise NetworkError("ResetInstanceDiskPassword", e) from e
+
     # ── Instance IPs ──
 
     async def list_instance_ips(self, instance_id: int) -> dict[str, Any]:
@@ -12034,6 +12055,12 @@ class RetryableClient:
             disk_id,
             size,
         )
+
+    async def reset_instance_disk_password(
+        self, instance_id: int, disk_id: int, password: str
+    ) -> None:
+        """Reset an instance disk root password once without retry replay."""
+        await self.client.reset_instance_disk_password(instance_id, disk_id, password)
 
     # ── Instance IPs (retry wrappers) ──
 

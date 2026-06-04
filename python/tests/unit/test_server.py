@@ -15060,3 +15060,20 @@ async def test_linode_instance_config_create_registered(sample_config: Config) -
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_instance_config_create" in srv.registered_tool_names
+
+
+def test_linode_instance_disk_password_reset_registered(sample_config: Config) -> None:
+    """Disk password reset tool is exported, registered, and enabled for full access."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_disk_password_reset_tool" in tools_mod.__all__
+    assert "handle_linode_instance_disk_password_reset" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert "linode_instance_disk_password_reset" in registry
+    assert (
+        registry["linode_instance_disk_password_reset"].capability is Capability.Write
+    )
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_disk_password_reset" in srv.registered_tool_names
