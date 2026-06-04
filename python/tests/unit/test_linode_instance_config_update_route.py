@@ -16,9 +16,11 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_config_interface_add_tool,
     create_linode_instance_config_interface_delete_tool,
     create_linode_instance_config_update_tool,
+    create_linode_instance_interfaces_list_tool,
     handle_linode_instance_config_interface_add,
     handle_linode_instance_config_interface_delete,
     handle_linode_instance_config_update,
+    handle_linode_instance_interfaces_list,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -42,6 +44,140 @@ class _FailingRetryableClient(RetryableClient):
         del func, args
         self.retry_calls += 1
         raise AssertionError("mutating update must not use replay retry")
+
+
+@pytest.mark.asyncio
+async def test_client_list_instance_interfaces_sends_exact_request() -> None:
+    """Low-level client sends GET for the documented instance interfaces path."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": [{"id": 789}], "page": 1})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.list_instance_interfaces(123)
+    finally:
+        await client.close()
+
+    assert result == {"data": [{"id": 789}], "page": 1}
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "GET"
+    assert request.url.path == "/v4/linode/instances/123/interfaces"
+    assert request.url.query == b""
+    assert request.headers["Authorization"] == "Bearer test-token"
+    assert request.content == b""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, True])
+async def test_client_list_instance_interfaces_rejects_invalid_linode_id(
+    linode_id: Any,
+) -> None:
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
+            await client.list_instance_interfaces(linode_id)
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_client_list_instance_interfaces_translates_http_errors() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timeout")
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="ListInstanceInterfaces"):
+            await client.list_instance_interfaces(123)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_retryable_list_instance_interfaces_uses_retry() -> None:
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    retryable = cast("Any", client)
+    retryable.client.list_instance_interfaces = AsyncMock(
+        return_value={"data": [{"id": 789}], "page": 1}
+    )
+    retryable._execute_with_retry = AsyncMock(
+        return_value={"data": [{"id": 789}], "page": 1}
+    )
+
+    result = await client.list_instance_interfaces(123)
+
+    assert result == {"data": [{"id": 789}], "page": 1}
+    retryable._execute_with_retry.assert_awaited_once_with(
+        client.client.list_instance_interfaces, 123
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_interfaces_list_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    mock_linode_client.list_instance_interfaces.return_value = {
+        "data": [{"id": 789}],
+        "page": 1,
+    }
+
+    result = await handle_linode_instance_interfaces_list(
+        {"linode_id": 123}, sample_config
+    )
+
+    assert json.loads(result[0].text) == {"data": [{"id": 789}], "page": 1}
+    mock_linode_client.list_instance_interfaces.assert_awaited_once_with(123)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, True])
+async def test_handle_linode_instance_interfaces_list_rejects_invalid_linode_id(
+    linode_id: Any, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    result = await handle_linode_instance_interfaces_list(
+        {"linode_id": linode_id}, sample_config
+    )
+
+    assert result[0].text.startswith("Error: linode_id must be a positive integer")
+    mock_linode_client.list_instance_interfaces.assert_not_called()
+
+
+def test_create_linode_instance_interfaces_list_tool_schema() -> None:
+    tool, capability = create_linode_instance_interfaces_list_tool()
+
+    assert capability is Capability.Read
+    assert tool.name == "linode_instance_interfaces_list"
+    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+
+
+def test_linode_instance_interfaces_list_registered_and_exported() -> None:
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_instance_interfaces_list"]
+    assert entry.capability is Capability.Read
+    assert entry.tool.name == "linode_instance_interfaces_list"
+    assert entry.handle_fn is handle_linode_instance_interfaces_list
+    assert "linode_instance_interfaces_list" in FEATURE_TOOLS_LIST
 
 
 @pytest.mark.asyncio
