@@ -3016,6 +3016,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetImageSharegroupMemberToken", e) from e
 
+    async def delete_image_sharegroup_member_token(
+        self, sharegroup_id: str, token_uuid: str
+    ) -> None:
+        """Revoke a membership token in an image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        token_uuid_path = quote(str(token_uuid), safe="")
+        try:
+            await self.make_request(
+                "DELETE",
+                f"/images/sharegroups/{sharegroup_id_path}/members/{token_uuid_path}",
+            )
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteImageSharegroupMemberToken", e) from e
+
     async def add_members_to_image_sharegroup(
         self, sharegroup_id: str, *, label: str, token: str
     ) -> dict[str, Any]:
@@ -9435,6 +9449,14 @@ class RetryableClient:
             )
         )
         return result
+
+    async def delete_image_sharegroup_member_token(
+        self, sharegroup_id: str, token_uuid: str
+    ) -> None:
+        """Revoke a membership token once without retry replay."""
+        await self.client.delete_image_sharegroup_member_token(
+            sharegroup_id, token_uuid
+        )
 
     async def add_members_to_image_sharegroup(
         self, sharegroup_id: str, *, label: str, token: str
