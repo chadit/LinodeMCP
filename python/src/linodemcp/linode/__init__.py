@@ -3346,6 +3346,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListTypes", e) from e
 
+    async def get_type(self, type_id: str) -> InstanceType:
+        """Get a Linode instance type."""
+        if not type_id:
+            raise ValueError("type_id is required")
+        encoded_type_id = quote(type_id, safe="")
+        endpoint = f"/linode/types/{encoded_type_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_instance_type(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetType", e) from e
+
     async def list_database_engines(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -10484,6 +10497,13 @@ class RetryableClient:
         """List Linode instance types with retry."""
         result: list[InstanceType] = await self._execute_with_retry(
             self.client.list_types
+        )
+        return result
+
+    async def get_type(self, type_id: str) -> InstanceType:
+        """Get a Linode instance type with retry."""
+        result: InstanceType = await self._execute_with_retry(
+            lambda: self.client.get_type(type_id)
         )
         return result
 
