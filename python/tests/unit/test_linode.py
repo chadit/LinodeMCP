@@ -5400,6 +5400,127 @@ async def test_retryable_delete_managed_contact_delegates_once_without_retry() -
     await retryable.close()
 
 
+async def test_update_managed_contact_sends_put_to_managed_contact_route() -> None:
+    """Test Managed contact update sends documented PUT body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "id": 174,
+        "name": "Ops",
+        "email": "ops@example.com",
+        "group": "on-call",
+        "phone": {"primary": "123-456-7890"},
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_managed_contact(
+            174,
+            email="ops@example.com",
+            group="on-call",
+            name="Ops",
+            phone={"primary": "123-456-7890"},
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/managed/contacts/174",
+        {
+            "email": "ops@example.com",
+            "group": "on-call",
+            "name": "Ops",
+            "phone": {"primary": "123-456-7890"},
+        },
+    )
+    await client.close()
+
+
+async def test_update_managed_contact_sends_null_group() -> None:
+    """Managed contact update preserves explicit null group updates."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 174, "group": None}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_managed_contact(174, group=None)
+
+    assert result == {"id": 174, "group": None}
+    mock_request.assert_called_once_with(
+        "PUT", "/managed/contacts/174", {"group": None}
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("contact_id", [0, -1, True, "/", "1?", ".."])
+async def test_update_managed_contact_rejects_invalid_contact_id(
+    contact_id: object,
+) -> None:
+    """Managed contact update rejects malformed path IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="contact_id must be a positive integer"),
+    ):
+        await client.update_managed_contact(
+            cast("int", contact_id), email="ops@example.com"
+        )
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_managed_contact_rejects_empty_body() -> None:
+    """Managed contact update requires at least one writable body field."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="At least one managed contact field"),
+    ):
+        await client.update_managed_contact(174)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_managed_contact_wraps_http_errors() -> None:
+    """Test Managed contact update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_managed_contact(174, email="ops@example.com")
+
+    assert "UpdateManagedContact" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_managed_contact_delegates_once_without_retry() -> None:
+    """RetryableClient delegates Managed contact updates once to avoid replay."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_update = AsyncMock(side_effect=httpx.HTTPError("transient"))
+    object.__setattr__(retryable.client, "update_managed_contact", mock_update)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_managed_contact(174, email="ops@example.com")
+    finally:
+        await retryable.close()
+
+    mock_update.assert_awaited_once_with(174, email="ops@example.com")
+
+
 async def test_get_managed_stats_sends_get_to_managed_stats_route() -> None:
     """Test Managed stats sends documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")

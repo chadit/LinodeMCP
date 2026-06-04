@@ -3088,6 +3088,7 @@ async def test_account_event_seen_tool_is_exported_registered_and_profiled(
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert set(tool.inputSchema["required"]) == {"event_id", "confirm"}
     assert "account" in categories("linode_account_event_seen")
+    assert "account" in categories("linode_managed_contacts_update")
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_account_event_seen" in srv.registered_tool_names
@@ -9966,6 +9967,53 @@ async def test_managed_contact_delete_dispatches_from_registry(
         "result": response_data,
     }
     mock_client.delete_managed_contact.assert_awaited_once_with(123)
+
+
+async def test_managed_contacts_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed contact update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_contacts_update_tool" in tools_mod.__all__
+    assert "handle_linode_managed_contacts_update" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_contacts_update_tool()
+    assert tool.name == "linode_managed_contacts_update"
+    assert capability is Capability.Write
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_contacts_update" in srv.registered_tool_names
+
+
+async def test_managed_contacts_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed contact update is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "id": 174,
+        "name": "Ops",
+        "email": "ops@example.com",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_managed_contact.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_contacts_update",
+            {"contact_id": 174, "email": "ops@example.com", "confirm": True},
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_managed_contact.assert_awaited_once_with(
+        174, email="ops@example.com"
+    )
 
 
 async def test_managed_stats_tool_is_exported_and_registered(
