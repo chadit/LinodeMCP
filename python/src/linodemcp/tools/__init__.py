@@ -441,7 +441,9 @@ from linodemcp.tools.linode_instance_write import (
     handle_linode_instance_update,
 )
 from linodemcp.tools.linode_instances import (
+    create_linode_instance_configs_list_tool,
     create_linode_instances_list_tool,
+    handle_linode_instance_configs_list,
     handle_linode_instances_list,
 )
 from linodemcp.tools.linode_lke import (
@@ -1009,6 +1011,7 @@ __all__ = [
     "create_linode_instance_backups_list_tool",
     "create_linode_instance_boot_tool",
     "create_linode_instance_clone_tool",
+    "create_linode_instance_configs_list_tool",
     "create_linode_instance_create_tool",
     "create_linode_instance_delete_tool",
     "create_linode_instance_disk_clone_tool",
@@ -1381,6 +1384,7 @@ __all__ = [
     "handle_linode_instance_backups_list",
     "handle_linode_instance_boot",
     "handle_linode_instance_clone",
+    "handle_linode_instance_configs_list",
     "handle_linode_instance_create",
     "handle_linode_instance_delete",
     "handle_linode_instance_disk_clone",

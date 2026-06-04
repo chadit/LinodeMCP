@@ -80,6 +80,7 @@ from linodemcp.tools import (
     create_linode_instance_backups_enable_tool,
     create_linode_instance_backups_list_tool,
     create_linode_instance_clone_tool,
+    create_linode_instance_configs_list_tool,
     create_linode_instance_disk_clone_tool,
     create_linode_instance_disk_create_tool,
     create_linode_instance_disk_delete_tool,
@@ -233,6 +234,7 @@ from linodemcp.tools import (
     handle_linode_instance_backups_list,
     handle_linode_instance_boot,
     handle_linode_instance_clone,
+    handle_linode_instance_configs_list,
     handle_linode_instance_create,
     handle_linode_instance_delete,
     handle_linode_instance_disk_clone,
@@ -714,6 +716,102 @@ async def test_handle_linode_profile_preferences_update_error(
 
     assert len(result) == 1
     assert "Failed to update Linode profile preferences" in result[0].text
+
+
+async def test_linode_instance_configs_list_tool_definition() -> None:
+    """Test linode_instance_configs_list tool definition."""
+    tool, capability = create_linode_instance_configs_list_tool()
+
+    assert tool.name == "linode_instance_configs_list"
+    assert capability == Capability.Read
+    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+
+async def test_handle_linode_instance_configs_list(sample_config: Config) -> None:
+    """Test linode_instance_configs_list tool."""
+    mock_configs = {
+        "data": [{"id": 6, "label": "boot-config"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_instance_configs.return_value = mock_configs
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_configs_list(
+            {"linode_id": 123, "page": 2, "page_size": 50}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "boot-config" in result[0].text
+    mock_client.list_instance_configs.assert_called_once_with(123, page=2, page_size=50)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"linode_id": 0},
+        {"linode_id": -1},
+        {"linode_id": True},
+        {"linode_id": "123"},
+        {"linode_id": "1/2"},
+        {"linode_id": "1?x"},
+        {"linode_id": ".."},
+    ],
+)
+async def test_handle_linode_instance_configs_list_invalid_linode_id(
+    arguments: dict[str, Any], sample_config: Config
+) -> None:
+    """linode_instance_configs_list rejects malformed path parameters."""
+    result = await handle_linode_instance_configs_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "linode_id must be a positive integer" in result[0].text
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"linode_id": 123, "page": 0},
+        {"linode_id": 123, "page": "1"},
+        {"linode_id": 123, "page_size": 24},
+        {"linode_id": 123, "page_size": 501},
+        {"linode_id": 123, "page_size": True},
+    ],
+)
+async def test_handle_linode_instance_configs_list_invalid_pagination(
+    arguments: dict[str, Any], sample_config: Config
+) -> None:
+    """linode_instance_configs_list rejects invalid pagination."""
+    result = await handle_linode_instance_configs_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "page" in result[0].text
+
+
+async def test_handle_linode_instance_configs_list_error(sample_config: Config) -> None:
+    """Test linode_instance_configs_list error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_instance_configs.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_configs_list(
+            {"linode_id": 123}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to retrieve" in result[0].text or "error" in result[0].text.lower()
 
 
 async def test_handle_linode_instances_list(
