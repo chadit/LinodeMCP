@@ -6777,6 +6777,39 @@ class Client:
             logger.exception("HTTP error mutating instance: %s", e)
             raise NetworkError("MutateInstance", e) from e
 
+    async def upgrade_instance_interfaces(
+        self,
+        linode_id: int,
+        config_id: int | None = None,
+        dry_run: bool | None = None,
+    ) -> dict[str, Any]:
+        """Upgrade a Linode to Linode Interfaces."""
+        linode_id_value = _validate_positive_path_int(linode_id, "linode_id")
+        encoded_linode_id = quote(str(linode_id_value), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/upgrade-interfaces"
+        logger.info(
+            "Upgrading instance interfaces", extra={"linode_id": linode_id_value}
+        )
+
+        if config_id is not None:
+            config_id = _validate_positive_path_int(config_id, "config_id")
+        if dry_run is not None and type(dry_run) is not bool:
+            raise TypeError("dry_run must be a boolean")
+
+        body: dict[str, Any] = {}
+        if config_id is not None:
+            body["config_id"] = config_id
+        if dry_run is not None:
+            body["dry_run"] = dry_run
+
+        try:
+            response = await self.make_request("POST", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error upgrading instance interfaces: %s", e)
+            raise NetworkError("UpgradeInstanceInterfaces", e) from e
+
     async def create_firewall(
         self,
         label: str,
@@ -11808,6 +11841,21 @@ class RetryableClient:
         """Delegate mutate without retry because POST mutations must not replay."""
         result: dict[str, Any] = await self.client.mutate_instance(
             linode_id, allow_auto_disk_resize
+        )
+        return result
+
+    async def upgrade_instance_interfaces(
+        self,
+        linode_id: int,
+        config_id: int | None = None,
+        dry_run: bool | None = None,
+    ) -> dict[str, Any]:
+        """Delegate interface upgrade without retry.
+
+        POST mutations must not replay.
+        """
+        result: dict[str, Any] = await self.client.upgrade_instance_interfaces(
+            linode_id, config_id=config_id, dry_run=dry_run
         )
         return result
 
