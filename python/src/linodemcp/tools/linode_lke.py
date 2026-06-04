@@ -9,6 +9,16 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
+
+def _validate_lke_path_segment(value: Any) -> str:
+    """Validate an LKE string path segment before client dispatch."""
+    if not isinstance(value, str) or not value:
+        return ""
+    if "/" in value or "?" in value or ".." in value:
+        return ""
+    return value
+
+
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
@@ -451,3 +461,47 @@ async def handle_linode_lke_tier_versions_list(
         return {"count": len(versions), "tier_versions": versions}
 
     return await execute_tool(cfg, arguments, "list LKE tier versions", _call)
+
+
+def create_linode_lke_tier_version_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_tier_version_get tool."""
+    return Tool(
+        name="linode_lke_tier_version_get",
+        description="Gets details of a specific LKE Kubernetes version for any tier",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "tier": {
+                    "type": "string",
+                    "description": "The LKE tier (required)",
+                },
+                "version": {
+                    "type": "string",
+                    "description": "The Kubernetes version (required)",
+                },
+            },
+            "required": ["tier", "version"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_lke_tier_version_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_lke_tier_version_get tool request."""
+    tier = _validate_lke_path_segment(arguments.get("tier", ""))
+    if not tier:
+        return error_response(
+            "tier must be a non-empty string without '/', '?', or '..'"
+        )
+    version = _validate_lke_path_segment(arguments.get("version", ""))
+    if not version:
+        return error_response(
+            "version must be a non-empty string without '/', '?', or '..'"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_lke_tier_version(tier, version)
+
+    return await execute_tool(cfg, arguments, "get LKE tier version", _call)

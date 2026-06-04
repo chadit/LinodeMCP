@@ -8108,6 +8108,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListLKETierVersions", e) from e
 
+    async def get_lke_tier_version(self, tier: str, version: str) -> dict[str, Any]:
+        """Get a specific LKE Kubernetes version for any tier."""
+        encoded_tier = quote(str(tier), safe="")
+        encoded_version = quote(str(version), safe="")
+        endpoint = f"/lke/tiers/{encoded_tier}/versions/{encoded_version}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKETierVersion", e) from e
+
     # VPC operations
 
     async def list_vpcs(self) -> list[dict[str, Any]]:
@@ -12597,6 +12609,13 @@ class RetryableClient:
         """List LKE tier versions with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.list_lke_tier_versions
+        )
+        return result
+
+    async def get_lke_tier_version(self, tier: str, version: str) -> dict[str, Any]:
+        """Get a specific LKE tier version with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_tier_version, tier, version
         )
         return result
 
