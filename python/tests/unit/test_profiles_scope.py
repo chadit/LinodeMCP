@@ -63,6 +63,11 @@ def test_meta_returns_empty() -> None:
             Capability.Read,
             [Scope.LinodesReadOnly],
         ),
+        (
+            "linode_instance_config_interface_update",
+            Capability.Write,
+            [Scope.LinodesReadWrite],
+        ),
         ("linode_instance_config_delete", Capability.Destroy, [Scope.LinodesReadWrite]),
         (
             "linode_instance_config_interfaces_list",

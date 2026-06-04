@@ -172,6 +172,64 @@ def create_linode_instance_config_interfaces_list_tool() -> tuple[Tool, Capabili
     ), Capability.Read
 
 
+def create_linode_instance_config_interface_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_interface_update tool."""
+    return Tool(
+        name="linode_instance_config_interface_update",
+        description=(
+            "Updates an interface for a Linode instance configuration profile. "
+            "Requires confirm because interface networking can change."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+                "interface_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "The ID of the configuration profile interface (required)"
+                    ),
+                },
+                "ip_ranges": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "IPv4 ranges routed to this interface.",
+                },
+                "ipv4": {
+                    "type": "object",
+                    "description": "IPv4 configuration for this interface.",
+                },
+                "primary": {
+                    "type": "boolean",
+                    "description": "Whether this is the primary interface.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to update the configuration interface."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "config_id", "interface_id", "confirm"],
+            "anyOf": [
+                {"required": [field]} for field in ("ip_ranges", "ipv4", "primary")
+            ],
+        },
+    ), Capability.Write
+
+
 def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instances_list tool."""
     return Tool(
@@ -438,6 +496,92 @@ async def handle_linode_instance_config_interfaces_list(
         arguments,
         "retrieve Linode instance configuration profile interfaces",
         _call,
+    )
+
+
+def _instance_config_interface_update_fields(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    fields: dict[str, Any] = {}
+    if "ip_ranges" in arguments:
+        value = arguments["ip_ranges"]
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in cast("list[object]", value)
+        ):
+            return None, "ip_ranges must be an array of strings"
+        fields["ip_ranges"] = value
+    if "ipv4" in arguments:
+        value = arguments["ipv4"]
+        if not isinstance(value, dict):
+            return None, "ipv4 must be an object"
+        fields["ipv4"] = value
+    if "primary" in arguments:
+        value = arguments["primary"]
+        if not isinstance(value, bool):
+            return None, "primary must be a boolean"
+        fields["primary"] = value
+
+    if not fields:
+        return None, "at least one update field is required"
+    return fields, None
+
+
+async def handle_linode_instance_config_interface_update(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_interface_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    ids: dict[str, int] = {}
+    for key in ("linode_id", "config_id", "interface_id"):
+        value = _positive_int_argument(arguments, key)
+        if value is None:
+            return error_response(f"{key} must be a positive integer")
+        ids[key] = value
+    linode_id = ids["linode_id"]
+    config_id = ids["config_id"]
+    interface_id = ids["interface_id"]
+
+    fields, fields_error = _instance_config_interface_update_fields(arguments)
+    if fields is None:
+        return error_response(fields_error or "at least one update field is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_config_interface_update",
+            arguments.get("environment", ""),
+            "PUT",
+            (
+                f"/linode/instances/{linode_id}/configs/{config_id}"
+                f"/interfaces/{interface_id}"
+            ),
+            None,
+            side_effects=[
+                f"Interface {interface_id} on configuration profile {config_id} "
+                f"for Linode {linode_id} will be updated."
+            ],
+            request_body=fields,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_instance_config_interface(
+            linode_id, config_id, interface_id, fields
+        )
+        if result:
+            return result
+        return {
+            "message": (
+                f"Linode instance config interface {interface_id} update requested "
+                f"for config {config_id} on Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "config_id": config_id,
+            "interface_id": interface_id,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "update Linode instance config interface", _call
     )
 
 
