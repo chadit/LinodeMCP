@@ -14,10 +14,105 @@ class _FakeClient:
         self.list_longview_clients = AsyncMock(
             return_value={"data": [{"id": 123}], "page": 2, "pages": 3}
         )
+        self.delete_longview_client = AsyncMock(return_value=None)
 
 
 def _text(result: list[Any]) -> str:
     return str(result[0].text)
+
+
+def test_longview_client_delete_tool_schema() -> None:
+    tool, capability = linode_longview.create_linode_longview_client_delete_tool()
+
+    assert tool.name == "linode_longview_client_delete"
+    assert capability is Capability.Destroy
+    properties = tool.inputSchema["properties"]
+    assert properties["client_id"]["minimum"] == 1
+    assert properties["confirm"]["type"] == "boolean"
+    assert properties["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == ["client_id", "confirm"]
+
+
+@pytest.mark.asyncio
+async def test_longview_client_delete_handler_calls_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeClient()
+
+    async def fake_execute_tool(
+        cfg: object, arguments: dict[str, Any], action: str, call: Any
+    ) -> list[Any]:
+        assert action == "delete Longview client"
+        payload = await call(fake)
+        return [type("Text", (), {"text": str(payload)})()]
+
+    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
+    result = await linode_longview.handle_linode_longview_client_delete(
+        {"client_id": 123, "confirm": True}, cast("Any", object())
+    )
+
+    fake.delete_longview_client.assert_awaited_once_with(123)
+    assert "Longview client 123 deleted" in _text(result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_longview_client_delete_handler_requires_boolean_confirm(
+    monkeypatch: pytest.MonkeyPatch, confirm: object
+) -> None:
+    fake = _FakeClient()
+
+    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
+        raise AssertionError("execute_tool should not be called")
+
+    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
+    arguments: dict[str, Any] = {"client_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    result = await linode_longview.handle_linode_longview_client_delete(
+        arguments, cast("Any", object())
+    )
+
+    fake.delete_longview_client.assert_not_awaited()
+    assert "Set confirm=true to proceed" in _text(result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("client_id", [None, 0, -1, True, "123", "1/2", "1?x=2", ".."])
+async def test_longview_client_delete_handler_rejects_invalid_client_id(
+    monkeypatch: pytest.MonkeyPatch, client_id: object
+) -> None:
+    fake = _FakeClient()
+
+    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
+        raise AssertionError("execute_tool should not be called")
+
+    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
+    arguments: dict[str, Any] = {"confirm": True}
+    if client_id is not None:
+        arguments["client_id"] = client_id
+
+    result = await linode_longview.handle_linode_longview_client_delete(
+        arguments, cast("Any", object())
+    )
+
+    fake.delete_longview_client.assert_not_awaited()
+    assert "client_id" in _text(result)
+
+
+@pytest.mark.asyncio
+async def test_longview_client_delete_handler_dry_run_does_not_call_client() -> None:
+    fake = _FakeClient()
+    result = await linode_longview.handle_linode_longview_client_delete(
+        {"client_id": 123, "confirm": True, "dry_run": True}, cast("Any", object())
+    )
+
+    fake.delete_longview_client.assert_not_awaited()
+    text = _text(result)
+    assert "linode_longview_client_delete" in text
+    assert "DELETE" in text
+    assert "/longview/clients/123" in text
 
 
 def test_longview_clients_list_tool_schema() -> None:

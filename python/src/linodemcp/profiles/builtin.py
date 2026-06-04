@@ -132,6 +132,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("lke", ("linode_lke_",)),
     ("vpcs", ("linode_vpc_", "linode_vpcs_")),
     ("security", ("linode_sshkey_", "linode_sshkeys_")),
+    ("longview", ("linode_longview_",)),
     ("monitor", ("linode_monitor_",)),
 )
 
@@ -333,6 +334,7 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
                 "dns",
                 "networking",
                 "lke",
+                "longview",
                 "vpcs",
                 "security",
                 "monitor",
@@ -357,6 +359,7 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
                 "dns",
                 "networking",
                 "lke",
+                "longview",
                 "vpcs",
                 "security",
                 "monitor",
