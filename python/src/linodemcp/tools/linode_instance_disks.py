@@ -144,6 +144,53 @@ async def handle_linode_instance_disks_list(
     return await execute_tool(cfg, arguments, "list instance disks", _call)
 
 
+def create_linode_instance_volumes_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_volumes_list tool."""
+    return Tool(
+        name="linode_instance_volumes_list",
+        description="Lists volumes attached to a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["instance_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_instance_volumes_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_volumes_list tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+    pagination = _parse_optional_page_args(arguments)
+    if isinstance(pagination, list):
+        return pagination
+    page, page_size = pagination
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.list_instance_volumes(iid, page=page, page_size=page_size)
+
+    return await execute_tool(cfg, arguments, "list instance volumes", _call)
+
+
 def create_linode_instance_firewalls_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_firewalls_list tool."""
     return Tool(
