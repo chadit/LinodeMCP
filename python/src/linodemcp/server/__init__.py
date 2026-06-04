@@ -101,7 +101,8 @@ def _build_tool_registry() -> list[ToolEntry]:
     Scans ``linodemcp.tools.__all__`` for ``create_*_tool`` / ``handle_*``
     pairs, invokes each factory once to materialize the ``(Tool, Capability)``
     tuple, and stores it alongside the matching handler. New route tools are
-    registered by exporting the matching create/handle pair from that module.
+    registered by exporting the matching create/handle pair from that module;
+    there is intentionally no per-route server registry table to update.
     """
     all_names = getattr(tools_module, "__all__", [])
 

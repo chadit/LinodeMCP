@@ -12931,6 +12931,35 @@ def test_linode_instance_config_get_registered() -> None:
     assert entry.capability == Capability.Read
 
 
+def test_linode_instance_config_interface_delete_exported() -> None:
+    """Linode instance config interface delete tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_config_interface_delete_tool" in tools_mod.__all__
+    assert "handle_linode_instance_config_interface_delete" in tools_mod.__all__
+
+
+def test_linode_instance_config_interface_delete_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance config interface delete tool is registered."""
+    import linodemcp.tools as tools_mod
+    from linodemcp.server import Server, get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "create_linode_instance_config_interface_delete_tool" in tools_mod.__all__
+    assert "handle_linode_instance_config_interface_delete" in tools_mod.__all__
+    assert "linode_instance_config_interface_delete" in entries
+    entry = entries["linode_instance_config_interface_delete"]
+    assert entry.capability == Capability.Destroy
+    assert entry.handle_fn.__name__ == "handle_linode_instance_config_interface_delete"
+    assert entry.tool.name == "linode_instance_config_interface_delete"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_config_interface_delete" in srv.registered_tool_names
+
+
 def test_linode_instance_config_interface_get_exported() -> None:
     """Linode instance config interface get tool is exported."""
     import linodemcp.tools as tools_mod
