@@ -122,6 +122,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_maintenance_policies_list_tool,
+    create_linode_managed_contact_delete_tool,
     create_linode_managed_contacts_list_tool,
     create_linode_managed_stats_tool,
     create_linode_monitor_service_alert_definition_get_tool,
@@ -326,6 +327,7 @@ from linodemcp.tools import (
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
     handle_linode_maintenance_policies_list,
+    handle_linode_managed_contact_delete,
     handle_linode_managed_contacts_list,
     handle_linode_managed_stats,
     handle_linode_monitor_service_alert_definition_get,
@@ -1893,6 +1895,89 @@ async def test_handle_linode_managed_contacts_list_rejects_invalid_page_size(
         )
 
     assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_managed_contact_delete_tool() -> None:
+    """Test linode_managed_contact_delete tool schema."""
+    tool, capability = create_linode_managed_contact_delete_tool()
+
+    assert tool.name == "linode_managed_contact_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["type"] == "object"
+    assert tool.inputSchema["required"] == ["contact_id", "confirm"]
+    assert tool.inputSchema["properties"]["contact_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_managed_contact_delete(sample_config: Config) -> None:
+    """Test linode_managed_contact_delete tool."""
+    response_data: dict[str, Any] = {"id": 123}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_managed_contact.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_contact_delete(
+            {"contact_id": 123, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == {
+            "message": "Managed contact deleted successfully",
+            "result": response_data,
+        }
+        mock_client.delete_managed_contact.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_managed_contact_delete_requires_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Managed contact delete requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {"contact_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_contact_delete(arguments, sample_config)
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("contact_id", [None, 0, "123", "1/2", "1?x", "..", True])
+async def test_handle_linode_managed_contact_delete_validates_contact_id(
+    sample_config: Config, contact_id: object
+) -> None:
+    """Managed contact delete validates contact ID before client calls."""
+    arguments: dict[str, object] = {"confirm": True}
+    if contact_id is not None:
+        arguments["contact_id"] = contact_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_contact_delete(arguments, sample_config)
+
+    assert "contact_id" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_contact_delete_dry_run(
+    sample_config: Config,
+) -> None:
+    """Managed contact delete dry run previews DELETE without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_contact_delete(
+            {"contact_id": 123, "confirm": True, "dry_run": True}, sample_config
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_managed_contact_delete"
+    assert payload["would_execute"]["method"] == "DELETE"
+    assert payload["would_execute"]["path"] == "/managed/contacts/123"
     mock_client_class.assert_not_called()
 
 
