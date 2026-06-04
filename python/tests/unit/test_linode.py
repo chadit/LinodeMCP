@@ -3356,6 +3356,81 @@ async def test_retryable_list_instance_configs_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_instance_config() -> None:
+    """Get Linode instance config sends GET to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 6, "label": "boot-config"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_instance_config(123, 6)
+
+    assert result["label"] == "boot-config"
+    mock_request.assert_called_once_with("GET", "/linode/instances/123/configs/6")
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("linode_id", "config_id", "expected"),
+    [
+        ("1/2", 6, "/linode/instances/1%2F2/configs/6"),
+        ("1?x", 6, "/linode/instances/1%3Fx/configs/6"),
+        (123, "6/7", "/linode/instances/123/configs/6%2F7"),
+        (123, "6?x", "/linode/instances/123/configs/6%3Fx"),
+    ],
+)
+async def test_get_instance_config_escapes_path_separators(
+    linode_id: Any, config_id: Any, expected: str
+) -> None:
+    """Linode instance config get escapes path separators and query markers."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 6}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_instance_config(linode_id, config_id)
+
+    mock_request.assert_called_once_with("GET", expected)
+    await client.close()
+
+
+async def test_get_instance_config_wraps_http_errors() -> None:
+    """Get Linode instance config wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_instance_config(123, 6)
+
+    assert "GetInstanceConfig" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_instance_config_delegates_to_client() -> None:
+    """RetryableClient delegates Linode instance config get with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_instance_config", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 6, "label": "boot-config"}
+        result = await retryable.get_instance_config(123, 6)
+
+    assert result["id"] == 6
+    mock_get.assert_awaited_once_with(123, 6)
+    await retryable.close()
+
+
 async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     """Test getting specific instance."""
     client = Client("https://api.linode.com/v4", "test-token")

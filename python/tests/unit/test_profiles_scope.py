@@ -57,6 +57,7 @@ def test_meta_returns_empty() -> None:
             [Scope.StackScriptsReadWrite],
         ),
         ("linode_vpcs_list", Capability.Read, [Scope.VPCReadOnly]),
+        ("linode_instance_config_get", Capability.Read, [Scope.LinodesReadOnly]),
         (
             "linode_nodebalancer_vpc_configs_list",
             Capability.Read,

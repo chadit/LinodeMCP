@@ -12893,6 +12893,25 @@ def test_linode_nodebalancer_config_get_registered() -> None:
     assert entry.capability == Capability.Read
 
 
+def test_linode_instance_config_get_exported() -> None:
+    """Linode instance config get tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_config_get_tool" in tools_mod.__all__
+    assert "handle_linode_instance_config_get" in tools_mod.__all__
+
+
+def test_linode_instance_config_get_registered() -> None:
+    """Linode instance config get tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_instance_config_get" in entries
+    entry = entries["linode_instance_config_get"]
+    assert entry.capability == Capability.Read
+
+
 def test_linode_instance_configs_list_exported() -> None:
     """Linode instance configs list tool is exported."""
     import linodemcp.tools as tools_mod

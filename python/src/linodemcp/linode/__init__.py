@@ -1513,6 +1513,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigs", e) from e
 
+    async def get_instance_config(
+        self, linode_id: int, config_id: int
+    ) -> dict[str, Any]:
+        """Get a configuration profile for a Linode instance."""
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/configs/{encoded_config_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceConfig", e) from e
+
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance."""
         endpoint = f"/linode/instances/{instance_id}"
@@ -8790,6 +8804,15 @@ class RetryableClient:
             lambda: self.client.list_instance_configs(
                 linode_id, page=page, page_size=page_size
             )
+        )
+        return result
+
+    async def get_instance_config(
+        self, linode_id: int, config_id: int
+    ) -> dict[str, Any]:
+        """Get a Linode instance configuration profile with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_config, linode_id, config_id
         )
         return result
 
