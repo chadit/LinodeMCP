@@ -10050,6 +10050,40 @@ async def test_managed_stats_dispatches_from_registry(
     mock_client.get_managed_stats.assert_awaited_once_with()
 
 
+async def test_managed_contact_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed contact get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_contact_get_tool" in tools_mod.__all__
+    assert "handle_linode_managed_contact_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_managed_contact_get" in srv.registered_tool_names
+
+
+async def test_managed_contact_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed contact get is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 42, "name": "Primary on-call"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_contact.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_contact_get", {"contact_id": 42})
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_managed_contact.assert_awaited_once_with(42)
+
+
 async def test_account_support_tickets_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
