@@ -121,6 +121,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
+    create_linode_maintenance_policies_list_tool,
     create_linode_managed_stats_tool,
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_get_tool,
@@ -323,6 +324,7 @@ from linodemcp.tools import (
     handle_linode_lke_types_list,
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
+    handle_linode_maintenance_policies_list,
     handle_linode_managed_stats,
     handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_get,
@@ -1975,6 +1977,35 @@ async def test_handle_linode_account_maintenance_list(sample_config: Config) -> 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
     mock_client.list_account_maintenance.assert_awaited_once_with()
+
+
+async def test_create_linode_maintenance_policies_list_tool() -> None:
+    """Test linode_maintenance_policies_list tool schema."""
+    tool, capability = create_linode_maintenance_policies_list_tool()
+
+    assert tool.name == "linode_maintenance_policies_list"
+    assert capability is Capability.Read
+    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_maintenance_policies_list(sample_config: Config) -> None:
+    """Test linode_maintenance_policies_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"slug": "linode/migrate", "label": "Migrate"}],
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_maintenance_policies.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_maintenance_policies_list({}, sample_config)
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_maintenance_policies.assert_awaited_once_with()
 
 
 async def test_create_linode_account_availability_list_tool() -> None:

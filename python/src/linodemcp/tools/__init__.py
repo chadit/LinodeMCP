@@ -75,6 +75,7 @@ from linodemcp.tools.linode_account import (
     create_linode_account_user_update_tool,
     create_linode_account_users_list_tool,
     create_linode_betas_list_tool,
+    create_linode_maintenance_policies_list_tool,
     create_linode_managed_stats_tool,
     handle_linode_account,
     handle_linode_account_agreements_acknowledge,
@@ -144,6 +145,7 @@ from linodemcp.tools.linode_account import (
     handle_linode_account_user_update,
     handle_linode_account_users_list,
     handle_linode_betas_list,
+    handle_linode_maintenance_policies_list,
     handle_linode_managed_stats,
 )
 from linodemcp.tools.linode_audit_export import (
@@ -1215,6 +1217,7 @@ __all__ = [
     "create_linode_longview_subscription_get_tool",
     "create_linode_longview_subscriptions_list_tool",
     "create_linode_longview_types_list_tool",
+    "create_linode_maintenance_policies_list_tool",
     "create_linode_managed_stats_tool",
     "create_linode_monitor_alert_channels_list_tool",
     "create_linode_monitor_alert_definition_update_tool",
@@ -1636,6 +1639,7 @@ __all__ = [
     "handle_linode_longview_subscription_get",
     "handle_linode_longview_subscriptions_list",
     "handle_linode_longview_types_list",
+    "handle_linode_maintenance_policies_list",
     "handle_linode_managed_stats",
     "handle_linode_monitor_alert_channels_list",
     "handle_linode_monitor_alert_definition_update",
