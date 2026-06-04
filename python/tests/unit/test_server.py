@@ -12430,6 +12430,15 @@ def test_linode_image_update_registered() -> None:
     assert entries["linode_image_update"].capability.name == "Write"
 
 
+def test_linode_kernel_get_registered() -> None:
+    """Kernel get tool should be registered from tools exports."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert "linode_kernel_get" in entries
+    assert entries["linode_kernel_get"].capability.name == "Read"
+
+
 def test_linode_image_get_registered() -> None:
     """Image get tool should be registered from tools exports."""
     from linodemcp.server import get_tool_registry

@@ -23,6 +23,7 @@ from linodemcp.linode import (
     Grant,
     Grants,
     Image,
+    LinodeError,
     NetworkError,
     Profile,
     RateLimiter,
@@ -11034,6 +11035,109 @@ async def test_retryable_create_image_sharegroup_token_delegates_once() -> None:
             valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
             label="partner-token",
         )
+
+    await client.close()
+
+
+async def test_get_kernel_sends_get_to_encoded_kernel_route() -> None:
+    """Getting a kernel sends GET to the encoded kernel route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": "linode/latest-64bit",
+        "label": "Latest 64 bit",
+        "version": "6.6.0",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_kernel("linode/latest-64bit")
+
+        mock_request.assert_awaited_once_with(
+            "GET", "/linode/kernels/linode%2Flatest-64bit"
+        )
+        assert result["id"] == "linode/latest-64bit"
+        assert result["label"] == "Latest 64 bit"
+
+    await client.close()
+
+
+async def test_get_kernel_encodes_separator_characters() -> None:
+    """Getting a kernel encodes untrusted separators at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.get_kernel("linode/../?x=1")
+
+        mock_request.assert_awaited_once_with(
+            "GET", "/linode/kernels/linode%2F..%2F%3Fx%3D1"
+        )
+
+    await client.close()
+
+
+async def test_get_kernel_rejects_non_object_response() -> None:
+    """Getting a kernel should fail closed on malformed API responses."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = ["not", "an", "object"]
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        with pytest.raises(LinodeError) as exc_info:
+            await client.get_kernel("linode/latest-64bit")
+
+        mock_request.assert_awaited_once_with(
+            "GET", "/linode/kernels/linode%2Flatest-64bit"
+        )
+        assert "non-object" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_get_kernel_wraps_http_errors() -> None:
+    """Getting a kernel should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_kernel("linode/latest-64bit")
+
+    assert "GetKernel" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_get_kernel_delegates_to_client() -> None:
+    """Retryable client should delegate kernel get through read retry."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    response_kernel = {
+        "id": "linode/latest-64bit",
+        "label": "Latest 64 bit",
+    }
+
+    with patch.object(
+        client.client,
+        "get_kernel",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.return_value = response_kernel
+
+        result = await client.get_kernel("linode/latest-64bit")
+
+        assert result["id"] == "linode/latest-64bit"
+        mock_get.assert_awaited_once_with("linode/latest-64bit")
 
     await client.close()
 
