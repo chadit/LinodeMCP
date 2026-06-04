@@ -602,6 +602,40 @@ def create_linode_instance_nodebalancers_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_instance_stats_month_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_stats_month_get tool."""
+    return Tool(
+        name="linode_instance_stats_month_get",
+        description=(
+            "Gets a month of statistics for a Linode instance by year and month."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "year": {
+                    "type": "integer",
+                    "minimum": 1970,
+                    "maximum": 9999,
+                    "description": "The four-digit year to retrieve statistics for.",
+                },
+                "month": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 12,
+                    "description": "The month number to retrieve statistics for.",
+                },
+            },
+            "required": ["linode_id", "year", "month"],
+        },
+    ), Capability.Read
+
+
 def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_configs_list tool."""
     return Tool(
@@ -1428,6 +1462,33 @@ async def handle_linode_instance_nodebalancers_list(
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance NodeBalancers", _call
+    )
+
+
+async def handle_linode_instance_stats_month_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_stats_month_get tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    try:
+        year = _optional_int_argument(arguments, "year", 1970, 9999)
+        month = _optional_int_argument(arguments, "month", 1, 12)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    if year is None:
+        return error_response("year must be an integer")
+    if month is None:
+        return error_response("month must be an integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_instance_stats_by_year_month(linode_id, year, month)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance monthly statistics", _call
     )
 
 

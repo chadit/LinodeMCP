@@ -21,6 +21,10 @@ import httpx
 
 T = TypeVar("T")
 
+_LINODE_STATS_MIN_YEAR = 1970
+_LINODE_STATS_MAX_YEAR = 9999
+_LINODE_STATS_MAX_MONTH = 12
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +32,21 @@ def _validate_positive_path_int(value: object, name: str) -> int:
     """Validate a finite positive integer path parameter."""
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         msg = f"{name} must be a positive integer"
+        raise ValueError(msg)
+    return value
+
+
+def _validate_range_path_int(
+    value: object, name: str, minimum: int, maximum: int
+) -> int:
+    """Validate a finite integer path parameter within an inclusive range."""
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < minimum
+        or value > maximum
+    ):
+        msg = f"{name} must be an integer between {minimum} and {maximum}"
         raise ValueError(msg)
     return value
 
@@ -1595,6 +1614,32 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceNodeBalancers", e) from e
+
+    async def get_instance_stats_by_year_month(
+        self, linode_id: int, year: int, month: int
+    ) -> dict[str, Any]:
+        """Get monthly statistics for a Linode instance."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        year = _validate_range_path_int(
+            year, "year", _LINODE_STATS_MIN_YEAR, _LINODE_STATS_MAX_YEAR
+        )
+        month = _validate_range_path_int(month, "month", 1, _LINODE_STATS_MAX_MONTH)
+
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_year = quote(str(year), safe="")
+        encoded_month = quote(str(month), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}"
+            f"/stats/{encoded_year}/{encoded_month}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: Any = response.json()
+            if isinstance(data, dict):
+                return cast("dict[str, Any]", data)
+            return {}
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceStatsByYearMonth", e) from e
 
     async def list_instance_configs(
         self,
@@ -9428,6 +9473,18 @@ class RetryableClient:
         """List NodeBalancers assigned to a Linode instance with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_instance_nodebalancers(linode_id)
+        )
+        return result
+
+    async def get_instance_stats_by_year_month(
+        self, linode_id: int, year: int, month: int
+    ) -> dict[str, Any]:
+        """Get monthly Linode instance statistics with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_stats_by_year_month,
+            linode_id,
+            year,
+            month,
         )
         return result
 
