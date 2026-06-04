@@ -302,6 +302,7 @@ from linodemcp.tools.linode_firewalls_write import (
 )
 from linodemcp.tools.linode_images import (
     create_linode_image_create_tool,
+    create_linode_image_delete_tool,
     create_linode_image_get_tool,
     create_linode_image_replicate_tool,
     create_linode_image_sharegroup_create_tool,
@@ -329,6 +330,7 @@ from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_token_update_tool,
     create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_image_create,
+    handle_linode_image_delete,
     handle_linode_image_get,
     handle_linode_image_replicate,
     handle_linode_image_sharegroup_create,
@@ -972,6 +974,7 @@ __all__ = [
     "create_linode_firewall_update_tool",
     "create_linode_firewalls_list_tool",
     "create_linode_image_create_tool",
+    "create_linode_image_delete_tool",
     "create_linode_image_get_tool",
     "create_linode_image_replicate_tool",
     "create_linode_image_sharegroup_create_tool",
@@ -1343,6 +1346,7 @@ __all__ = [
     "handle_linode_firewall_update",
     "handle_linode_firewalls_list",
     "handle_linode_image_create",
+    "handle_linode_image_delete",
     "handle_linode_image_get",
     "handle_linode_image_replicate",
     "handle_linode_image_sharegroup_create",
