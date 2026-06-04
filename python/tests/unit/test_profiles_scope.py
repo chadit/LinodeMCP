@@ -246,6 +246,13 @@ def test_read_vs_write_per_category(
     assert required_scopes(tool_name, capability) == expected
 
 
+def test_image_upload_needs_images_write() -> None:
+    """Creating an image upload needs image write scope."""
+    assert required_scopes("linode_image_upload", Capability.Write) == [
+        Scope.ImagesReadWrite
+    ]
+
+
 def test_image_sharegroup_token_create_needs_images_write() -> None:
     """Creating an image share group token needs image write scope."""
     assert required_scopes(

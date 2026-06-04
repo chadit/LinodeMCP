@@ -68,6 +68,7 @@ from linodemcp.tools import (
     create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
+    create_linode_image_upload_tool,
     create_linode_images_sharegroups_token_create_tool,
     create_linode_images_sharegroups_token_update_tool,
     create_linode_instance_backup_create_tool,
@@ -216,6 +217,7 @@ from linodemcp.tools import (
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
+    handle_linode_image_upload,
     handle_linode_images_list,
     handle_linode_images_sharegroups_token_create,
     handle_linode_images_sharegroups_token_update,
@@ -3558,6 +3560,138 @@ async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -
         assert "data-vol" in result[0].text
         assert "backup-vol" not in result[0].text
         assert '"count": 1' in result[0].text
+
+
+async def test_create_linode_image_upload_tool_def() -> None:
+    """Image upload tool should require label, region, and confirm."""
+    tool, capability = create_linode_image_upload_tool()
+    assert tool.name == "linode_image_upload"
+    assert capability.name == "Write"
+    assert tool.inputSchema["required"] == ["label", "region", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_image_upload_success(sample_config: Config) -> None:
+    """Image upload tool should call the client and return upload details."""
+    upload_response = {
+        "image": {"id": "private/98765", "label": "upload-image"},
+        "upload_to": "https://uploads.example.invalid/image",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.upload_image.return_value = upload_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_image_upload(
+            {
+                "label": "upload-image",
+                "region": "us-east",
+                "cloud_init": True,
+                "description": "Uploaded image",
+                "tags": ["prod"],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "private/98765" in result[0].text
+    mock_client.upload_image.assert_awaited_once_with(
+        label="upload-image",
+        region="us-east",
+        cloud_init=True,
+        description="Uploaded image",
+        tags=["prod"],
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_image_upload_confirm_required(
+    sample_config: Config, confirm: object
+) -> None:
+    """Image upload should require literal confirm=true before client call."""
+    arguments: dict[str, object] = {"label": "upload-image", "region": "us-east"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_image_upload(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            {"region": "us-east", "confirm": True},
+            "label must be a non-empty string",
+        ),
+        (
+            {"label": "upload-image", "confirm": True},
+            "region must be a non-empty string",
+        ),
+        (
+            {
+                "label": "upload-image",
+                "region": "us-east",
+                "cloud_init": "yes",
+                "confirm": True,
+            },
+            "cloud_init must be a boolean",
+        ),
+        (
+            {
+                "label": "upload-image",
+                "region": "us-east",
+                "tags": ["prod", ""],
+                "confirm": True,
+            },
+            "tags must contain non-empty strings",
+        ),
+    ],
+)
+async def test_handle_linode_image_upload_validation_errors(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Image upload should validate required and optional body fields."""
+    result = await handle_linode_image_upload(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+
+
+async def test_image_upload_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the upload with request body and no call."""
+    result = await handle_linode_image_upload(
+        {
+            "label": "upload-image",
+            "region": "us-east",
+            "description": "Uploaded image",
+            "tags": ["prod"],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_image_upload"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/images/upload"
+    assert body["would_execute"]["body"] == {
+        "label": "upload-image",
+        "region": "us-east",
+        "description": "Uploaded image",
+        "tags": ["prod"],
+    }
+    assert "confirm=true" not in result[0].text
 
 
 async def test_create_linode_image_create_tool_def() -> None:
