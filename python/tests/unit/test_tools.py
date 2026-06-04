@@ -81,6 +81,7 @@ from linodemcp.tools import (
     create_linode_instance_backups_list_tool,
     create_linode_instance_clone_tool,
     create_linode_instance_config_create_tool,
+    create_linode_instance_config_delete_tool,
     create_linode_instance_config_get_tool,
     create_linode_instance_configs_list_tool,
     create_linode_instance_disk_clone_tool,
@@ -237,6 +238,7 @@ from linodemcp.tools import (
     handle_linode_instance_boot,
     handle_linode_instance_clone,
     handle_linode_instance_config_create,
+    handle_linode_instance_config_delete,
     handle_linode_instance_config_get,
     handle_linode_instance_configs_list,
     handle_linode_instance_create,
@@ -720,6 +722,143 @@ async def test_handle_linode_profile_preferences_update_error(
 
     assert len(result) == 1
     assert "Failed to update Linode profile preferences" in result[0].text
+
+
+async def test_linode_instance_config_delete_tool_definition() -> None:
+    """Test linode_instance_config_delete tool definition."""
+    tool, capability = create_linode_instance_config_delete_tool()
+
+    assert tool.name == "linode_instance_config_delete"
+    assert capability == Capability.Destroy
+    assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_instance_config_delete(sample_config: Config) -> None:
+    """Test linode_instance_config_delete tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_instance_config.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_delete(
+            {"linode_id": 123, "config_id": 6, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "deleted" in result[0].text
+    assert "123" in result[0].text
+    assert "6" in result[0].text
+    mock_client.delete_instance_config.assert_called_once_with(123, 6)
+
+
+@pytest.mark.parametrize(
+    "confirm_value",
+    [None, False, "true", 1, 0],
+)
+async def test_handle_linode_instance_config_delete_requires_boolean_confirm(
+    confirm_value: Any, sample_config: Config
+) -> None:
+    """linode_instance_config_delete rejects missing or non-true confirm."""
+    arguments: dict[str, Any] = {"linode_id": 123, "config_id": 6}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_config_delete(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_config_delete_dry_run(
+    sample_config: Config,
+) -> None:
+    """dry_run previews config deletion without calling delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_instance_config.return_value = {"id": 6, "label": "boot"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_delete(
+            {
+                "linode_id": 123,
+                "config_id": 6,
+                "confirm": True,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_config_delete"
+    assert body["would_execute"] == {
+        "method": "DELETE",
+        "path": "/linode/instances/123/configs/6",
+    }
+    assert body["current_state"] == {"id": 6, "label": "boot"}
+    mock_client.get_instance_config.assert_called_once_with(123, 6)
+    mock_client.delete_instance_config.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"linode_id": 0, "config_id": 6, "confirm": True},
+        {"linode_id": -1, "config_id": 6, "confirm": True},
+        {"linode_id": True, "config_id": 6, "confirm": True},
+        {"linode_id": "123", "config_id": 6, "confirm": True},
+        {"linode_id": "1/2", "config_id": 6, "confirm": True},
+        {"linode_id": "1?x", "config_id": 6, "confirm": True},
+        {"linode_id": "..", "config_id": 6, "confirm": True},
+        {"linode_id": 123, "confirm": True},
+        {"linode_id": 123, "config_id": 0, "confirm": True},
+        {"linode_id": 123, "config_id": -1, "confirm": True},
+        {"linode_id": 123, "config_id": True, "confirm": True},
+        {"linode_id": 123, "config_id": "6", "confirm": True},
+        {"linode_id": 123, "config_id": "1/2", "confirm": True},
+        {"linode_id": 123, "config_id": "1?x", "confirm": True},
+        {"linode_id": 123, "config_id": "..", "confirm": True},
+    ],
+)
+async def test_handle_linode_instance_config_delete_invalid_ids(
+    arguments: dict[str, Any], sample_config: Config
+) -> None:
+    """linode_instance_config_delete rejects malformed path parameters."""
+    result = await handle_linode_instance_config_delete(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "positive integer" in result[0].text or "confirm=true" in result[0].text
+
+
+async def test_handle_linode_instance_config_delete_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_instance_config_delete error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_instance_config.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_delete(
+            {"linode_id": 123, "config_id": 6, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to delete" in result[0].text or "error" in result[0].text.lower()
 
 
 async def test_linode_instance_config_get_tool_definition() -> None:

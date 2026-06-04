@@ -1565,6 +1565,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetInstanceConfig", e) from e
 
+    async def delete_instance_config(self, linode_id: int, config_id: int) -> None:
+        """Delete a configuration profile from a Linode instance."""
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/configs/{encoded_config_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteInstanceConfig", e) from e
+
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance."""
         endpoint = f"/linode/instances/{instance_id}"
@@ -8892,6 +8902,10 @@ class RetryableClient:
             self.client.get_instance_config, linode_id, config_id
         )
         return result
+
+    async def delete_instance_config(self, linode_id: int, config_id: int) -> None:
+        """Delete a Linode instance configuration profile without replay retry."""
+        await self.client.delete_instance_config(linode_id, config_id)
 
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance with retry."""

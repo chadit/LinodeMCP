@@ -13,6 +13,7 @@ from linodemcp.tools.helpers import (
     PARAM_DRY_RUN,
     build_dry_run_response,
     error_response,
+    execute_dry_run,
     execute_tool,
     is_dry_run,
 )
@@ -69,6 +70,38 @@ def create_linode_instance_config_get_tool() -> tuple[Tool, Capability]:
             "required": ["linode_id", "config_id"],
         },
     ), Capability.Read
+
+
+def create_linode_instance_config_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_delete tool."""
+    return Tool(
+        name="linode_instance_config_delete",
+        description="Deletes a configuration profile from a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "config_id", "confirm"],
+        },
+    ), Capability.Destroy
 
 
 def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
@@ -186,6 +219,51 @@ def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
             ],
         },
     ), Capability.Write
+
+
+async def handle_linode_instance_config_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_delete tool request."""
+    confirm = arguments.get("confirm")
+    if not isinstance(confirm, bool) or not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
+
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> dict[str, Any]:
+            return await client.get_instance_config(linode_id, config_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_config_delete",
+            "DELETE",
+            f"/linode/instances/{linode_id}/configs/{config_id}",
+            _fetch,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_instance_config(linode_id, config_id)
+        return {
+            "message": (
+                f"Configuration profile {config_id} deleted from Linode instance "
+                f"{linode_id}"
+            ),
+            "linode_id": linode_id,
+            "config_id": config_id,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "delete Linode instance configuration profile", _call
+    )
 
 
 async def handle_linode_instance_config_get(
