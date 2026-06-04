@@ -218,6 +218,48 @@ def create_linode_instance_config_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def create_linode_instance_config_interface_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_interface_delete tool."""
+    return Tool(
+        name="linode_instance_config_interface_delete",
+        description=(
+            "Deletes an interface from a Linode instance configuration profile. "
+            "Requires confirm because the interface is removed from the profile."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+                "interface_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "The ID of the configuration profile interface (required)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to delete the configuration interface."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "config_id", "interface_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_instance_config_interface_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_interface_get tool."""
     return Tool(
@@ -622,6 +664,58 @@ async def handle_linode_instance_config_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance configuration profile", _call
+    )
+
+
+async def handle_linode_instance_config_interface_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_interface_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+    interface_id = _positive_int_argument(arguments, "interface_id")
+    if interface_id is None:
+        return error_response("interface_id must be a positive integer")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_config_interface_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            (
+                f"/linode/instances/{linode_id}/configs/{config_id}/"
+                f"interfaces/{interface_id}"
+            ),
+            None,
+            side_effects=[
+                f"Interface {interface_id} will be deleted from configuration "
+                f"profile {config_id} for Linode {linode_id}."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_instance_config_interface(
+            linode_id, config_id, interface_id
+        )
+        return {
+            "message": (
+                f"Linode instance config {config_id} interface {interface_id} "
+                f"deleted from Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "config_id": config_id,
+            "interface_id": interface_id,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "delete Linode instance config interface", _call
     )
 
 

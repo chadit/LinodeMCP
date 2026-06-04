@@ -1728,6 +1728,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetInstanceConfigInterface", e) from e
 
+    async def delete_instance_config_interface(
+        self, linode_id: int, config_id: int, interface_id: int
+    ) -> None:
+        """Delete an interface from a Linode instance configuration profile."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        config_id = _validate_positive_path_int(config_id, "config_id")
+        interface_id = _validate_positive_path_int(interface_id, "interface_id")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        encoded_interface_id = quote(str(interface_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/configs/"
+            f"{encoded_config_id}/interfaces/{encoded_interface_id}"
+        )
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteInstanceConfigInterface", e) from e
+
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
     ) -> dict[str, Any]:
@@ -9153,6 +9172,14 @@ class RetryableClient:
             interface_id,
         )
         return result
+
+    async def delete_instance_config_interface(
+        self, linode_id: int, config_id: int, interface_id: int
+    ) -> None:
+        """Delete a Linode instance config interface without replay retry."""
+        await self.client.delete_instance_config_interface(
+            linode_id, config_id, interface_id
+        )
 
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
