@@ -119,6 +119,75 @@ async def handle_linode_stackscripts_list(
     return await execute_tool(cfg, arguments, "retrieve StackScripts", _call)
 
 
+def create_linode_stackscript_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_stackscript_get tool."""
+    return Tool(
+        name="linode_stackscript_get",
+        description="Gets details for a specific StackScript.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "stackscript_id": {
+                    "type": "integer",
+                    "description": "StackScript ID to retrieve (required)",
+                    "minimum": 1,
+                },
+            },
+            "required": ["stackscript_id"],
+        },
+    ), Capability.Read
+
+
+def _parse_stackscript_id(value: object) -> int | None:
+    """Return a positive integer StackScript ID, or None when invalid."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.isdecimal():
+        stackscript_id = int(value)
+        if stackscript_id > 0:
+            return stackscript_id
+    return None
+
+
+async def handle_linode_stackscript_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_stackscript_get tool request."""
+    stackscript_id = _parse_stackscript_id(arguments.get("stackscript_id"))
+    if stackscript_id is None:
+        return error_response("stackscript_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        stackscript = await client.get_stackscript(stackscript_id)
+        return {
+            "id": stackscript.id,
+            "label": stackscript.label,
+            "username": stackscript.username,
+            "description": truncate_string(
+                stackscript.description, DESCRIPTION_TRUNCATE_LIMIT
+            ),
+            "images": stackscript.images,
+            "is_public": stackscript.is_public,
+            "mine": stackscript.mine,
+            "deployments_total": stackscript.deployments_total,
+            "deployments_active": stackscript.deployments_active,
+            "created": stackscript.created,
+            "updated": stackscript.updated,
+        }
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve StackScript {stackscript_id}", _call
+    )
+
+
 def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_stackscript_create tool."""
     return Tool(

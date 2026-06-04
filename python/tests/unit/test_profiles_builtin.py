@@ -150,6 +150,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ),
         ToolDescriptor("linode_images_sharegroups_token_update", Capability.Write),
         ToolDescriptor("linode_images_sharegroups_tokens_list", Capability.Read),
+        ToolDescriptor("linode_stackscript_get", Capability.Read),
         ToolDescriptor("linode_stackscripts_list", Capability.Read),
         # Compute deep (backups, disks, ips).
         ToolDescriptor("linode_instance_backups_list", Capability.Read),

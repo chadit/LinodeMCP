@@ -4879,6 +4879,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListStackScripts", e) from e
 
+    async def get_stackscript(self, stackscript_id: int | str) -> StackScript:
+        """Get a StackScript by ID."""
+        encoded_stackscript_id = quote(str(stackscript_id), safe="")
+        endpoint = f"/linode/stackscripts/{encoded_stackscript_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_stackscript(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetStackScript", e) from e
+
     async def create_stackscript(
         self,
         label: str,
@@ -11217,6 +11228,13 @@ class RetryableClient:
         """List StackScripts with retry."""
         result: list[StackScript] = await self._execute_with_retry(
             self.client.list_stackscripts
+        )
+        return result
+
+    async def get_stackscript(self, stackscript_id: int | str) -> StackScript:
+        """Get a StackScript by ID with retry."""
+        result: StackScript = await self._execute_with_retry(
+            lambda: self.client.get_stackscript(stackscript_id)
         )
         return result
 
