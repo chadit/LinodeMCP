@@ -68,9 +68,8 @@ from linodemcp.tools import (
     create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
-    create_linode_image_update_tool,
-
     create_linode_image_get_tool,
+    create_linode_image_update_tool,
     create_linode_image_upload_tool,
     create_linode_images_sharegroups_token_create_tool,
     create_linode_images_sharegroups_token_update_tool,
@@ -220,9 +219,8 @@ from linodemcp.tools import (
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
-    handle_linode_image_update,
-
     handle_linode_image_get,
+    handle_linode_image_update,
     handle_linode_image_upload,
     handle_linode_images_list,
     handle_linode_images_sharegroups_token_create,
