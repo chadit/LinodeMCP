@@ -253,6 +253,65 @@ async def test_placement_group_get_tool_is_exported_and_registered(
     assert "linode_placement_group_get" in srv.registered_tool_names
 
 
+async def test_longview_subscriptions_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Longview subscriptions list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_longview_subscriptions_list_tool" in tools_mod.__all__
+    assert "handle_linode_longview_subscriptions_list" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_longview_subscriptions_list"].capability is not None
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_longview_subscriptions_list" in srv.registered_tool_names
+
+
+async def test_longview_subscriptions_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Longview subscriptions list is callable through server dispatch."""
+    response_data = {
+        "data": [{"id": "longview-3", "label": "Longview Pro"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_longview_subscriptions.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_longview_subscriptions_list", {"page": 2, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_longview_subscriptions.assert_awaited_once_with(
+        page=2, page_size=25
+    )
+
+
+async def test_longview_subscriptions_list_rejects_bad_pagination(
+    sample_config: Config,
+) -> None:
+    """Longview subscriptions list validates pagination before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_longview_subscriptions_list", {"page": "bad"}
+        )
+
+    assert "page must be an integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_linode_kernels_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
