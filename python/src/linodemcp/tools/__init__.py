@@ -463,6 +463,7 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_config_interfaces_order_tool,
     create_linode_instance_config_update_tool,
     create_linode_instance_configs_list_tool,
+    create_linode_instance_interfaces_list_tool,
     create_linode_instances_list_tool,
     handle_linode_instance_config_delete,
     handle_linode_instance_config_get,
@@ -474,6 +475,7 @@ from linodemcp.tools.linode_instances import (
     handle_linode_instance_config_interfaces_order,
     handle_linode_instance_config_update,
     handle_linode_instance_configs_list,
+    handle_linode_instance_interfaces_list,
     handle_linode_instances_list,
 )
 from linodemcp.tools.linode_lke import (
@@ -1067,6 +1069,7 @@ __all__ = [
     "create_linode_instance_firewalls_list_tool",
     "create_linode_instance_firewalls_update_tool",
     "create_linode_instance_get_tool",
+    "create_linode_instance_interfaces_list_tool",
     "create_linode_instance_ip_allocate_tool",
     "create_linode_instance_ip_delete_tool",
     "create_linode_instance_ip_get_tool",
@@ -1455,6 +1458,7 @@ __all__ = [
     "handle_linode_instance_firewalls_list",
     "handle_linode_instance_firewalls_update",
     "handle_linode_instance_get",
+    "handle_linode_instance_interfaces_list",
     "handle_linode_instance_ip_allocate",
     "handle_linode_instance_ip_delete",
     "handle_linode_instance_ip_get",
