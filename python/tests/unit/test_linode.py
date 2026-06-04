@@ -5570,6 +5570,75 @@ async def test_retryable_create_managed_credential_delegates_once_without_retry(
     )
 
 
+async def test_revoke_managed_credential_sends_post_to_revoke_route() -> None:
+    """Managed credential revoke sends POST to the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"message": "Credential revoked"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.revoke_managed_credential(91)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/managed/credentials/91/revoke")
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    "credential_id",
+    [0, -1, True, "91/../x", "91?x=1"],
+)
+async def test_revoke_managed_credential_rejects_malformed_ids(
+    credential_id: object,
+) -> None:
+    """Managed credential revoke validates path IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match="credential_id"),
+    ):
+        await client.revoke_managed_credential(credential_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_revoke_managed_credential_wraps_http_errors() -> None:
+    """Managed credential revoke maps HTTP errors to RevokeManagedCredential."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.revoke_managed_credential(91)
+
+    assert "RevokeManagedCredential" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_revoke_managed_credential_delegates_once_without_retry() -> (
+    None
+):
+    """RetryableClient does not replay Managed credential revoke on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_revoke = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    object.__setattr__(retryable.client, "revoke_managed_credential", mock_revoke)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.revoke_managed_credential(91)
+    finally:
+        await retryable.close()
+
+    mock_revoke.assert_awaited_once_with(91)
+
+
 async def test_create_managed_contact_wraps_http_errors() -> None:
     """Managed contact create maps HTTP errors to CreateManagedContact."""
     client = Client("https://api.linode.com/v4", "test-token")
