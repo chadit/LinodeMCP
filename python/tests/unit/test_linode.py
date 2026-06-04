@@ -18276,6 +18276,47 @@ async def test_retryable_lke_tier_versions_forwards_tier_argument() -> None:
         await retryable.close()
 
 
+async def test_get_longview_plan_sends_get_to_longview_plan_route() -> None:
+    """Longview plan get sends GET /longview/plan."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = httpx.Response(200, json={"label": "Longview Pro"})
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.get_longview_plan()
+
+    assert result == {"label": "Longview Pro"}
+    mock_request.assert_awaited_once_with("GET", "/longview/plan")
+    await client.close()
+
+
+async def test_get_longview_plan_wraps_http_errors() -> None:
+    """Longview plan get maps HTTP errors to GetLongviewPlan."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError, match="GetLongviewPlan"):
+            await client.get_longview_plan()
+
+    await client.close()
+
+
+async def test_retryable_client_get_longview_plan_delegates() -> None:
+    """RetryableClient delegates Longview plan get to Client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_method = AsyncMock(return_value={"label": "Longview Pro"})
+    object.__setattr__(client.client, "get_longview_plan", mock_method)
+
+    try:
+        result = await client.get_longview_plan()
+
+        assert result == {"label": "Longview Pro"}
+        mock_method.assert_awaited_once_with()
+    finally:
+        await client.close()
+
+
 async def test_list_longview_clients_sends_get_to_longview_clients_route() -> None:
     """Longview clients list sends GET /longview/clients."""
     client = Client("https://api.linode.com/v4", "test-token")

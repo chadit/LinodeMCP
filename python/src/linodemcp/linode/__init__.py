@@ -6041,6 +6041,28 @@ class Client:
             logger.exception("HTTP error getting profile trusted device: %s", e)
             raise NetworkError("GetProfileDevice", e) from e
 
+    async def get_longview_plan(self) -> dict[str, Any]:
+        """Get the Longview plan for the account."""
+        logger.info("Getting Longview plan")
+
+        try:
+            response = await self.make_request("GET", "/longview/plan")
+            result: dict[str, Any] = response.json()
+            logger.info("Longview plan retrieved")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting Longview plan: %s", e)
+            raise NetworkError("GetLongviewPlan", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting Longview plan: %s", e)
+            raise NetworkError("GetLongviewPlan", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting Longview plan")
+            raise NetworkError("GetLongviewPlan", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting Longview plan: %s", e)
+            raise NetworkError("GetLongviewPlan", e) from e
+
     async def list_longview_clients(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -11947,6 +11969,13 @@ class RetryableClient:
         """Get a profile trusted device with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_device, device_id
+        )
+        return result
+
+    async def get_longview_plan(self) -> dict[str, Any]:
+        """Get the Longview plan with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_longview_plan
         )
         return result
 
