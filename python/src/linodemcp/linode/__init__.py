@@ -6051,6 +6051,30 @@ class Client:
             logger.exception("HTTP error getting profile trusted device: %s", e)
             raise NetworkError("GetProfileDevice", e) from e
 
+    async def get_longview_subscription(self, subscription_id: int) -> dict[str, Any]:
+        """Get a Longview subscription."""
+        valid_subscription_id = _validate_positive_path_int(
+            subscription_id, "subscription_id"
+        )
+        encoded_subscription_id = quote(str(valid_subscription_id), safe="")
+        endpoint = f"/longview/subscriptions/{encoded_subscription_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting Longview subscription: %s", e)
+            raise NetworkError("GetLongviewSubscription", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting Longview subscription: %s", e)
+            raise NetworkError("GetLongviewSubscription", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting Longview subscription")
+            raise NetworkError("GetLongviewSubscription", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting Longview subscription: %s", e)
+            raise NetworkError("GetLongviewSubscription", e) from e
+
     async def get_longview_plan(self) -> dict[str, Any]:
         """Get the Longview plan for the account."""
         logger.info("Getting Longview plan")
@@ -11983,6 +12007,13 @@ class RetryableClient:
         """Get a profile trusted device with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_device, device_id
+        )
+        return result
+
+    async def get_longview_subscription(self, subscription_id: int) -> dict[str, Any]:
+        """Get a Longview subscription with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_longview_subscription, subscription_id
         )
         return result
 
