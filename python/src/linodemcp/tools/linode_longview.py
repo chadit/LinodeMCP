@@ -58,6 +58,20 @@ def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_longview_plan_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_plan_get tool."""
+    return Tool(
+        name="linode_longview_plan_get",
+        description="Gets the account Longview plan.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_longview_clients_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_longview_clients_list tool."""
     return Tool(
@@ -252,3 +266,14 @@ async def handle_linode_longview_client_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete Longview client", _call)
+
+
+async def handle_linode_longview_plan_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_longview_plan_get tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_longview_plan()
+
+    return await execute_tool(cfg, arguments, "get Longview plan", _call)

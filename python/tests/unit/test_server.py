@@ -15588,6 +15588,10 @@ async def test_longview_clients_list_tool_is_exported_and_registered(
     registry_names = {entry.name for entry in get_tool_registry()}
 
     assert "create_linode_longview_clients_list_tool" in tools_mod.__all__
+    assert "create_linode_longview_plan_get_tool" in tools_mod.__all__
     assert "handle_linode_longview_clients_list" in tools_mod.__all__
+    assert "handle_linode_longview_plan_get" in tools_mod.__all__
     assert "linode_longview_clients_list" in registry_names
+    assert "linode_longview_plan_get" in registry_names
     assert "linode_longview_clients_list" in srv.registered_tool_names
+    assert "linode_longview_plan_get" in srv.registered_tool_names
