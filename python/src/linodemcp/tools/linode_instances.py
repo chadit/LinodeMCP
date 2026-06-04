@@ -7,7 +7,15 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    ENV_PARAM_SCHEMA,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
+    error_response,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -119,6 +127,67 @@ def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_update tool."""
+    return Tool(
+        name="linode_instance_config_update",
+        description=(
+            "Updates a configuration profile for a Linode instance. "
+            "Requires confirm because the instance boot profile can change."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+                "comments": {"type": "string", "description": "Config comments."},
+                "devices": {"type": "object", "description": "Block device mapping."},
+                "helpers": {"type": "object", "description": "Helper settings."},
+                "interfaces": {"type": "array", "description": "Network interfaces."},
+                "kernel": {"type": "string", "description": "Kernel ID."},
+                "label": {"type": "string", "description": "Config label."},
+                "memory_limit": {
+                    "type": "integer",
+                    "description": "Memory limit in MB.",
+                },
+                "root_device": {"type": "string", "description": "Root device path."},
+                "run_level": {"type": "string", "description": "Boot run level."},
+                "virt_mode": {"type": "string", "description": "Virtualization mode."},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to update the configuration profile.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "config_id", "confirm"],
+            "anyOf": [
+                {"required": [field]}
+                for field in (
+                    "comments",
+                    "devices",
+                    "helpers",
+                    "interfaces",
+                    "kernel",
+                    "label",
+                    "memory_limit",
+                    "root_device",
+                    "run_level",
+                    "virt_mode",
+                )
+            ],
+        },
+    ), Capability.Write
+
+
 async def handle_linode_instance_config_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
@@ -211,3 +280,68 @@ async def handle_linode_instance_configs_list(
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance configuration profiles", _call
     )
+
+
+async def handle_linode_instance_config_update(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    fields: dict[str, Any] = {}
+    for key in (
+        "comments",
+        "devices",
+        "helpers",
+        "interfaces",
+        "kernel",
+        "label",
+        "memory_limit",
+        "root_device",
+        "run_level",
+        "virt_mode",
+    ):
+        value = arguments.get(key)
+        if value is not None:
+            fields[key] = value
+
+    if not fields:
+        return error_response("at least one update field is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_config_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/linode/instances/{linode_id}/configs/{config_id}",
+            None,
+            side_effects=[
+                f"Configuration profile {config_id} on Linode {linode_id} "
+                "will be updated."
+            ],
+            request_body=fields,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_instance_config(linode_id, config_id, fields)
+        if result:
+            return result
+        return {
+            "message": (
+                f"Linode instance config {config_id} update requested "
+                f"for Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "config_id": config_id,
+        }
+
+    return await execute_tool(cfg, arguments, "update Linode instance config", _call)
