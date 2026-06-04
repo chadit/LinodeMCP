@@ -129,6 +129,7 @@ from linodemcp.tools import (
     create_linode_managed_credential_revoke_tool,
     create_linode_managed_credential_update_tool,
     create_linode_managed_credentials_list_tool,
+    create_linode_managed_issue_get_tool,
     create_linode_managed_issues_list_tool,
     create_linode_managed_ssh_key_get_tool,
     create_linode_managed_stats_tool,
@@ -341,6 +342,7 @@ from linodemcp.tools import (
     handle_linode_managed_credential_revoke,
     handle_linode_managed_credential_update,
     handle_linode_managed_credentials_list,
+    handle_linode_managed_issue_get,
     handle_linode_managed_issues_list,
     handle_linode_managed_ssh_key_get,
     handle_linode_managed_stats,
@@ -2416,6 +2418,78 @@ async def test_handle_linode_managed_stats(sample_config: Config) -> None:
         assert len(result) == 1
         assert json.loads(result[0].text) == response_data
         mock_client.get_managed_stats.assert_awaited_once_with()
+
+
+async def test_create_linode_managed_issue_get_tool() -> None:
+    """Test linode_managed_issue_get tool schema."""
+    tool, capability = create_linode_managed_issue_get_tool()
+
+    assert tool.name == "linode_managed_issue_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["type"] == "object"
+    assert tool.inputSchema["required"] == ["issue_id"]
+    assert tool.inputSchema["properties"]["issue_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["issue_id"]["minimum"] == 1
+
+
+async def test_handle_linode_managed_issue_get(sample_config: Config) -> None:
+    """Test linode_managed_issue_get tool."""
+    response_data: dict[str, Any] = {"id": 77, "entity": {"label": "web-1"}}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_issue.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_issue_get({"issue_id": 77}, sample_config)
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.get_managed_issue.assert_awaited_once_with(77)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"issue_id": 0},
+        {"issue_id": False},
+        {"issue_id": "77"},
+        {"issue_id": "1/2"},
+        {"issue_id": "1?x"},
+        {"issue_id": ".."},
+    ],
+)
+async def test_handle_linode_managed_issue_get_rejects_bad_issue_id(
+    arguments: dict[str, object], sample_config: Config
+) -> None:
+    """Test Managed issue handler rejects missing or unsafe issue IDs."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_issue_get(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "issue_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_issue_get_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Test Managed issue handler reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_issue.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_issue_get({"issue_id": 77}, sample_config)
+
+    assert len(result) == 1
+    assert "Failed to get Linode Managed issue: boom" in result[0].text
+    mock_client.get_managed_issue.assert_awaited_once_with(77)
 
 
 async def test_create_linode_managed_contact_get_tool() -> None:

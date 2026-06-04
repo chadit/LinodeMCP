@@ -4896,6 +4896,41 @@ async def handle_linode_managed_stats(
     return await execute_tool(cfg, arguments, "list Linode Managed statistics", _call)
 
 
+def create_linode_managed_issue_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_issue_get tool."""
+    return Tool(
+        name="linode_managed_issue_get",
+        description="Gets a Linode Managed issue by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "issue_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed issue ID to retrieve",
+                },
+            },
+            "required": ["issue_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_issue_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_issue_get tool request."""
+    issue_id = arguments.get("issue_id")
+    if not isinstance(issue_id, int) or isinstance(issue_id, bool) or issue_id < 1:
+        return error_response("issue_id must be a positive integer")
+    validated_issue_id = issue_id
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_managed_issue(validated_issue_id)
+
+    return await execute_tool(cfg, arguments, "get Linode Managed issue", _call)
+
+
 def create_linode_managed_contact_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contact_get tool."""
     return Tool(
