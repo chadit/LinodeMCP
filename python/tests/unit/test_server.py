@@ -9487,7 +9487,7 @@ async def test_account_child_account_token_create_rejects_invalid_euuid(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        arguments: dict[str, object] = {"confirm": True}
+        arguments: dict[str, object] = {"confirm": True, "confirm_bypass_dry_run": True}
         if euuid is not None:
             arguments["euuid"] = euuid
         result = await srv.dispatch(
@@ -9972,6 +9972,131 @@ async def test_managed_credential_update_dispatches_from_registry(
     mock_client.update_managed_credential.assert_awaited_once_with(
         42, label="prod-root"
     )
+
+
+async def test_managed_credential_revoke_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed credential revoke tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_credential_revoke_tool" in tools_mod.__all__
+    assert "handle_linode_managed_credential_revoke" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_credential_revoke_tool()
+    assert capability is Capability.Destroy
+    assert tool.name == "linode_managed_credential_revoke"
+    assert set(tool.inputSchema["required"]) == {"credential_id", "confirm"}
+    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_credential_revoke" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_credential_revoke_rejects_non_true_confirm(
+    sample_config: Config,
+    confirm: object,
+) -> None:
+    """Managed credential revoke requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {"credential_id": 91}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_credential_revoke", arguments)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("credential_id", "expected"),
+    [
+        (None, "credential_id required"),
+        (0, "credential_id must be at least 1"),
+        (-1, "credential_id must be at least 1"),
+        (True, "credential_id must be an integer"),
+        ("91/../x", "credential_id must be an integer"),
+        ("91?x=1", "credential_id must be an integer"),
+    ],
+)
+async def test_managed_credential_revoke_rejects_invalid_id_before_client(
+    sample_config: Config,
+    credential_id: object,
+    expected: str,
+) -> None:
+    """Managed credential revoke validates IDs before client calls."""
+    arguments: dict[str, object] = {"confirm": True, "confirm_bypass_dry_run": True}
+    if credential_id is not None:
+        arguments["credential_id"] = credential_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_credential_revoke", arguments)
+
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_revoke_dry_run_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed credential revoke dry run previews route without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_revoke",
+            {"dry_run": True, "confirm": True, "credential_id": 91},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/managed/credentials/91/revoke"
+    assert "body" not in payload["would_execute"]
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_revoke_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Managed credential revoke dry run still requires the confirm safety gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_revoke",
+            {"dry_run": True, "credential_id": 91},
+        )
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_credential_revoke_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed credential revoke is callable through server dispatch."""
+    response_data: dict[str, object] = {"message": "Credential revoked"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.revoke_managed_credential.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_revoke",
+            {"confirm": True, "confirm_bypass_dry_run": True, "credential_id": 91},
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.revoke_managed_credential.assert_awaited_once_with(91)
 
 
 async def test_managed_contact_create_tool_is_exported_and_registered(

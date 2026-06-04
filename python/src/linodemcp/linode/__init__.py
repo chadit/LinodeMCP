@@ -4548,6 +4548,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateManagedCredential", e) from e
 
+    async def revoke_managed_credential(self, credential_id: int) -> dict[str, Any]:
+        """Revoke a Managed credential by credential ID."""
+        validated_credential_id = _validate_positive_path_int(
+            credential_id, "credential_id"
+        )
+        encoded_credential_id = quote(str(validated_credential_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST",
+                f"/managed/credentials/{encoded_credential_id}/revoke",
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("RevokeManagedCredential", e) from e
+
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Delete a Managed contact by contact ID."""
         validated_contact_id = _validate_positive_path_int(contact_id, "contact_id")
@@ -11675,6 +11691,10 @@ class RetryableClient:
             credential_id,
             label=label,
         )
+
+    async def revoke_managed_credential(self, credential_id: int) -> dict[str, Any]:
+        """Revoke a Managed credential by delegating once without retry."""
+        return await self.client.revoke_managed_credential(credential_id)
 
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Delete a Managed contact by delegating once without retry."""

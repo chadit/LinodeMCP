@@ -126,6 +126,7 @@ from linodemcp.tools import (
     create_linode_managed_contact_get_tool,
     create_linode_managed_contacts_list_tool,
     create_linode_managed_credential_get_tool,
+    create_linode_managed_credential_revoke_tool,
     create_linode_managed_credential_update_tool,
     create_linode_managed_credentials_list_tool,
     create_linode_managed_ssh_key_get_tool,
@@ -336,6 +337,7 @@ from linodemcp.tools import (
     handle_linode_managed_contact_get,
     handle_linode_managed_contacts_list,
     handle_linode_managed_credential_get,
+    handle_linode_managed_credential_revoke,
     handle_linode_managed_credential_update,
     handle_linode_managed_credentials_list,
     handle_linode_managed_ssh_key_get,
@@ -2032,6 +2034,51 @@ async def test_handle_linode_managed_credential_get_rejects_invalid_id(
         result = await handle_linode_managed_credential_get(arguments, sample_config)
 
     assert "credential_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_managed_credential_revoke_tool() -> None:
+    """Test linode_managed_credential_revoke tool schema."""
+    tool, capability = create_linode_managed_credential_revoke_tool()
+
+    assert tool.name == "linode_managed_credential_revoke"
+    assert capability is Capability.Destroy
+    assert set(tool.inputSchema["required"]) == {"credential_id", "confirm"}
+    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_managed_credential_revoke(sample_config: Config) -> None:
+    """Test linode_managed_credential_revoke handler."""
+    response_data = {"message": "Credential revoked"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.revoke_managed_credential.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_credential_revoke(
+            {"credential_id": 91, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.revoke_managed_credential.assert_awaited_once_with(91)
+
+
+async def test_handle_linode_managed_credential_revoke_rejects_bad_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_credential_revoke rejects invalid IDs."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_credential_revoke(
+            {"credential_id": "91/../x", "confirm": True}, sample_config
+        )
+
+    assert "credential_id must be an integer" in result[0].text
     mock_client_class.assert_not_called()
 
 

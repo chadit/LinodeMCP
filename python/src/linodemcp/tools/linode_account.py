@@ -4233,6 +4233,70 @@ async def handle_linode_managed_credentials_list(
     return await execute_tool(cfg, arguments, "list Linode Managed credentials", _call)
 
 
+def create_linode_managed_credential_revoke_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_credential_revoke tool."""
+    return Tool(
+        name="linode_managed_credential_revoke",
+        description=(
+            "Revokes a Managed credential. Pass confirm=true to revoke it; "
+            "pass dry_run=true to preview without revoking it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "credential_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed credential ID to revoke",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm revoking or previewing "
+                        "the Managed credential."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["credential_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_managed_credential_revoke(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_credential_revoke tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes a Managed credential. Set confirm=true to proceed."
+        )
+
+    try:
+        credential_id = _optional_int_argument(arguments, "credential_id", 1)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if credential_id is None:
+        return error_response("credential_id required")
+
+    encoded_credential_id = quote(str(credential_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_credential_revoke",
+            arguments.get("environment", ""),
+            "POST",
+            f"/managed/credentials/{encoded_credential_id}/revoke",
+            None,
+            side_effects=["A Managed credential is revoked."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.revoke_managed_credential(credential_id)
+
+    return await execute_tool(cfg, arguments, "revoke Managed credential", _call)
+
+
 def create_linode_managed_ssh_key_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_ssh_key_get tool."""
     return Tool(
