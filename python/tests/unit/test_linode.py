@@ -16625,3 +16625,65 @@ async def test_retryable_reset_instance_disk_password_does_not_replay() -> None:
         123, 10, "NewStr0ngP@ss!"
     )
     await retryable.close()
+
+
+async def test_list_instance_firewalls_sends_exact_method_path_query() -> None:
+    """Linode firewalls list sends documented method, path, and query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"data": [{"id": 123}], "page": 1, "results": 1}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.list_instance_firewalls(42, page=2, page_size=25)
+
+    assert result["data"][0]["id"] == 123
+    mock_request.assert_awaited_once_with(
+        "GET", "/linode/instances/42/firewalls?page=2&page_size=25"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["bad/id", "bad?query", "..", True, 0, -1])
+async def test_list_instance_firewalls_rejects_malformed_linode_id(
+    linode_id: object,
+) -> None:
+    """Linode firewalls list rejects malformed path params before request."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="linode_id must be a positive integer"),
+    ):
+        await client.list_instance_firewalls(linode_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_list_instance_firewalls_wraps_http_errors() -> None:
+    """Linode firewalls list maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_instance_firewalls(42)
+
+    assert "ListInstanceFirewalls" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_list_instance_firewalls_delegates_with_retry() -> None:
+    """Retryable Linode firewalls list delegates through retry wrapper."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_instance_firewalls", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [{"id": 123}], "results": 1}
+        result = await client.list_instance_firewalls(42, page=1, page_size=25)
+
+    assert result["results"] == 1
+    mock_list.assert_awaited_once_with(42, page=1, page_size=25)
+    await client.close()

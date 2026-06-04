@@ -15077,3 +15077,16 @@ def test_linode_instance_disk_password_reset_registered(sample_config: Config) -
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_instance_disk_password_reset" in srv.registered_tool_names
+
+
+async def test_instance_firewalls_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance firewalls list tool is exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_firewalls_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_firewalls_list" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_firewalls_list" in srv.registered_tool_names
