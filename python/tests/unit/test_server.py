@@ -15256,6 +15256,22 @@ def test_linode_instance_disk_password_reset_registered(sample_config: Config) -
     assert "linode_instance_disk_password_reset" in srv.registered_tool_names
 
 
+async def test_instance_volumes_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode instance volumes list tool is exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_instance_volumes_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_volumes_list" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_instance_volumes_list"].capability is Capability.Read
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_volumes_list" in srv.registered_tool_names
+
+
 async def test_instance_firewalls_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
