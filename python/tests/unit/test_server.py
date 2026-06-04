@@ -605,17 +605,22 @@ async def test_domain_zone_file_get_handler_rejects_invalid_domain_id(
     assert "domain_id must be a positive integer" in result[0].text
 
 
-async def test_stackscript_get_tool_is_exported_and_registered(
+async def test_stackscript_get_delete_tools_are_exported_and_registered(
     sample_config: Config,
 ) -> None:
-    """StackScript get tool should be exported and registered."""
+    """StackScript get/delete tools should be exported and registered."""
     from linodemcp import tools as tools_mod
 
     assert "create_linode_stackscript_get_tool" in tools_mod.__all__
     assert "handle_linode_stackscript_get" in tools_mod.__all__
+    assert "create_linode_stackscript_delete_tool" in tools_mod.__all__
+    assert "handle_linode_stackscript_delete" in tools_mod.__all__
 
-    srv = Server(sample_config)
-    assert "linode_stackscript_get" in srv.registered_tool_names
+    read_only_srv = Server(sample_config)
+    assert "linode_stackscript_get" in read_only_srv.registered_tool_names
+
+    full_access_srv = Server(_full_access_config(sample_config))
+    assert "linode_stackscript_delete" in full_access_srv.registered_tool_names
 
 
 async def test_regions_get_tool_is_exported_and_registered(

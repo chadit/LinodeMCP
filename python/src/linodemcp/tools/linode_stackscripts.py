@@ -188,6 +188,68 @@ async def handle_linode_stackscript_get(
     )
 
 
+def create_linode_stackscript_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_stackscript_delete tool."""
+    return Tool(
+        name="linode_stackscript_delete",
+        description="Deletes a StackScript by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "stackscript_id": {
+                    "type": "integer",
+                    "description": "StackScript ID to delete (required)",
+                    "minimum": 1,
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["stackscript_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_stackscript_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_stackscript_delete tool request."""
+    stackscript_id = _parse_stackscript_id(arguments.get("stackscript_id"))
+    if stackscript_id is None:
+        return error_response("stackscript_id must be a positive integer")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_stackscript_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/linode/stackscripts/{stackscript_id}",
+            None,
+        )
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a StackScript. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_stackscript(stackscript_id)
+        return {
+            "message": f"StackScript {stackscript_id} deleted successfully",
+            "stackscript_id": stackscript_id,
+        }
+
+    return await execute_tool(
+        cfg, arguments, f"delete StackScript {stackscript_id}", _call
+    )
+
+
 def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_stackscript_create tool."""
     return Tool(
