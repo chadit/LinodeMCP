@@ -126,6 +126,7 @@ from linodemcp.tools import (
     create_linode_managed_contact_get_tool,
     create_linode_managed_contacts_list_tool,
     create_linode_managed_credential_get_tool,
+    create_linode_managed_credential_update_tool,
     create_linode_managed_credentials_list_tool,
     create_linode_managed_ssh_key_get_tool,
     create_linode_managed_stats_tool,
@@ -335,6 +336,7 @@ from linodemcp.tools import (
     handle_linode_managed_contact_get,
     handle_linode_managed_contacts_list,
     handle_linode_managed_credential_get,
+    handle_linode_managed_credential_update,
     handle_linode_managed_credentials_list,
     handle_linode_managed_ssh_key_get,
     handle_linode_managed_stats,
@@ -2139,6 +2141,137 @@ async def test_handle_linode_managed_ssh_key_get_propagates_errors(
     assert "Failed to get Linode Managed SSH key" in result[0].text
     assert "boom" in result[0].text
     mock_client.get_managed_ssh_key.assert_awaited_once_with()
+
+
+async def test_create_linode_managed_credential_update_tool() -> None:
+    """Test linode_managed_credential_update tool schema."""
+    tool, capability = create_linode_managed_credential_update_tool()
+
+    assert tool.name == "linode_managed_credential_update"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["required"]) == {"credential_id", "label", "confirm"}
+    assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["label"]["type"] == "string"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_managed_credential_update(sample_config: Config) -> None:
+    """Test linode_managed_credential_update tool."""
+    response_data = {"id": 42, "label": "prod-root"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_managed_credential.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_credential_update(
+            {"credential_id": 42, "label": "prod-root", "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_managed_credential.assert_awaited_once_with(
+        42, label="prod-root"
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_managed_credential_update_requires_confirm(
+    sample_config: Config,
+    confirm: object,
+) -> None:
+    """Test linode_managed_credential_update requires literal confirm=true."""
+    arguments: dict[str, object] = {"credential_id": 42, "label": "prod-root"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_credential_update(arguments, sample_config)
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_credential_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_handle_linode_managed_credential_update_rejects_bad_credential_id(
+    sample_config: Config,
+    bad_credential_id: object,
+) -> None:
+    """Test linode_managed_credential_update validates credential_id."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_credential_update(
+            {"credential_id": bad_credential_id, "label": "prod-root", "confirm": True},
+            sample_config,
+        )
+
+    assert "credential_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({"credential_id": 42, "confirm": True}, "label is required"),
+        (
+            {"credential_id": 42, "label": "", "confirm": True},
+            "label must be a non-empty string",
+        ),
+        (
+            {"credential_id": 42, "label": 123, "confirm": True},
+            "label must be a non-empty string",
+        ),
+        (
+            {"credential_id": 42, "label": "prod-root", "id": 99, "confirm": True},
+            "Read-only fields are not accepted: id",
+        ),
+        (
+            {
+                "credential_id": 42,
+                "label": "prod-root",
+                "last_decrypted": "2024-01-01T00:00:00",
+                "confirm": True,
+            },
+            "Read-only fields are not accepted: last_decrypted",
+        ),
+    ],
+)
+async def test_handle_linode_managed_credential_update_rejects_invalid_body(
+    sample_config: Config,
+    arguments: dict[str, object],
+    expected: str,
+) -> None:
+    """Test linode_managed_credential_update validates body fields."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_credential_update(arguments, sample_config)
+
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_credential_update_dry_run(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_credential_update dry run."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_credential_update(
+            {
+                "credential_id": 42,
+                "label": "prod-root",
+                "confirm": True,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_managed_credential_update"
+    assert payload["would_execute"]["method"] == "PUT"
+    assert payload["would_execute"]["path"] == "/managed/credentials/42"
+    assert payload["would_execute"]["body"] == {"label": "prod-root"}
+    mock_client_class.assert_not_called()
 
 
 async def test_create_linode_managed_stats_tool() -> None:
