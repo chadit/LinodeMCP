@@ -21,9 +21,9 @@ import httpx
 
 T = TypeVar("T")
 
-_LINODE_STATS_MIN_YEAR = 1970
-_LINODE_STATS_MAX_YEAR = 9999
-_LINODE_STATS_MAX_MONTH = 12
+LINODE_STATS_MIN_YEAR = 1970
+LINODE_STATS_MAX_YEAR = 9999
+LINODE_STATS_MAX_MONTH = 12
 
 logger = logging.getLogger(__name__)
 
@@ -1633,9 +1633,9 @@ class Client:
         """Get monthly statistics for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         year = _validate_range_path_int(
-            year, "year", _LINODE_STATS_MIN_YEAR, _LINODE_STATS_MAX_YEAR
+            year, "year", LINODE_STATS_MIN_YEAR, LINODE_STATS_MAX_YEAR
         )
-        month = _validate_range_path_int(month, "month", 1, _LINODE_STATS_MAX_MONTH)
+        month = _validate_range_path_int(month, "month", 1, LINODE_STATS_MAX_MONTH)
 
         encoded_linode_id = quote(str(linode_id), safe="")
         encoded_year = quote(str(year), safe="")
@@ -1942,6 +1942,29 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceInterfaces", e) from e
+
+    async def get_instance_transfer_by_year_month(
+        self, linode_id: int, year: int, month: int
+    ) -> dict[str, Any]:
+        """Get monthly network transfer stats for a Linode instance."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        year = _validate_range_path_int(
+            year, "year", LINODE_STATS_MIN_YEAR, LINODE_STATS_MAX_YEAR
+        )
+        month = _validate_range_path_int(month, "month", 1, LINODE_STATS_MAX_MONTH)
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_year = quote(str(year), safe="")
+        encoded_month = quote(str(month), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/transfer/"
+            f"{encoded_year}/{encoded_month}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceTransferByYearMonth", e) from e
 
     async def delete_instance_interface(
         self, linode_id: int, interface_id: int
@@ -9674,6 +9697,18 @@ class RetryableClient:
         """List Linode instance interfaces with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_instance_interfaces, linode_id
+        )
+        return result
+
+    async def get_instance_transfer_by_year_month(
+        self, linode_id: int, year: int, month: int
+    ) -> dict[str, Any]:
+        """Get monthly Linode instance transfer stats with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_transfer_by_year_month,
+            linode_id,
+            year,
+            month,
         )
         return result
 

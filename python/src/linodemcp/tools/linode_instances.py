@@ -6,6 +6,11 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import (
+    LINODE_STATS_MAX_MONTH,
+    LINODE_STATS_MAX_YEAR,
+    LINODE_STATS_MIN_YEAR,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -361,6 +366,42 @@ def create_linode_instance_interface_settings_get_tool() -> tuple[Tool, Capabili
                 },
             },
             "required": ["linode_id"],
+        },
+    ), Capability.Read
+
+
+def create_linode_instance_transfer_month_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_transfer_month_get tool."""
+    return Tool(
+        name="linode_instance_transfer_month_get",
+        description="Gets monthly network transfer stats for a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "year": {
+                    "type": "integer",
+                    "minimum": LINODE_STATS_MIN_YEAR,
+                    "maximum": LINODE_STATS_MAX_YEAR,
+                    "description": (
+                        "The four-digit year for the transfer stats (required)"
+                    ),
+                },
+                "month": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": LINODE_STATS_MAX_MONTH,
+                    "description": (
+                        "The month for the transfer stats, 1 through 12 (required)"
+                    ),
+                },
+            },
+            "required": ["linode_id", "year", "month"],
         },
     ), Capability.Read
 
@@ -1253,6 +1294,33 @@ async def handle_linode_instance_interface_settings_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance interface settings", _call
+    )
+
+
+async def handle_linode_instance_transfer_month_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_transfer_month_get tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    try:
+        year = _optional_int_argument(
+            arguments, "year", LINODE_STATS_MIN_YEAR, LINODE_STATS_MAX_YEAR
+        )
+        month = _optional_int_argument(arguments, "month", 1, LINODE_STATS_MAX_MONTH)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if year is None:
+        return error_response("year must be an integer")
+    if month is None:
+        return error_response("month must be an integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_instance_transfer_by_year_month(linode_id, year, month)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance monthly transfer stats", _call
     )
 
 
