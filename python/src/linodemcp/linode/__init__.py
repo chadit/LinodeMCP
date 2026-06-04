@@ -1219,6 +1219,56 @@ class VPCIP:
     subnet_mask: str | None
 
 
+def _validate_optional_interface_string(body: dict[str, Any], name: str) -> None:
+    if name not in body:
+        return
+    value = body[name]
+    if value is not None and not isinstance(value, str):
+        raise ValueError(f"{name} must be a string or null")
+
+
+def _validate_optional_interface_object(body: dict[str, Any], name: str) -> None:
+    if name not in body:
+        return
+    value = body[name]
+    if value is not None and not isinstance(value, dict):
+        raise ValueError(f"{name} must be an object or null")
+
+
+def _validate_config_interface_payload(interface: Any) -> dict[str, Any]:
+    if not isinstance(interface, dict):
+        raise TypeError("interface must be an object")
+    body = cast("dict[str, Any]", interface)
+    purpose = body.get("purpose")
+    if purpose not in {"public", "vlan", "vpc"}:
+        raise ValueError("purpose must be one of: public, vlan, vpc")
+    for field in ("label", "ipam_address"):
+        _validate_optional_interface_string(body, field)
+    if purpose == "vlan" and not body.get("label"):
+        raise ValueError("label is required for vlan interfaces")
+    subnet_id = body.get("subnet_id")
+    if "subnet_id" in body and (
+        not isinstance(subnet_id, int) or isinstance(subnet_id, bool) or subnet_id < 1
+    ):
+        raise ValueError("subnet_id must be a positive integer")
+    if purpose == "vpc" and subnet_id is None:
+        raise ValueError("subnet_id must be a positive integer for vpc interfaces")
+    if "primary" in body and not isinstance(body["primary"], bool):
+        raise ValueError("primary must be a boolean")
+    if "ip_ranges" in body:
+        ip_ranges = body["ip_ranges"]
+        if ip_ranges is not None and not isinstance(ip_ranges, list):
+            raise ValueError("ip_ranges must be an array of strings or null")
+        ip_range_values = cast("list[object] | None", ip_ranges)
+        if ip_range_values is not None and any(
+            not isinstance(item, str) for item in ip_range_values
+        ):
+            raise ValueError("ip_ranges must be an array of strings or null")
+    for field in ("ipv4", "ipv6"):
+        _validate_optional_interface_object(body, field)
+    return body
+
+
 def _build_public_interface_entry(
     firewall_id: int, route_ipv4: bool, route_ipv6: bool
 ) -> dict[str, Any]:
@@ -1570,6 +1620,36 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("UpdateInstanceConfig", e) from e
+
+    async def add_instance_config_interface(
+        self, linode_id: int, config_id: int, interface: Any
+    ) -> dict[str, Any]:
+        """Add an interface to a Linode instance configuration profile."""
+        if (
+            not isinstance(linode_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(linode_id, bool)
+            or linode_id < 1
+        ):
+            raise ValueError("linode_id must be a positive integer")
+        if (
+            not isinstance(config_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(config_id, bool)
+            or config_id < 1
+        ):
+            raise ValueError("config_id must be a positive integer")
+        interface_body = _validate_config_interface_payload(interface)
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/configs/"
+            f"{encoded_config_id}/interfaces"
+        )
+        try:
+            response = await self.make_request("POST", endpoint, interface_body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AddInstanceConfigInterface", e) from e
 
     async def reorder_instance_config_interfaces(
         self, linode_id: int, config_id: int, ids: object
@@ -9010,6 +9090,15 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Update a Linode instance config without replay retry."""
         return await self.client.update_instance_config(linode_id, config_id, fields)
+
+    async def add_instance_config_interface(
+        self, linode_id: int, config_id: int, interface: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Add instance config interface without retry replay."""
+        result: dict[str, Any] = await self.client.add_instance_config_interface(
+            linode_id, config_id, interface
+        )
+        return result
 
     async def reorder_instance_config_interfaces(
         self, linode_id: int, config_id: int, ids: list[int]

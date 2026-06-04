@@ -58,6 +58,109 @@ def _optional_int_argument(
     return value
 
 
+def _add_optional_string_field(
+    body: dict[str, Any], arguments: dict[str, Any], name: str
+) -> str | None:
+    if name not in arguments:
+        return None
+    value = arguments[name]
+    if value is not None and not isinstance(value, str):
+        return f"{name} must be a string or null"
+    body[name] = value
+    return None
+
+
+def _add_optional_positive_int_field(
+    body: dict[str, Any], arguments: dict[str, Any], name: str
+) -> str | None:
+    if name not in arguments:
+        return None
+    value = arguments[name]
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        return f"{name} must be a positive integer"
+    body[name] = value
+    return None
+
+
+def _add_optional_object_field(
+    body: dict[str, Any], arguments: dict[str, Any], name: str
+) -> str | None:
+    if name not in arguments:
+        return None
+    value = arguments[name]
+    if value is not None and not isinstance(value, dict):
+        return f"{name} must be an object or null"
+    body[name] = value
+    return None
+
+
+def _validate_config_interface_purpose(arguments: dict[str, Any]) -> str | None:
+    purpose = arguments.get("purpose")
+    if isinstance(purpose, str) and purpose in {"public", "vlan", "vpc"}:
+        return purpose
+    return None
+
+
+def _add_interface_purpose_fields(
+    body: dict[str, Any], arguments: dict[str, Any]
+) -> str | None:
+    for field in ("label", "ipam_address"):
+        error = _add_optional_string_field(body, arguments, field)
+        if error is not None:
+            return error
+
+    purpose = body["purpose"]
+    if purpose == "vlan" and not body.get("label"):
+        return "label is required for vlan interfaces"
+
+    error = _add_optional_positive_int_field(body, arguments, "subnet_id")
+    if error is not None:
+        return error
+    if purpose == "vpc" and "subnet_id" not in body:
+        return "subnet_id is required for vpc interfaces"
+    return None
+
+
+def _add_interface_misc_fields(
+    body: dict[str, Any], arguments: dict[str, Any]
+) -> str | None:
+    if "primary" in arguments:
+        primary = arguments["primary"]
+        if not isinstance(primary, bool):
+            return "primary must be a boolean"
+        body["primary"] = primary
+
+    if "ip_ranges" in arguments:
+        ip_ranges = arguments["ip_ranges"]
+        if ip_ranges is not None and not isinstance(ip_ranges, list):
+            return "ip_ranges must be an array of strings or null"
+        ip_range_values = cast("list[object] | None", ip_ranges)
+        if ip_range_values is not None and any(
+            not isinstance(item, str) for item in ip_range_values
+        ):
+            return "ip_ranges must be an array of strings or null"
+        body["ip_ranges"] = ip_ranges
+
+    for field in ("ipv4", "ipv6"):
+        error = _add_optional_object_field(body, arguments, field)
+        if error is not None:
+            return error
+    return None
+
+
+def _config_interface_add_body(arguments: dict[str, Any]) -> dict[str, Any] | str:
+    purpose = _validate_config_interface_purpose(arguments)
+    if purpose is None:
+        return "purpose must be one of: public, vlan, vpc"
+
+    body: dict[str, Any] = {"purpose": purpose}
+    for add_fields in (_add_interface_purpose_fields, _add_interface_misc_fields):
+        error = add_fields(body, arguments)
+        if error is not None:
+            return error
+    return body
+
+
 def create_linode_instance_config_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_get tool."""
     return Tool(
@@ -321,6 +424,78 @@ def create_linode_instance_config_interfaces_order_tool() -> tuple[Tool, Capabil
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["linode_id", "config_id", "ids", "confirm"],
+        },
+    ), Capability.Write
+
+
+def create_linode_instance_config_interface_add_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_interface_add tool."""
+    return Tool(
+        name="linode_instance_config_interface_add",
+        description=(
+            "Adds an interface to a Linode instance configuration profile. "
+            "Requires confirm because the instance network configuration changes."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+                "purpose": {
+                    "type": "string",
+                    "enum": ["public", "vlan", "vpc"],
+                    "description": "The interface purpose (required).",
+                },
+                "label": {
+                    "type": ["string", "null"],
+                    "description": "Interface label. Required for vlan interfaces.",
+                },
+                "ipam_address": {
+                    "type": ["string", "null"],
+                    "description": "Private CIDR address for vlan interfaces.",
+                },
+                "primary": {
+                    "type": "boolean",
+                    "description": "Whether this is the primary non-vlan interface.",
+                },
+                "subnet_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The VPC subnet ID. Required for vpc interfaces.",
+                },
+                "ip_ranges": {
+                    "type": ["array", "null"],
+                    "items": {"type": "string"},
+                    "description": (
+                        "IPv4 CIDR VPC subnet ranges routed to this interface."
+                    ),
+                },
+                "ipv4": {
+                    "type": ["object", "null"],
+                    "description": "VPC IPv4 configuration for this interface.",
+                },
+                "ipv6": {
+                    "type": ["object", "null"],
+                    "description": "VPC IPv6 configuration for this interface.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to add the configuration profile interface."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "config_id", "purpose", "confirm"],
         },
     ), Capability.Write
 
@@ -711,6 +886,57 @@ async def handle_linode_instance_config_interfaces_order(
 
     return await execute_tool(
         cfg, arguments, "reorder Linode instance config interfaces", _call
+    )
+
+
+async def handle_linode_instance_config_interface_add(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_interface_add tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    body = _config_interface_add_body(arguments)
+    if isinstance(body, str):
+        return error_response(body)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_config_interface_add",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{linode_id}/configs/{config_id}/interfaces",
+            None,
+            side_effects=[
+                f"An interface will be added to configuration profile {config_id} "
+                f"on Linode {linode_id}."
+            ],
+            request_body=body,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.add_instance_config_interface(linode_id, config_id, body)
+        if result:
+            return result
+        return {
+            "message": (
+                f"Linode instance config interface add requested for "
+                f"config {config_id} on Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "config_id": config_id,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "add Linode instance config interface", _call
     )
 
 
