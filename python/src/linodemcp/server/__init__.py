@@ -104,6 +104,9 @@ def _build_tool_registry() -> list[ToolEntry]:
     registered by exporting the matching create/handle pair from that module;
     there is intentionally no per-route server registry table to update.
     """
+    # ``linodemcp.tools.__all__`` is the production registration surface:
+    # exported create/handle pairs below become MCP tools without a per-route
+    # table in this module.
     all_names = getattr(tools_module, "__all__", [])
 
     create_fns: dict[str, ToolFactory] = {}
