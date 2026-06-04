@@ -97,6 +97,7 @@ from linodemcp.tools import (
     create_linode_instance_firewalls_apply_tool,
     create_linode_instance_firewalls_list_tool,
     create_linode_instance_firewalls_update_tool,
+    create_linode_instance_interface_firewalls_list_tool,
     create_linode_instance_ip_allocate_tool,
     create_linode_instance_ip_delete_tool,
     create_linode_instance_ip_get_tool,
@@ -263,6 +264,7 @@ from linodemcp.tools import (
     handle_linode_instance_firewalls_list,
     handle_linode_instance_firewalls_update,
     handle_linode_instance_get,
+    handle_linode_instance_interface_firewalls_list,
     handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
     handle_linode_instance_ip_get,
@@ -22643,6 +22645,74 @@ async def test_instance_firewalls_list_rejects_invalid_instance_id(
 
     assert len(result) == 1
     assert "instance_id" in result[0].text.lower()
+
+
+async def test_instance_interface_firewalls_list_tool_def() -> None:
+    """Linode interface firewalls list tool requires both path params."""
+    tool, capability = create_linode_instance_interface_firewalls_list_tool()
+    assert tool.name == "linode_instance_interface_firewalls_list"
+    assert capability is Capability.Read
+    required: list[str] = tool.inputSchema.get("required") or []
+    assert required == ["linode_id", "interface_id"]
+    props = tool.inputSchema["properties"]
+    assert props["linode_id"]["minimum"] == 1
+    assert props["interface_id"]["minimum"] == 1
+
+
+async def test_instance_interface_firewalls_list_success(sample_config: Config) -> None:
+    """Linode interface firewalls list handler returns API result."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
+        mock_client = AsyncMock()
+        mock_client.list_instance_interface_firewalls.return_value = {
+            "data": [{"id": 123, "label": "web"}],
+            "results": 1,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mc.return_value = mock_client
+
+        result = list(
+            await handle_linode_instance_interface_firewalls_list(
+                {"linode_id": 42, "interface_id": 7}, sample_config
+            )
+        )
+
+    assert len(result) == 1
+    assert "web" in result[0].text
+    mock_client.list_instance_interface_firewalls.assert_awaited_once_with(42, 7)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"linode_id": "bad/id", "interface_id": 7}, "linode_id"),
+        ({"linode_id": "bad?query", "interface_id": 7}, "linode_id"),
+        ({"linode_id": "..", "interface_id": 7}, "linode_id"),
+        ({"linode_id": True, "interface_id": 7}, "linode_id"),
+        ({"linode_id": 0, "interface_id": 7}, "linode_id"),
+        ({"linode_id": -1, "interface_id": 7}, "linode_id"),
+        ({"linode_id": 42, "interface_id": "bad/id"}, "interface_id"),
+        ({"linode_id": 42, "interface_id": "bad?query"}, "interface_id"),
+        ({"linode_id": 42, "interface_id": ".."}, "interface_id"),
+        ({"linode_id": 42, "interface_id": True}, "interface_id"),
+        ({"linode_id": 42, "interface_id": 0}, "interface_id"),
+        ({"linode_id": 42, "interface_id": -1}, "interface_id"),
+    ],
+)
+async def test_instance_interface_firewalls_list_rejects_invalid_path_args(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Linode interface firewalls list handler rejects malformed path args."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
+        result = list(
+            await handle_linode_instance_interface_firewalls_list(
+                arguments, sample_config
+            )
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text.lower()
+    mc.assert_not_called()
 
 
 async def test_instance_firewalls_list_rejects_invalid_page(

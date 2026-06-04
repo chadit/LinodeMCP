@@ -8313,6 +8313,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceFirewalls", e) from e
 
+    async def list_instance_interface_firewalls(
+        self,
+        linode_id: int,
+        interface_id: int,
+    ) -> dict[str, Any]:
+        """List firewalls assigned to a Linode instance interface."""
+        safe_linode_id = quote(
+            str(_validate_positive_path_int(linode_id, "linode_id")), safe=""
+        )
+        safe_interface_id = quote(
+            str(_validate_positive_path_int(interface_id, "interface_id")), safe=""
+        )
+        endpoint = (
+            f"/linode/instances/{safe_linode_id}/interfaces/"
+            f"{safe_interface_id}/firewalls"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListInstanceInterfaceFirewalls", e) from e
+
     async def get_instance_disk(self, instance_id: int, disk_id: int) -> dict[str, Any]:
         """Get a specific disk for an instance."""
         endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
@@ -12457,6 +12480,19 @@ class RetryableClient:
             lambda: self.client.list_instance_firewalls(
                 linode_id, page=page, page_size=page_size
             )
+        )
+        return result
+
+    async def list_instance_interface_firewalls(
+        self,
+        linode_id: int,
+        interface_id: int,
+    ) -> dict[str, Any]:
+        """List Linode instance interface firewalls with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_instance_interface_firewalls,
+            linode_id,
+            interface_id,
         )
         return result
 
