@@ -90,6 +90,7 @@ from linodemcp.tools import (
     create_linode_instance_disk_create_tool,
     create_linode_instance_disk_delete_tool,
     create_linode_instance_disk_get_tool,
+    create_linode_instance_disk_password_reset_tool,
     create_linode_instance_disk_resize_tool,
     create_linode_instance_disk_update_tool,
     create_linode_instance_disks_list_tool,
@@ -251,6 +252,7 @@ from linodemcp.tools import (
     handle_linode_instance_disk_create,
     handle_linode_instance_disk_delete,
     handle_linode_instance_disk_get,
+    handle_linode_instance_disk_password_reset,
     handle_linode_instance_disk_resize,
     handle_linode_instance_disk_update,
     handle_linode_instance_disks_list,
@@ -22193,3 +22195,122 @@ async def test_handle_linode_instance_config_create_validates_required_arguments
 
     assert message in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_instance_disk_password_reset_tool_def() -> None:
+    """Disk password reset should require IDs, password, confirm, and expose dry_run."""
+    tool, capability = create_linode_instance_disk_password_reset_tool()
+    assert tool.name == "linode_instance_disk_password_reset"
+    assert capability is Capability.Write
+    required: list[str] = tool.inputSchema.get("required") or []
+    assert "instance_id" in required
+    assert "disk_id" in required
+    assert "password" in required
+    assert "confirm" in required
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_instance_disk_password_reset_success(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Disk password reset should call the client with valid args and confirm=true."""
+    mock_linode_client.reset_instance_disk_password.return_value = None
+
+    result = await handle_linode_instance_disk_password_reset(
+        {
+            "instance_id": 123,
+            "disk_id": 10,
+            "password": "NewStr0ngP@ss!",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    data = json.loads(result[0].text)
+    assert data["message"] == "Root password reset for disk 10 on instance 123"
+    assert data["instance_id"] == 123
+    assert data["disk_id"] == 10
+    mock_linode_client.reset_instance_disk_password.assert_called_once_with(
+        123, 10, "NewStr0ngP@ss!"
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_instance_disk_password_reset_requires_boolean_confirm(
+    mock_linode_client: AsyncMock, sample_config: Config, confirm: Any
+) -> None:
+    """Missing, false, string, and numeric confirm values are rejected."""
+    arguments: dict[str, Any] = {
+        "instance_id": 123,
+        "disk_id": 10,
+        "password": "NewStr0ngP@ss!",
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    result = await handle_linode_instance_disk_password_reset(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+    mock_linode_client.reset_instance_disk_password.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["instance_id", "disk_id"])
+@pytest.mark.parametrize("value", ["1/2", "1?x=2", ".."])
+async def test_instance_disk_password_reset_rejects_malformed_path_params(
+    mock_linode_client: AsyncMock, sample_config: Config, field: str, value: str
+) -> None:
+    """Malformed finite IDs are rejected before the client call."""
+    arguments: dict[str, Any] = {
+        "instance_id": 123,
+        "disk_id": 10,
+        "password": "NewStr0ngP@ss!",
+        "confirm": True,
+    }
+    arguments[field] = value
+
+    result = await handle_linode_instance_disk_password_reset(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "valid integer" in result[0].text.lower()
+    mock_linode_client.reset_instance_disk_password.assert_not_called()
+
+
+async def test_instance_disk_password_reset_missing_password(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Missing password is rejected before confirm/client handling."""
+    result = await handle_linode_instance_disk_password_reset(
+        {"instance_id": 123, "disk_id": 10, "confirm": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "password is required" in result[0].text
+    mock_linode_client.reset_instance_disk_password.assert_not_called()
+
+
+async def test_instance_disk_password_reset_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true fetches the disk and never resets the password."""
+    mock_linode_client.get_instance_disk.return_value = {"id": 10, "label": "boot"}
+
+    result = await handle_linode_instance_disk_password_reset(
+        {
+            "instance_id": 123,
+            "disk_id": 10,
+            "password": "NewStr0ngP@ss!",
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_disk_password_reset"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/disks/10/password"
+    assert body["warnings"]
+    mock_linode_client.get_instance_disk.assert_awaited_once_with(123, 10)
+    mock_linode_client.reset_instance_disk_password.assert_not_called()

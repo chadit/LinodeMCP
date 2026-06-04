@@ -93,7 +93,7 @@ FEATURE_TOOLS_LIST = (
     "linode_instance_config_create,linode_instance_disks_list,linode_instance_disk_get,"
     "linode_instance_disk_create,linode_instance_disk_update,"
     "linode_instance_disk_delete,linode_instance_disk_clone,"
-    "linode_instance_disk_resize,"
+    "linode_instance_disk_resize,linode_instance_disk_password_reset,"
     "linode_instance_ips_list,linode_instance_ip_get,"
     "linode_instance_ip_allocate,linode_instance_ip_update,linode_instance_ip_delete,"
     "linode_instance_clone,linode_instance_migrate,"

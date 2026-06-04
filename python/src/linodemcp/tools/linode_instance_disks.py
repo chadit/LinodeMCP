@@ -639,3 +639,87 @@ async def handle_linode_instance_disk_resize(
         }
 
     return await execute_tool(cfg, arguments, "resize instance disk", _call)
+
+
+def create_linode_instance_disk_password_reset_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_disk_password_reset tool."""
+    return Tool(
+        name="linode_instance_disk_password_reset",
+        description="Resets the root password for a Linode instance disk",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "disk_id": _DISK_ID_PROP,
+                "password": {
+                    "type": "string",
+                    "description": "New root password for the disk",
+                },
+                "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": [
+                "instance_id",
+                "disk_id",
+                "password",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_disk_password_reset(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_password_reset tool request."""
+    ids = _parse_instance_and_disk_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, disk_id = ids
+
+    password = arguments.get("password", "")
+    if not isinstance(password, str) or not password:
+        return _error_response("password is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_disk(instance_id, disk_id)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    f"The root password for disk {disk_id} on instance "
+                    f"{instance_id} will be reset."
+                ],
+                "warnings": ["Existing disk root password access will be replaced."],
+            }
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_disk_password_reset",
+            "POST",
+            f"/linode/instances/{instance_id}/disks/{disk_id}/password",
+            _fetch,
+            _walk,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if confirm is not True:
+        return _error_response("Set confirm=true to proceed.")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.reset_instance_disk_password(instance_id, disk_id, password)
+        return {
+            "message": (
+                f"Root password reset for disk {disk_id} on instance {instance_id}"
+            ),
+            "instance_id": instance_id,
+            "disk_id": disk_id,
+        }
+
+    return await execute_tool(cfg, arguments, "reset instance disk password", _call)

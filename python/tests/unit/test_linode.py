@@ -16558,3 +16558,70 @@ async def test_retryable_create_instance_config_delegates_once_without_retry() -
 
     mock_create.assert_awaited_once_with(456, "boot-config", {"sda": {}})
     await client.close()
+
+
+async def test_reset_instance_disk_password_sends_exact_route_and_body() -> None:
+    """Disk password reset sends POST to the exact documented path and body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.reset_instance_disk_password(123, 10, "NewStr0ngP@ss!")
+
+    mock_request.assert_awaited_once_with(
+        "POST",
+        "/linode/instances/123/disks/10/password",
+        {"password": "NewStr0ngP@ss!"},
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("instance_id", "disk_id"),
+    [(0, 10), (-1, 10), (True, 10), (123, 0), (123, -1), (123, False)],
+)
+async def test_reset_instance_disk_password_validates_positive_ids(
+    instance_id: object, disk_id: object
+) -> None:
+    """Finite ID path params are validated before request dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="must be a positive integer"),
+    ):
+        await client.reset_instance_disk_password(
+            cast("Any", instance_id), cast("Any", disk_id), "NewStr0ngP@ss!"
+        )
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_reset_instance_disk_password_requires_password() -> None:
+    """Password is required before request dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="password is required"),
+    ):
+        await client.reset_instance_disk_password(123, 10, "")
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_reset_instance_disk_password_does_not_replay() -> None:
+    """Retry wrapper delegates once for the non-idempotent password reset."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    retryable.client.reset_instance_disk_password = AsyncMock(  # type: ignore[method-assign]
+        side_effect=httpx.ConnectError("boom")
+    )
+
+    with pytest.raises(httpx.ConnectError):
+        await retryable.reset_instance_disk_password(123, 10, "NewStr0ngP@ss!")
+
+    retryable.client.reset_instance_disk_password.assert_awaited_once_with(
+        123, 10, "NewStr0ngP@ss!"
+    )
+    await retryable.close()
