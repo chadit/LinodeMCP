@@ -1961,10 +1961,10 @@ async def test_client_delete_image_sharegroup_member_token_encodes_path_params()
 
 @pytest.mark.asyncio
 async def test_client_delete_image_sharegroup_member_token_maps_http_error() -> None:
-    """Low-level client maps HTTP failures to NetworkError."""
+    """Low-level client maps httpx transport failures to NetworkError."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
+        raise httpx.HTTPError("temporary")
 
     client = Client("https://api.linode.com/v4", "test-token")
     client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -1981,13 +1981,16 @@ async def test_client_delete_image_sharegroup_member_token_maps_http_error() -> 
 
 @pytest.mark.asyncio
 async def test_retryable_member_token_delete_delegates_once() -> None:
-    """Destructive member token revoke should not replay after errors."""
+    """Destructive member token revoke should not replay mapped client errors."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    mock_delete = AsyncMock(side_effect=httpx.HTTPError("temporary"))
+    mapped_error = NetworkError(
+        "DeleteImageSharegroupMemberToken", httpx.HTTPError("temporary")
+    )
+    mock_delete = AsyncMock(side_effect=mapped_error)
     cast("Any", retryable.client).delete_image_sharegroup_member_token = mock_delete
 
     try:
-        with pytest.raises(httpx.HTTPError):
+        with pytest.raises(NetworkError, match="DeleteImageSharegroupMemberToken"):
             await retryable.delete_image_sharegroup_member_token(
                 "22222222-2222-4222-8222-222222222222",
                 "11111111-1111-4111-8111-111111111111",
