@@ -38,6 +38,31 @@ def _optional_int_argument(
     return value
 
 
+def create_linode_instance_config_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_get tool."""
+    return Tool(
+        name="linode_instance_config_get",
+        description="Gets a configuration profile for a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the configuration profile (required)",
+                },
+            },
+            "required": ["linode_id", "config_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instances_list tool."""
     return Tool(
@@ -92,6 +117,25 @@ def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
             "required": ["linode_id"],
         },
     ), Capability.Read
+
+
+async def handle_linode_instance_config_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_config_get tool request."""
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_instance_config(linode_id, config_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode instance configuration profile", _call
+    )
 
 
 async def handle_linode_instances_list(
