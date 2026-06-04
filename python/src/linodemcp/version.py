@@ -44,7 +44,7 @@ FEATURE_TOOLS_LIST = (
     "linode_nodebalancers_list,linode_nodebalancer_types_list,linode_nodebalancer_get,linode_nodebalancer_vpc_config_get,"
     "linode_nodebalancer_vpc_configs_list,linode_nodebalancer_configs_list,"
     "linode_stackscripts_list,linode_stackscript_create,linode_sshkey_create,linode_sshkey_update,linode_sshkey_delete,"
-    "linode_instance_boot,linode_instance_reboot,linode_instance_shutdown,"
+    "linode_instance_boot,linode_instance_reboot,linode_instance_shutdown,linode_instance_firewalls_apply,"
     "linode_instance_create,linode_instance_update,linode_instance_delete,linode_instance_resize,"
     "linode_firewall_create,linode_firewall_update,linode_firewall_delete,"
     "linode_firewall_device_create,linode_firewall_device_delete,"

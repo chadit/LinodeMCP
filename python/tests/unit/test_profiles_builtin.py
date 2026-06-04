@@ -179,6 +179,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Networking.
         ToolDescriptor("linode_firewalls_list", Capability.Read),
         ToolDescriptor("linode_firewall_create", Capability.Write),
+        ToolDescriptor("linode_instance_firewalls_apply", Capability.Write),
         ToolDescriptor("linode_nodebalancer_create", Capability.Write),
         ToolDescriptor("linode_vlan_delete", Capability.Destroy),
         ToolDescriptor("linode_ipv6_range_create", Capability.Write),

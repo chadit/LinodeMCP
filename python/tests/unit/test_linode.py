@@ -9047,6 +9047,70 @@ async def test_retryable_list_nodebalancer_vpc_configs_delegates_to_client() -> 
     await retryable.close()
 
 
+async def test_apply_linode_firewalls_sends_post_to_apply_route() -> None:
+    """Test applying a Linode's firewalls sends the documented POST route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 123, "label": "web-1"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.apply_linode_firewalls(123)
+
+    assert result["id"] == 123
+    mock_request.assert_called_once_with(
+        "POST", "/linode/instances/123/firewalls/apply"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("linode_id", ["123", "1/2", "1?x", "..", True, 0, -1])
+async def test_apply_linode_firewalls_rejects_malformed_ids(linode_id: Any) -> None:
+    """Linode firewall apply validates finite path IDs before request dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match="positive integer"),
+    ):
+        await client.apply_linode_firewalls(linode_id)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_apply_linode_firewalls_wraps_http_errors() -> None:
+    """Test applying Linode firewalls wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.apply_linode_firewalls(123)
+
+    assert "ApplyLinodeFirewalls" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_apply_linode_firewalls_does_not_replay() -> None:
+    """RetryableClient delegates Linode firewall apply once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "apply_linode_firewalls", new_callable=AsyncMock
+    ) as mock_apply:
+        mock_apply.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.apply_linode_firewalls(123)
+
+    mock_apply.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_update_nodebalancer_firewalls() -> None:
     """Test updating NodeBalancer firewall assignments."""
     client = Client("https://api.linode.com/v4", "test-token")

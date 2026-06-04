@@ -4213,6 +4213,23 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListNodeBalancerVPCConfigs", e) from e
 
+    async def apply_linode_firewalls(self, linode_id: int) -> dict[str, Any]:
+        """Apply a Linode's currently assigned firewalls."""
+        if type(linode_id) is not int:
+            raise TypeError("linode_id must be a positive integer")
+        linode_id_value = linode_id
+        if linode_id_value <= 0:
+            raise ValueError("linode_id must be a positive integer")
+
+        encoded_linode_id = quote(str(linode_id_value), safe="")
+        endpoint = f"/linode/instances/{encoded_linode_id}/firewalls/apply"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ApplyLinodeFirewalls", e) from e
+
     async def update_nodebalancer_firewalls(
         self,
         nodebalancer_id: int,
@@ -10533,6 +10550,10 @@ class RetryableClient:
             )
         )
         return result
+
+    async def apply_linode_firewalls(self, linode_id: int) -> dict[str, Any]:
+        """Apply Linode firewall assignments without replay retry."""
+        return await self.client.apply_linode_firewalls(linode_id)
 
     async def update_nodebalancer_firewalls(
         self,
