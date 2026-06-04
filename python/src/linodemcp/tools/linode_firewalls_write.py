@@ -580,6 +580,73 @@ async def handle_linode_firewall_rules_update(
     return await execute_tool(cfg, arguments, "update firewall rules", _call)
 
 
+def create_linode_instance_firewalls_apply_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_firewalls_apply tool."""
+    return Tool(
+        name="linode_instance_firewalls_apply",
+        description=(
+            "Applies the currently assigned Cloud Firewalls to a Linode instance."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to apply Linode firewalls. "
+                        "Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_firewalls_apply(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_firewalls_apply tool request."""
+    linode_id, error = _positive_int_argument(arguments, "linode_id")
+    if error is not None:
+        return error_response(error)
+
+    linode_id_value = cast("int", linode_id)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_firewalls_apply",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{linode_id_value}/firewalls/apply",
+            None,
+            side_effects=[
+                "Cloud Firewall assignments will be applied to "
+                f"Linode {linode_id_value}."
+            ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.apply_linode_firewalls(linode_id_value)
+        return {
+            "message": f"Firewalls applied to Linode {linode_id_value} successfully",
+            "linode_id": linode_id_value,
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "apply Linode firewalls", _call)
+
+
 def create_linode_firewall_settings_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_settings_update tool."""
     return Tool(

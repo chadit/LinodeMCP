@@ -292,6 +292,7 @@ from linodemcp.tools.linode_firewalls_write import (
     create_linode_firewall_rules_update_tool,
     create_linode_firewall_settings_update_tool,
     create_linode_firewall_update_tool,
+    create_linode_instance_firewalls_apply_tool,
     handle_linode_firewall_create,
     handle_linode_firewall_delete,
     handle_linode_firewall_device_create,
@@ -299,6 +300,7 @@ from linodemcp.tools.linode_firewalls_write import (
     handle_linode_firewall_rules_update,
     handle_linode_firewall_settings_update,
     handle_linode_firewall_update,
+    handle_linode_instance_firewalls_apply,
 )
 from linodemcp.tools.linode_images import (
     create_linode_image_create_tool,
@@ -1061,6 +1063,7 @@ __all__ = [
     "create_linode_instance_disk_resize_tool",
     "create_linode_instance_disk_update_tool",
     "create_linode_instance_disks_list_tool",
+    "create_linode_instance_firewalls_apply_tool",
     "create_linode_instance_firewalls_list_tool",
     "create_linode_instance_firewalls_update_tool",
     "create_linode_instance_get_tool",
@@ -1448,6 +1451,7 @@ __all__ = [
     "handle_linode_instance_disk_resize",
     "handle_linode_instance_disk_update",
     "handle_linode_instance_disks_list",
+    "handle_linode_instance_firewalls_apply",
     "handle_linode_instance_firewalls_list",
     "handle_linode_instance_firewalls_update",
     "handle_linode_instance_get",

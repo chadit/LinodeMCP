@@ -876,6 +876,25 @@ async def test_account_settings_update_rejects_invalid_fields(
     mock_client.update_account_settings.assert_not_called()
 
 
+async def test_linode_instance_firewalls_apply_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Linode firewall apply tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_instance_firewalls_apply_tool" in tools_mod.__all__
+    assert "handle_linode_instance_firewalls_apply" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_instance_firewalls_apply_tool()
+    assert tool.name == "linode_instance_firewalls_apply"
+    assert capability is Capability.Write
+    assert "confirm" in tool.inputSchema["required"]
+    assert "dry_run" in tool.inputSchema["properties"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_instance_firewalls_apply" in srv.registered_tool_names
+
+
 async def test_firewall_settings_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

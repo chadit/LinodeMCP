@@ -94,6 +94,7 @@ from linodemcp.tools import (
     create_linode_instance_disk_resize_tool,
     create_linode_instance_disk_update_tool,
     create_linode_instance_disks_list_tool,
+    create_linode_instance_firewalls_apply_tool,
     create_linode_instance_firewalls_list_tool,
     create_linode_instance_firewalls_update_tool,
     create_linode_instance_ip_allocate_tool,
@@ -258,6 +259,7 @@ from linodemcp.tools import (
     handle_linode_instance_disk_resize,
     handle_linode_instance_disk_update,
     handle_linode_instance_disks_list,
+    handle_linode_instance_firewalls_apply,
     handle_linode_instance_firewalls_list,
     handle_linode_instance_firewalls_update,
     handle_linode_instance_get,
@@ -7929,6 +7931,94 @@ async def test_handle_linode_firewall_rules_update_invalid_rule_lists(
 
     assert len(result) == 1
     assert f"{field} must be a list of rule objects" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_linode_instance_firewalls_apply_tool_definition() -> None:
+    """Test linode_instance_firewalls_apply tool definition."""
+    tool, capability = create_linode_instance_firewalls_apply_tool()
+
+    assert tool.name == "linode_instance_firewalls_apply"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["linode_id", "confirm"]
+    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_instance_firewalls_apply(sample_config: Config) -> None:
+    """Test linode_instance_firewalls_apply tool happy path."""
+    mock_result = {"id": 123, "label": "web-1"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.apply_linode_firewalls.return_value = mock_result
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_firewalls_apply(
+            {"linode_id": 123, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["message"] == "Firewalls applied to Linode 123 successfully"
+    assert body["linode_id"] == 123
+    assert body["result"] == mock_result
+    mock_client.apply_linode_firewalls.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_instance_firewalls_apply_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Linode firewall apply rejects missing or non-true confirm."""
+    arguments: dict[str, Any] = {"linode_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_apply(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm must be true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("linode_id", [None, "123", "../123", "123?x=1", True, 0, -1])
+async def test_handle_linode_instance_firewalls_apply_invalid_linode_id(
+    sample_config: Config, linode_id: Any
+) -> None:
+    """Linode firewall apply rejects malformed Linode IDs before client calls."""
+    arguments: dict[str, Any] = {"confirm": True}
+    if linode_id is not None:
+        arguments["linode_id"] = linode_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_apply(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "linode_id" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_firewalls_apply_dry_run(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews Linode firewall apply without a client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_firewalls_apply(
+            {"linode_id": 123, "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_firewalls_apply"
+    assert body["would_execute"] == {
+        "method": "POST",
+        "path": "/linode/instances/123/firewalls/apply",
+    }
+    assert "Linode 123" in body["side_effects"][0]
     mock_client_class.assert_not_called()
 
 
