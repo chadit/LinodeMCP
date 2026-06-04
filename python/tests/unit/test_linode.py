@@ -3257,6 +3257,105 @@ async def test_list_instances(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_list_instance_configs() -> None:
+    """List Linode instance configs sends GET to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"id": 6, "label": "boot-config"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_instance_configs(123)
+
+    assert result["data"][0]["label"] == "boot-config"
+    mock_request.assert_called_once_with("GET", "/linode/instances/123/configs")
+    await client.close()
+
+
+async def test_list_instance_configs_with_pagination() -> None:
+    """List Linode instance configs forwards pagination query params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [], "page": 2, "pages": 3}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_instance_configs(123, page=2, page_size=50)
+
+    assert result == {"data": [], "page": 2, "pages": 3}
+    mock_request.assert_called_once_with(
+        "GET", "/linode/instances/123/configs?page=2&page_size=50"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("linode_id", "encoded"),
+    [
+        ("1/2", "1%2F2"),
+        ("1?x", "1%3Fx"),
+        ("..", ".."),
+    ],
+)
+async def test_list_instance_configs_encodes_path_params(
+    linode_id: str, encoded: str
+) -> None:
+    """Linode instance config list path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.list_instance_configs(cast("Any", linode_id))
+
+    mock_request.assert_called_once_with("GET", f"/linode/instances/{encoded}/configs")
+    await client.close()
+
+
+async def test_list_instance_configs_wraps_http_errors() -> None:
+    """List Linode instance configs wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_instance_configs(123)
+
+    assert "ListInstanceConfigs" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_instance_configs_delegates_to_client() -> None:
+    """RetryableClient delegates Linode instance config list with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_instance_configs", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_instance_configs(123, page=1, page_size=100)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(123, page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     """Test getting specific instance."""
     client = Client("https://api.linode.com/v4", "test-token")
