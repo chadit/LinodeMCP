@@ -4194,6 +4194,29 @@ async def handle_linode_managed_credentials_list(
     return await execute_tool(cfg, arguments, "list Linode Managed credentials", _call)
 
 
+def create_linode_managed_ssh_key_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_ssh_key_get tool."""
+    return Tool(
+        name="linode_managed_ssh_key_get",
+        description="Gets the Managed SSH public key for the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": ENV_PARAM_SCHEMA,
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_ssh_key_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_ssh_key_get tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_managed_ssh_key()
+
+    return await execute_tool(cfg, arguments, "get Linode Managed SSH key", _call)
+
+
 _MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name", "phone")
 _MANAGED_CREDENTIAL_REQUIRED_FIELDS = ("label", "password")
 
