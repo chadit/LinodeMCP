@@ -6021,6 +6021,51 @@ class Client:
             logger.exception("HTTP error getting profile trusted device: %s", e)
             raise NetworkError("GetProfileDevice", e) from e
 
+    async def list_longview_clients(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List Longview clients."""
+        endpoint = "/longview/clients"
+        params: dict[str, int] = {}
+        min_page_size = 25
+        max_page_size = 500
+        if page is not None and (type(page) is not int or page <= 0):
+            msg = "page must be a positive integer"
+            raise ValueError(msg)
+        if page_size is not None and (
+            type(page_size) is not int
+            or page_size < min_page_size
+            or page_size > max_page_size
+        ):
+            msg = f"page_size must be between {min_page_size} and {max_page_size}"
+            raise ValueError(msg)
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+
+        logger.info("Listing Longview clients")
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            logger.info("Longview clients listed")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout listing Longview clients: %s", e)
+            raise NetworkError("ListLongviewClients", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing Longview clients: %s", e)
+            raise NetworkError("ListLongviewClients", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing Longview clients")
+            raise NetworkError("ListLongviewClients", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing Longview clients: %s", e)
+            raise NetworkError("ListLongviewClients", e) from e
+
     async def list_profile_apps(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -11853,6 +11898,15 @@ class RetryableClient:
         """Get a profile trusted device with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_device, device_id
+        )
+        return result
+
+    async def list_longview_clients(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List Longview clients with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_longview_clients(page=page, page_size=page_size)
         )
         return result
 
