@@ -3166,6 +3166,38 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateImageSharegroupToken", e) from e
 
+    async def update_image(
+        self,
+        image_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Image:
+        """Update a private image."""
+        if not image_id.strip():
+            raise ValueError("image_id must be a non-empty string")
+        if label is None and description is None and tags is None:
+            raise ValueError(
+                "at least one of label, description, or tags must be provided"
+            )
+
+        image_id_path = quote(image_id, safe="")
+        body: dict[str, Any] = {}
+        if label is not None:
+            body["label"] = label
+        if description is not None:
+            body["description"] = description
+        if tags is not None:
+            body["tags"] = tags
+
+        try:
+            response = await self.make_request("PUT", f"/images/{image_id_path}", body)
+            data = response.json()
+            return self._parse_image(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateImage", e) from e
+
     async def delete_image_sharegroup_token(self, token_uuid: str) -> None:
         """Delete an image share group token."""
         token_uuid_path = quote(token_uuid, safe="")
@@ -9545,6 +9577,22 @@ class RetryableClient:
     async def delete_image_sharegroup_token(self, token_uuid: str) -> None:
         """Delete an image share group token without retry replay."""
         await self.client.delete_image_sharegroup_token(token_uuid=token_uuid)
+
+    async def update_image(
+        self,
+        image_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Image:
+        """Update a private image without retry replay."""
+        return await self.client.update_image(
+            image_id=image_id,
+            label=label,
+            description=description,
+            tags=tags,
+        )
 
     async def create_image(
         self,

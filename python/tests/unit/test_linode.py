@@ -1350,6 +1350,105 @@ async def test_retryable_list_account_payments_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_update_image_sends_put_to_encoded_image_route() -> None:
+    """Updating an image sends PUT /images/{imageId} with writable fields only."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "id": "private/12345",
+        "label": "renamed-image",
+        "description": "Updated image",
+        "type": "manual",
+        "is_public": False,
+        "deprecated": False,
+        "size": 2048,
+        "vendor": "",
+        "status": "available",
+        "created": "2024-01-01T00:00:00",
+        "created_by": "testuser",
+        "expiry": None,
+        "eol": None,
+        "capabilities": ["cloud-init"],
+        "tags": ["prod"],
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        image = await client.update_image(
+            "private/12345",
+            label="renamed-image",
+            description="Updated image",
+            tags=["prod"],
+        )
+
+    assert image.id == "private/12345"
+    assert image.label == "renamed-image"
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/images/private%2F12345",
+        {"label": "renamed-image", "description": "Updated image", "tags": ["prod"]},
+    )
+    await client.close()
+
+
+async def test_update_image_requires_a_writable_field() -> None:
+    """Updating an image requires at least one writable request field."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match="at least one"):
+        await client.update_image("private/12345")
+
+    await client.close()
+
+
+async def test_update_image_rejects_blank_image_id() -> None:
+    """Updating an image requires a non-empty image ID."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match="image_id must be a non-empty string"):
+        await client.update_image("", label="renamed-image")
+
+    await client.close()
+
+
+async def test_update_image_wraps_http_errors() -> None:
+    """Image update wraps HTTP client errors with route-specific context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_image("private/12345", label="renamed-image")
+
+    assert "UpdateImage" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_image_does_not_replay_transient_errors() -> None:
+    """Retryable image update delegates once so mutating PUT calls are not replayed."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_image", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.ReadTimeout("timeout")
+
+        with pytest.raises(httpx.ReadTimeout):
+            await retryable.update_image("private/12345", label="renamed-image")
+
+    mock_update.assert_awaited_once_with(
+        image_id="private/12345",
+        label="renamed-image",
+        description=None,
+        tags=None,
+    )
+    await retryable.close()
+
+
 async def test_list_account_payment_methods_sends_exact_route_with_query() -> None:
     """Account payment method listing sends GET /account/payment-methods."""
     client = Client("https://api.linode.com/v4", "test-token")
