@@ -18505,6 +18505,49 @@ async def test_retryable_client_get_longview_plan_delegates() -> None:
         await client.close()
 
 
+async def test_list_longview_types_sends_get_to_longview_types_route() -> None:
+    """Longview types list sends GET /longview/types."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = httpx.Response(
+        200, json={"data": [{"id": "g6-standard-2", "label": "2GB"}]}
+    )
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_longview_types()
+
+    assert result == {"data": [{"id": "g6-standard-2", "label": "2GB"}]}
+    mock_request.assert_awaited_once_with("GET", "/longview/types")
+    await client.close()
+
+
+async def test_list_longview_types_wraps_http_errors() -> None:
+    """Longview types list maps HTTP errors to ListLongviewTypes."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError, match="ListLongviewTypes"):
+            await client.list_longview_types()
+
+    await client.close()
+
+
+async def test_retryable_client_list_longview_types_delegates() -> None:
+    """RetryableClient delegates Longview types listing to Client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_method = AsyncMock(return_value={"data": [{"id": "g6-standard-2"}]})
+    object.__setattr__(client.client, "list_longview_types", mock_method)
+
+    try:
+        result = await client.list_longview_types()
+
+        assert result == {"data": [{"id": "g6-standard-2"}]}
+        mock_method.assert_awaited_once_with()
+    finally:
+        await client.close()
+
+
 async def test_list_longview_clients_sends_get_to_longview_clients_route() -> None:
     """Longview clients list sends GET /longview/clients."""
     client = Client("https://api.linode.com/v4", "test-token")
