@@ -15595,3 +15595,58 @@ async def test_longview_clients_list_tool_is_exported_and_registered(
     assert "linode_longview_plan_get" in registry_names
     assert "linode_longview_clients_list" in srv.registered_tool_names
     assert "linode_longview_plan_get" in srv.registered_tool_names
+
+
+async def test_longview_client_create_tool_is_exported_registered_and_schema(
+    sample_config: Config,
+) -> None:
+    """Longview client create tool is exported, registered, and confirm-gated."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_longview_client_create_tool" in tools_mod.__all__
+    assert "handle_linode_longview_client_create" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    tool = registry["linode_longview_client_create"].tool
+    schema = tool.inputSchema
+    assert schema["required"] == ["label", "confirm"]
+    assert schema["properties"]["label"]["pattern"] == "^[A-Za-z0-9_-]{3,32}$"
+    assert schema["properties"]["confirm"]["type"] == "boolean"
+    assert schema["properties"]["dry_run"]["type"] == "boolean"
+
+    default_srv = Server(sample_config)
+    assert "linode_longview_client_create" not in default_srv.registered_tool_names
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_longview_client_create" in srv.registered_tool_names
+
+
+async def test_longview_client_create_dry_run_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Longview client create dry-run is callable through server dispatch."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_longview_client_create",
+            {"label": "web-01", "confirm": True, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/longview/clients",
+        "body": {"label": "web-01"},
+    }
+    mock_client_class.assert_not_called()
+
+
+def test_longview_tools_map_to_longview_scopes() -> None:
+    """Longview read/write tools map to the matching Longview scopes."""
+    from linodemcp.profiles.scope import Scope, required_scopes
+
+    assert required_scopes("linode_longview_clients_list", Capability.Read) == [
+        Scope.LongviewReadOnly
+    ]
+    assert required_scopes("linode_longview_client_create", Capability.Write) == [
+        Scope.LongviewReadWrite
+    ]

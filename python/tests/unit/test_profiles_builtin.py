@@ -376,6 +376,15 @@ def test_linode_kernels_list_requires_linodes_read_scope() -> None:
     assert categories("linode_kernels_list") == ["compute"]
 
 
+def test_longview_tools_map_to_one_longview_category() -> None:
+    """Longview tools report one Longview category and matching scopes."""
+    assert categories("linode_longview_client_create") == ["longview"]
+    assert categories("linode_longview_client_delete") == ["longview"]
+    assert required_scopes("linode_longview_client_create", Capability.Write) == [
+        Scope.LongviewReadWrite
+    ]
+
+
 def test_database_tools_require_database_read_scope() -> None:
     """Managed Database tools require the database token scope."""
     assert required_scopes("linode_database_instances_list", Capability.Read) == [

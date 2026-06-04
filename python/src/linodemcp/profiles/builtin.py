@@ -130,10 +130,10 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     ("lke", ("linode_lke_",)),
-    ("longview", ("linode_longview_",)),
     ("vpcs", ("linode_vpc_", "linode_vpcs_")),
     ("security", ("linode_sshkey_", "linode_sshkeys_")),
     ("monitor", ("linode_monitor_",)),
+    ("longview", ("linode_longview_",)),
 )
 
 
@@ -334,10 +334,10 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
                 "dns",
                 "networking",
                 "lke",
-                "longview",
                 "vpcs",
                 "security",
                 "monitor",
+                "longview",
             }
         ),
         required_token_scopes=("*:read_write",),
@@ -359,10 +359,10 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
                 "dns",
                 "networking",
                 "lke",
-                "longview",
                 "vpcs",
                 "security",
                 "monitor",
+                "longview",
             }
         ),
         required_token_scopes=("*:read_write",),
