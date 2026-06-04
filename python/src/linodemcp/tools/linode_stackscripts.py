@@ -322,6 +322,160 @@ async def handle_linode_stackscript_create(
     return await execute_tool(cfg, arguments, "create StackScript", _call)
 
 
+def create_linode_stackscript_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_stackscript_update tool."""
+    return Tool(
+        name="linode_stackscript_update",
+        description=(
+            "Updates an existing StackScript. Pass dry_run=true to preview "
+            "without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "stackscript_id": {
+                    "type": "integer",
+                    "description": "StackScript ID to update (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Display label for the StackScript",
+                },
+                "images": {
+                    "type": "array",
+                    "description": "Image IDs deployable with this StackScript",
+                    "items": {"type": "string"},
+                },
+                "script": {
+                    "type": "string",
+                    "description": "Script executed during provisioning",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description for the StackScript",
+                },
+                "is_public": {
+                    "type": "boolean",
+                    "description": "Whether other users can use this StackScript",
+                },
+                "rev_note": {
+                    "type": "string",
+                    "description": "Notes for this StackScript revision",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["stackscript_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _stackscript_id_error(value: object) -> str | None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        return "stackscript_id must be a positive integer"
+    return None
+
+
+def _stackscript_update_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate update fields; return an error response or None."""
+    id_error = _stackscript_id_error(arguments.get("stackscript_id"))
+    if id_error is not None:
+        return error_response(id_error)
+    images_arg: object = arguments.get("images")
+    if images_arg is not None:
+        if not isinstance(images_arg, list) or not images_arg:
+            return error_response("images must be a non-empty list")
+        for image in cast("list[object]", images_arg):
+            if not isinstance(image, str) or not image:
+                return error_response("images must contain non-empty strings")
+    for field in ("label", "script", "description", "rev_note"):
+        value = arguments.get(field)
+        if value is not None and not isinstance(value, str):
+            return error_response(f"{field} must be a string")
+    is_public = arguments.get("is_public")
+    if is_public is not None and not isinstance(is_public, bool):
+        return error_response("is_public must be a boolean")
+    return None
+
+
+def _stackscript_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    body: dict[str, Any] = {}
+    for field in ("label", "images", "script", "description", "is_public", "rev_note"):
+        if field in arguments:
+            body[field] = arguments[field]
+    return body
+
+
+async def handle_linode_stackscript_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_stackscript_update tool request."""
+    validation = _stackscript_update_error(arguments)
+    if validation is not None:
+        return validation
+
+    stackscript_id = cast("int", arguments["stackscript_id"])
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_stackscript_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/linode/stackscripts/{stackscript_id}",
+            None,
+            request_body=_stackscript_update_body(arguments),
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a StackScript. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        stackscript = await client.update_stackscript(
+            stackscript_id,
+            label=arguments.get("label"),
+            images=arguments.get("images"),
+            script=arguments.get("script"),
+            description=arguments.get("description"),
+            is_public=arguments.get("is_public"),
+            rev_note=arguments.get("rev_note"),
+        )
+        return {
+            "message": (
+                f"StackScript '{stackscript.label}' "
+                f"(ID: {stackscript.id}) updated successfully"
+            ),
+            "stackscript": {
+                "id": stackscript.id,
+                "label": stackscript.label,
+                "username": stackscript.username,
+                "description": truncate_string(
+                    stackscript.description, DESCRIPTION_TRUNCATE_LIMIT
+                ),
+                "images": stackscript.images,
+                "is_public": stackscript.is_public,
+                "mine": stackscript.mine,
+                "created": stackscript.created,
+                "updated": stackscript.updated,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "update StackScript", _call)
+
+
 def truncate_string(value: str, limit: int) -> str:
     """Truncate a string with ellipsis if it exceeds the limit."""
     if len(value) > limit:
