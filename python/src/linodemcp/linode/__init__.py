@@ -1821,6 +1821,24 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetInstanceInterfaceSettings", e) from e
 
+    async def get_instance_interface(
+        self, linode_id: int, interface_id: int
+    ) -> dict[str, Any]:
+        """Get an interface for a Linode instance."""
+        linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        interface_id = _validate_positive_path_int(interface_id, "interface_id")
+        encoded_linode_id = quote(str(linode_id), safe="")
+        encoded_interface_id = quote(str(interface_id), safe="")
+        endpoint = (
+            f"/linode/instances/{encoded_linode_id}/interfaces/{encoded_interface_id}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceInterface", e) from e
+
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
     ) -> dict[str, Any]:
@@ -9341,6 +9359,15 @@ class RetryableClient:
         """List Linode instance interface settings with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_instance_interface_settings, linode_id
+        )
+        return result
+
+    async def get_instance_interface(
+        self, linode_id: int, interface_id: int
+    ) -> dict[str, Any]:
+        """Get Linode instance interface with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_interface, linode_id, interface_id
         )
         return result
 
