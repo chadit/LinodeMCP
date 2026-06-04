@@ -292,6 +292,39 @@ def create_linode_instance_config_interface_get_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
+def create_linode_instance_interface_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_delete tool."""
+    return Tool(
+        name="linode_instance_interface_delete",
+        description=(
+            "Deletes an interface from a Linode instance. "
+            "Requires confirm because the interface is removed from the Linode."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the Linode instance (required)",
+                },
+                "interface_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the instance interface (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to delete the instance interface.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "interface_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_instance_interfaces_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_interfaces_list tool."""
     return Tool(
@@ -1011,6 +1044,46 @@ async def handle_linode_instance_config_interface_get(
         "retrieve Linode instance configuration profile interface",
         _call,
     )
+
+
+async def handle_linode_instance_interface_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_instance_interface_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    linode_id = _positive_int_argument(arguments, "linode_id")
+    if linode_id is None:
+        return error_response("linode_id must be a positive integer")
+    interface_id = _positive_int_argument(arguments, "interface_id")
+    if interface_id is None:
+        return error_response("interface_id must be a positive integer")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_interface_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/linode/instances/{linode_id}/interfaces/{interface_id}",
+            None,
+            side_effects=[
+                f"Interface {interface_id} will be deleted from Linode {linode_id}."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_instance_interface(linode_id, interface_id)
+        return {
+            "message": (
+                f"Linode instance interface {interface_id} deleted from "
+                f"Linode {linode_id}"
+            ),
+            "linode_id": linode_id,
+            "interface_id": interface_id,
+        }
+
+    return await execute_tool(cfg, arguments, "delete Linode instance interface", _call)
 
 
 async def handle_linode_instance_interfaces_list(
