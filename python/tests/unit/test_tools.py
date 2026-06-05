@@ -130,6 +130,7 @@ from linodemcp.tools import (
     create_linode_managed_credential_update_tool,
     create_linode_managed_credentials_list_tool,
     create_linode_managed_issues_list_tool,
+    create_linode_managed_linode_settings_list_tool,
     create_linode_managed_ssh_key_get_tool,
     create_linode_managed_stats_tool,
     create_linode_monitor_service_alert_definition_get_tool,
@@ -342,6 +343,7 @@ from linodemcp.tools import (
     handle_linode_managed_credential_update,
     handle_linode_managed_credentials_list,
     handle_linode_managed_issues_list,
+    handle_linode_managed_linode_settings_list,
     handle_linode_managed_ssh_key_get,
     handle_linode_managed_stats,
     handle_linode_monitor_service_alert_definition_get,
@@ -1977,6 +1979,86 @@ async def test_handle_linode_managed_issues_list_rejects_invalid_page_size(
         )
 
     assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_managed_linode_settings_list_tool() -> None:
+    """Test linode_managed_linode_settings_list tool schema."""
+    tool, capability = create_linode_managed_linode_settings_list_tool()
+
+    assert tool.name == "linode_managed_linode_settings_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["type"] == "object"
+    assert "required" not in tool.inputSchema
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+
+async def test_handle_linode_managed_linode_settings_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_linode_settings_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"id": 123, "label": "web-1", "group": "prod"}],
+        "page": 2,
+        "pages": 4,
+        "results": 76,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_managed_linode_settings.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_linode_settings_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_managed_linode_settings.assert_awaited_once_with(
+        page=2, page_size=25
+    )
+
+
+async def test_handle_linode_managed_linode_settings_list_rejects_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_linode_settings_list rejects invalid page."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_linode_settings_list(
+            {"page": 0}, sample_config
+        )
+
+    assert "page must be at least 1" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_linode_settings_list_rejects_page_size(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_linode_settings_list rejects bad page_size."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_linode_settings_list(
+            {"page_size": 501}, sample_config
+        )
+
+    assert "page_size must be at most 500" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_linode_settings_list_rejects_low_page_size(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_linode_settings_list rejects low page_size."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_linode_settings_list(
+            {"page_size": 24}, sample_config
+        )
+
+    assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
 
 

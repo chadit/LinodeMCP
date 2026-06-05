@@ -4459,6 +4459,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListManagedIssues", e) from e
 
+    async def list_managed_linode_settings(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List Managed Linode settings on the account."""
+        endpoint = "/managed/linode-settings"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListManagedLinodeSettings", e) from e
+
     async def get_managed_ssh_key(self) -> dict[str, Any]:
         """Get the Managed SSH public key for this account."""
         try:
@@ -11652,6 +11671,17 @@ class RetryableClient:
         """List Managed issues with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_managed_issues(page=page, page_size=page_size)
+        )
+        return result
+
+    async def list_managed_linode_settings(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List Managed Linode settings with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_managed_linode_settings(
+                page=page, page_size=page_size
+            )
         )
         return result
 
