@@ -4753,6 +4753,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetManagedService", e) from e
 
+    async def disable_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Disable a Managed service monitor."""
+        validated_service_id = _validate_positive_path_int(service_id, "service_id")
+        encoded_service_id = quote(str(validated_service_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST", f"/managed/services/{encoded_service_id}/disable"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DisableManagedService", e) from e
+
     async def update_managed_credential(
         self,
         credential_id: int,
@@ -12093,6 +12106,10 @@ class RetryableClient:
             self.client.get_managed_service, service_id
         )
         return result
+
+    async def disable_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Disable a Managed service monitor by delegating once without retry."""
+        return await self.client.disable_managed_service(service_id)
 
     async def update_managed_credential(
         self,
