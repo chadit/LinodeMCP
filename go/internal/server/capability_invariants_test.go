@@ -91,6 +91,23 @@ func TestNoCapabilityUnknownInRegistry(t *testing.T) {
 	)
 }
 
+func TestDeprecatedAccountEntityTransferDeleteToolRemoved(t *testing.T) {
+	t.Parallel()
+
+	srv, err := server.New(fullAccessConfig())
+	require.NoError(t, err, "full-access server should construct cleanly")
+
+	names := make([]string, 0, len(srv.Tools()))
+	for _, tool := range srv.Tools() {
+		names = append(names, tool.Name())
+	}
+
+	assert.NotContains(t, names, "linode_account_entity_transfer_delete",
+		"deprecated account entity-transfer delete tool should not be registered")
+	assert.Contains(t, names, "linode_account_service_transfer_delete",
+		"replacement account service-transfer delete tool should remain registered")
+}
+
 // TestCapabilityAndConfirmInvariants enforces the relationship between a
 // tool's capability tag and its confirm parameter:
 //

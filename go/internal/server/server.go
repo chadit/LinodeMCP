@@ -999,7 +999,6 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountEventGetTool,
 		tools.NewLinodeAccountEventSeenTool,
 		tools.NewLinodeAccountEntityTransferAcceptTool,
-		tools.NewLinodeAccountEntityTransferDeleteTool,
 		tools.NewLinodeAccountChildAccountGetTool,
 		tools.NewLinodeAccountChildAccountTokenTool,
 		tools.NewLinodeAccountBetaGetTool,
