@@ -1813,28 +1813,6 @@ func (c *Client) httpAcceptAccountServiceTransfer(ctx context.Context, token str
 	return c.handleResponse(resp, nil)
 }
 
-// httpGetAccountEntityTransfer retrieves one account entity transfer by token.
-func (c *Client) httpGetAccountEntityTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountEntityTransfers + "/" + url.PathEscape(token)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountEntityTransfer", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var transfer AccountEntityTransfer
-	if err := c.handleResponse(resp, &transfer); err != nil {
-		return nil, err
-	}
-
-	return &transfer, nil
-}
-
 // httpCreateAccountServiceTransfer creates an account service transfer.
 func (c *Client) httpCreateAccountServiceTransfer(ctx context.Context, req *CreateAccountServiceTransferRequest) (*AccountEntityTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

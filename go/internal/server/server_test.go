@@ -306,7 +306,6 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_service_transfer_create":                profiles.CapAdmin,
 		"linode_account_service_transfer_delete":                profiles.CapDestroy,
 		"linode_account_service_transfer_accept":                profiles.CapAdmin,
-		"linode_account_entity_transfer_get":                    profiles.CapRead,
 		"linode_account_event_get":                              profiles.CapRead,
 		"linode_account_event_seen":                             profiles.CapAdmin,
 		"linode_account_child_account_get":                      profiles.CapRead,
@@ -368,7 +367,10 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_instance_firewall_list":                         profiles.CapRead,
 	}
 
+	seen := make(map[string]struct{}, len(descriptors))
 	for _, descriptor := range descriptors {
+		seen[descriptor.Name] = struct{}{}
+
 		assert.NotEqual(t, "linode_account_entity_transfer_create", descriptor.Name, "deprecated entity-transfer create route should not be registered")
 
 		if capability, ok := want[descriptor.Name]; ok {
@@ -378,6 +380,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 	}
 
 	assert.Empty(t, want, "expected descriptors should be registered")
+	assert.NotContains(t, seen, "linode_account_entity_transfer_get", "deprecated entity transfer get tool should not be registered")
 }
 
 // TestToolWrapperExecuteReturnsError verifies that calling Execute on a

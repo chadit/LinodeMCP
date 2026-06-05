@@ -33,8 +33,7 @@ func TestLinodeAccountEntityTransferAcceptToolDryRun(t *testing.T) {
 	t.Run("preview without accepting", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, entityTransferGetPath, map[string]any{keyToken: transferTestToken})
-		_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(cfg)
+		_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyToken:  transferTestToken,
@@ -50,7 +49,7 @@ func TestLinodeAccountEntityTransferAcceptToolDryRun(t *testing.T) {
 		would, _ := body["would_execute"].(map[string]any)
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, entityTransferGetPath+"/accept", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assert.Nil(t, body["current_state"], "deprecated entity transfer GET is not called during dry_run")
 	})
 }
 
@@ -67,8 +66,7 @@ func TestLinodeAccountEntityTransferDeleteToolDryRun(t *testing.T) {
 	t.Run("preview without deleting", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, entityTransferGetPath, map[string]any{keyToken: transferTestToken})
-		_, _, handler := tools.NewLinodeAccountEntityTransferDeleteTool(cfg)
+		_, _, handler := tools.NewLinodeAccountEntityTransferDeleteTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyToken:  transferTestToken,
@@ -84,7 +82,7 @@ func TestLinodeAccountEntityTransferDeleteToolDryRun(t *testing.T) {
 		would, _ := body["would_execute"].(map[string]any)
 		assert.Equal(t, "DELETE", would["method"])
 		assert.Equal(t, entityTransferGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assert.Nil(t, body["current_state"], "deprecated entity transfer GET is not called during dry_run")
 	})
 }
 

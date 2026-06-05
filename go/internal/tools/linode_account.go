@@ -1530,22 +1530,6 @@ func NewLinodeAccountServiceTransferAcceptTool(cfg *config.Config) (mcp.Tool, pr
 	return tool, profiles.CapAdmin, handler
 }
 
-// NewLinodeAccountEntityTransferGetTool creates a tool for retrieving one account entity transfer.
-func NewLinodeAccountEntityTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
-		"linode_account_entity_transfer_get",
-		"Gets one account entity transfer request by token.",
-		[]mcp.ToolOption{
-			mcp.WithString("token", mcp.Required(),
-				mcp.Description("Entity transfer token.")),
-		},
-		handleLinodeAccountEntityTransferGetRequest,
-	)
-
-	return tool, profiles.CapRead, handler
-}
-
 // NewLinodeAccountEventGetTool creates a tool for retrieving one account event.
 func NewLinodeAccountEventGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -4818,10 +4802,14 @@ func runAccountTransferAction(
 			path += "/" + verb
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, toolName, method, path,
-			func(ctx context.Context, c *linode.Client) (any, error) {
+		var fetch func(context.Context, *linode.Client) (any, error)
+		if fetchState != nil {
+			fetch = func(ctx context.Context, c *linode.Client) (any, error) {
 				return fetchState(ctx, c, token)
-			})
+			}
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, toolName, method, path, fetch)
 	}
 
 	if result := RequireConfirm(request, confirmMessage); result != nil {
@@ -4865,25 +4853,6 @@ func handleLinodeAccountServiceTransferAcceptRequest(ctx context.Context, reques
 			return c.GetAccountServiceTransfer(ctx, token)
 		},
 		acceptAccountServiceTransfer)
-}
-
-func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	token, validationMessage := accountTransferTokenFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	transfer, getFailure := client.GetAccountEntityTransfer(ctx, token)
-	if getFailure == nil {
-		return MarshalToolResponse(transfer)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_account_entity_transfer_get: " + getFailure.Error()), nil
 }
 
 func handleLinodeAccountEventGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -5063,9 +5032,7 @@ func handleLinodeAccountEntityTransferAcceptRequest(ctx context.Context, request
 		"This accepts an account entity transfer. Set confirm=true to proceed.",
 		"Account entity transfer accepted successfully",
 		"Failed to accept linode_account_entity_transfer_accept: ",
-		func(ctx context.Context, c *linode.Client, token string) (any, error) {
-			return c.GetAccountEntityTransfer(ctx, token)
-		},
+		nil,
 		acceptAccountEntityTransfer)
 }
 
@@ -5075,9 +5042,7 @@ func handleLinodeAccountEntityTransferDeleteRequest(ctx context.Context, request
 		"This cancels an account entity transfer. Set confirm=true to proceed.",
 		"Account entity transfer canceled successfully",
 		"Failed to delete linode_account_entity_transfer_delete: ",
-		func(ctx context.Context, c *linode.Client, token string) (any, error) {
-			return c.GetAccountEntityTransfer(ctx, token)
-		},
+		nil,
 		deleteAccountEntityTransfer)
 }
 
