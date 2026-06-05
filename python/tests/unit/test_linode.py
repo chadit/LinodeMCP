@@ -6664,6 +6664,75 @@ async def test_retryable_delete_managed_service_delegates_once_without_retry() -
     mock_delete.assert_awaited_once_with(9944)
 
 
+async def test_enable_managed_service_sends_post_to_managed_service_enable_route() -> (
+    None
+):
+    """Managed service enable sends POST to the documented route without a body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 9944, "status": "ok"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.enable_managed_service(9944)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/managed/services/9944/enable")
+    await client.close()
+
+
+@pytest.mark.parametrize("service_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_enable_managed_service_rejects_invalid_service_id(
+    service_id: object,
+) -> None:
+    """Managed service enable validates finite integer IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(
+            (TypeError, ValueError),
+            match="service_id must be a positive integer",
+        ),
+    ):
+        await client.enable_managed_service(service_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_enable_managed_service_wraps_http_errors() -> None:
+    """Managed service enable maps HTTP errors to EnableManagedService."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.enable_managed_service(9944)
+
+    assert "EnableManagedService" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_enable_managed_service_delegates_once_without_retry() -> None:
+    """RetryableClient does not replay Managed service enable on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_enable = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    object.__setattr__(retryable.client, "enable_managed_service", mock_enable)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.enable_managed_service(9944)
+    finally:
+        await retryable.close()
+
+    mock_enable.assert_awaited_once_with(9944)
+
+
 async def test_retryable_list_managed_services_delegates_to_client() -> None:
     """RetryableClient delegates Managed services listing."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")

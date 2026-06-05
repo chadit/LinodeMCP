@@ -4944,6 +4944,68 @@ async def handle_linode_managed_service_create(
     return await execute_tool(cfg, arguments, "create Managed service monitor", _call)
 
 
+def create_linode_managed_service_enable_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_enable tool."""
+    return Tool(
+        name="linode_managed_service_enable",
+        description=(
+            "Enables a Managed service monitor. Requires confirm=true; pass "
+            "dry_run=true with confirm=true to preview without enabling it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "service_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed service monitor ID to enable",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm enabling the monitor.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["service_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_service_enable(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_service_enable tool request."""
+    service_id = _managed_service_id(arguments)
+    if isinstance(service_id, list):
+        return service_id
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enables a Managed service monitor. Set confirm=true to proceed."
+        )
+
+    dry_run_path = f"/managed/services/{quote(str(service_id), safe='')}/enable"
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_service_enable",
+            arguments.get("environment", ""),
+            "POST",
+            dry_run_path,
+            None,
+            side_effects=[f"Managed service monitor {service_id} will be enabled."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.enable_managed_service(service_id)
+        return {
+            "message": "Managed service monitor enabled successfully",
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "enable Managed service monitor", _call)
+
+
 def create_linode_managed_service_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_service_delete tool."""
     return Tool(
