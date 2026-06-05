@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -4625,112 +4626,11 @@ func TestClientGetAccountPaymentRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
-// TestClientListAccountEntityTransfersSuccess verifies ListAccountEntityTransfers sends a GET
-// request to /account/entity-transfers with pagination query parameters.
-func TestClientListAccountEntityTransfersSuccess(t *testing.T) {
+func TestClientListAccountEntityTransfersRemoved(t *testing.T) {
 	t.Parallel()
 
-	transfers := linode.PaginatedResponse[linode.AccountEntityTransfer]{
-		Data: []linode.AccountEntityTransfer{{
-			Created:  accountEntityTransferDate,
-			Entities: linode.AccountEntityTransferEntities{Linodes: []int{111, 222}},
-			Expiry:   accountEntityTransferExpiry,
-			IsSender: true,
-			Status:   statusPending,
-			Token:    accountEntityTransferToken,
-			Updated:  accountEntityTransferDate,
-		}},
-		Page:    2,
-		Pages:   4,
-		Results: 80,
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/entity-transfers", r.URL.Path, "request path should be /account/entity-transfers")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(transfers))
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	result, err := client.ListAccountEntityTransfers(t.Context(), 2, 25)
-
-	require.NoError(t, err, "ListAccountEntityTransfers should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountEntityTransferToken, result.Data[0].Token)
-	assert.Equal(t, "pending", result.Data[0].Status)
-	assert.Equal(t, []int{111, 222}, result.Data[0].Entities.Linodes)
-}
-
-// TestClientListAccountEntityTransfersAPIError verifies ListAccountEntityTransfers propagates API errors.
-func TestClientListAccountEntityTransfersAPIError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/entity-transfers", r.URL.Path, "request path should be /account/entity-transfers")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	_, err := client.ListAccountEntityTransfers(t.Context(), 0, 0)
-
-	require.Error(t, err, "ListAccountEntityTransfers should fail on 403 response")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
-}
-
-// TestClientListAccountEntityTransfersRetriesTransientError verifies the read-only list retries transient failures.
-func TestClientListAccountEntityTransfersRetriesTransientError(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count := requestCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
-
-			return
-		}
-
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/entity-transfers", r.URL.Path, "request path should be /account/entity-transfers")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEntityTransfer]{
-			Data: []linode.AccountEntityTransfer{{Token: accountEntityTransferToken, Status: "pending"}},
-		}))
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
-
-	result, err := client.ListAccountEntityTransfers(t.Context(), 0, 0)
-
-	require.NoError(t, err, "ListAccountEntityTransfers should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountEntityTransferToken, result.Data[0].Token)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	_, ok := reflect.TypeFor[*linode.Client]().MethodByName("ListAccountEntityTransfers")
+	assert.False(t, ok, "deprecated account entity transfer list client method should be removed")
 }
 
 func TestClientListAccountServiceTransfersSuccess(t *testing.T) {

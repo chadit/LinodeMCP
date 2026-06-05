@@ -59,6 +59,8 @@ const (
 	accountPaymentMethodsPath          = "/account/payment-methods"
 	accountEntityTransfersPath         = "/account/entity-transfers"
 	accountServiceTransfersPath        = "/account/service-transfers"
+	accountServiceTransfersPageSizeMin = 25
+	accountServiceTransfersPageSizeMax = 500
 	accountAgreementsPath              = "/account/agreements"
 	accountBetasPath                   = "/account/betas"
 	accountCancelPath                  = "/account/cancel"
@@ -165,8 +167,6 @@ const (
 	accountChildAccountsPageSizeMin    = 25
 	accountChildAccountsPageSizeMax    = 500
 	accountEventIDParam                = "event_id"
-	accountEntityTransfersPageSizeMin  = 25
-	accountEntityTransfersPageSizeMax  = 500
 )
 
 // NewLinodeAccountTool creates a tool for retrieving Linode account information.
@@ -1420,22 +1420,6 @@ func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountChildAccountsRequest,
-	)
-
-	return tool, profiles.CapRead, handler
-}
-
-// NewLinodeAccountEntityTransfersTool creates a tool for listing account entity transfers.
-func NewLinodeAccountEntityTransfersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
-		"linode_account_entity_transfers",
-		"Lists account entity transfer requests.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
-		},
-		handleLinodeAccountEntityTransfersRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -4721,25 +4705,6 @@ func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *m
 	return mcp.NewToolResultError("Failed to create linode_account_child_account_token: " + createFailure.Error()), nil
 }
 
-func handleLinodeAccountEntityTransfersRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := accountEntityTransfersPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	transfers, listFailure := client.ListAccountEntityTransfers(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(transfers)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_account_entity_transfers: " + listFailure.Error()), nil
-}
-
 func handleLinodeAccountServiceTransfersRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := accountServiceTransfersPaginationFromTool(request)
 	if validationMessage != "" {
@@ -4967,22 +4932,6 @@ func accountTransferTokenFromTool(request *mcp.CallToolRequest) (string, string)
 	return token, ""
 }
 
-func accountEntityTransfersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEntityTransfersPageSizeMin, accountEntityTransfersPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func accountServiceTransfersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
@@ -4991,7 +4940,7 @@ func accountServiceTransfersPaginationFromTool(request *mcp.CallToolRequest) (in
 		return 0, 0, validationMessage
 	}
 
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEntityTransfersPageSizeMin, accountEntityTransfersPageSizeMax)
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountServiceTransfersPageSizeMin, accountServiceTransfersPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
