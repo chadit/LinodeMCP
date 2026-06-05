@@ -58,6 +58,8 @@ _GLOBAL_BOOLEAN_FIELDS = {
     "longview_subscription",
 }
 _GLOBAL_NULLABLE_BOOLEAN_FIELDS = {"child_account_access"}
+_MANAGED_LINODE_SSH_PORT_MAX = 65535
+_MANAGED_LINODE_SSH_USER_MAX_LENGTH = 32
 _RESOURCE_GRANT_FIELDS = tuple(
     field for field in _ACCOUNT_GRANT_FIELDS if field != "global"
 )
@@ -4338,6 +4340,130 @@ async def handle_linode_managed_credential_revoke(
     return await execute_tool(cfg, arguments, "revoke Managed credential", _call)
 
 
+def _collect_managed_linode_settings_ssh(value: dict[str, Any]) -> dict[str, Any]:
+    """Collect Managed Linode SSH settings from tool arguments."""
+    allowed_keys = {"access", "ip", "port", "user"}
+    unknown_keys = sorted(set(value) - allowed_keys)
+    if unknown_keys:
+        msg = "ssh contains unsupported fields: " + ", ".join(unknown_keys)
+        raise ValueError(msg)
+    if not value:
+        msg = "ssh must contain at least one field"
+        raise ValueError(msg)
+
+    ssh: dict[str, Any] = {}
+    if "access" in value:
+        access = value["access"]
+        if type(access) is not bool:
+            msg = "ssh.access must be a boolean"
+            raise ValueError(msg)
+        ssh["access"] = access
+    if "ip" in value:
+        ip = value["ip"]
+        if not isinstance(ip, str) or not ip.strip():
+            msg = "ssh.ip must be a non-empty string"
+            raise ValueError(msg)
+        ssh["ip"] = ip.strip()
+    if "port" in value:
+        port = value["port"]
+        if port is not None and (
+            type(port) is not int or port < 1 or port > _MANAGED_LINODE_SSH_PORT_MAX
+        ):
+            msg = "ssh.port must be an integer from 1 to 65535 or null"
+            raise ValueError(msg)
+        ssh["port"] = port
+    if "user" in value:
+        user = value["user"]
+        if user is not None and (
+            not isinstance(user, str) or len(user) > _MANAGED_LINODE_SSH_USER_MAX_LENGTH
+        ):
+            msg = "ssh.user must be a string up to 32 characters or null"
+            raise ValueError(msg)
+        ssh["user"] = user
+    return ssh
+
+
+def _validate_managed_linode_settings_update_arguments(
+    arguments: dict[str, Any],
+) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    allowed_keys = {"environment", "linode_id", "ssh", "confirm", PARAM_DRY_RUN}
+    unknown_keys = sorted(set(arguments) - allowed_keys)
+    if unknown_keys:
+        return (
+            None,
+            None,
+            "Unsupported Managed Linode settings field(s): " + ", ".join(unknown_keys),
+        )
+
+    linode_id = arguments.get("linode_id")
+    if not isinstance(linode_id, int) or isinstance(linode_id, bool) or linode_id < 1:
+        return None, None, "linode_id must be a positive integer"
+
+    ssh_raw = arguments.get("ssh")
+    if not isinstance(ssh_raw, dict):
+        return None, None, "ssh must be a non-empty object"
+    typed_ssh = cast("dict[str, Any]", ssh_raw)
+    try:
+        ssh = _collect_managed_linode_settings_ssh(typed_ssh)
+    except ValueError as exc:
+        return None, None, str(exc)
+    return linode_id, ssh, None
+
+
+def create_linode_managed_linode_settings_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_linode_settings_update tool."""
+    return Tool(
+        name="linode_managed_linode_settings_update",
+        description=(
+            "Updates SSH-related Managed settings for a specific Linode. "
+            "Pass dry_run=true to preview without updating settings."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Linode ID whose Managed settings to update",
+                },
+                "ssh": {
+                    "type": "object",
+                    "description": "SSH Managed settings to update for this Linode",
+                    "additionalProperties": False,
+                    "minProperties": 1,
+                    "properties": {
+                        "access": {"type": "boolean"},
+                        "ip": {"type": "string", "minLength": 1},
+                        "port": {
+                            "anyOf": [
+                                {"type": "integer", "minimum": 1, "maximum": 65535},
+                                {"type": "null"},
+                            ],
+                        },
+                        "user": {
+                            "anyOf": [
+                                {"type": "string", "maxLength": 32},
+                                {"type": "null"},
+                            ],
+                        },
+                    },
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating Managed settings "
+                        "operation. Required even when dry_run=true; dry_run "
+                        "still avoids the client call."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_id", "ssh", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_managed_ssh_key_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_ssh_key_get tool."""
     return Tool(
@@ -4348,6 +4474,49 @@ def create_linode_managed_ssh_key_get_tool() -> tuple[Tool, Capability]:
             "properties": ENV_PARAM_SCHEMA,
         },
     ), Capability.Read
+
+
+async def handle_linode_managed_linode_settings_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_linode_settings_update tool request."""
+    validated = _validate_managed_linode_settings_update_arguments(arguments)
+    linode_id, ssh, validation_error = validated
+    if validation_error is not None or linode_id is None or ssh is None:
+        return error_response(
+            validation_error or "Managed Linode settings input is invalid"
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates Managed settings for a Linode. Set confirm=true to proceed."
+        )
+
+    encoded_linode_id = quote(str(linode_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_linode_settings_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/managed/linode-settings/{encoded_linode_id}",
+            None,
+            request_body={"ssh": ssh},
+            side_effects=["Managed SSH settings are updated for the selected Linode."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_managed_linode_settings(linode_id, ssh=ssh)
+        return {
+            "message": "Managed Linode settings updated successfully",
+            "settings": result,
+        }
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"update Managed settings for Linode {linode_id}",
+        _call,
+    )
 
 
 async def handle_linode_managed_ssh_key_get(

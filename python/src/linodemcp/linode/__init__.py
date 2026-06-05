@@ -24,6 +24,8 @@ T = TypeVar("T")
 LINODE_STATS_MIN_YEAR = 1970
 LINODE_STATS_MAX_YEAR = 9999
 LINODE_STATS_MAX_MONTH = 12
+MANAGED_LINODE_SSH_PORT_MAX = 65535
+MANAGED_LINODE_SSH_USER_MAX_LENGTH = 32
 _UNSET: Any = object()
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,53 @@ def _validate_positive_path_int(value: object, name: str) -> int:
         msg = f"{name} must be a positive integer"
         raise ValueError(msg)
     return value
+
+
+def _validate_managed_linode_settings_ssh(value: object) -> dict[str, Any]:
+    """Validate Managed Linode SSH settings payload."""
+    if not isinstance(value, dict):
+        msg = "ssh must be an object"
+        raise TypeError(msg)
+    ssh = cast("dict[str, Any]", value)
+    allowed_keys = {"access", "ip", "port", "user"}
+    unknown_keys = sorted(set(ssh) - allowed_keys)
+    if unknown_keys:
+        msg = "ssh contains unsupported fields: " + ", ".join(unknown_keys)
+        raise ValueError(msg)
+    if not ssh:
+        msg = "ssh must contain at least one field"
+        raise ValueError(msg)
+
+    payload: dict[str, Any] = {}
+    if "access" in ssh:
+        access = ssh["access"]
+        if type(access) is not bool:
+            msg = "ssh.access must be a boolean"
+            raise ValueError(msg)
+        payload["access"] = access
+    if "ip" in ssh:
+        ip = ssh["ip"]
+        if not isinstance(ip, str) or not ip.strip():
+            msg = "ssh.ip must be a non-empty string"
+            raise ValueError(msg)
+        payload["ip"] = ip.strip()
+    if "port" in ssh:
+        port = ssh["port"]
+        if port is not None and (
+            type(port) is not int or port < 1 or port > MANAGED_LINODE_SSH_PORT_MAX
+        ):
+            msg = "ssh.port must be an integer from 1 to 65535 or null"
+            raise ValueError(msg)
+        payload["port"] = port
+    if "user" in ssh:
+        user = ssh["user"]
+        if user is not None and (
+            not isinstance(user, str) or len(user) > MANAGED_LINODE_SSH_USER_MAX_LENGTH
+        ):
+            msg = "ssh.user must be a string up to 32 characters or null"
+            raise ValueError(msg)
+        payload["user"] = user
+    return payload
 
 
 def _validate_range_path_int(
@@ -4477,6 +4526,28 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListManagedLinodeSettings", e) from e
+
+    async def update_managed_linode_settings(
+        self, linode_id: int, *, ssh: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Update a Linode's Managed settings."""
+        validated_linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        body: dict[str, Any] = {}
+        if ssh is not None:
+            body["ssh"] = _validate_managed_linode_settings_ssh(ssh)
+        if not body:
+            msg = "At least one Managed Linode settings field is required"
+            raise ValueError(msg)
+
+        encoded_linode_id = quote(str(validated_linode_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT", f"/managed/linode-settings/{encoded_linode_id}", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateManagedLinodeSettings", e) from e
 
     async def get_managed_ssh_key(self) -> dict[str, Any]:
         """Get the Managed SSH public key for this account."""
@@ -11697,6 +11768,12 @@ class RetryableClient:
             )
         )
         return result
+
+    async def update_managed_linode_settings(
+        self, linode_id: int, *, ssh: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Update Managed Linode settings once without retry replay."""
+        return await self.client.update_managed_linode_settings(linode_id, ssh=ssh)
 
     async def get_managed_ssh_key(self) -> dict[str, Any]:
         """Get the Managed SSH public key with retry."""
