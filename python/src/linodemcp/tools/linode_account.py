@@ -4944,6 +4944,71 @@ async def handle_linode_managed_service_create(
     return await execute_tool(cfg, arguments, "create Managed service monitor", _call)
 
 
+def create_linode_managed_service_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_delete tool."""
+    return Tool(
+        name="linode_managed_service_delete",
+        description=(
+            "Deletes a Managed service monitor. Requires confirm=true; pass "
+            "dry_run=true with confirm=true to preview without deleting it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "service_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed service monitor ID to delete",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["service_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_managed_service_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_service_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Managed service monitor. Set confirm=true to proceed."
+        )
+
+    try:
+        service_id = _optional_int_argument(arguments, "service_id", 1)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if service_id is None:
+        return error_response("service_id required")
+
+    encoded_service_id = quote(str(service_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_service_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/managed/services/{encoded_service_id}",
+            None,
+            side_effects=[f"Managed service monitor {service_id} will be deleted."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.delete_managed_service(service_id)
+        return {
+            "message": "Managed service monitor deleted successfully",
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "delete Managed service monitor", _call)
+
+
 def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contact_create tool."""
     body_properties = {

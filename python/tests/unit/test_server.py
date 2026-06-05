@@ -10801,6 +10801,121 @@ async def test_managed_service_create_dispatches_from_registry(
     )
 
 
+async def test_managed_service_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed service delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_service_delete_tool" in tools_mod.__all__
+    assert "handle_linode_managed_service_delete" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_service_delete_tool()
+    assert tool.name == "linode_managed_service_delete"
+    assert capability is Capability.Destroy
+    assert set(tool.inputSchema["required"]) == {"service_id", "confirm"}
+    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_service_delete" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_service_delete_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Managed service delete requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {"service_id": 9944}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_service_delete", arguments)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("service_id", [None, 0, "9944", "1/2", "1?x", "..", True])
+async def test_managed_service_delete_validates_service_id_before_client(
+    sample_config: Config, service_id: object
+) -> None:
+    """Managed service delete validates finite IDs before client calls."""
+    arguments: dict[str, object] = {"confirm": True, "dry_run": True}
+    if service_id is not None:
+        arguments["service_id"] = service_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_service_delete", arguments)
+
+    assert "service_id" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_service_delete_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Managed service delete dry run still requires confirm."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_service_delete", {"dry_run": True, "service_id": 9944}
+        )
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_service_delete_dry_run_includes_path_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed service delete dry run previews DELETE path without a client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_service_delete",
+            {"dry_run": True, "confirm": True, "service_id": 9944},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_managed_service_delete"
+    assert payload["would_execute"]["method"] == "DELETE"
+    assert payload["would_execute"]["path"] == "/managed/services/9944"
+    assert "body" not in payload["would_execute"]
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_service_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed service delete is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 9944}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_managed_service.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_service_delete",
+            {"confirm": True, "confirm_bypass_dry_run": True, "service_id": 9944},
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == {
+        "message": "Managed service monitor deleted successfully",
+        "result": response_data,
+    }
+    mock_client.delete_managed_service.assert_awaited_once_with(9944)
+
+
 async def test_managed_contact_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

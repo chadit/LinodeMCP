@@ -6539,6 +6539,73 @@ async def test_list_managed_services_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_delete_managed_service_sends_delete_to_managed_service_route() -> None:
+    """Managed service delete sends DELETE to the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 9944}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.delete_managed_service(9944)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("DELETE", "/managed/services/9944")
+    await client.close()
+
+
+@pytest.mark.parametrize("service_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_delete_managed_service_rejects_invalid_service_id(
+    service_id: object,
+) -> None:
+    """Managed service delete validates finite integer IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(
+            (TypeError, ValueError),
+            match="service_id must be a positive integer",
+        ),
+    ):
+        await client.delete_managed_service(service_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_delete_managed_service_wraps_http_errors() -> None:
+    """Managed service delete maps HTTP errors to DeleteManagedService."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_managed_service(9944)
+
+    assert "DeleteManagedService" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_delete_managed_service_delegates_once_without_retry() -> None:
+    """RetryableClient does not replay Managed service deletion on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_delete = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    object.__setattr__(retryable.client, "delete_managed_service", mock_delete)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.delete_managed_service(9944)
+    finally:
+        await retryable.close()
+
+    mock_delete.assert_awaited_once_with(9944)
+
+
 async def test_retryable_list_managed_services_delegates_to_client() -> None:
     """RetryableClient delegates Managed services listing."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
