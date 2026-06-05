@@ -322,12 +322,15 @@ async def handle_linode_ipv4_assign(
         parsed = _parse_ipv4_assign(arguments)
         if isinstance(parsed, list):
             return parsed
+        region, typed_assignments = parsed
+        request_body = {"region": region, "assignments": typed_assignments}
         return build_dry_run_response(
             "linode_ipv4_assign",
             arguments.get("environment", ""),
             "POST",
-            "/networking/ips/assign",
+            "/networking/ipv4/assign",
             None,
+            request_body=request_body,
         )
 
     if arguments.get("confirm") is not True:
