@@ -23,6 +23,7 @@ def test_get_version_info() -> None:
     assert "linode_managed_services_list" in info.features["tools"]
     assert "linode_managed_service_delete" in info.features["tools"]
     assert "linode_managed_service_disable" in info.features["tools"]
+    assert "linode_managed_service_enable" in info.features["tools"]
 
 
 def test_version_info_with_custom_values() -> None:

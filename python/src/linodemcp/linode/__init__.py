@@ -4932,6 +4932,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateManagedService", e) from e
 
+    async def enable_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Enable a Managed service monitor by service ID."""
+        validated_service_id = _validate_positive_path_int(service_id, "service_id")
+        encoded_service_id = quote(str(validated_service_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST", f"/managed/services/{encoded_service_id}/enable"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("EnableManagedService", e) from e
+
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics from the last 24 hours."""
         try:
@@ -12199,6 +12212,10 @@ class RetryableClient:
         if timeout is not None:
             kwargs["timeout"] = timeout
         return await self.client.update_managed_service(service_id, **kwargs)
+
+    async def enable_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Enable a Managed service monitor once without retry replay."""
+        return await self.client.enable_managed_service(service_id)
 
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics with retry."""
