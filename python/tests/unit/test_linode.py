@@ -5641,6 +5641,120 @@ async def test_retryable_create_managed_credential_delegates_once_without_retry(
     )
 
 
+async def test_update_managed_credential_username_password_sends_post() -> None:
+    """Managed credential username/password update sends documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 91, "username": "root"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.update_managed_credential_username_password(
+            91, password="s3cret", username="root"
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST",
+        "/managed/credentials/91/update",
+        {"password": "s3cret", "username": "root"},
+    )
+    await client.close()
+
+
+async def test_update_managed_credential_username_password_omits_username() -> None:
+    """Managed credential username/password update omits username when absent."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 91}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        await client.update_managed_credential_username_password(91, password="s3cret")
+
+    mock_request.assert_called_once_with(
+        "POST", "/managed/credentials/91/update", {"password": "s3cret"}
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("credential_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_update_managed_credential_username_password_rejects_bad_id(
+    credential_id: object,
+) -> None:
+    """Managed credential username/password update validates path ID."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match="credential_id"),
+    ):
+        await client.update_managed_credential_username_password(
+            cast("Any", credential_id), password="s3cret"
+        )
+    mock_request.assert_not_called()
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"password": ""}, "password"),
+        ({"password": 123}, "password"),
+        ({"password": "s3cret", "username": ""}, "username"),
+        ({"password": "s3cret", "username": 123}, "username"),
+    ],
+)
+async def test_update_managed_credential_username_password_rejects_bad_body(
+    kwargs: dict[str, object], expected: str
+) -> None:
+    """Managed credential username/password update validates body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match=expected),
+    ):
+        await client.update_managed_credential_username_password(
+            91, **cast("Any", kwargs)
+        )
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_managed_credential_username_password_wraps_http_errors() -> None:
+    """Managed credential username/password update maps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_managed_credential_username_password(
+                91, password="s3cret"
+            )
+    assert "UpdateManagedCredentialUsernamePassword" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_credential_username_password_delegates_once() -> None:
+    """RetryableClient does not replay credential username/password update."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_update = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    object.__setattr__(
+        retryable.client,
+        "update_managed_credential_username_password",
+        mock_update,
+    )
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_managed_credential_username_password(
+                91, password="s3cret", username="root"
+            )
+    finally:
+        await retryable.close()
+    mock_update.assert_awaited_once_with(91, password="s3cret", username="root")
+
+
 async def test_revoke_managed_credential_sends_post_to_revoke_route() -> None:
     """Managed credential revoke sends POST to the documented route."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -128,6 +128,7 @@ from linodemcp.tools import (
     create_linode_managed_credential_get_tool,
     create_linode_managed_credential_revoke_tool,
     create_linode_managed_credential_update_tool,
+    create_linode_managed_credential_username_password_update_tool,
     create_linode_managed_credentials_list_tool,
     create_linode_managed_issue_get_tool,
     create_linode_managed_issues_list_tool,
@@ -342,6 +343,7 @@ from linodemcp.tools import (
     handle_linode_managed_credential_get,
     handle_linode_managed_credential_revoke,
     handle_linode_managed_credential_update,
+    handle_linode_managed_credential_username_password_update,
     handle_linode_managed_credentials_list,
     handle_linode_managed_issue_get,
     handle_linode_managed_issues_list,
@@ -2189,6 +2191,48 @@ async def test_handle_linode_managed_credential_get_rejects_invalid_id(
 
     assert "credential_id must be a positive integer" in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_create_linode_managed_credential_username_password_update_tool() -> None:
+    """Test username/password credential update tool schema."""
+    tool, capability = create_linode_managed_credential_username_password_update_tool()
+    assert tool.name == "linode_managed_credential_username_password_update"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["required"]) == {
+        "credential_id",
+        "password",
+        "confirm",
+    }
+    assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["password"]["type"] == "string"
+    assert tool.inputSchema["properties"]["username"]["type"] == "string"
+
+
+async def test_handle_linode_managed_credential_username_password_update(
+    sample_config: Config,
+) -> None:
+    """Test username/password credential update handler."""
+    response_data: dict[str, Any] = {"id": 91, "username": "root"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_update = mock_client.update_managed_credential_username_password
+        mock_update.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+        result = await handle_linode_managed_credential_username_password_update(
+            {
+                "credential_id": 91,
+                "password": "s3cret",
+                "username": "root",
+                "confirm": True,
+            },
+            sample_config,
+        )
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_update.assert_awaited_once_with(91, password="s3cret", username="root")
 
 
 async def test_create_linode_managed_credential_revoke_tool() -> None:

@@ -10151,6 +10151,166 @@ async def test_managed_credential_update_dispatches_from_registry(
     )
 
 
+async def test_credential_username_password_tool_is_registered(
+    sample_config: Config,
+) -> None:
+    """Credential username/password update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert (
+        "create_linode_managed_credential_username_password_update_tool"
+        in tools_mod.__all__
+    )
+    assert (
+        "handle_linode_managed_credential_username_password_update" in tools_mod.__all__
+    )
+    tool, capability = (
+        tools_mod.create_linode_managed_credential_username_password_update_tool()
+    )
+    assert capability is Capability.Write
+    assert tool.name == "linode_managed_credential_username_password_update"
+    assert set(tool.inputSchema["required"]) == {
+        "credential_id",
+        "password",
+        "confirm",
+    }
+    srv = Server(_full_access_config(sample_config))
+    assert (
+        "linode_managed_credential_username_password_update"
+        in srv.registered_tool_names
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_credential_username_password_update_rejects_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Credential username/password update requires literal confirm=true."""
+    arguments: dict[str, object] = {"credential_id": 91, "password": "s3cret"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_username_password_update", arguments
+        )
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({"confirm": True, "password": "s3cret"}, "credential_id"),
+        ({"confirm": True, "credential_id": 0, "password": "s3cret"}, "credential_id"),
+        (
+            {"confirm": True, "credential_id": True, "password": "s3cret"},
+            "credential_id",
+        ),
+        (
+            {"confirm": True, "credential_id": "1/2", "password": "s3cret"},
+            "credential_id",
+        ),
+        (
+            {"confirm": True, "credential_id": "1?x", "password": "s3cret"},
+            "credential_id",
+        ),
+        (
+            {"confirm": True, "credential_id": "..", "password": "s3cret"},
+            "credential_id",
+        ),
+        ({"confirm": True, "credential_id": 91}, "password required"),
+        ({"confirm": True, "credential_id": 91, "password": ""}, "password"),
+        ({"confirm": True, "credential_id": 91, "password": 123}, "password"),
+        (
+            {
+                "confirm": True,
+                "credential_id": 91,
+                "password": "s3cret",
+                "username": 123,
+            },
+            "username",
+        ),
+    ],
+)
+async def test_credential_username_password_update_rejects_inputs(
+    sample_config: Config, arguments: dict[str, object], expected: str
+) -> None:
+    """Credential username/password update validates args before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_username_password_update", arguments
+        )
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_credential_username_password_update_dry_run(
+    sample_config: Config,
+) -> None:
+    """Credential username/password update dry run redacts password."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_username_password_update",
+            {
+                "dry_run": True,
+                "confirm": True,
+                "credential_id": 91,
+                "password": "s3cret",
+                "username": "root",
+            },
+        )
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/managed/credentials/91/update"
+    assert payload["would_execute"]["body"] == {"password": "***", "username": "root"}
+    assert "s3cret" not in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_credential_username_password_update_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Credential username/password update dry run still requires confirm."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_username_password_update",
+            {"dry_run": True, "credential_id": 91, "password": "s3cret"},
+        )
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_credential_username_password_update_dispatches(
+    sample_config: Config,
+) -> None:
+    """Credential username/password update is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 91, "username": "root"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_update = mock_client.update_managed_credential_username_password
+        mock_update.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_credential_username_password_update",
+            {
+                "confirm": True,
+                "credential_id": 91,
+                "password": "s3cret",
+                "username": "root",
+            },
+        )
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_update.assert_awaited_once_with(91, password="s3cret", username="root")
+
+
 async def test_managed_credential_revoke_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
