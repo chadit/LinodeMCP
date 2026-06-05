@@ -324,11 +324,6 @@ async def handle_linode_account_user_create(
 
     body = {"username": username, "email": email, "restricted": restricted}
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates an account user. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_user_create",
@@ -341,6 +336,11 @@ async def handle_linode_account_user_create(
                 f"with restricted={restricted}."
             ],
             request_body=body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an account user. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -422,11 +422,6 @@ async def handle_linode_account_user_grants_update(
     if grants_error is not None or grants is None:
         return error_response(grants_error or "at least one grant field is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates account user grants. Set confirm=true to proceed."
-        )
-
     encoded_username = quote(username, safe="")
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -437,6 +432,11 @@ async def handle_linode_account_user_grants_update(
             None,
             side_effects=[f"Account grants for user {username!r} will be updated."],
             request_body=grants,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates account user grants. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -605,11 +605,6 @@ async def handle_linode_account_settings_managed_enable(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_settings_managed_enable tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This enables Linode Managed. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_settings_managed_enable",
@@ -618,6 +613,11 @@ async def handle_linode_account_settings_managed_enable(
             "/account/settings/managed-enable",
             None,
             side_effects=["Linode Managed is enabled for this account."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enables Linode Managed. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1683,11 +1683,6 @@ async def handle_linode_account_beta_enroll(
     if not beta_id:
         return error_response("id is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This enrolls the account in a beta program. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_beta_enroll",
@@ -1697,6 +1692,11 @@ async def handle_linode_account_beta_enroll(
             None,
             request_body={"id": beta_id},
             side_effects=[f"The account is enrolled in beta program {beta_id!r}."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enrolls the account in a beta program. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2022,11 +2022,6 @@ async def handle_linode_account_promo_credit_add(
     if promo_code_error is not None or promo_code is None:
         return error_response(promo_code_error or "promo_code is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This applies a promo credit to the account. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_promo_credit_add",
@@ -2038,6 +2033,11 @@ async def handle_linode_account_promo_credit_add(
             side_effects=[
                 "The promo code is applied to the account and may add account credit."
             ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This applies a promo credit to the account. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2668,11 +2668,6 @@ async def handle_linode_account_service_transfer_accept(
         return error_response(validation_error)
     token = cast("str", token)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This accepts an account service transfer. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         encoded_token = quote(token, safe="")
         return build_dry_run_response(
@@ -2682,6 +2677,11 @@ async def handle_linode_account_service_transfer_accept(
             f"/account/service-transfers/{encoded_token}/accept",
             None,
             side_effects=["The service transfer is accepted for the Linode account."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This accepts an account service transfer. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -3250,11 +3250,6 @@ async def handle_linode_account_user_delete(
     if username is None:
         return error_response(message or "username is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes an account user. Set confirm=true to proceed."
-        )
-
     encoded_username = quote(username, safe="")
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -3264,6 +3259,11 @@ async def handle_linode_account_user_delete(
             f"/account/users/{encoded_username}",
             None,
             side_effects=["The selected account user is deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an account user. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -3684,11 +3684,6 @@ async def handle_linode_account_child_account_token_create(
     if euuid is None:
         return error_response("euuid must match the child account EUUID format")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates a child account proxy token. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_child_account_token_create",
@@ -3699,6 +3694,11 @@ async def handle_linode_account_child_account_token_create(
             side_effects=[
                 "A proxy user token is created for the selected child account."
             ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a child account proxy token. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4332,11 +4332,6 @@ async def handle_linode_managed_credential_username_password_update(
     if isinstance(credential_id, list):
         return credential_id
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates a Managed credential. Set confirm=true to proceed."
-        )
-
     try:
         body = _managed_credential_username_password_update_body(arguments)
     except (TypeError, ValueError) as exc:
@@ -4353,6 +4348,11 @@ async def handle_linode_managed_credential_username_password_update(
             None,
             request_body=preview_body,
             side_effects=[f"Managed credential {credential_id} will be updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed credential. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4400,11 +4400,6 @@ async def handle_linode_managed_credential_revoke(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_managed_credential_revoke tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This revokes a Managed credential. Set confirm=true to proceed."
-        )
-
     try:
         credential_id = _optional_int_argument(arguments, "credential_id", 1)
     except (TypeError, ValueError) as exc:
@@ -4421,6 +4416,11 @@ async def handle_linode_managed_credential_revoke(
             f"/managed/credentials/{encoded_credential_id}/revoke",
             None,
             side_effects=["A Managed credential is revoked."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes a Managed credential. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4576,11 +4576,6 @@ async def handle_linode_managed_linode_settings_update(
             validation_error or "Managed Linode settings input is invalid"
         )
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates Managed settings for a Linode. Set confirm=true to proceed."
-        )
-
     encoded_linode_id = quote(str(linode_id), safe="")
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -4591,6 +4586,11 @@ async def handle_linode_managed_linode_settings_update(
             None,
             request_body={"ssh": ssh},
             side_effects=["Managed SSH settings are updated for the selected Linode."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates Managed settings for a Linode. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4673,11 +4673,6 @@ async def handle_linode_managed_credential_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_managed_credential_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates a Managed credential. Set confirm=true to proceed."
-        )
-
     try:
         body = _managed_credential_body(arguments)
     except (TypeError, ValueError) as exc:
@@ -4693,6 +4688,11 @@ async def handle_linode_managed_credential_create(
             None,
             request_body=preview_body,
             side_effects=["A Managed credential is created."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a Managed credential. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4778,11 +4778,6 @@ async def handle_linode_managed_credential_update(
     if isinstance(body, list):
         return body
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates a Managed credential. Set confirm=true to proceed."
-        )
-
     dry_run_path = f"/managed/credentials/{quote(str(credential_id), safe='')}"
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -4793,6 +4788,11 @@ async def handle_linode_managed_credential_update(
             None,
             side_effects=[f"Managed credential {credential_id} will be updated."],
             request_body=body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed credential. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4907,11 +4907,6 @@ async def handle_linode_managed_service_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_managed_service_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates a Managed service monitor. Set confirm=true to proceed."
-        )
-
     try:
         request_body = _managed_service_body(arguments)
     except (TypeError, ValueError) as exc:
@@ -4926,6 +4921,11 @@ async def handle_linode_managed_service_create(
             None,
             request_body=request_body,
             side_effects=["A Managed service monitor is created."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a Managed service monitor. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4980,11 +4980,6 @@ async def handle_linode_managed_service_enable(
     if isinstance(service_id, list):
         return service_id
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This enables a Managed service monitor. Set confirm=true to proceed."
-        )
-
     dry_run_path = f"/managed/services/{quote(str(service_id), safe='')}/enable"
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -4994,6 +4989,11 @@ async def handle_linode_managed_service_enable(
             dry_run_path,
             None,
             side_effects=[f"Managed service monitor {service_id} will be enabled."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enables a Managed service monitor. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -5038,11 +5038,6 @@ async def handle_linode_managed_service_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_managed_service_delete tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a Managed service monitor. Set confirm=true to proceed."
-        )
-
     try:
         service_id = _optional_int_argument(arguments, "service_id", 1)
     except (TypeError, ValueError) as exc:
@@ -5059,6 +5054,11 @@ async def handle_linode_managed_service_delete(
             f"/managed/services/{encoded_service_id}",
             None,
             side_effects=[f"Managed service monitor {service_id} will be deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Managed service monitor. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -5151,11 +5151,6 @@ async def handle_linode_managed_service_disable(
     if service_id is None:
         return error_response("service_id is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This disables a Managed service monitor. Set confirm=true to proceed."
-        )
-
     encoded_service_id = quote(str(service_id), safe="")
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -5165,6 +5160,11 @@ async def handle_linode_managed_service_disable(
             f"/managed/services/{encoded_service_id}/disable",
             None,
             side_effects=["The selected Managed service monitor is disabled."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This disables a Managed service monitor. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -5208,11 +5208,6 @@ async def handle_linode_managed_contact_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_managed_contact_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates a Managed contact. Set confirm=true to proceed."
-        )
-
     try:
         body = _managed_contact_body(arguments)
     except (TypeError, ValueError) as exc:
@@ -5227,6 +5222,11 @@ async def handle_linode_managed_contact_create(
             None,
             request_body=body,
             side_effects=["A Managed contact is created."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a Managed contact. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -5279,11 +5279,6 @@ async def handle_linode_managed_contact_delete(
     if contact_id is None:
         return error_response("contact_id is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a Managed contact. Set confirm=true to proceed."
-        )
-
     encoded_contact_id = quote(str(contact_id), safe="")
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -5293,6 +5288,11 @@ async def handle_linode_managed_contact_delete(
             f"/managed/contacts/{encoded_contact_id}",
             None,
             side_effects=["The selected Managed contact is deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Managed contact. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -5468,11 +5468,6 @@ async def handle_linode_managed_contacts_update(
     if isinstance(body, list):
         return body
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates a Managed contact. Set confirm=true to proceed."
-        )
-
     dry_run_path = f"/managed/contacts/{quote(str(contact_id), safe='')}"
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -5483,6 +5478,11 @@ async def handle_linode_managed_contacts_update(
             None,
             side_effects=[f"Managed contact {contact_id} will be updated."],
             request_body=body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed contact. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -5688,10 +5688,6 @@ async def handle_linode_managed_service_update(
     request_body = _managed_service_update_body(arguments)
     if isinstance(request_body, list):
         return request_body
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates a Managed service monitor. Set confirm=true to proceed."
-        )
     dry_run_path = f"/managed/services/{quote(str(service_id), safe='')}"
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -5702,6 +5698,11 @@ async def handle_linode_managed_service_update(
             None,
             side_effects=[f"Managed service monitor {service_id} will be updated."],
             request_body=request_body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed service monitor. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:

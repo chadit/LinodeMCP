@@ -1310,11 +1310,6 @@ async def handle_linode_image_sharegroup_create(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates an image share group. Set confirm=true to proceed."
-        )
-
     payload, payload_err = _image_sharegroup_create_payload(arguments)
     if payload_err is not None:
         return error_response(payload_err)
@@ -1331,6 +1326,11 @@ async def handle_linode_image_sharegroup_create(
                 f"A new image share group labeled {payload['label']!r} will be created."
             ],
             request_body=payload,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an image share group. Set confirm=true to proceed."
         )
 
     images = cast("list[dict[str, str]] | None", payload.get("images"))
@@ -1560,11 +1560,6 @@ async def handle_linode_images_sharegroups_token_delete(
     if uuid_error is not None:
         return error_response(uuid_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes an image share group token. Set confirm=true to proceed."
-        )
-
     token_uuid_str = cast("str", token_uuid).strip()
 
     if is_dry_run(arguments):
@@ -1575,6 +1570,11 @@ async def handle_linode_images_sharegroups_token_delete(
             f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
             None,
             side_effects=["The image share group token will be deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an image share group token. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1699,11 +1699,6 @@ async def handle_linode_images_sharegroup_delete(
     if id_error is not None:
         return error_response(id_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes an image share group. Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = cast("str", sharegroup_id).strip()
 
     if is_dry_run(arguments):
@@ -1714,6 +1709,11 @@ async def handle_linode_images_sharegroup_delete(
             f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
             None,
             side_effects=["The image share group will be deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an image share group. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1841,12 +1841,6 @@ async def handle_linode_images_sharegroup_member_token_delete(
     if token_error is not None:
         return error_response(token_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This revokes an image share group membership token. "
-            "Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = cast("str", sharegroup_id).strip()
     token_uuid_str = cast("str", token_uuid).strip()
 
@@ -1861,6 +1855,12 @@ async def handle_linode_images_sharegroup_member_token_delete(
             ),
             current_state=None,
             side_effects=["The image share group membership token will be revoked."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes an image share group membership token. "
+            "Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1892,12 +1892,6 @@ async def handle_linode_images_sharegroup_member_token_update(
     if label_error is not None:
         return error_response(label_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates an image share group member token. "
-            "Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = cast("str", sharegroup_id).strip()
     token_uuid_str = cast("str", token_uuid).strip()
     label = cast("str", arguments["label"]).strip()
@@ -1914,6 +1908,12 @@ async def handle_linode_images_sharegroup_member_token_update(
             current_state=None,
             request_body={"label": label},
             side_effects=["The image share group member token will be updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an image share group member token. "
+            "Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1944,11 +1944,6 @@ async def handle_linode_images_sharegroup_image_delete(
     if image_error is not None:
         return error_response(image_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This revokes shared image access. Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = str(cast("int", sharegroup_id))
     image_id_str = str(cast("int", image_id))
 
@@ -1965,6 +1960,11 @@ async def handle_linode_images_sharegroup_image_delete(
             side_effects=[
                 "The shared image will be removed from the image share group."
             ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes shared image access. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1996,11 +1996,6 @@ async def handle_linode_images_sharegroup_image_update(
     if body_error is not None:
         return error_response(body_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates a shared image. Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = str(cast("int", sharegroup_id))
     image_id_str = str(cast("int", image_id))
 
@@ -2016,6 +2011,11 @@ async def handle_linode_images_sharegroup_image_update(
             current_state=None,
             request_body=body,
             side_effects=["The shared image will be updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a shared image. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2046,11 +2046,6 @@ async def handle_linode_images_sharegroup_members_add(
     if body_error is not None:
         return error_response(body_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This adds members to an image share group. Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = cast("str", sharegroup_id).strip()
     body = cast("dict[str, str]", body)
 
@@ -2063,6 +2058,11 @@ async def handle_linode_images_sharegroup_members_add(
             current_state=None,
             request_body=body,
             side_effects=["Members will be added to the image share group."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This adds members to an image share group. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2090,11 +2090,6 @@ async def handle_linode_images_sharegroup_images_add(
     if images_error is not None:
         return error_response(images_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This adds images to an image share group. Set confirm=true to proceed."
-        )
-
     sharegroup_id_str = cast("str", sharegroup_id).strip()
     images = cast("list[dict[str, str]]", images)
 
@@ -2107,6 +2102,11 @@ async def handle_linode_images_sharegroup_images_add(
             current_state=None,
             request_body={"images": images},
             side_effects=["Images will be added to the image share group."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This adds images to an image share group. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2134,11 +2134,6 @@ async def handle_linode_images_sharegroup_update(
     if body_error is not None:
         return error_response(body_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates an image share group. Set confirm=true to proceed."
-        )
-
     if not isinstance(sharegroup_id, str):
         return error_response("sharegroup_id must be a non-empty string")
     sharegroup_id_str = sharegroup_id.strip()
@@ -2152,6 +2147,11 @@ async def handle_linode_images_sharegroup_update(
             current_state=None,
             request_body=body,
             side_effects=["The image share group will be updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an image share group. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2252,11 +2252,6 @@ async def handle_linode_images_sharegroups_token_update(
     if label_error is not None:
         return error_response(label_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates an image share group token. Set confirm=true to proceed."
-        )
-
     token_uuid_str = cast("str", token_uuid).strip()
     label_str = cast("str", label).strip()
 
@@ -2269,6 +2264,11 @@ async def handle_linode_images_sharegroups_token_update(
             None,
             request_body={"label": label_str},
             side_effects=["The image share group token label will be updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an image share group token. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2297,11 +2297,6 @@ async def handle_linode_images_sharegroups_token_create(
     if label_error is not None:
         return error_response(label_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates an image share group token. Set confirm=true to proceed."
-        )
-
     uuid_str = cast("str", uuid_value).strip()
     label_str = cast("str", label).strip() if label is not None else None
 
@@ -2322,6 +2317,11 @@ async def handle_linode_images_sharegroups_token_create(
                     "the target share group."
                 )
             ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an image share group token. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2459,11 +2459,6 @@ async def handle_linode_image_delete(
     if image_id_error is not None:
         return error_response(image_id_error)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a private image. Set confirm=true to proceed."
-        )
-
     image_id_str = cast("str", image_id).strip()
 
     if is_dry_run(arguments):
@@ -2474,6 +2469,11 @@ async def handle_linode_image_delete(
             f"/images/{quote(image_id_str, safe='')}",
             None,
             side_effects=["The private image will be deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a private image. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:

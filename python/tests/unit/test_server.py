@@ -1969,17 +1969,17 @@ async def test_account_settings_managed_enable_dry_run_skips_client(
     mock_client_class.assert_not_called()
 
 
-async def test_account_settings_managed_enable_dry_run_requires_confirm(
+async def test_account_settings_managed_enable_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Account managed enable dry run still requires the confirm safety gate."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_settings_managed_enable", {"dry_run": True}
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10198,10 +10198,10 @@ async def test_managed_credential_create_dry_run_includes_body_and_skips_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_credential_create_dry_run_requires_confirm(
+async def test_managed_credential_create_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed credential create dry run still requires the confirm safety gate."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
@@ -10209,7 +10209,7 @@ async def test_managed_credential_create_dry_run_requires_confirm(
             {"dry_run": True, "label": "prod-root", "password": "s3cret"},
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10472,17 +10472,17 @@ async def test_credential_username_password_update_dry_run(
     mock_client_class.assert_not_called()
 
 
-async def test_credential_username_password_update_dry_run_requires_confirm(
+async def test_credential_username_password_update_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Credential username/password update dry run still requires confirm."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_credential_username_password_update",
             {"dry_run": True, "credential_id": 91, "password": "s3cret"},
         )
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10599,10 +10599,10 @@ async def test_managed_credential_revoke_dry_run_skips_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_credential_revoke_dry_run_requires_confirm(
+async def test_managed_credential_revoke_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed credential revoke dry run still requires the confirm safety gate."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
@@ -10610,7 +10610,7 @@ async def test_managed_credential_revoke_dry_run_requires_confirm(
             {"dry_run": True, "credential_id": 91},
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10849,10 +10849,10 @@ async def test_managed_service_create_dry_run_includes_body_and_skips_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_service_create_dry_run_requires_confirm(
+async def test_managed_service_create_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed service create dry run still requires confirm=true."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
@@ -10866,7 +10866,7 @@ async def test_managed_service_create_dry_run_requires_confirm(
             },
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10966,17 +10966,17 @@ async def test_managed_service_delete_validates_service_id_before_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_service_delete_dry_run_requires_confirm(
+async def test_managed_service_delete_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed service delete dry run still requires confirm."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_service_delete", {"dry_run": True, "service_id": 9944}
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -11122,17 +11122,17 @@ async def test_managed_contact_create_dry_run_includes_body_and_skips_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_contact_create_dry_run_requires_confirm(
+async def test_managed_contact_create_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed contact create dry run still requires the confirm safety gate."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_contact_create", {"dry_run": True, "name": "Ops"}
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -11223,17 +11223,17 @@ async def test_managed_service_disable_validates_service_id_before_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_service_disable_dry_run_requires_confirm(
+async def test_managed_service_disable_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed service disable dry run still requires confirm."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_service_disable", {"dry_run": True, "service_id": 9944}
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -11337,17 +11337,17 @@ async def test_managed_contact_delete_validates_contact_id_before_client(
     mock_client_class.assert_not_called()
 
 
-async def test_managed_contact_delete_dry_run_requires_confirm(
+async def test_managed_contact_delete_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Managed contact delete dry run still requires confirm."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_contact_delete", {"dry_run": True, "contact_id": 123}
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -12244,10 +12244,10 @@ async def test_account_user_create_dry_run_skips_client_call(
     mock_client.create_account_user.assert_not_called()
 
 
-async def test_account_user_create_dry_run_requires_confirm(
+async def test_account_user_create_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Account user create dry-run still requires explicit confirm."""
+    """Dry-run previews without requiring the confirm gate."""
     mock_client = AsyncMock()
     mock_client.create_account_user = AsyncMock()
 
@@ -12265,7 +12265,7 @@ async def test_account_user_create_dry_run_requires_confirm(
             },
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client.create_account_user.assert_not_called()
 
 
@@ -17948,10 +17948,10 @@ async def test_longview_plan_update_rejects_invalid_subscription(
     mock_client.update_longview_plan.assert_not_called()
 
 
-async def test_longview_plan_update_dry_run_requires_confirm_and_skips_client(
+async def test_longview_plan_update_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Longview plan update dry-run still requires confirm before preview."""
+    """Dry-run previews without requiring the confirm gate."""
     mock_client = AsyncMock()
     mock_client.update_longview_plan = AsyncMock()
 
@@ -17964,7 +17964,7 @@ async def test_longview_plan_update_dry_run_requires_confirm_and_skips_client(
             {"longview_subscription": "longview-10", "dry_run": True},
         )
 
-    assert "confirm" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client.update_longview_plan.assert_not_called()
 
 

@@ -1101,7 +1101,7 @@ async def test_handle_linode_instance_config_update_dry_run_skips_client(
 async def test_handle_linode_instance_config_update_requires_boolean_confirm_true(
     confirm: Any, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    arguments: dict[str, Any] = {"linode_id": 123, "config_id": 456}
+    arguments: dict[str, Any] = {"linode_id": 123, "config_id": 456, "label": "rescue"}
     if confirm is not None:
         arguments["confirm"] = confirm
 

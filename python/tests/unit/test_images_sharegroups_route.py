@@ -2029,10 +2029,10 @@ async def test_member_token_update_rejects_invalid_label(
 
 
 @pytest.mark.asyncio
-async def test_image_sharegroup_member_token_update_dry_run_requires_confirm(
+async def test_image_sharegroup_member_token_update_dry_run_previews_without_confirm(
     sample_config: Any,
 ) -> None:
-    """Dry-run still requires confirm because the tool schema requires it."""
+    """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_images_sharegroup_member_token_update(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
@@ -2043,7 +2043,7 @@ async def test_image_sharegroup_member_token_update_dry_run_requires_confirm(
         sample_config,
     )
 
-    assert "confirm=true" in result[0].text
+    assert '"dry_run": true' in result[0].text
 
 
 @pytest.mark.asyncio
@@ -2323,10 +2323,10 @@ async def test_member_token_delete_rejects_invalid_path_params(
 
 
 @pytest.mark.asyncio
-async def test_image_sharegroup_member_token_delete_dry_run_requires_confirm(
+async def test_image_sharegroup_member_token_delete_dry_run_previews_without_confirm(
     sample_config: Any,
 ) -> None:
-    """Dry-run still requires confirm because the tool schema requires it."""
+    """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_images_sharegroup_member_token_delete(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
@@ -2336,7 +2336,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_requires_confirm(
         sample_config,
     )
 
-    assert "confirm=true" in result[0].text
+    assert '"dry_run": true' in result[0].text
 
 
 @pytest.mark.asyncio
@@ -3572,10 +3572,10 @@ async def test_handle_linode_images_sharegroups_token_update_rejects_invalid_lab
 
 
 @pytest.mark.asyncio
-async def test_image_sharegroup_token_update_dry_run_requires_confirm(
+async def test_image_sharegroup_token_update_dry_run_previews_without_confirm(
     sample_config: Any,
 ) -> None:
-    """Dry-run still requires confirm because the tool schema requires it."""
+    """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_images_sharegroups_token_update(
         {
             "token_uuid": "11111111-1111-4111-8111-111111111111",
@@ -3585,7 +3585,7 @@ async def test_image_sharegroup_token_update_dry_run_requires_confirm(
         sample_config,
     )
 
-    assert "confirm=true" in result[0].text
+    assert '"dry_run": true' in result[0].text
 
 
 @pytest.mark.asyncio
@@ -3783,10 +3783,10 @@ async def test_handle_linode_images_sharegroups_token_delete_rejects_invalid_tok
 
 
 @pytest.mark.asyncio
-async def test_image_sharegroup_token_delete_dry_run_requires_confirm(
+async def test_image_sharegroup_token_delete_dry_run_previews_without_confirm(
     sample_config: Any,
 ) -> None:
-    """Dry-run still requires confirm because the tool schema requires it."""
+    """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_images_sharegroups_token_delete(
         {
             "token_uuid": "11111111-1111-4111-8111-111111111111",
@@ -3795,7 +3795,7 @@ async def test_image_sharegroup_token_delete_dry_run_requires_confirm(
         sample_config,
     )
 
-    assert "confirm=true" in result[0].text
+    assert '"dry_run": true' in result[0].text
 
 
 @pytest.mark.asyncio

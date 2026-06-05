@@ -1331,9 +1331,6 @@ async def handle_linode_database_cluster_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_cluster_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     payload, error = _build_mysql_database_payload(arguments)
     if error is not None or payload is None:
         return error_response(error or "invalid database create arguments")
@@ -1353,6 +1350,9 @@ async def handle_linode_database_cluster_create(
             request_body=payload,
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_mysql_database_instance(payload)
 
@@ -1363,9 +1363,6 @@ async def handle_linode_database_postgresql_instance_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_postgresql_instance_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     payload, error = _build_postgresql_database_payload(arguments)
     if error is not None or payload is None:
         return error_response(error or "invalid database create arguments")
@@ -1384,6 +1381,9 @@ async def handle_linode_database_postgresql_instance_create(
             warnings=["Creating a Managed Database can incur billing."],
             request_body=payload,
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_postgresql_database_instance(payload)
@@ -1405,9 +1405,6 @@ async def handle_linode_database_mysql_instance_delete(
     encoded_instance_id = quote(str(instance_id), safe="")
     delete_path = f"/databases/mysql/instances/{encoded_instance_id}"
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_mysql_instance_delete",
@@ -1420,6 +1417,9 @@ async def handle_linode_database_mysql_instance_delete(
             ],
             warnings=["Deleting a Managed Database is destructive."],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.delete_mysql_database_instance(instance_id)
@@ -1451,9 +1451,6 @@ async def handle_linode_database_mysql_instance_suspend(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_mysql_instance_suspend tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     instance_id, error = _validate_instance_id(arguments.get("instance_id"))
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
@@ -1474,6 +1471,9 @@ async def handle_linode_database_mysql_instance_suspend(
             warnings=["Suspending a Managed Database can interrupt service."],
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.suspend_mysql_database_instance(instance_id)
 
@@ -1484,9 +1484,6 @@ async def handle_linode_database_mysql_instance_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_mysql_instance_update tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     instance_id, error = _validate_instance_id(arguments.get("instance_id"))
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
@@ -1508,6 +1505,9 @@ async def handle_linode_database_mysql_instance_update(
             request_body=payload,
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_mysql_database_instance(instance_id, payload)
 
@@ -1520,9 +1520,6 @@ async def handle_linode_database_postgresql_instance_suspend(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_postgresql_instance_suspend tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     instance_id, error = _validate_instance_id(arguments.get("instance_id"))
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
@@ -1543,6 +1540,9 @@ async def handle_linode_database_postgresql_instance_suspend(
             warnings=["Suspending a Managed Database can interrupt service."],
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.suspend_postgresql_database_instance(instance_id)
 
@@ -1555,9 +1555,6 @@ async def handle_linode_database_postgresql_instance_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_postgresql_instance_update tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     instance_id, error = _validate_instance_id(arguments.get("instance_id"))
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
@@ -1580,6 +1577,9 @@ async def handle_linode_database_postgresql_instance_update(
             warnings=["Updating a Managed Database can change service behavior."],
             request_body=payload,
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_postgresql_database_instance(instance_id, payload)
@@ -1621,9 +1621,6 @@ async def handle_linode_database_postgresql_instance_delete(
     encoded_instance_id = quote(str(instance_id), safe="")
     delete_path = f"/databases/postgresql/instances/{encoded_instance_id}"
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_postgresql_instance_delete",
@@ -1636,6 +1633,9 @@ async def handle_linode_database_postgresql_instance_delete(
             ],
             warnings=["Deleting a Managed Database is destructive."],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.delete_postgresql_database_instance(instance_id)
@@ -1657,9 +1657,6 @@ async def handle_linode_database_mysql_instance_patch(
     encoded_instance_id = quote(str(instance_id), safe="")
     patch_path = f"/databases/mysql/instances/{encoded_instance_id}/patch"
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_mysql_instance_patch",
@@ -1672,6 +1669,9 @@ async def handle_linode_database_mysql_instance_patch(
                 f"instance {instance_id}."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.patch_mysql_database_instance(instance_id)
@@ -1691,9 +1691,6 @@ async def handle_linode_database_postgresql_instance_patch(
     encoded_instance_id = quote(str(instance_id), safe="")
     patch_path = f"/databases/postgresql/instances/{encoded_instance_id}/patch"
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_postgresql_instance_patch",
@@ -1706,6 +1703,9 @@ async def handle_linode_database_postgresql_instance_patch(
                 f"instance {instance_id}."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.patch_postgresql_database_instance(instance_id)
@@ -1743,9 +1743,6 @@ async def handle_linode_database_mysql_credentials_reset(
     encoded_instance_id = quote(str(instance_id), safe="")
     reset_path = f"/databases/mysql/instances/{encoded_instance_id}/credentials/reset"
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_mysql_credentials_reset",
@@ -1763,6 +1760,9 @@ async def handle_linode_database_mysql_credentials_reset(
                 "Resetting credentials can disrupt clients using the old credentials."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.reset_mysql_database_credentials(instance_id)
@@ -1786,9 +1786,6 @@ async def handle_linode_database_postgresql_credentials_reset(
         f"/databases/postgresql/instances/{encoded_instance_id}/credentials/reset"
     )
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_postgresql_credentials_reset",
@@ -1806,6 +1803,9 @@ async def handle_linode_database_postgresql_credentials_reset(
                 "Resetting credentials can disrupt clients using the old credentials."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.reset_postgresql_database_credentials(instance_id)
@@ -1848,9 +1848,6 @@ async def handle_linode_database_mysql_instance_credentials_get(
     encoded_instance_id = quote(str(instance_id), safe="")
     credentials_path = f"/databases/mysql/instances/{encoded_instance_id}/credentials"
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_mysql_instance_credentials_get",
@@ -1863,6 +1860,9 @@ async def handle_linode_database_mysql_instance_credentials_get(
             ],
             warnings=["The response contains sensitive password material."],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_database_mysql_instance_credentials(instance_id)
@@ -1891,9 +1891,6 @@ async def handle_linode_database_postgresql_instance_credentials_get(
         f"/databases/postgresql/instances/{encoded_instance_id}/credentials"
     )
 
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_database_postgresql_instance_credentials_get",
@@ -1906,6 +1903,9 @@ async def handle_linode_database_postgresql_instance_credentials_get(
             ],
             warnings=["The response contains sensitive password material."],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_database_postgresql_instance_credentials(instance_id)
@@ -1922,9 +1922,6 @@ async def handle_linode_database_mysql_instance_resume(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_mysql_instance_resume tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     instance_id, error = _validate_instance_id(arguments.get("instance_id"))
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
@@ -1942,6 +1939,9 @@ async def handle_linode_database_mysql_instance_resume(
             warnings=["Resuming a Managed Database changes service state."],
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.resume_mysql_database_instance(instance_id)
 
@@ -1954,9 +1954,6 @@ async def handle_linode_database_postgresql_instance_resume(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_postgresql_instance_resume tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
-
     instance_id, error = _validate_instance_id(arguments.get("instance_id"))
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
@@ -1975,6 +1972,9 @@ async def handle_linode_database_postgresql_instance_resume(
             ],
             warnings=["Resuming a Managed Database changes service state."],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.resume_postgresql_database_instance(instance_id)

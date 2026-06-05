@@ -1604,16 +1604,16 @@ async def test_handle_linode_account_beta_enroll_dry_run(
     mock_client_class.assert_not_called()
 
 
-async def test_handle_linode_account_beta_enroll_dry_run_requires_confirm(
+async def test_handle_linode_account_beta_enroll_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """dry_run=true still requires explicit boolean confirm before client calls."""
+    """Dry-run previews without requiring the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_account_beta_enroll(
             {"id": "distributed-beta", "dry_run": True}, sample_config
         )
 
-    assert "confirm=true" in result[0].text
+    assert '"dry_run": true' in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -6026,10 +6026,10 @@ async def test_handle_linode_images_sharegroups_token_create_validates_label(
     mock_client_class.assert_not_called()
 
 
-async def test_image_sharegroup_token_create_dry_run_requires_confirm(
+async def test_image_sharegroup_token_create_dry_run_previews_without_confirm(
     sample_config: Config,
 ) -> None:
-    """Dry-run still requires confirm because the tool schema requires it."""
+    """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_images_sharegroups_token_create(
         {
             "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
@@ -6039,7 +6039,7 @@ async def test_image_sharegroup_token_create_dry_run_requires_confirm(
     )
 
     assert len(result) == 1
-    assert "confirm=true" in result[0].text
+    assert '"dry_run": true' in result[0].text
 
 
 async def test_image_sharegroup_token_create_dry_run_returns_preview(

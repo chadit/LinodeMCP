@@ -308,11 +308,6 @@ async def handle_linode_longview_client_update(
     client_id = cast("int", arguments["client_id"])
     body = _longview_client_update_body(arguments)
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates a Longview client. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_longview_client_update",
@@ -322,6 +317,11 @@ async def handle_linode_longview_client_update(
             None,
             request_body=body,
             side_effects=["The Longview client is updated with the provided label."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Longview client. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -480,11 +480,6 @@ async def handle_linode_longview_plan_update(
             "longview_subscription must be a Longview plan ID like longview-10"
         )
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This updates the account Longview plan. Set confirm=true to proceed."
-        )
-
     request_body: dict[str, Any] = {"longview_subscription": longview_subscription}
 
     if is_dry_run(arguments):
@@ -499,6 +494,11 @@ async def handle_linode_longview_plan_update(
             None,
             request_body=request_body,
             side_effects=["The account Longview plan would be updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates the account Longview plan. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -532,11 +532,6 @@ async def handle_linode_longview_client_delete(
     except ValueError as exc:
         return error_response(str(exc))
 
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a Longview client. Set confirm=true to proceed."
-        )
-
     if is_dry_run(arguments):
         environment = arguments.get("environment")
         if not isinstance(environment, str):
@@ -548,6 +543,11 @@ async def handle_linode_longview_client_delete(
             f"/longview/clients/{client_id}",
             None,
             side_effects=[f"Longview client {client_id} would be deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Longview client. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:

@@ -254,18 +254,14 @@ async def test_handle_linode_longview_client_update_dry_run_skips_client(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
-@pytest.mark.parametrize("dry_run", [False, True])
 async def test_handle_linode_longview_client_update_rejects_non_true_confirm(
     confirm_value: Any,
-    dry_run: bool,
     sample_config: Any,
     mock_linode_client: AsyncMock,
 ) -> None:
     arguments: dict[str, Any] = {"client_id": 123, "label": "updated-client"}
     if confirm_value is not None:
         arguments["confirm"] = confirm_value
-    if dry_run:
-        arguments["dry_run"] = True
 
     result = await handle_linode_longview_client_update(arguments, sample_config)
 

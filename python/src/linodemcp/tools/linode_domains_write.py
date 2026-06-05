@@ -78,9 +78,6 @@ async def handle_linode_domain_import(
         validate_label(domain_name)
     except ValueError as exc:
         return error_response(str(exc))
-    if arguments.get("confirm") is not True:
-        return error_response("This imports a DNS domain. Set confirm=true to proceed.")
-
     request_body = {
         "domain": domain_name,
         "remote_nameserver": remote_nameserver,
@@ -99,6 +96,9 @@ async def handle_linode_domain_import(
                 f"{remote_nameserver!r}."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("This imports a DNS domain. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         domain = await client.import_domain(
@@ -176,9 +176,6 @@ async def handle_linode_domain_clone(
         validate_label(domain_name)
     except ValueError as exc:
         return error_response(str(exc))
-    if arguments.get("confirm") is not True:
-        return error_response("This clones a DNS domain. Set confirm=true to proceed.")
-
     request_body = {"domain": domain_name}
     encoded_domain_id = quote(str(domain_id), safe="")
 
@@ -194,6 +191,9 @@ async def handle_linode_domain_clone(
                 f"DNS domain ID {domain_id} will be cloned to {domain_name!r}."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("This clones a DNS domain. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         domain = await client.clone_domain(domain_id=domain_id, domain=domain_name)

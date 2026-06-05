@@ -995,9 +995,6 @@ async def handle_linode_instance_interface_add(
         return error_response("interface must be an object")
     interface_body = cast("dict[str, Any]", interface)
 
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_instance_interface_add",
@@ -1008,6 +1005,9 @@ async def handle_linode_instance_interface_add(
             request_body=interface_body,
             side_effects=[f"An interface will be added to Linode {linode_id}."],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         interface_result = await client.add_instance_interface(
@@ -1050,9 +1050,6 @@ async def handle_linode_instance_interface_update(
     if fields is None:
         return error_response(fields_error or "at least one update field is required")
 
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_instance_interface_update",
@@ -1065,6 +1062,9 @@ async def handle_linode_instance_interface_update(
             ],
             request_body=fields,
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_interface(linode_id, interface_id, fields)
@@ -1150,9 +1150,6 @@ async def handle_linode_instance_config_interface_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_delete tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1178,6 +1175,9 @@ async def handle_linode_instance_config_interface_delete(
                 f"profile {config_id} for Linode {linode_id}."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_config_interface(
@@ -1229,9 +1229,6 @@ async def handle_linode_instance_interface_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_delete tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1250,6 +1247,9 @@ async def handle_linode_instance_interface_delete(
                 f"Interface {interface_id} will be deleted from Linode {linode_id}."
             ],
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_interface(linode_id, interface_id)
@@ -1415,9 +1415,6 @@ async def handle_linode_instance_config_interface_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_update tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     ids: dict[str, int] = {}
     for key in ("linode_id", "config_id", "interface_id"):
         value = _positive_int_argument(arguments, key)
@@ -1448,6 +1445,9 @@ async def handle_linode_instance_config_interface_update(
             ],
             request_body=fields,
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_config_interface(
@@ -1624,9 +1624,6 @@ async def handle_linode_instance_config_interfaces_order(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interfaces_order tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1652,6 +1649,9 @@ async def handle_linode_instance_config_interfaces_order(
             ],
             request_body={"ids": ids},
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.reorder_instance_config_interfaces(
@@ -1686,9 +1686,6 @@ async def handle_linode_instance_config_interface_add(
     if config_id is None:
         return error_response("config_id must be a positive integer")
 
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     body = _config_interface_add_body(arguments)
     if isinstance(body, str):
         return error_response(body)
@@ -1706,6 +1703,9 @@ async def handle_linode_instance_config_interface_add(
             ],
             request_body=body,
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.add_instance_config_interface(linode_id, config_id, body)
@@ -1729,9 +1729,6 @@ async def handle_linode_instance_config_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_update tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1773,6 +1770,9 @@ async def handle_linode_instance_config_update(
             ],
             request_body=fields,
         )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_config(linode_id, config_id, fields)
