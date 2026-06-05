@@ -133,6 +133,7 @@ from linodemcp.tools import (
     create_linode_managed_issue_get_tool,
     create_linode_managed_issues_list_tool,
     create_linode_managed_linode_settings_list_tool,
+    create_linode_managed_service_get_tool,
     create_linode_managed_ssh_key_get_tool,
     create_linode_managed_stats_tool,
     create_linode_monitor_service_alert_definition_get_tool,
@@ -348,6 +349,7 @@ from linodemcp.tools import (
     handle_linode_managed_issue_get,
     handle_linode_managed_issues_list,
     handle_linode_managed_linode_settings_list,
+    handle_linode_managed_service_get,
     handle_linode_managed_ssh_key_get,
     handle_linode_managed_stats,
     handle_linode_monitor_service_alert_definition_get,
@@ -2692,6 +2694,84 @@ async def test_handle_linode_managed_contact_get_reports_client_errors(
     assert len(result) == 1
     assert "Failed to get Linode Managed contact: boom" in result[0].text
     mock_client.get_managed_contact.assert_awaited_once_with(42)
+
+
+async def test_create_linode_managed_service_get_tool() -> None:
+    """Test linode_managed_service_get tool schema."""
+    tool, capability = create_linode_managed_service_get_tool()
+
+    assert tool.name == "linode_managed_service_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["type"] == "object"
+    assert tool.inputSchema["required"] == ["service_id"]
+    assert tool.inputSchema["properties"]["service_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert "confirm" not in tool.inputSchema["properties"]
+
+
+async def test_handle_linode_managed_service_get(sample_config: Config) -> None:
+    """Test linode_managed_service_get tool."""
+    response_data: dict[str, Any] = {"id": 314, "label": "web monitor"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_service.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_service_get(
+            {"service_id": 314}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.get_managed_service.assert_awaited_once_with(314)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"service_id": 0},
+        {"service_id": -1},
+        {"service_id": False},
+        {"service_id": "314"},
+        {"service_id": "1/2"},
+        {"service_id": "1?x"},
+        {"service_id": ".."},
+    ],
+)
+async def test_handle_linode_managed_service_get_rejects_bad_service_id(
+    arguments: dict[str, object], sample_config: Config
+) -> None:
+    """Test Managed service handler rejects missing or unsafe service IDs."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_service_get(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "service_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_service_get_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Test Managed service handler reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_service.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_service_get(
+            {"service_id": 314}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to get Linode Managed service monitor: boom" in result[0].text
+    mock_client.get_managed_service.assert_awaited_once_with(314)
 
 
 async def test_create_linode_account_beta_get_tool() -> None:
