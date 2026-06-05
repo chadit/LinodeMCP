@@ -157,7 +157,6 @@ from linodemcp.tools import (
     create_linode_nodebalancer_vpc_config_get_tool,
     create_linode_nodebalancer_vpc_configs_list_tool,
     create_linode_object_storage_cancel_tool,
-    create_linode_object_storage_cluster_get_tool,
     create_linode_object_storage_endpoints_list_tool,
     create_linode_object_storage_quota_get_tool,
     create_linode_object_storage_quota_usage_tool,
@@ -389,7 +388,6 @@ from linodemcp.tools import (
     handle_linode_object_storage_buckets_list,
     handle_linode_object_storage_buckets_region_list,
     handle_linode_object_storage_cancel,
-    handle_linode_object_storage_cluster_get,
     handle_linode_object_storage_endpoints_list,
     handle_linode_object_storage_key_create,
     handle_linode_object_storage_key_delete,
@@ -12345,93 +12343,16 @@ async def test_handle_linode_object_storage_bucket_contents_missing_region(
     assert "region is required" in result[0].text
 
 
-async def test_create_linode_object_storage_cluster_get_schema() -> None:
-    """Object Storage cluster get tool should require cluster_id."""
-    tool, capability = create_linode_object_storage_cluster_get_tool()
-
-    assert tool.name == "linode_object_storage_cluster_get"
-    assert capability is Capability.Read
-    assert "cluster_id" in (tool.inputSchema.get("required") or [])
-    assert tool.inputSchema["properties"]["cluster_id"]["type"] == "string"
-
-
-async def test_handle_linode_object_storage_cluster_get(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_cluster_get tool."""
-    mock_cluster = {
-        "id": "us-east-1",
-        "region": "us-east",
-        "domain": "us-east-1.linodeobjects.com",
-        "status": "available",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_object_storage_cluster.return_value = mock_cluster
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_cluster_get(
-            {"cluster_id": "us-east-1"}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "us-east-1" in result[0].text
-        mock_client.get_object_storage_cluster.assert_called_once_with("us-east-1")
-
-
-async def test_handle_linode_object_storage_cluster_get_missing_cluster_id(
-    sample_config: Config,
-) -> None:
-    """Object Storage cluster get should require cluster_id."""
-    result = await handle_linode_object_storage_cluster_get({}, sample_config)
-
-    assert len(result) == 1
-    assert "cluster_id is required" in result[0].text
-
-
-@pytest.mark.parametrize("cluster_id", [123, True])
-async def test_handle_linode_object_storage_cluster_get_rejects_non_string_cluster_id(
-    cluster_id: object,
-    sample_config: Config,
-) -> None:
-    """Object Storage cluster get should reject non-string cluster_id values."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_object_storage_cluster_get(
-            {"cluster_id": cluster_id}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "cluster_id must be a string" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("cluster_id", ["us/east-1", "us-east-1?x=y", ".."])
-async def test_handle_linode_object_storage_cluster_get_rejects_bad_cluster_id(
-    cluster_id: str,
-    sample_config: Config,
-) -> None:
-    """Object Storage cluster get should reject path traversal separators."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_object_storage_cluster_get(
-            {"cluster_id": cluster_id}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "cluster_id must contain only" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_linode_object_storage_cluster_get_registered() -> None:
-    """Object Storage cluster get should be in the server registry."""
+async def test_linode_object_storage_cluster_get_removed_from_registry() -> None:
+    """Deprecated Object Storage cluster get tool should not be registered."""
     from linodemcp.server import get_tool_registry
+    from linodemcp.version import FEATURE_TOOLS_LIST, REMOVED_FEATURE_TOOLS_LIST
 
     registry = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_object_storage_cluster_get" in registry
-    assert registry["linode_object_storage_cluster_get"].capability is Capability.Read
+    assert "linode_object_storage_cluster_get" not in registry
+    assert "linode_object_storage_cluster_get" not in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_object_storage_cluster_get" in REMOVED_FEATURE_TOOLS_LIST.split(",")
 
 
 async def test_handle_linode_object_storage_types_list(

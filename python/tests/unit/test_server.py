@@ -485,19 +485,25 @@ async def test_object_storage_quotas_list_tool_is_exported_and_registered(
 async def test_deprecated_object_storage_clusters_list_tool_absent(
     sample_config: Config,
 ) -> None:
-    """Deprecated Object Storage clusters list tool should not be exposed."""
+    """Deprecated Object Storage cluster tools should not be exposed."""
     from linodemcp import tools as tools_mod
-    from linodemcp.version import FEATURE_TOOLS_LIST
+    from linodemcp.version import FEATURE_TOOLS_LIST, REMOVED_FEATURE_TOOLS_LIST
 
     assert "create_linode_object_storage_clusters_list_tool" not in tools_mod.__all__
     assert "handle_linode_object_storage_clusters_list" not in tools_mod.__all__
+    assert "create_linode_object_storage_cluster_get_tool" not in tools_mod.__all__
+    assert "handle_linode_object_storage_cluster_get" not in tools_mod.__all__
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert "linode_object_storage_clusters_list" not in registry
+    assert "linode_object_storage_cluster_get" not in registry
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_object_storage_clusters_list" not in srv.registered_tool_names
+    assert "linode_object_storage_cluster_get" not in srv.registered_tool_names
     assert "linode_object_storage_clusters_list" not in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_object_storage_cluster_get" not in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_object_storage_cluster_get" in REMOVED_FEATURE_TOOLS_LIST.split(",")
     assert "linode_regions_get" in registry
     assert "linode_regions_get" in srv.registered_tool_names
 
@@ -513,6 +519,26 @@ async def test_object_storage_endpoints_list_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_object_storage_endpoints_list" in srv.registered_tool_names
+
+
+async def test_deprecated_object_storage_cluster_get_tool_is_not_dispatchable(
+    sample_config: Config,
+) -> None:
+    """Deprecated Object Storage cluster get tool should not be dispatchable."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_object_storage_cluster_get_tool" not in tools_mod.__all__
+    assert "handle_linode_object_storage_cluster_get" not in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_object_storage_cluster_get" not in srv.registered_tool_names
+
+    list_tools = srv.mcp.request_handlers[ListToolsRequest]
+    result = await list_tools(ListToolsRequest(method="tools/list"))
+    list_result = cast("ListToolsResult", result.root)
+    assert "linode_object_storage_cluster_get" not in {
+        tool.name for tool in list_result.tools
+    }
 
 
 async def test_network_transfer_prices_tool_is_exported_and_registered(
