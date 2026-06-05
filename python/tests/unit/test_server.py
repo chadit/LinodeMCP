@@ -9712,6 +9712,162 @@ async def test_managed_contacts_list_rejects_out_of_range_page_size(
     mock_client_class.assert_not_called()
 
 
+async def test_managed_linode_settings_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed Linode settings update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.profiles.builtin import categories
+
+    assert "create_linode_managed_linode_settings_update_tool" in tools_mod.__all__
+    assert "handle_linode_managed_linode_settings_update" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_linode_settings_update_tool()
+    assert tool.name == "linode_managed_linode_settings_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert set(tool.inputSchema["required"]) == {"linode_id", "ssh", "confirm"}
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "account" in categories("linode_managed_linode_settings_update")
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_linode_settings_update" in srv.registered_tool_names
+
+
+async def test_managed_linode_settings_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed Linode settings update is callable through server dispatch."""
+    response_data = {"id": 123, "ssh": {"access": False}}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_managed_linode_settings.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_linode_settings_update",
+            {"linode_id": 123, "ssh": {"access": False}, "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Managed Linode settings updated successfully"
+    assert payload["settings"] == response_data
+    mock_client.update_managed_linode_settings.assert_awaited_once_with(
+        123, ssh={"access": False}
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_linode_settings_update_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Managed Linode settings update requires confirm before client calls."""
+    arguments: dict[str, Any] = {"linode_id": 123, "ssh": {"access": True}}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_linode_settings_update", arguments)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            {"linode_id": "1/2", "ssh": {"access": True}, "confirm": True},
+            "linode_id must be a positive integer",
+        ),
+        (
+            {"linode_id": "1?x", "ssh": {"access": True}, "confirm": True},
+            "linode_id must be a positive integer",
+        ),
+        (
+            {"linode_id": "..", "ssh": {"access": True}, "confirm": True},
+            "linode_id must be a positive integer",
+        ),
+        (
+            {"linode_id": True, "ssh": {"access": True}, "confirm": True},
+            "linode_id must be a positive integer",
+        ),
+        (
+            {"linode_id": 123, "ssh": {}, "confirm": True},
+            "ssh must contain at least one field",
+        ),
+        (
+            {"linode_id": 123, "ssh": {"id": 123}, "confirm": True},
+            "unsupported fields",
+        ),
+        (
+            {"linode_id": 123, "ssh": {"access": "true"}, "confirm": True},
+            "ssh.access must be a boolean",
+        ),
+        (
+            {"linode_id": 123, "ssh": {"ip": ""}, "confirm": True},
+            "ssh.ip must be a non-empty string",
+        ),
+        (
+            {"linode_id": 123, "ssh": {"port": 0}, "confirm": True},
+            "ssh.port must be an integer from 1 to 65535 or null",
+        ),
+        (
+            {"linode_id": 123, "ssh": {"user": "x" * 33}, "confirm": True},
+            "ssh.user must be a string up to 32 characters or null",
+        ),
+        (
+            {
+                "linode_id": 123,
+                "ssh": {"access": True},
+                "confirm": True,
+                "label": "read-only",
+            },
+            "Unsupported Managed Linode settings field(s): label",
+        ),
+    ],
+)
+async def test_managed_linode_settings_update_rejects_invalid_arguments(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """Managed Linode settings update validates inputs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_linode_settings_update", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_linode_settings_update_dry_run_includes_body_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed Linode settings dry-run previews body and skips client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_linode_settings_update",
+            {
+                "linode_id": 123,
+                "ssh": {"access": True, "port": None},
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_managed_linode_settings_update"
+    assert payload["would_execute"]["method"] == "PUT"
+    assert payload["would_execute"]["path"] == "/managed/linode-settings/123"
+    assert payload["would_execute"]["body"] == {"ssh": {"access": True, "port": None}}
+    mock_client_class.assert_not_called()
+
+
 async def test_managed_linode_settings_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
