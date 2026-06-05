@@ -580,11 +580,6 @@ type AccountEntityTransferEntities struct {
 	Linodes []int `json:"linodes"`
 }
 
-// CreateAccountEntityTransferRequest contains the entities to transfer for POST /account/entity-transfers.
-type CreateAccountEntityTransferRequest struct {
-	Entities AccountEntityTransferEntities `json:"entities"`
-}
-
 // CreateAccountServiceTransferRequest contains the entities to transfer for POST /account/service-transfers.
 type CreateAccountServiceTransferRequest struct {
 	Entities AccountEntityTransferEntities `json:"entities"`

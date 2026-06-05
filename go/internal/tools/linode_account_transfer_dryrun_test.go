@@ -20,39 +20,6 @@ const (
 	serviceTransferGetPath          = accountServiceTransfersTestPath + "/" + transferTestToken
 )
 
-func TestLinodeAccountEntityTransferCreateToolDryRun(t *testing.T) {
-	t.Parallel()
-
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
-
-		tool, _, _ := tools.NewLinodeAccountEntityTransferCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
-
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeAccountEntityTransferCreateTool(dryRunNoCallServer(t))
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeIDs: []any{float64(123)},
-			keyDryRun:    true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_entity_transfer_create", body["tool"])
-
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountEntityTransfersTestPath, would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
-	})
-}
-
 func TestLinodeAccountEntityTransferAcceptToolDryRun(t *testing.T) {
 	t.Parallel()
 
