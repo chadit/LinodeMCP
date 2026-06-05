@@ -4936,6 +4936,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListManagedServices", e) from e
 
+    async def delete_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Delete a Managed service monitor by service ID."""
+        validated_service_id = _validate_positive_path_int(service_id, "service_id")
+        encoded_service_id = quote(str(validated_service_id), safe="")
+        try:
+            response = await self.make_request(
+                "DELETE", f"/managed/services/{encoded_service_id}"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteManagedService", e) from e
+
     async def get_managed_issue(self, issue_id: int) -> dict[str, Any]:
         """Get a Managed issue by issue ID."""
         valid_issue_id = _validate_positive_path_int(issue_id, "issue_id")
@@ -12170,6 +12183,10 @@ class RetryableClient:
             self.client.list_managed_services
         )
         return result
+
+    async def delete_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Delete a Managed service monitor once without retry replay."""
+        return await self.client.delete_managed_service(service_id)
 
     async def get_managed_issue(self, issue_id: int) -> dict[str, Any]:
         """Get a Managed issue with retry."""
