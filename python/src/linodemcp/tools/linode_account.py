@@ -5009,6 +5009,47 @@ async def handle_linode_managed_service_delete(
     return await execute_tool(cfg, arguments, "delete Managed service monitor", _call)
 
 
+def create_linode_managed_service_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_get tool."""
+    return Tool(
+        name="linode_managed_service_get",
+        description="Gets a Linode Managed service monitor by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "service_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed service monitor ID to retrieve",
+                },
+            },
+            "required": ["service_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_service_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_service_get tool request."""
+    service_id = arguments.get("service_id")
+    if (
+        not isinstance(service_id, int)
+        or isinstance(service_id, bool)
+        or service_id < 1
+    ):
+        return error_response("service_id must be a positive integer")
+    validated_service_id = service_id
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_managed_service(validated_service_id)
+
+    return await execute_tool(
+        cfg, arguments, "get Linode Managed service monitor", _call
+    )
+
+
 def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contact_create tool."""
     body_properties = {

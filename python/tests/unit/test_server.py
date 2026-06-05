@@ -10592,6 +10592,70 @@ async def test_managed_credential_revoke_dispatches_from_registry(
     mock_client.revoke_managed_credential.assert_awaited_once_with(91)
 
 
+async def test_managed_service_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed service get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_service_get_tool" in tools_mod.__all__
+    assert "handle_linode_managed_service_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_service_get_tool()
+    assert tool.name == "linode_managed_service_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["service_id"]
+
+    srv = Server(sample_config)
+    assert "linode_managed_service_get" in srv.registered_tool_names
+
+
+async def test_managed_service_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed service get is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 314, "label": "web monitor"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_service.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_service_get", {"service_id": 314})
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_managed_service.assert_awaited_once_with(314)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"service_id": 0},
+        {"service_id": -1},
+        {"service_id": True},
+        {"service_id": "1/2"},
+        {"service_id": "1?x"},
+        {"service_id": ".."},
+    ],
+)
+async def test_managed_service_get_rejects_invalid_service_id(
+    sample_config: Config, arguments: dict[str, object]
+) -> None:
+    """Managed service get rejects malformed IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_service_get", arguments)
+
+    assert len(result) == 1
+    assert "service_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_managed_service_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

@@ -4740,6 +4740,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateManagedService", e) from e
 
+    async def get_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Get a Managed service monitor by service ID."""
+        valid_service_id = _validate_positive_path_int(service_id, "service_id")
+        # Keep URL construction encoded at the client boundary for path-param safety.
+        encoded_service_id = quote(str(valid_service_id), safe="")
+        endpoint = f"/managed/services/{encoded_service_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetManagedService", e) from e
+
     async def update_managed_credential(
         self,
         credential_id: int,
@@ -12073,6 +12086,13 @@ class RetryableClient:
             notes=notes,
             region=region,
         )
+
+    async def get_managed_service(self, service_id: int) -> dict[str, Any]:
+        """Get a Managed service monitor with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_managed_service, service_id
+        )
+        return result
 
     async def update_managed_credential(
         self,
