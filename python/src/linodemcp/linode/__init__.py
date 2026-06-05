@@ -4389,7 +4389,7 @@ class Client:
         """Share IPv4 addresses with a Linode."""
         try:
             body: dict[str, Any] = {"ips": ips, "linode_id": linode_id}
-            response = await self.make_request("POST", "/networking/ips/share", body)
+            response = await self.make_request("POST", "/networking/ipv4/share", body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -11878,11 +11878,8 @@ class RetryableClient:
         await self._execute_with_retry(self.client.delete_vlan, region_id, label)
 
     async def share_ipv4s(self, ips: list[str], linode_id: int) -> dict[str, Any]:
-        """Share IPv4s with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
-            self.client.share_ipv4s, ips, linode_id
-        )
-        return result
+        """Share IPv4s without replay retry."""
+        return await self.client.share_ipv4s(ips, linode_id)
 
     async def assign_ipv4s(
         self, region: str, assignments: list[dict[str, Any]]

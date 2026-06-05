@@ -23123,7 +23123,11 @@ async def test_ipv4_share_dry_run_returns_preview(sample_config: Config) -> None
     assert body["dry_run"] is True
     assert body["tool"] == "linode_ipv4_share"
     assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ips/share"
+    assert body["would_execute"]["path"] == "/networking/ipv4/share"
+    assert body["would_execute"]["body"] == {
+        "ips": ["192.0.2.10"],
+        "linode_id": 123,
+    }
     assert body["current_state"] is None
     assert "confirm=true" not in result[0].text
 
