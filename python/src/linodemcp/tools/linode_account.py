@@ -60,6 +60,7 @@ _GLOBAL_BOOLEAN_FIELDS = {
 _GLOBAL_NULLABLE_BOOLEAN_FIELDS = {"child_account_access"}
 _MANAGED_LINODE_SSH_PORT_MAX = 65535
 _MANAGED_LINODE_SSH_USER_MAX_LENGTH = 32
+_MANAGED_SERVICE_TIMEOUT_MAX = 255
 _RESOURCE_GRANT_FIELDS = tuple(
     field for field in _ACCOUNT_GRANT_FIELDS if field != "global"
 )
@@ -5258,6 +5259,225 @@ async def handle_linode_managed_contacts_update(
         return await client.update_managed_contact(contact_id, **body)
 
     return await execute_tool(cfg, arguments, "update Linode Managed contact", _call)
+
+
+def create_linode_managed_service_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_update tool."""
+    return Tool(
+        name="linode_managed_service_update",
+        description=(
+            "Updates a Managed service monitor. Requires confirm=true; pass "
+            "dry_run=true with confirm=true to preview without changing it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "service_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed service monitor ID to update",
+                },
+                "address": {"type": "string", "description": "Service monitor URL"},
+                "body": {
+                    "type": ["string", "null"],
+                    "description": "Expected response body text, or null to clear",
+                },
+                "consultation_group": {
+                    "type": "string",
+                    "description": "Managed contact group for issue consultation",
+                },
+                "credentials": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": "Managed credential IDs used when resolving issues",
+                },
+                "label": {"type": "string", "description": "Display label"},
+                "notes": {
+                    "type": ["string", "null"],
+                    "description": "Notes for support staff, or null to clear",
+                },
+                "region": {
+                    "type": ["string", "null"],
+                    "description": "Region for private IP monitors, or null to clear",
+                },
+                "service_type": {
+                    "type": "string",
+                    "enum": ["url", "tcp"],
+                    "description": "How this service is monitored",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": _MANAGED_SERVICE_TIMEOUT_MAX,
+                    "description": (
+                        "Seconds to wait before considering the service down"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm update.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["service_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _managed_service_id(arguments: dict[str, Any]) -> int | list[TextContent]:
+    """Parse a positive Managed service ID, or return an error response."""
+    service_id = arguments.get("service_id")
+    if (
+        not isinstance(service_id, int)
+        or isinstance(service_id, bool)
+        or service_id < 1
+    ):
+        return error_response("service_id must be a positive integer")
+    return service_id
+
+
+def _managed_service_string_fields(
+    arguments: dict[str, Any], request_body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy non-empty string service update fields into the request body."""
+    for field in ("address", "consultation_group", "label"):
+        if field not in arguments:
+            continue
+        value = arguments.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return error_response(f"{field} must be a non-empty string")
+        request_body[field] = value.strip()
+    return None
+
+
+def _managed_service_nullable_string_fields(
+    arguments: dict[str, Any], request_body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy nullable string service update fields into the request body."""
+    for field in ("body", "notes", "region"):
+        if field not in arguments:
+            continue
+        value = arguments.get(field)
+        if value is None:
+            request_body[field] = None
+        elif isinstance(value, str):
+            request_body[field] = value
+        else:
+            return error_response(f"{field} must be a string or null")
+    return None
+
+
+def _managed_service_credentials_field(
+    arguments: dict[str, Any], request_body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy Managed credential IDs into the request body."""
+    if "credentials" not in arguments:
+        return None
+    credentials = arguments.get("credentials")
+    if not isinstance(credentials, list):
+        return error_response("credentials must be an array of positive integers")
+    raw_credentials: list[object] = [*credentials]
+    typed_credentials: list[int] = []
+    for credential_id in raw_credentials:
+        if (
+            not isinstance(credential_id, int)
+            or isinstance(credential_id, bool)
+            or credential_id < 1
+        ):
+            return error_response("credentials must be an array of positive integers")
+        typed_credentials.append(credential_id)
+    request_body["credentials"] = typed_credentials
+    return None
+
+
+def _managed_service_type_field(
+    arguments: dict[str, Any], request_body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy and validate the service_type field."""
+    if "service_type" not in arguments:
+        return None
+    service_type = arguments.get("service_type")
+    if service_type not in {"url", "tcp"}:
+        return error_response("service_type must be one of: tcp, url")
+    request_body["service_type"] = service_type
+    return None
+
+
+def _managed_service_timeout_field(
+    arguments: dict[str, Any], request_body: dict[str, Any]
+) -> list[TextContent] | None:
+    """Copy and validate the timeout field."""
+    if "timeout" not in arguments:
+        return None
+    timeout = arguments.get("timeout")
+    if (
+        not isinstance(timeout, int)
+        or isinstance(timeout, bool)
+        or not 1 <= timeout <= _MANAGED_SERVICE_TIMEOUT_MAX
+    ):
+        return error_response("timeout must be an integer from 1 to 255")
+    request_body["timeout"] = timeout
+    return None
+
+
+def _managed_service_update_body(
+    arguments: dict[str, Any],
+) -> dict[str, Any] | list[TextContent]:
+    """Build a Managed service update body from writable documented fields."""
+    read_only_fields = sorted(
+        {"created", "id", "status", "updated"}.intersection(arguments)
+    )
+    if read_only_fields:
+        return error_response(
+            "Read-only fields are not accepted: " + ", ".join(read_only_fields)
+        )
+    request_body: dict[str, Any] = {}
+    for validator in (
+        _managed_service_string_fields,
+        _managed_service_nullable_string_fields,
+        _managed_service_credentials_field,
+        _managed_service_type_field,
+        _managed_service_timeout_field,
+    ):
+        error = validator(arguments, request_body)
+        if error is not None:
+            return error
+    if not request_body:
+        return error_response("At least one managed service field is required")
+    return request_body
+
+
+async def handle_linode_managed_service_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_service_update tool request."""
+    service_id = _managed_service_id(arguments)
+    if isinstance(service_id, list):
+        return service_id
+    request_body = _managed_service_update_body(arguments)
+    if isinstance(request_body, list):
+        return request_body
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed service monitor. Set confirm=true to proceed."
+        )
+    dry_run_path = f"/managed/services/{quote(str(service_id), safe='')}"
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_service_update",
+            arguments.get("environment", ""),
+            "PUT",
+            dry_run_path,
+            None,
+            side_effects=[f"Managed service monitor {service_id} will be updated."],
+            request_body=request_body,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_managed_service(service_id, **request_body)
+
+    return await execute_tool(cfg, arguments, "update Linode Managed service", _call)
 
 
 def create_linode_managed_linode_settings_list_tool() -> tuple[Tool, Capability]:

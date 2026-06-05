@@ -20455,3 +20455,99 @@ async def test_longview_client_create_dry_run_includes_request_body(
     }
     assert payload["current_state"] is None
     mock_retryable.assert_not_called()
+
+
+async def test_update_managed_service_sends_put_to_managed_service_route() -> None:
+    """Test Managed service update sends documented PUT body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "id": 429,
+        "label": "web monitor",
+        "service_type": "url",
+        "timeout": 30,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.update_managed_service(
+            429,
+            address="https://example.com/health?check=1",
+            body="ok",
+            consultation_group="ops",
+            credentials=[9991],
+            label="web monitor",
+            notes=None,
+            region="us-east",
+            service_type="url",
+            timeout=30,
+        )
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/managed/services/429",
+        {
+            "address": "https://example.com/health?check=1",
+            "body": "ok",
+            "consultation_group": "ops",
+            "credentials": [9991],
+            "label": "web monitor",
+            "notes": None,
+            "region": "us-east",
+            "service_type": "url",
+            "timeout": 30,
+        },
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize("service_id", [0, -1, True, "/", "1?", ".."])
+async def test_update_managed_service_rejects_invalid_service_id(
+    service_id: object,
+) -> None:
+    """Managed service update rejects malformed path IDs before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="service_id must be a positive integer"),
+    ):
+        await client.update_managed_service(cast("int", service_id), label="web")
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_managed_service_rejects_empty_body() -> None:
+    """Managed service update requires at least one writable body field."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="At least one managed service field"),
+    ):
+        await client.update_managed_service(429)
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_managed_service_wraps_http_errors() -> None:
+    """Test Managed service update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_managed_service(429, label="web")
+    assert "UpdateManagedService" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_managed_service_delegates_once_without_retry() -> None:
+    """RetryableClient delegates Managed service updates once to avoid replay."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_update = AsyncMock(side_effect=httpx.HTTPError("transient"))
+    object.__setattr__(retryable.client, "update_managed_service", mock_update)
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_managed_service(429, label="web")
+    finally:
+        await retryable.close()
+    mock_update.assert_awaited_once_with(429, label="web")
