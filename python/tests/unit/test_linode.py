@@ -8473,6 +8473,49 @@ async def test_create_placement_group_rejects_invalid_values(
     await client.close()
 
 
+async def test_get_object_storage_bucket_encodes_path_params() -> None:
+    """Object Storage bucket get URL-encodes path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"label": "bucket"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.get_object_storage_bucket("us/east?1", "bad/bucket?x")
+
+    mock_request.assert_awaited_once_with(
+        "GET", "/object-storage/buckets/us%2Feast%3F1/bad%2Fbucket%3Fx"
+    )
+    await client.close()
+
+
+async def test_list_object_storage_bucket_contents_encodes_path_params() -> None:
+    """Object Storage bucket contents URL-encodes path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"data": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.list_object_storage_bucket_contents(
+            "us/east?1", "bad/bucket?x", {"prefix": "images/"}
+        )
+
+    mock_request.assert_awaited_once_with(
+        "GET",
+        "/object-storage/buckets/us%2Feast%3F1/bad%2Fbucket%3Fx/object-list?prefix=images%2F",
+    )
+    await client.close()
+
+
+def test_deprecated_object_storage_clusters_list_client_methods_absent() -> None:
+    """Deprecated Object Storage cluster listing client methods should be removed."""
+    assert not hasattr(Client, "list_object_storage_clusters")
+    assert not hasattr(RetryableClient, "list_object_storage_clusters")
+    assert hasattr(Client, "get_region")
+    assert hasattr(RetryableClient, "get_region")
+
+
 async def test_get_object_storage_cluster_sends_get_to_cluster_route() -> None:
     """Object Storage cluster get sends GET to the single-cluster route."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -390,7 +390,6 @@ from linodemcp.tools import (
     handle_linode_object_storage_buckets_region_list,
     handle_linode_object_storage_cancel,
     handle_linode_object_storage_cluster_get,
-    handle_linode_object_storage_clusters_list,
     handle_linode_object_storage_endpoints_list,
     handle_linode_object_storage_key_create,
     handle_linode_object_storage_key_delete,
@@ -12214,6 +12213,49 @@ async def test_handle_linode_object_storage_bucket_get_missing_label(
     assert "label is required" in result[0].text
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"region": "us/east", "label": "my-bucket"}, "region must be a valid"),
+        ({"region": "us-east", "label": "bad/bucket"}, "label must be a valid"),
+        ({"region": "us-east?x=y", "label": "my-bucket"}, "region must be a valid"),
+        ({"region": "us-east", "label": ".."}, "label must be a valid"),
+    ],
+)
+async def test_handle_linode_object_storage_bucket_get_rejects_bad_path_params(
+    arguments: dict[str, object], message: str, sample_config: Config
+) -> None:
+    """Object Storage bucket get rejects malformed path params before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_object_storage_bucket_get(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"region": "us/east", "label": "my-bucket"}, "region must be a valid"),
+        ({"region": "us-east", "label": "bad?bucket"}, "label must be a valid"),
+        ({"region": "..", "label": "my-bucket"}, "region must be a valid"),
+    ],
+)
+async def test_handle_linode_object_storage_bucket_contents_rejects_bad_path_params(
+    arguments: dict[str, object], message: str, sample_config: Config
+) -> None:
+    """Bucket contents rejects malformed path params before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_object_storage_bucket_contents(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_handle_linode_object_storage_bucket_contents(
     sample_config: Config,
 ) -> None:
@@ -12303,35 +12345,6 @@ async def test_handle_linode_object_storage_bucket_contents_missing_region(
     assert "region is required" in result[0].text
 
 
-async def test_handle_linode_object_storage_clusters_list(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_clusters_list tool."""
-    mock_clusters = [
-        {
-            "id": "us-east-1",
-            "region": "us-east",
-            "domain": "us-east-1.linodeobjects.com",
-            "status": "available",
-            "static_site": {"domain": "website-us-east-1.linodeobjects.com"},
-        },
-    ]
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_clusters.return_value = mock_clusters
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_clusters_list({}, sample_config)
-
-        assert len(result) == 1
-        assert "us-east-1" in result[0].text
-        assert '"count": 1' in result[0].text
-        mock_client.list_object_storage_clusters.assert_called_once()
-
-
 async def test_create_linode_object_storage_cluster_get_schema() -> None:
     """Object Storage cluster get tool should require cluster_id."""
     tool, capability = create_linode_object_storage_cluster_get_tool()
@@ -12419,23 +12432,6 @@ async def test_linode_object_storage_cluster_get_registered() -> None:
 
     assert "linode_object_storage_cluster_get" in registry
     assert registry["linode_object_storage_cluster_get"].capability is Capability.Read
-
-
-async def test_handle_linode_object_storage_clusters_list_error(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_clusters_list tool error handling."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_clusters.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_clusters_list({}, sample_config)
-
-        assert len(result) == 1
-        assert "Failed" in result[0].text
 
 
 async def test_handle_linode_object_storage_types_list(

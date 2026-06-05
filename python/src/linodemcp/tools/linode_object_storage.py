@@ -16,11 +16,21 @@ if TYPE_CHECKING:
 
 
 _CLUSTER_ID_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$")
+_BUCKET_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$")
+_MAX_BUCKET_LABEL_LENGTH = 63
 
 
 def _valid_cluster_id(cluster_id: str) -> bool:
     """Return whether a cluster ID is safe for the legacy cluster route."""
     return bool(_CLUSTER_ID_RE.fullmatch(cluster_id))
+
+
+def _valid_bucket_label(label: str) -> bool:
+    """Return whether a bucket label is safe for Object Storage bucket routes."""
+    return (
+        bool(_BUCKET_LABEL_RE.fullmatch(label))
+        and len(label) <= _MAX_BUCKET_LABEL_LENGTH
+    )
 
 
 def create_linode_object_storage_buckets_list_tool() -> tuple[Tool, Capability]:
@@ -146,8 +156,12 @@ async def handle_linode_object_storage_bucket_get(
 
     if not region:
         return _error_response("region is required")
+    if not isinstance(region, str) or not _valid_cluster_id(region):
+        return _error_response("region must be a valid region or cluster ID")
     if not label:
         return _error_response("label is required")
+    if not isinstance(label, str) or not _valid_bucket_label(label):
+        return _error_response("label must be a valid bucket label")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_object_storage_bucket(region, label)
@@ -254,8 +268,12 @@ async def handle_linode_object_storage_bucket_contents(
 
     if not region:
         return _error_response("region is required")
+    if not isinstance(region, str) or not _valid_cluster_id(region):
+        return _error_response("region must be a valid region or cluster ID")
     if not label:
         return _error_response("label is required")
+    if not isinstance(label, str) or not _valid_bucket_label(label):
+        return _error_response("label must be a valid bucket label")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         params = _build_bucket_params(prefix, delimiter, marker, page_size)
@@ -284,43 +302,8 @@ async def handle_linode_object_storage_bucket_contents(
     )
 
 
-def create_linode_object_storage_clusters_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_clusters_list tool."""
-    return Tool(
-        name="linode_object_storage_clusters_list",
-        description=(
-            "Lists available Object Storage clusters/regions. "
-            "Shows which regions support Object Storage and their endpoints."
-        ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
-    ), Capability.Read
-
-
-async def handle_linode_object_storage_clusters_list(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_object_storage_clusters_list tool request."""
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        clusters = await client.list_object_storage_clusters()
-        return {
-            "count": len(clusters),
-            "clusters": clusters,
-        }
-
-    return await execute_tool(cfg, arguments, "retrieve Object Storage clusters", _call)
-
-
+# Deprecated Object Storage cluster listing is intentionally not exposed.
+# Use the regions API for supported region metadata.
 def create_linode_object_storage_cluster_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_cluster_get tool."""
     return Tool(
