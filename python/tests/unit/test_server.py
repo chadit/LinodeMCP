@@ -10592,6 +10592,215 @@ async def test_managed_credential_revoke_dispatches_from_registry(
     mock_client.revoke_managed_credential.assert_awaited_once_with(91)
 
 
+async def test_managed_service_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed service create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_service_create_tool" in tools_mod.__all__
+    assert "handle_linode_managed_service_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_service_create_tool()
+    assert tool.name == "linode_managed_service_create"
+    assert capability is Capability.Write
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["service_type"]["enum"] == ["url", "tcp"]
+    assert tool.inputSchema["properties"]["timeout"]["maximum"] == 255
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_service_create" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_managed_service_create_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Managed service create requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {
+        "label": "prod-1",
+        "service_type": "url",
+        "address": "https://example.org",
+        "timeout": 30,
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_service_create", arguments)
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        (
+            {
+                "confirm": True,
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+            },
+            "label",
+        ),
+        (
+            {
+                "confirm": True,
+                "label": "prod-1",
+                "service_type": "udp",
+                "address": "https://example.org",
+                "timeout": 30,
+            },
+            "service_type",
+        ),
+        (
+            {
+                "confirm": True,
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": "30",
+            },
+            "timeout",
+        ),
+        (
+            {
+                "confirm": True,
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+                "credentials": [0],
+            },
+            "credentials",
+        ),
+        (
+            {
+                "confirm": True,
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+                "id": 9944,
+            },
+            "Read-only",
+        ),
+    ],
+)
+async def test_managed_service_create_rejects_bad_body_before_client(
+    sample_config: Config, arguments: dict[str, object], expected: str
+) -> None:
+    """Managed service create validates documented body before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_managed_service_create", arguments)
+
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_service_create_dry_run_includes_body_and_skips_client(
+    sample_config: Config,
+) -> None:
+    """Managed service create dry run previews body without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_service_create",
+            {
+                "dry_run": True,
+                "confirm": True,
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+                "body": "it worked",
+                "consultation_group": "on-call",
+                "credentials": [9991],
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/managed/services"
+    assert payload["would_execute"]["body"] == {
+        "label": "prod-1",
+        "service_type": "url",
+        "address": "https://example.org",
+        "timeout": 30,
+        "body": "it worked",
+        "consultation_group": "on-call",
+        "credentials": [9991],
+    }
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_service_create_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Managed service create dry run still requires confirm=true."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_service_create",
+            {
+                "dry_run": True,
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+            },
+        )
+
+    assert "confirm" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_managed_service_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed service create is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 9944, "label": "prod-1"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_managed_service.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_managed_service_create",
+            {
+                "confirm": True,
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+                "region": "us-east",
+            },
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_managed_service.assert_awaited_once_with(
+        label="prod-1",
+        service_type="url",
+        address="https://example.org",
+        timeout=30,
+        body=None,
+        consultation_group=None,
+        credentials=None,
+        notes=None,
+        region="us-east",
+    )
+
+
 async def test_managed_contact_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

@@ -5560,6 +5560,159 @@ async def test_create_managed_contact_sends_post_to_managed_contacts_route() -> 
     await client.close()
 
 
+async def test_create_managed_service_sends_post_to_managed_services_route() -> None:
+    """Managed service create sends POST /managed/services with body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 9944, "label": "prod-1"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_managed_service(
+            label="prod-1",
+            service_type="url",
+            address="https://example.org",
+            timeout=30,
+            body="it worked",
+            consultation_group="on-call",
+            credentials=[9991],
+            notes="The service name is my-cool-application",
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST",
+        "/managed/services",
+        {
+            "label": "prod-1",
+            "service_type": "url",
+            "address": "https://example.org",
+            "timeout": 30,
+            "body": "it worked",
+            "consultation_group": "on-call",
+            "credentials": [9991],
+            "notes": "The service name is my-cool-application",
+        },
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        (
+            {
+                "label": "",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+            },
+            "label",
+        ),
+        (
+            {
+                "label": "prod-1",
+                "service_type": "udp",
+                "address": "https://example.org",
+                "timeout": 30,
+            },
+            "service_type",
+        ),
+        (
+            {
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "",
+                "timeout": 30,
+            },
+            "address",
+        ),
+        (
+            {
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 0,
+            },
+            "timeout",
+        ),
+        (
+            {
+                "label": "prod-1",
+                "service_type": "url",
+                "address": "https://example.org",
+                "timeout": 30,
+                "credentials": [True],
+            },
+            "credentials",
+        ),
+    ],
+)
+async def test_create_managed_service_rejects_bad_body_before_request(
+    kwargs: dict[str, object], expected: str
+) -> None:
+    """Managed service create validates body before dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError), match=expected),
+    ):
+        await client.create_managed_service(**cast("Any", kwargs))
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_create_managed_service_wraps_http_errors() -> None:
+    """Managed service create maps HTTP errors to CreateManagedService."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_managed_service(
+                label="prod-1",
+                service_type="url",
+                address="https://example.org",
+                timeout=30,
+            )
+    assert "CreateManagedService" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_managed_service_delegates_once_without_retry() -> None:
+    """RetryableClient does not replay Managed service creation on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    mock_create = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    object.__setattr__(retryable.client, "create_managed_service", mock_create)
+
+    try:
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_managed_service(
+                label="prod-1",
+                service_type="url",
+                address="https://example.org",
+                timeout=30,
+                body="it worked",
+                credentials=[9991],
+            )
+    finally:
+        await retryable.close()
+
+    mock_create.assert_awaited_once_with(
+        label="prod-1",
+        service_type="url",
+        address="https://example.org",
+        timeout=30,
+        body="it worked",
+        consultation_group=None,
+        credentials=[9991],
+        notes=None,
+        region=None,
+    )
+
+
 async def test_create_managed_credential_sends_post_to_managed_credentials_route() -> (
     None
 ):
