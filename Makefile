@@ -1,4 +1,4 @@
-.PHONY: help build check lint clean \
+.PHONY: help build check lint clean install-hooks check-hooks \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
@@ -25,6 +25,14 @@ check: go-check python-check
 
 ## lint: Run all linters (go-lint, python-lint, betterleaks, trivy)
 lint: go-lint python-lint betterleaks trivy
+
+## install-hooks: Install commit and push hooks from .pre-commit-config.yaml
+install-hooks:
+	@./scripts/git-hooks.sh install
+
+## check-hooks: Verify commit and push hooks are installed
+check-hooks:
+	@./scripts/git-hooks.sh check
 
 # --- Container targets ---
 
