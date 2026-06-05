@@ -12,18 +12,19 @@ import (
 )
 
 const (
-	toolObjectEndpointsList = "linode_object_storage_endpoint_list"
-	toolInstancesList       = "linode_instance_list"
-	toolInstanceCreate      = "linode_instance_create"
-	toolVolumesList         = "linode_volume_list"
-	toolVolumeTypeList      = "linode_volume_type_list"
-	toolInstanceVolumeList  = "linode_instance_volume_list"
-	toolBucketAccessAllow   = "linode_object_storage_bucket_access_allow"
-	toolAccountPaymentGet   = "linode_account_payment_get"
-	toolMonitorAlertCreate  = "linode_monitor_service_alert_definition_create"
-	toolMonitorTokenCreate  = "linode_monitor_service_token_create"
-	toolMonitorAlertDelete  = "linode_monitor_service_alert_definition_delete"
-	toolMonitorAlertUpdate  = "linode_monitor_service_alert_definition_update"
+	toolObjectEndpointsList         = "linode_object_storage_endpoint_list"
+	toolInstancesList               = "linode_instance_list"
+	toolInstanceCreate              = "linode_instance_create"
+	toolVolumesList                 = "linode_volume_list"
+	toolVolumeTypeList              = "linode_volume_type_list"
+	toolInstanceVolumeList          = "linode_instance_volume_list"
+	toolBucketAccessAllow           = "linode_object_storage_bucket_access_allow"
+	toolAccountPaymentGet           = "linode_account_payment_get"
+	toolAccountEntityTransferAccept = "linode_account_entity_transfer_accept"
+	toolMonitorAlertCreate          = "linode_monitor_service_alert_definition_create"
+	toolMonitorTokenCreate          = "linode_monitor_service_token_create"
+	toolMonitorAlertDelete          = "linode_monitor_service_alert_definition_delete"
+	toolMonitorAlertUpdate          = "linode_monitor_service_alert_definition_update"
 )
 
 // toolNames extracts the registered tool name for each entry on the server.
@@ -131,6 +132,13 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 		"full-access must expose destructive tools like %s", toolMonitorAlertDelete)
 	assert.Contains(t, names, toolMonitorAlertUpdate,
 		"full-access must expose write tools like %s", toolMonitorAlertUpdate)
+	assert.NotContains(t, names, toolAccountEntityTransferAccept,
+		"deprecated entity-transfer accept route must not be registered")
+
+	for _, tool := range srv.Tools() {
+		assert.NotEqual(t, toolAccountEntityTransferAccept, tool.Name(),
+			"deprecated entity-transfer accept handler must not be dispatchable")
+	}
 
 	// The full-access tool set must be a strict superset of the default
 	// tool set. Comparing against a default-profile sibling avoids hard
