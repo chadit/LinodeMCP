@@ -1734,13 +1734,6 @@ func (c *Client) AcceptAccountEntityTransfer(ctx context.Context, token string) 
 	return c.httpAcceptAccountEntityTransfer(ctx, token)
 }
 
-// DeleteAccountEntityTransfer cancels an account entity transfer without retrying
-// the mutating request. Retrying can replay transfer cancellation after a
-// transient error, so this method delegates exactly once.
-func (c *Client) DeleteAccountEntityTransfer(ctx context.Context, token string) error {
-	return c.httpDeleteAccountEntityTransfer(ctx, token)
-}
-
 // GetAccountChildAccount retrieves one child-level account with automatic retry on transient failures.
 func (c *Client) GetAccountChildAccount(ctx context.Context, euuid string) (*ChildAccount, error) {
 	var childAccount *ChildAccount
