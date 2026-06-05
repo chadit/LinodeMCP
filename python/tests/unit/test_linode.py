@@ -9161,7 +9161,7 @@ async def test_retryable_client_delete_vlan() -> None:
 
 
 async def test_client_share_ipv4s(linode_client: Client) -> None:
-    """Test Client.share_ipv4s sends POST /networking/ips/share."""
+    """Test Client.share_ipv4s sends POST /networking/ipv4/share."""
     mock_response = MagicMock()
     mock_response.json.return_value = {"success": True, "shared": ["192.168.1.1"]}
     with patch.object(
@@ -9173,7 +9173,7 @@ async def test_client_share_ipv4s(linode_client: Client) -> None:
         result = await linode_client.share_ipv4s(["192.168.1.1"], 12345)
         mock_req.assert_awaited_once_with(
             "POST",
-            "/networking/ips/share",
+            "/networking/ipv4/share",
             {"ips": ["192.168.1.1"], "linode_id": 12345},
         )
         assert result == {"success": True, "shared": ["192.168.1.1"]}
@@ -9206,6 +9206,26 @@ async def test_retryable_client_share_ipv4s() -> None:
         result = await client.share_ipv4s(["192.168.1.1"], 12345)
 
         assert result == expected_result
+        mock_share.assert_awaited_once_with(["192.168.1.1"], 12345)
+
+    await client.close()
+
+
+async def test_retryable_client_share_ipv4s_does_not_replay_errors() -> None:
+    """State-changing IPv4 sharing is delegated once without replay retry."""
+    client = RetryableClient(
+        "https://api.linode.com/v4", "test-token", RetryConfig(max_retries=3)
+    )
+
+    with patch.object(
+        client.client, "share_ipv4s", new_callable=AsyncMock
+    ) as mock_share:
+        mock_share.side_effect = NetworkError(
+            "ShareIPv4s", httpx.ConnectError("connection refused")
+        )
+        with pytest.raises(NetworkError):
+            await client.share_ipv4s(["192.168.1.1"], 12345)
+
         mock_share.assert_awaited_once_with(["192.168.1.1"], 12345)
 
     await client.close()

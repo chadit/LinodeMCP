@@ -16417,6 +16417,26 @@ async def test_ipv4_share_rejects_false_confirm(
     assert "confirm" in text.lower()
 
 
+@pytest.mark.parametrize("confirm", ["true", 1])
+async def test_ipv4_share_rejects_non_boolean_true_confirm_before_client(
+    sample_config: Config, confirm: Any
+) -> None:
+    """IPv4 share requires literal boolean confirm=true before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_share",
+            {
+                "confirm": confirm,
+                "ips": ["192.168.1.1"],
+                "linode_id": 12345,
+            },
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
 async def test_ipv4_share_rejects_missing_ips(
     sample_config: Config,
 ) -> None:
