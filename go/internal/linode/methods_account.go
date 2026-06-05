@@ -1714,28 +1714,6 @@ func (c *Client) httpListAccountChildAccounts(ctx context.Context, page, pageSiz
 	return &childAccounts, nil
 }
 
-// httpListAccountEntityTransfers retrieves account entity transfers.
-func (c *Client) httpListAccountEntityTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountEntityTransfers, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountEntityTransfers", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var transfers PaginatedResponse[AccountEntityTransfer]
-	if err := c.handleResponse(resp, &transfers); err != nil {
-		return nil, err
-	}
-
-	return &transfers, nil
-}
-
 func (c *Client) httpListAccountServiceTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()

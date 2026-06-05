@@ -300,7 +300,6 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_invoice_get":                            profiles.CapRead,
 		"linode_account_invoice_items":                          profiles.CapRead,
 		"linode_account_child_accounts":                         profiles.CapRead,
-		"linode_account_entity_transfers":                       profiles.CapRead,
 		"linode_account_service_transfers":                      profiles.CapRead,
 		"linode_account_service_transfer_get":                   profiles.CapRead,
 		"linode_account_service_transfer_create":                profiles.CapAdmin,
@@ -367,20 +366,34 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_instance_firewall_list":                         profiles.CapRead,
 	}
 
-	seen := make(map[string]struct{}, len(descriptors))
+	registeredNames := make(map[string]struct{}, len(descriptors))
 	for _, descriptor := range descriptors {
-		seen[descriptor.Name] = struct{}{}
-
-		assert.NotEqual(t, "linode_account_entity_transfer_create", descriptor.Name, "deprecated entity-transfer create route should not be registered")
-
+		registeredNames[descriptor.Name] = struct{}{}
 		if capability, ok := want[descriptor.Name]; ok {
 			assert.Equal(t, capability, descriptor.Capability, "descriptor capability should match")
 			delete(want, descriptor.Name)
 		}
 	}
 
+	assert.NotContains(t, registeredNames, "linode_account_entity_transfers", "deprecated entity transfer list tool should not be registered")
+	assert.NotContains(t, registeredNames, "linode_account_entity_transfer_create", "deprecated entity-transfer create route should not be registered")
+	assert.NotContains(t, registeredNames, "linode_account_entity_transfer_get", "deprecated entity transfer get tool should not be registered")
 	assert.Empty(t, want, "expected descriptors should be registered")
-	assert.NotContains(t, seen, "linode_account_entity_transfer_get", "deprecated entity transfer get tool should not be registered")
+}
+
+func TestDeprecatedAccountEntityTransfersListToolRemoved(t *testing.T) {
+	t.Parallel()
+
+	srv, err := server.New(baseTestConfig())
+	require.NoError(t, err, "server should initialize")
+
+	for _, tool := range srv.Tools() {
+		assert.NotEqual(t, "linode_account_entity_transfers", tool.Name(), "deprecated entity transfer list tool should not be registered")
+	}
+
+	for _, descriptor := range srv.ToolCatalog() {
+		assert.NotEqual(t, "linode_account_entity_transfers", descriptor.Name, "deprecated entity transfer list tool should not be in the catalog")
+	}
 }
 
 // TestToolWrapperExecuteReturnsError verifies that calling Execute on a

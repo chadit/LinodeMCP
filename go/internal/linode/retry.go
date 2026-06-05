@@ -1654,21 +1654,6 @@ func (c *Client) ListAccountChildAccounts(ctx context.Context, page, pageSize in
 	return childAccounts, err
 }
 
-// ListAccountEntityTransfers retrieves account entity transfers with automatic retry on transient failures.
-func (c *Client) ListAccountEntityTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
-	var transfers *PaginatedResponse[AccountEntityTransfer]
-
-	err := c.executeWithRetry(ctx, "ListAccountEntityTransfers", func() error {
-		var err error
-
-		transfers, err = c.httpListAccountEntityTransfers(ctx, page, pageSize)
-
-		return err
-	})
-
-	return transfers, err
-}
-
 // ListAccountServiceTransfers retrieves account service transfers with automatic retry on transient failures.
 func (c *Client) ListAccountServiceTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
 	var transfers *PaginatedResponse[AccountEntityTransfer]
