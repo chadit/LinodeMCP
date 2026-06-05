@@ -197,6 +197,11 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.AccountReadWrite],
         ),
+        (
+            "linode_managed_credential_username_password_update",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
         ("linode_profile", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_database_engine_get", Capability.Read, [Scope.DatabasesReadOnly]),
         ("linode_database_type_get", Capability.Read, [Scope.DatabasesReadOnly]),

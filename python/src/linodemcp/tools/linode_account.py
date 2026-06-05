@@ -4274,6 +4274,94 @@ async def handle_linode_managed_credentials_list(
     return await execute_tool(cfg, arguments, "list Linode Managed credentials", _call)
 
 
+def _managed_credential_username_password_update_body(
+    arguments: dict[str, Any],
+) -> dict[str, str]:
+    """Collect documented Managed credential username/password update fields."""
+    password = _optional_string_argument(arguments, "password")
+    if password is None:
+        raise ValueError("password required")
+    body = {"password": password}
+    username = _optional_string_argument(arguments, "username")
+    if username is not None:
+        body["username"] = username
+    return body
+
+
+def create_linode_managed_credential_username_password_update_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the managed credential username/password update tool."""
+    return Tool(
+        name="linode_managed_credential_username_password_update",
+        description=(
+            "Updates a Managed credential username and password. "
+            "Requires confirm=true; pass dry_run=true with confirm=true "
+            "to preview without changing it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "credential_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed credential ID to update",
+                },
+                "password": {"type": "string"},
+                "username": {"type": "string"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm credential update.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["credential_id", "password", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_credential_username_password_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_credential_username_password_update tool request."""
+    credential_id = _managed_credential_id(arguments)
+    if isinstance(credential_id, list):
+        return credential_id
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Managed credential. Set confirm=true to proceed."
+        )
+
+    try:
+        body = _managed_credential_username_password_update_body(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    encoded_credential_id = quote(str(credential_id), safe="")
+    if is_dry_run(arguments):
+        preview_body = {**body, "password": "***"}
+        return build_dry_run_response(
+            "linode_managed_credential_username_password_update",
+            arguments.get("environment", ""),
+            "POST",
+            f"/managed/credentials/{encoded_credential_id}/update",
+            None,
+            request_body=preview_body,
+            side_effects=[f"Managed credential {credential_id} will be updated."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_managed_credential_username_password(
+            credential_id,
+            password=body["password"],
+            username=body.get("username"),
+        )
+
+    return await execute_tool(cfg, arguments, "update Linode Managed credential", _call)
+
+
 def create_linode_managed_credential_revoke_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_credential_revoke tool."""
     return Tool(

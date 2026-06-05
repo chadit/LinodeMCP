@@ -4586,6 +4586,36 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateManagedCredential", e) from e
 
+    async def update_managed_credential_username_password(
+        self,
+        credential_id: int,
+        *,
+        password: object,
+        username: object | None = None,
+    ) -> dict[str, Any]:
+        """Update a Managed credential username and password."""
+        validated_credential_id = _validate_positive_path_int(
+            credential_id, "credential_id"
+        )
+        if not isinstance(password, str) or not password.strip():
+            msg = "password must be a non-empty string"
+            raise ValueError(msg)
+        body = {"password": password}
+        if username is not None:
+            if not isinstance(username, str) or not username.strip():
+                msg = "username must be a non-empty string"
+                raise ValueError(msg)
+            body["username"] = username
+        encoded_credential_id = quote(str(validated_credential_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST", f"/managed/credentials/{encoded_credential_id}/update", body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateManagedCredentialUsernamePassword", e) from e
+
     async def revoke_managed_credential(self, credential_id: int) -> dict[str, Any]:
         """Revoke a Managed credential by credential ID."""
         validated_credential_id = _validate_positive_path_int(
@@ -11761,6 +11791,18 @@ class RetryableClient:
         return await self.client.update_managed_credential(
             credential_id,
             label=label,
+        )
+
+    async def update_managed_credential_username_password(
+        self,
+        credential_id: int,
+        *,
+        password: str,
+        username: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a Managed credential username and password once without retry."""
+        return await self.client.update_managed_credential_username_password(
+            credential_id, password=password, username=username
         )
 
     async def revoke_managed_credential(self, credential_id: int) -> dict[str, Any]:
