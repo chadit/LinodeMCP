@@ -10938,6 +10938,73 @@ async def test_managed_stats_dispatches_from_registry(
     mock_client.get_managed_stats.assert_awaited_once_with()
 
 
+async def test_managed_linode_settings_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed Linode settings tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_linode_settings_get_tool" in tools_mod.__all__
+    assert "handle_linode_managed_linode_settings_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_managed_linode_settings_get_tool()
+    assert tool.name == "linode_managed_linode_settings_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["linode_id"]
+    assert "confirm" not in tool.inputSchema["properties"]
+
+    srv = Server(sample_config)
+    assert "linode_managed_linode_settings_get" in srv.registered_tool_names
+
+
+async def test_managed_linode_settings_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed Linode settings is callable through server dispatch."""
+    response_data: dict[str, object] = {"ssh": {"access": True}}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_linode_settings.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_managed_linode_settings_get", {"linode_id": 123}
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_managed_linode_settings.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"linode_id": 0},
+        {"linode_id": -1},
+        {"linode_id": True},
+        {"linode_id": "1/2"},
+        {"linode_id": "1?x"},
+        {"linode_id": ".."},
+    ],
+)
+async def test_managed_linode_settings_get_rejects_invalid_linode_id(
+    sample_config: Config, arguments: dict[str, object]
+) -> None:
+    """Managed Linode settings rejects malformed IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_linode_settings_get", arguments)
+
+    assert len(result) == 1
+    assert "linode_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_managed_issue_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

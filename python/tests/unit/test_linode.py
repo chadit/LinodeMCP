@@ -6167,6 +6167,73 @@ async def test_retryable_get_managed_stats_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_managed_linode_settings_sends_exact_route() -> None:
+    """Managed Linode settings sends the documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "ssh": {"access": True, "user": "linode"},
+        "group": "web",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_managed_linode_settings(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/managed/linode-settings/123")
+    await client.close()
+
+
+@pytest.mark.parametrize("bad_linode_id", [0, -1, True, "1/2", "1?x", ".."])
+async def test_get_managed_linode_settings_rejects_invalid_linode_id(
+    bad_linode_id: object,
+) -> None:
+    """Managed Linode settings validates the path ID before request dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises((TypeError, ValueError)),
+    ):
+        await client.get_managed_linode_settings(bad_linode_id)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_managed_linode_settings_wraps_http_errors() -> None:
+    """Managed Linode settings wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_managed_linode_settings(123)
+
+    assert "GetManagedLinodeSettings" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_managed_linode_settings_delegates_to_client() -> None:
+    """RetryableClient delegates Managed Linode settings retrieval."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_managed_linode_settings", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"ssh": {"access": True}}
+        result = await retryable.get_managed_linode_settings(123)
+
+    assert result == {"ssh": {"access": True}}
+    mock_get.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_update_managed_credential_sends_put_to_credential_route() -> None:
     """Test Managed credential update sends documented PUT route."""
     client = Client("https://api.linode.com/v4", "test-token")
