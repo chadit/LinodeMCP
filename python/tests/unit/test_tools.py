@@ -133,6 +133,7 @@ from linodemcp.tools import (
     create_linode_managed_issue_get_tool,
     create_linode_managed_issues_list_tool,
     create_linode_managed_linode_settings_list_tool,
+    create_linode_managed_service_disable_tool,
     create_linode_managed_service_get_tool,
     create_linode_managed_ssh_key_get_tool,
     create_linode_managed_stats_tool,
@@ -349,6 +350,7 @@ from linodemcp.tools import (
     handle_linode_managed_issue_get,
     handle_linode_managed_issues_list,
     handle_linode_managed_linode_settings_list,
+    handle_linode_managed_service_disable,
     handle_linode_managed_service_get,
     handle_linode_managed_ssh_key_get,
     handle_linode_managed_stats,
@@ -2065,6 +2067,80 @@ async def test_handle_linode_managed_linode_settings_list_rejects_low_page_size(
         )
 
     assert "page_size must be at least 25" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_create_linode_managed_service_disable_tool() -> None:
+    """Test linode_managed_service_disable tool schema."""
+    tool, capability = create_linode_managed_service_disable_tool()
+
+    assert tool.name == "linode_managed_service_disable"
+    assert capability is Capability.Write
+    assert tool.inputSchema["type"] == "object"
+    assert tool.inputSchema["required"] == ["service_id", "confirm"]
+    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_managed_service_disable(sample_config: Config) -> None:
+    """Test linode_managed_service_disable tool."""
+    response_data: dict[str, Any] = {"id": 9944, "status": "disabled"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.disable_managed_service.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_service_disable(
+            {"service_id": 9944, "confirm": True}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Managed service disabled successfully",
+        "result": response_data,
+    }
+    mock_client.disable_managed_service.assert_awaited_once_with(9944)
+
+
+async def test_handle_linode_managed_service_disable_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_service_disable requires confirm."""
+    arguments: dict[str, Any] = {"service_id": 9944}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_service_disable(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_service_disable_validates_service_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_service_disable validates service_id."""
+    arguments: dict[str, Any] = {"service_id": "1/2", "confirm": True}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_service_disable(arguments, sample_config)
+
+    assert "service_id" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_service_disable_dry_run(
+    sample_config: Config,
+) -> None:
+    """Test linode_managed_service_disable dry run response."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_service_disable(
+            {"service_id": 9944, "confirm": True, "dry_run": True}, sample_config
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_managed_service_disable"
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/managed/services/9944/disable"
     mock_client_class.assert_not_called()
 
 

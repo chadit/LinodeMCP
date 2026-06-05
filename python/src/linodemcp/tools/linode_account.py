@@ -5050,6 +5050,68 @@ async def handle_linode_managed_service_get(
     )
 
 
+def create_linode_managed_service_disable_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_disable tool."""
+    return Tool(
+        name="linode_managed_service_disable",
+        description=(
+            "Disables a Managed service monitor by service ID. "
+            "Pass dry_run=true to preview without disabling."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "service_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Managed service ID to disable",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm disabling the Managed service.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["service_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_service_disable(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_service_disable tool request."""
+    try:
+        service_id = _optional_int_argument(arguments, "service_id", 1)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if service_id is None:
+        return error_response("service_id is required")
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This disables a Managed service monitor. Set confirm=true to proceed."
+        )
+
+    encoded_service_id = quote(str(service_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_service_disable",
+            arguments.get("environment", ""),
+            "POST",
+            f"/managed/services/{encoded_service_id}/disable",
+            None,
+            side_effects=["The selected Managed service monitor is disabled."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.disable_managed_service(service_id)
+        return {"message": "Managed service disabled successfully", "result": result}
+
+    return await execute_tool(cfg, arguments, "disable Managed service monitor", _call)
+
+
 def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contact_create tool."""
     body_properties = {

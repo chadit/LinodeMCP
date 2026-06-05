@@ -433,6 +433,14 @@ def test_managed_tools_are_account_scoped() -> None:
     ]
 
 
+def test_managed_service_disable_is_account_scoped() -> None:
+    """Managed service disable belongs to the account category and scope."""
+    assert categories("linode_managed_service_disable") == ["account"]
+    assert required_scopes("linode_managed_service_disable", Capability.Write) == [
+        Scope.AccountReadWrite
+    ]
+
+
 def test_managed_contact_delete_is_account_scoped() -> None:
     """Managed contact delete belongs to the account category and scope."""
     assert categories("linode_managed_contact_delete") == ["account"]
