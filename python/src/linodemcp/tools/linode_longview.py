@@ -321,6 +321,7 @@ async def handle_linode_longview_client_update(
             f"/longview/clients/{client_id}",
             None,
             request_body=body,
+            side_effects=["The Longview client is updated with the provided label."],
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:

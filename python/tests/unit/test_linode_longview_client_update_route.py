@@ -248,6 +248,7 @@ async def test_handle_linode_longview_client_update_dry_run_skips_client(
         "path": "/longview/clients/123",
         "body": {"label": "updated-client"},
     }
+    assert len(payload["side_effects"]) == 1
     mock_linode_client.update_longview_client.assert_not_called()
 
 

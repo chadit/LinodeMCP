@@ -235,6 +235,7 @@ async def test_handle_linode_stackscript_update_dry_run_skips_client(
         "path": "/linode/stackscripts/123",
         "body": {"label": "updated-script"},
     }
+    assert len(payload["side_effects"]) == 1
     mock_linode_client.update_stackscript.assert_not_called()
 
 

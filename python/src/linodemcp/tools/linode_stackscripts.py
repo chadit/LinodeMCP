@@ -215,7 +215,7 @@ def create_linode_stackscript_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["stackscript_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Destroy
 
 
 async def handle_linode_stackscript_delete(
@@ -232,6 +232,7 @@ async def handle_linode_stackscript_delete(
             "DELETE",
             f"/linode/stackscripts/{stackscript_id}",
             None,
+            side_effects=["The StackScript will be permanently deleted."],
         )
     if arguments.get("confirm") is not True:
         return error_response(
@@ -498,6 +499,7 @@ async def handle_linode_stackscript_update(
             f"/linode/stackscripts/{stackscript_id}",
             None,
             request_body=_stackscript_update_body(arguments),
+            side_effects=["The StackScript is updated with the provided fields."],
         )
 
     if arguments.get("confirm") is not True:

@@ -7931,7 +7931,7 @@ async def test_linode_stackscript_delete_tool_schema() -> None:
     tool, capability = create_linode_stackscript_delete_tool()
 
     assert tool.name == "linode_stackscript_delete"
-    assert capability == Capability.Write
+    assert capability == Capability.Destroy
     assert tool.inputSchema["properties"]["stackscript_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
@@ -7951,6 +7951,7 @@ async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -
     assert payload["tool"] == "linode_stackscript_delete"
     assert payload["would_execute"]["method"] == "DELETE"
     assert payload["would_execute"]["path"] == "/linode/stackscripts/12345"
+    assert len(payload["side_effects"]) == 1
     mock_client_class.assert_not_called()
 
 
