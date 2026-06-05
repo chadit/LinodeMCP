@@ -21,17 +21,6 @@ type ObjectStorageObject struct {
 	IsPrefix     bool   `json:"is_prefix"`
 }
 
-// ObjectStorageCluster represents an Object Storage cluster/region.
-type ObjectStorageCluster struct {
-	ID         string `json:"id"`
-	Region     string `json:"region"`
-	Domain     string `json:"domain"`
-	StaticSite struct {
-		Domain string `json:"domain"`
-	} `json:"static_site"`
-	Status string `json:"status"`
-}
-
 // ObjectStorageEndpoint represents an Object Storage endpoint.
 type ObjectStorageEndpoint struct {
 	Region       string  `json:"region"`

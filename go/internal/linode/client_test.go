@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1701,6 +1702,14 @@ func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
 	_, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us/east?1")
 
 	require.NoError(t, err, "escaped path param should round-trip through the client")
+}
+
+func TestClientListObjectStorageClustersRemoved(t *testing.T) {
+	t.Parallel()
+
+	_, ok := reflect.TypeFor[*linode.Client]().MethodByName("ListObjectStorageClusters")
+
+	assert.False(t, ok, "deprecated Object Storage clusters route must not be exposed by the Go client")
 }
 
 func TestClientCancelObjectStorageSuccess(t *testing.T) {
