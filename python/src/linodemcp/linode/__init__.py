@@ -19,6 +19,8 @@ from urllib.parse import quote, urlencode
 
 import httpx
 
+_MANAGED_SERVICE_TIMEOUT_MAX = 255
+
 T = TypeVar("T")
 
 LINODE_STATS_MIN_YEAR = 1970
@@ -29,6 +31,78 @@ MANAGED_LINODE_SSH_USER_MAX_LENGTH = 32
 _UNSET: Any = object()
 
 logger = logging.getLogger(__name__)
+
+
+def _managed_service_required_payload(
+    label: object, service_type: object, address: object, timeout: object
+) -> dict[str, Any]:
+    """Validate Managed service required create fields."""
+    if not isinstance(label, str) or not label.strip():
+        msg = "label must be a non-empty string"
+        raise ValueError(msg)
+    if service_type not in {"url", "tcp"}:
+        msg = "service_type must be 'url' or 'tcp'"
+        raise ValueError(msg)
+    if not isinstance(address, str) or not address.strip():
+        msg = "address must be a non-empty string"
+        raise ValueError(msg)
+    if not isinstance(timeout, int) or isinstance(timeout, bool):
+        msg = "timeout must be an integer"
+        raise TypeError(msg)
+    if timeout < 1 or timeout > _MANAGED_SERVICE_TIMEOUT_MAX:
+        msg = "timeout must be between 1 and 255"
+        raise ValueError(msg)
+    return {
+        "label": label.strip(),
+        "service_type": service_type,
+        "address": address.strip(),
+        "timeout": timeout,
+    }
+
+
+def _add_managed_service_optional_strings(
+    payload: dict[str, Any],
+    *,
+    body: object | None,
+    consultation_group: object | None,
+    notes: object | None,
+    region: object | None,
+) -> None:
+    """Add optional Managed service string fields to payload."""
+    optional_strings = {
+        "body": body,
+        "consultation_group": consultation_group,
+        "notes": notes,
+        "region": region,
+    }
+    for field, value in optional_strings.items():
+        if value is None:
+            continue
+        if not isinstance(value, str) or (
+            field == "consultation_group" and not value.strip()
+        ):
+            msg = f"{field} must be a string"
+            raise ValueError(msg)
+        payload[field] = value.strip() if field == "consultation_group" else value
+
+
+def _add_managed_service_credentials(
+    payload: dict[str, Any], credentials: object | None
+) -> None:
+    """Add optional Managed service credential IDs to payload."""
+    if credentials is None:
+        return
+    if not isinstance(credentials, list):
+        msg = "credentials must be an array of positive integers"
+        raise TypeError(msg)
+    typed_credentials = cast("list[object]", credentials)
+    if any(
+        not isinstance(item, int) or isinstance(item, bool) or item < 1
+        for item in typed_credentials
+    ):
+        msg = "credentials must be an array of positive integers"
+        raise ValueError(msg)
+    payload["credentials"] = typed_credentials
 
 
 def _validate_positive_path_int(value: object, name: str) -> int:
@@ -4632,6 +4706,39 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("CreateManagedCredential", e) from e
+
+    async def create_managed_service(
+        self,
+        *,
+        label: object,
+        service_type: object,
+        address: object,
+        timeout: object,
+        body: object | None = None,
+        consultation_group: object | None = None,
+        credentials: object | None = None,
+        notes: object | None = None,
+        region: object | None = None,
+    ) -> dict[str, Any]:
+        """Create a Managed service monitor."""
+        payload = _managed_service_required_payload(
+            label, service_type, address, timeout
+        )
+        _add_managed_service_optional_strings(
+            payload,
+            body=body,
+            consultation_group=consultation_group,
+            notes=notes,
+            region=region,
+        )
+        _add_managed_service_credentials(payload, credentials)
+
+        try:
+            response = await self.make_request("POST", "/managed/services", payload)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateManagedService", e) from e
 
     async def update_managed_credential(
         self,
@@ -11877,6 +11984,32 @@ class RetryableClient:
             label=label,
             password=password,
             username=username,
+        )
+
+    async def create_managed_service(
+        self,
+        *,
+        label: str,
+        service_type: str,
+        address: str,
+        timeout: int,
+        body: str | None = None,
+        consultation_group: str | None = None,
+        credentials: list[int] | None = None,
+        notes: str | None = None,
+        region: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Managed service monitor once without retry."""
+        return await self.client.create_managed_service(
+            label=label,
+            service_type=service_type,
+            address=address,
+            timeout=timeout,
+            body=body,
+            consultation_group=consultation_group,
+            credentials=credentials,
+            notes=notes,
+            region=region,
         )
 
     async def update_managed_credential(

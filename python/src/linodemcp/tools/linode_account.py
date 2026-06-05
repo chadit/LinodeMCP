@@ -4619,6 +4619,8 @@ async def handle_linode_managed_ssh_key_get(
 
 
 _MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name", "phone")
+_MANAGED_SERVICE_READ_ONLY_FIELDS = {"created", "id", "status", "updated"}
+_MANAGED_SERVICE_TYPES = {"tcp", "url"}
 _MANAGED_CREDENTIAL_REQUIRED_FIELDS = ("label", "password")
 
 
@@ -4811,6 +4813,134 @@ def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, str]:
     if not body:
         raise ValueError("At least one of email, group, name, or phone is required")
     return body
+
+
+def _managed_service_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Collect documented Managed service create fields from tool arguments."""
+    read_only = sorted(_MANAGED_SERVICE_READ_ONLY_FIELDS.intersection(arguments))
+    if read_only:
+        raise ValueError("Read-only fields are not accepted: " + ", ".join(read_only))
+
+    label = _required_string_argument(arguments, "label")
+    service_type = _required_string_argument(arguments, "service_type")
+    if service_type not in _MANAGED_SERVICE_TYPES:
+        raise ValueError("service_type must be 'url' or 'tcp'")
+    address = _required_string_argument(arguments, "address")
+    timeout = _optional_int_argument(arguments, "timeout", 1, 255)
+    if timeout is None:
+        raise ValueError("timeout is required")
+
+    body: dict[str, Any] = {
+        "label": label,
+        "service_type": service_type,
+        "address": address,
+        "timeout": timeout,
+    }
+    for field in ("body", "consultation_group", "notes", "region"):
+        if (value := _optional_string_argument(arguments, field)) is not None:
+            body[field] = value
+
+    credentials = arguments.get("credentials")
+    if credentials is not None:
+        if not isinstance(credentials, list):
+            raise TypeError("credentials must be an array of positive integers")
+        typed_credentials = cast("list[object]", credentials)
+        if any(
+            not isinstance(item, int) or isinstance(item, bool) or item < 1
+            for item in typed_credentials
+        ):
+            raise ValueError("credentials must be an array of positive integers")
+        body["credentials"] = typed_credentials
+
+    return body
+
+
+def create_linode_managed_service_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_create tool."""
+    service_properties: dict[str, Any] = {
+        "label": {"type": "string", "minLength": 3, "maxLength": 64},
+        "service_type": {"type": "string", "enum": ["url", "tcp"]},
+        "address": {"type": "string", "minLength": 3, "maxLength": 100},
+        "timeout": {"type": "integer", "minimum": 1, "maximum": 255},
+        "body": {"type": "string"},
+        "consultation_group": {"type": "string", "maxLength": 50},
+        "credentials": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+        },
+        "notes": {"type": "string"},
+        "region": {"type": "string"},
+    }
+    return Tool(
+        name="linode_managed_service_create",
+        description=(
+            "Creates a Managed service monitor. Pass confirm=true to create it; "
+            "pass dry_run=true to preview without creating it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                **service_properties,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm creating or previewing "
+                        "the Managed service monitor."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": [
+                "label",
+                "service_type",
+                "address",
+                "timeout",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_managed_service_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_service_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a Managed service monitor. Set confirm=true to proceed."
+        )
+
+    try:
+        request_body = _managed_service_body(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_managed_service_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/managed/services",
+            None,
+            request_body=request_body,
+            side_effects=["A Managed service monitor is created."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_managed_service(
+            label=request_body["label"],
+            service_type=request_body["service_type"],
+            address=request_body["address"],
+            timeout=request_body["timeout"],
+            body=request_body.get("body"),
+            consultation_group=request_body.get("consultation_group"),
+            credentials=request_body.get("credentials"),
+            notes=request_body.get("notes"),
+            region=request_body.get("region"),
+        )
+
+    return await execute_tool(cfg, arguments, "create Managed service monitor", _call)
 
 
 def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
