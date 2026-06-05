@@ -1549,25 +1549,6 @@ func NewLinodeAccountEventSeenTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	return tool, profiles.CapAdmin, handler
 }
 
-// NewLinodeAccountEntityTransferAcceptTool creates a tool for accepting one account entity transfer.
-func NewLinodeAccountEntityTransferAcceptTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
-		"linode_account_entity_transfer_accept",
-		"Accepts one account entity transfer request by token.",
-		[]mcp.ToolOption{
-			mcp.WithString("token", mcp.Required(),
-				mcp.Description("Entity transfer token to accept.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm entity transfer acceptance. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountEntityTransferAcceptRequest,
-	)
-
-	return tool, profiles.CapAdmin, handler
-}
-
 // NewLinodeAccountChildAccountGetTool creates a tool for retrieving one child-level account.
 func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -4954,25 +4935,6 @@ func handleLinodeAccountServiceTransferCreateRequest(ctx context.Context, reques
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_account_service_transfer_create: " + createFailure.Error()), nil
-}
-
-func handleLinodeAccountEntityTransferAcceptRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	return runAccountTransferAction(ctx, request, cfg,
-		"linode_account_entity_transfer_accept", httpMethodPost, accountEntityTransfersPath, "accept",
-		"This accepts an account entity transfer. Set confirm=true to proceed.",
-		"Account entity transfer accepted successfully",
-		"Failed to accept linode_account_entity_transfer_accept: ",
-		nil,
-		acceptAccountEntityTransfer)
-}
-
-func acceptAccountEntityTransfer(ctx context.Context, client *linode.Client, token string) string {
-	acceptFailure := client.AcceptAccountEntityTransfer(ctx, token)
-	if acceptFailure != nil {
-		return acceptFailure.Error()
-	}
-
-	return ""
 }
 
 func deleteAccountServiceTransfer(ctx context.Context, client *linode.Client, token string) string {

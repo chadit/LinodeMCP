@@ -13,45 +13,10 @@ import (
 )
 
 const (
-	accountEntityTransfersTestPath  = "/account/entity-transfers"
 	accountServiceTransfersTestPath = "/account/service-transfers"
 	transferTestToken               = "tok-abc"
-	entityTransferGetPath           = accountEntityTransfersTestPath + "/" + transferTestToken
 	serviceTransferGetPath          = accountServiceTransfersTestPath + "/" + transferTestToken
 )
-
-func TestLinodeAccountEntityTransferAcceptToolDryRun(t *testing.T) {
-	t.Parallel()
-
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
-
-		tool, _, _ := tools.NewLinodeAccountEntityTransferAcceptTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
-
-	t.Run("preview without accepting", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(&config.Config{})
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyToken:  transferTestToken,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_entity_transfer_accept", body["tool"])
-
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, entityTransferGetPath+"/accept", would["path"])
-		assert.Nil(t, body["current_state"], "deprecated entity transfer GET is not called during dry_run")
-	})
-}
 
 func TestLinodeAccountServiceTransferCreateToolDryRun(t *testing.T) {
 	t.Parallel()
