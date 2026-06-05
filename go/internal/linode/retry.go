@@ -3830,21 +3830,6 @@ func (c *Client) ListObjectStorageBucketContents(ctx context.Context, region, la
 	return objects, isTruncated, nextMarker, err
 }
 
-// ListObjectStorageClusters retrieves Object Storage clusters with automatic retry.
-func (c *Client) ListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error) {
-	var clusters []ObjectStorageCluster
-
-	err := c.executeWithRetry(ctx, "ListObjectStorageClusters", func() error {
-		var err error
-
-		clusters, err = c.httpListObjectStorageClusters(ctx)
-
-		return err
-	})
-
-	return clusters, err
-}
-
 // ListObjectStorageEndpoints retrieves Object Storage endpoints with automatic retry.
 func (c *Client) ListObjectStorageEndpoints(ctx context.Context) ([]ObjectStorageEndpoint, error) {
 	var endpoints []ObjectStorageEndpoint

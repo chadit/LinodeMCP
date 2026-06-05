@@ -9,7 +9,6 @@ import (
 
 const (
 	endpointObjBuckets   = "/object-storage/buckets"
-	endpointObjClusters  = "/object-storage/clusters"
 	endpointObjEndpoints = "/object-storage/endpoints"
 	endpointObjTypes     = "/object-storage/types"
 	endpointObjKeys      = "/object-storage/keys"
@@ -119,27 +118,6 @@ func (c *Client) httpListObjectStorageBucketContents(ctx context.Context, region
 	}
 
 	return response.Data, response.IsTruncated, response.NextMarker, nil
-}
-
-// ListObjectStorageClusters retrieves available Object Storage clusters.
-func (c *Client) httpListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjClusters, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListObjectStorageClusters", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[ObjectStorageCluster]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
 }
 
 // ListObjectStorageEndpoints retrieves Object Storage endpoints.

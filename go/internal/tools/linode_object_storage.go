@@ -317,46 +317,6 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 	return MarshalToolResponse(response)
 }
 
-// NewLinodeObjectStorageClusterListTool creates a tool for listing Object Storage clusters.
-func NewLinodeObjectStorageClusterListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
-		"linode_object_storage_cluster_list",
-		mcp.WithDescription("Lists available Object Storage clusters/regions where buckets can be created"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageClustersListRequest(ctx, &request, cfg)
-	}
-
-	return tool, profiles.CapRead, handler
-}
-
-func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	clusters, err := client.ListObjectStorageClusters(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage clusters: %v", err)), nil
-	}
-
-	response := struct {
-		Count    int                           `json:"count"`
-		Clusters []linode.ObjectStorageCluster `json:"clusters"`
-	}{
-		Count:    len(clusters),
-		Clusters: clusters,
-	}
-
-	return MarshalToolResponse(response)
-}
-
 // NewLinodeObjectStorageEndpointListTool creates a tool for listing Object Storage endpoints.
 func NewLinodeObjectStorageEndpointListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

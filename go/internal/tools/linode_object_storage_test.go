@@ -430,63 +430,6 @@ func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 	})
 }
 
-// End-to-end verification of object storage cluster listing.
-func TestLinodeObjectStorageClustersListTool(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageClusterListTool(cfg)
-
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-
-		assert.Equal(t, "linode_object_storage_cluster_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		clusters := []linode.ObjectStorageCluster{
-			{ID: regionUSEast1, Region: regionUSEast, Domain: objectStorageEndpointUSEast, Status: "available"},
-			{ID: "eu-central-1", Region: "eu-central", Domain: "eu-central-1.linodeobjects.com", Status: "available"},
-		}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/clusters", r.URL.Path, "request path should match clusters endpoint")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    clusters,
-				keyPage:    1,
-				keyPages:   1,
-				keyResults: 2,
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageClusterListTool(srvCfg)
-
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := srvHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, regionUSEast1, "response should contain first cluster ID")
-		assert.Contains(t, textContent.Text, "eu-central-1", "response should contain second cluster ID")
-		assert.Contains(t, textContent.Text, `"count": 2`, "response should contain correct count")
-	})
-}
-
 // End-to-end verification of object storage endpoint listing.
 func TestLinodeObjectStorageEndpointsListTool(t *testing.T) {
 	t.Parallel()
