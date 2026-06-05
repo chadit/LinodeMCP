@@ -5931,6 +5931,73 @@ async def test_retryable_update_managed_contact_delegates_once_without_retry() -
     mock_update.assert_awaited_once_with(174, email="ops@example.com")
 
 
+async def test_list_managed_linode_settings_sends_get_to_settings_route() -> None:
+    """Test Managed Linode settings sends documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [{"id": 123, "label": "web-1", "group": "prod"}],
+        "page": 2,
+        "pages": 4,
+        "results": 76,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_managed_linode_settings(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/managed/linode-settings?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_managed_linode_settings_wraps_http_errors() -> None:
+    """Test Managed Linode settings wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_managed_linode_settings()
+
+    assert "ListManagedLinodeSettings" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_managed_linode_settings_uses_retry() -> None:
+    """Test RetryableClient wraps Managed Linode settings list in retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    attempts = 0
+
+    async def flaky_list(
+        *, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        nonlocal attempts
+        attempts += 1
+        assert page == 2
+        assert page_size == 25
+        if attempts == 1:
+            raise httpx.TimeoutException("transient")
+        return {"data": [{"id": 123}]}
+
+    object.__setattr__(retryable.client, "list_managed_linode_settings", flaky_list)
+
+    try:
+        result = await retryable.list_managed_linode_settings(page=2, page_size=25)
+    finally:
+        await retryable.close()
+
+    assert result == {"data": [{"id": 123}]}
+    assert attempts == 2
+
+
 async def test_get_managed_stats_sends_get_to_managed_stats_route() -> None:
     """Test Managed stats sends documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")
