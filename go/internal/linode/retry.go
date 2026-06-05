@@ -1699,21 +1699,6 @@ func (c *Client) GetAccountServiceTransfer(ctx context.Context, token string) (*
 	return transfer, err
 }
 
-// GetAccountEntityTransfer retrieves one account entity transfer with automatic retry on transient failures.
-func (c *Client) GetAccountEntityTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
-	var transfer *AccountEntityTransfer
-
-	err := c.executeWithRetry(ctx, "GetAccountEntityTransfer", func() error {
-		var err error
-
-		transfer, err = c.httpGetAccountEntityTransfer(ctx, token)
-
-		return err
-	})
-
-	return transfer, err
-}
-
 // GetAccountEvent retrieves one account event with automatic retry on transient failures.
 func (c *Client) GetAccountEvent(ctx context.Context, eventID int) (*AccountEvent, error) {
 	var event *AccountEvent
