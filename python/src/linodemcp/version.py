@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass
 VERSION = "0.1.0"
 API_VERSION = "0.1.0"
 
+REMOVED_FEATURE_TOOLS_LIST = "linode_object_storage_cluster_get"
+
 
 @dataclass
 class VersionInfo:
@@ -55,7 +57,7 @@ FEATURE_TOOLS_LIST = (
     "linode_nodebalancer_config_delete,linode_nodebalancer_config_node_create,linode_nodebalancer_config_nodes_list,linode_nodebalancer_config_node_get,linode_nodebalancer_config_rebuild,linode_nodebalancer_config_update,linode_nodebalancer_config_node_update,linode_nodebalancer_create,linode_nodebalancer_update,"
     "linode_nodebalancer_firewalls_update,linode_nodebalancer_delete,"
     "linode_object_storage_buckets_list,linode_object_storage_buckets_region_list,linode_object_storage_bucket_get,"
-    "linode_object_storage_bucket_contents,linode_object_storage_cluster_get,"
+    "linode_object_storage_bucket_contents,"
     "linode_object_storage_endpoints_list,"
     "linode_object_storage_type_list,linode_object_storage_keys_list,"
     "linode_object_storage_key_get,linode_object_storage_transfer,"

@@ -5723,17 +5723,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListObjectStorageBucketContents", e) from e
 
-    async def get_object_storage_cluster(self, cluster_id: str) -> dict[str, Any]:
-        """Get a specific Object Storage cluster."""
-        encoded_cluster_id = quote(str(cluster_id), safe="")
-        endpoint = f"/object-storage/clusters/{encoded_cluster_id}"
-        try:
-            response = await self.make_request("GET", endpoint)
-            cluster: dict[str, Any] = response.json()
-            return cluster
-        except httpx.HTTPError as e:
-            raise NetworkError("GetObjectStorageCluster", e) from e
-
     async def list_object_storage_endpoints(self) -> list[dict[str, Any]]:
         """List Object Storage endpoints."""
         try:
@@ -12594,13 +12583,6 @@ class RetryableClient:
         """List contents of an Object Storage bucket with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_object_storage_bucket_contents, region, label, params
-        )
-        return result
-
-    async def get_object_storage_cluster(self, cluster_id: str) -> dict[str, Any]:
-        """Get a specific Object Storage cluster with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
-            self.client.get_object_storage_cluster, cluster_id
         )
         return result
 
