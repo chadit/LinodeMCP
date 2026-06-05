@@ -4857,6 +4857,55 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateManagedContact", e) from e
 
+    async def update_managed_service(
+        self,
+        service_id: int,
+        *,
+        address: str | None = None,
+        body: Any = _UNSET,
+        consultation_group: str | None = None,
+        credentials: list[int] | None = None,
+        label: str | None = None,
+        notes: Any = _UNSET,
+        region: Any = _UNSET,
+        service_type: str | None = None,
+        timeout: int | None = None,
+    ) -> dict[str, Any]:
+        """Update a Managed service monitor on the Linode account."""
+        validated_service_id = _validate_positive_path_int(service_id, "service_id")
+        request_body: dict[str, Any] = {}
+        if address is not None:
+            request_body["address"] = address
+        if body is not _UNSET:
+            request_body["body"] = body
+        if consultation_group is not None:
+            request_body["consultation_group"] = consultation_group
+        if credentials is not None:
+            request_body["credentials"] = credentials
+        if label is not None:
+            request_body["label"] = label
+        if notes is not _UNSET:
+            request_body["notes"] = notes
+        if region is not _UNSET:
+            request_body["region"] = region
+        if service_type is not None:
+            request_body["service_type"] = service_type
+        if timeout is not None:
+            request_body["timeout"] = timeout
+        if not request_body:
+            msg = "At least one managed service field is required"
+            raise ValueError(msg)
+
+        encoded_service_id = quote(str(validated_service_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT", f"/managed/services/{encoded_service_id}", request_body
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateManagedService", e) from e
+
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics from the last 24 hours."""
         try:
@@ -12064,6 +12113,42 @@ class RetryableClient:
         if phone is not None:
             kwargs["phone"] = phone
         return await self.client.update_managed_contact(contact_id, **kwargs)
+
+    async def update_managed_service(
+        self,
+        service_id: int,
+        *,
+        address: str | None = None,
+        body: Any = _UNSET,
+        consultation_group: str | None = None,
+        credentials: list[int] | None = None,
+        label: str | None = None,
+        notes: Any = _UNSET,
+        region: Any = _UNSET,
+        service_type: str | None = None,
+        timeout: int | None = None,
+    ) -> dict[str, Any]:
+        """Update a Managed service monitor without retrying the mutating request."""
+        kwargs: dict[str, Any] = {}
+        if address is not None:
+            kwargs["address"] = address
+        if body is not _UNSET:
+            kwargs["body"] = body
+        if consultation_group is not None:
+            kwargs["consultation_group"] = consultation_group
+        if credentials is not None:
+            kwargs["credentials"] = credentials
+        if label is not None:
+            kwargs["label"] = label
+        if notes is not _UNSET:
+            kwargs["notes"] = notes
+        if region is not _UNSET:
+            kwargs["region"] = region
+        if service_type is not None:
+            kwargs["service_type"] = service_type
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return await self.client.update_managed_service(service_id, **kwargs)
 
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics with retry."""

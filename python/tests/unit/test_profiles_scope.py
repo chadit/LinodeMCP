@@ -192,6 +192,7 @@ def test_meta_returns_empty() -> None:
         ("linode_account_cancel", Capability.Destroy, [Scope.AccountReadWrite]),
         ("linode_account_user_update", Capability.Write, [Scope.AccountReadWrite]),
         ("linode_managed_contacts_update", Capability.Write, [Scope.AccountReadWrite]),
+        ("linode_managed_service_update", Capability.Write, [Scope.AccountReadWrite]),
         (
             "linode_managed_credential_update",
             Capability.Write,
