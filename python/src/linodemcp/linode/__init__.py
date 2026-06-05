@@ -4771,6 +4771,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetManagedLinodeSettings", e) from e
 
+    async def list_managed_services(self) -> dict[str, Any]:
+        """List Managed services."""
+        try:
+            response = await self.make_request("GET", "/managed/services")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListManagedServices", e) from e
+
     async def get_managed_issue(self, issue_id: int) -> dict[str, Any]:
         """Get a Managed issue by issue ID."""
         valid_issue_id = _validate_positive_path_int(issue_id, "issue_id")
@@ -11934,6 +11943,13 @@ class RetryableClient:
         """Get Managed settings for a Linode with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_managed_linode_settings, linode_id
+        )
+        return result
+
+    async def list_managed_services(self) -> dict[str, Any]:
+        """List Managed services with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_managed_services
         )
         return result
 

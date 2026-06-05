@@ -5230,6 +5230,29 @@ async def handle_linode_managed_linode_settings_get(
     return await execute_tool(cfg, arguments, "get Linode Managed settings", _call)
 
 
+def create_linode_managed_services_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_services_list tool."""
+    return Tool(
+        name="linode_managed_services_list",
+        description="Lists Managed services on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": ENV_PARAM_SCHEMA,
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_services_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_services_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_managed_services()
+
+    return await execute_tool(cfg, arguments, "list Linode Managed services", _call)
+
+
 def create_linode_managed_issue_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_issue_get tool."""
     return Tool(

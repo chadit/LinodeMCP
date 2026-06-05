@@ -11161,6 +11161,45 @@ async def test_managed_linode_settings_get_rejects_invalid_linode_id(
     mock_client_class.assert_not_called()
 
 
+async def test_managed_services_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed services list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_managed_services_list_tool" in tools_mod.__all__
+    assert "handle_linode_managed_services_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_managed_services_list" in srv.registered_tool_names
+
+
+async def test_managed_services_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed services list is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "data": [{"id": 123}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_managed_services.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_managed_services_list", {})
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_managed_services.assert_awaited_once_with()
+
+
 async def test_managed_issue_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
