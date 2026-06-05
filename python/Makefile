@@ -8,14 +8,9 @@ PYRIGHT := pyright
 
 .PHONY: help venv install install-dev build test test-cov lint format typecheck vulture deptry clean run all check _ensure-hooks update-hooks
 
-# Auto-install pre-commit hooks if not already set up
+# Auto-install commit and push hooks if not already set up
 _ensure-hooks:
-	@if command -v pre-commit >/dev/null 2>&1; then \
-		if [ ! -f ../.git/hooks/pre-commit ] || ! grep -q 'pre-commit' ../.git/hooks/pre-commit 2>/dev/null; then \
-			echo "Installing pre-commit hooks..."; \
-			cd .. && pre-commit install; \
-		fi \
-	fi
+	@$(MAKE) -C .. install-hooks
 
 update-hooks:
 	@cd .. && pre-commit autoupdate

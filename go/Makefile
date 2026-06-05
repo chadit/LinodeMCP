@@ -1,13 +1,8 @@
 .PHONY: help build build-prod run test test-race test-all clean lint lint-fast fmt fmt-check install-tools coverage tidy gopls-check check _ensure-hooks update-hooks
 
-# Auto-install pre-commit hooks if not already set up
+# Auto-install commit and push hooks if not already set up
 _ensure-hooks:
-	@if command -v pre-commit >/dev/null 2>&1; then \
-		if [ ! -f ../.git/hooks/pre-commit ] || ! grep -q 'pre-commit' ../.git/hooks/pre-commit 2>/dev/null; then \
-			echo "Installing pre-commit hooks..."; \
-			cd .. && pre-commit install; \
-		fi \
-	fi
+	@$(MAKE) -C .. install-hooks
 
 ## help: Show this help message
 help: _ensure-hooks
