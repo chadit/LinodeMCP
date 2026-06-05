@@ -309,7 +309,6 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_entity_transfer_get":                    profiles.CapRead,
 		"linode_account_event_get":                              profiles.CapRead,
 		"linode_account_event_seen":                             profiles.CapAdmin,
-		"linode_account_entity_transfer_create":                 profiles.CapAdmin,
 		"linode_account_child_account_get":                      profiles.CapRead,
 		"linode_account_child_account_token":                    profiles.CapAdmin,
 		"linode_account_beta_get":                               profiles.CapRead,
@@ -370,6 +369,8 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 	}
 
 	for _, descriptor := range descriptors {
+		assert.NotEqual(t, "linode_account_entity_transfer_create", descriptor.Name, "deprecated entity-transfer create route should not be registered")
+
 		if capability, ok := want[descriptor.Name]; ok {
 			assert.Equal(t, capability, descriptor.Capability, "descriptor capability should match")
 			delete(want, descriptor.Name)

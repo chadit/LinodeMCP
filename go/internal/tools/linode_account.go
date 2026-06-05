@@ -1581,25 +1581,6 @@ func NewLinodeAccountEventSeenTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	return tool, profiles.CapAdmin, handler
 }
 
-// NewLinodeAccountEntityTransferCreateTool creates a tool for creating an account entity transfer.
-func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
-		"linode_account_entity_transfer_create",
-		"Creates an account entity transfer for the provided Linode IDs.",
-		[]mcp.ToolOption{
-			mcp.WithArray("linode_ids", mcp.Required(),
-				mcp.Description("Linode IDs to include in the entity transfer.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm entity transfer creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountEntityTransferCreateRequest,
-	)
-
-	return tool, profiles.CapAdmin, handler
-}
-
 // NewLinodeAccountEntityTransferAcceptTool creates a tool for accepting one account entity transfer.
 func NewLinodeAccountEntityTransferAcceptTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -5049,33 +5030,6 @@ func accountServiceTransfersPaginationFromTool(request *mcp.CallToolRequest) (in
 	return page, pageSize, ""
 }
 
-func handleLinodeAccountEntityTransferCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	req, validationMessage := accountEntityTransferCreateRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_entity_transfer_create", httpMethodPost, accountEntityTransfersPath, nil)
-	}
-
-	if result := RequireConfirm(request, "This creates an account entity transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	transfer, createFailure := client.CreateAccountEntityTransfer(ctx, req)
-	if createFailure == nil {
-		return MarshalToolResponse(transfer)
-	}
-
-	return mcp.NewToolResultError("Failed to create linode_account_entity_transfer_create: " + createFailure.Error()), nil
-}
-
 func handleLinodeAccountServiceTransferCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	req, validationMessage := accountServiceTransferCreateRequestFromTool(request)
 	if validationMessage != "" {
@@ -5161,22 +5115,6 @@ func deleteAccountEntityTransfer(ctx context.Context, client *linode.Client, tok
 	}
 
 	return ""
-}
-
-func accountEntityTransferCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountEntityTransferRequest, string) {
-	raw, exists := request.GetArguments()["linode_ids"]
-	if !exists {
-		return nil, "linode_ids is required"
-	}
-
-	ids, validationMessage := intSliceFromToolArg(raw, "linode_ids")
-	if validationMessage != "" {
-		return nil, validationMessage
-	}
-
-	return &linode.CreateAccountEntityTransferRequest{
-		Entities: linode.AccountEntityTransferEntities{Linodes: ids},
-	}, ""
 }
 
 func accountServiceTransferCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountServiceTransferRequest, string) {

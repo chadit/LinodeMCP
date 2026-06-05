@@ -6401,44 +6401,6 @@ func TestClientGetAccountChildAccountRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
-// TestClientCreateAccountEntityTransferSuccess verifies CreateAccountEntityTransfer
-// sends a POST request to /account/entity-transfers and decodes the response.
-func TestClientCreateAccountEntityTransferSuccess(t *testing.T) {
-	t.Parallel()
-
-	want := linode.AccountEntityTransfer{
-		Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}},
-		Status:   statusPending,
-		Token:    "transfer-token",
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/entity-transfers", r.URL.Path, "request path should be /account/entity-transfers")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-
-		var got linode.CreateAccountEntityTransferRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
-
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	req := &linode.CreateAccountEntityTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}}}
-
-	got, err := client.CreateAccountEntityTransfer(t.Context(), req)
-
-	require.NoError(t, err, "CreateAccountEntityTransfer should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, statusPending, got.Status)
-	assert.Equal(t, "transfer-token", got.Token)
-	assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
-}
-
 // TestClientCreateAccountServiceTransferSuccess verifies CreateAccountServiceTransfer
 // sends a POST request to /account/service-transfers and decodes the response.
 func TestClientCreateAccountServiceTransferSuccess(t *testing.T) {
@@ -6525,58 +6487,6 @@ func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing
 
 	require.Error(t, err, "CreateAccountServiceTransfer should return the transient error")
 	assert.Equal(t, int32(1), requestCount.Load(), "mutating service transfer creation must not be retried")
-}
-
-// TestClientCreateAccountEntityTransferAPIError verifies API errors propagate.
-func TestClientCreateAccountEntityTransferAPIError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/entity-transfers", r.URL.Path, "request path should be /account/entity-transfers")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	req := &linode.CreateAccountEntityTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123}}}
-
-	_, err := client.CreateAccountEntityTransfer(t.Context(), req)
-
-	require.Error(t, err, "CreateAccountEntityTransfer should fail on 403 response")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
-}
-
-// TestClientCreateAccountEntityTransferDoesNotRetryTransientError verifies
-// transfer creation is not replayed after a transient failure.
-func TestClientCreateAccountEntityTransferDoesNotRetryTransientError(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		requestCount.Add(1)
-		w.WriteHeader(http.StatusInternalServerError)
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
-	req := &linode.CreateAccountEntityTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123}}}
-
-	_, err := client.CreateAccountEntityTransfer(t.Context(), req)
-
-	require.Error(t, err, "CreateAccountEntityTransfer should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating transfer creation must not be retried")
 }
 
 // TestClientCreateAccountChildAccountTokenSuccess verifies CreateAccountChildAccountToken
