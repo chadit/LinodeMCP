@@ -5687,7 +5687,9 @@ class Client:
         self, region: str, label: str
     ) -> dict[str, Any]:
         """Get a specific Object Storage bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}"
+        encoded_region = quote(str(region), safe="")
+        encoded_label = quote(str(label), safe="")
+        endpoint = f"/object-storage/buckets/{encoded_region}/{encoded_label}"
         try:
             response = await self.make_request("GET", endpoint)
             bucket: dict[str, Any] = response.json()
@@ -5699,7 +5701,11 @@ class Client:
         self, region: str, label: str, params: dict[str, str] | None = None
     ) -> dict[str, Any]:
         """List contents of an Object Storage bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/object-list"
+        encoded_region = quote(str(region), safe="")
+        encoded_label = quote(str(label), safe="")
+        endpoint = (
+            f"/object-storage/buckets/{encoded_region}/{encoded_label}/object-list"
+        )
 
         if params:
             filtered = {
@@ -5716,16 +5722,6 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListObjectStorageBucketContents", e) from e
-
-    async def list_object_storage_clusters(self) -> list[dict[str, Any]]:
-        """List Object Storage clusters."""
-        try:
-            response = await self.make_request("GET", "/object-storage/clusters")
-            data = response.json()
-            clusters: list[dict[str, Any]] = data.get("data", [])
-            return clusters
-        except httpx.HTTPError as e:
-            raise NetworkError("ListObjectStorageClusters", e) from e
 
     async def get_object_storage_cluster(self, cluster_id: str) -> dict[str, Any]:
         """Get a specific Object Storage cluster."""
@@ -12598,13 +12594,6 @@ class RetryableClient:
         """List contents of an Object Storage bucket with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_object_storage_bucket_contents, region, label, params
-        )
-        return result
-
-    async def list_object_storage_clusters(self) -> list[dict[str, Any]]:
-        """List Object Storage clusters with retry."""
-        result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_object_storage_clusters
         )
         return result
 
