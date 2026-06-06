@@ -5,9 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
@@ -53,14 +50,14 @@ func TestValidateScopesPATPath(t *testing.T) {
 	}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, required)
-	require.NoError(t, err)
-	require.NotNil(t, got)
+	requireNoError(t, err)
+	requireNotNil(t, got)
 
-	assert.Equal(t, profiles.TokenKindPAT, got.Kind,
+	assertEqual(t, profiles.TokenKindPAT, got.Kind,
 		"non-empty Profile.Scopes must be classified as PAT")
-	assert.False(t, got.Comparison.HasMissing())
-	assert.False(t, got.Comparison.HasExcess())
-	assert.False(t, inspector.grantsCalled,
+	assertFalse(t, got.Comparison.HasMissing())
+	assertFalse(t, got.Comparison.HasExcess())
+	assertFalse(t, inspector.grantsCalled,
 		"GetProfileGrants must not be called on the PAT path")
 }
 
@@ -86,14 +83,14 @@ func TestValidateScopesOAuthPath(t *testing.T) {
 	required := []profiles.Scope{profiles.ScopeLinodesReadWrite}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, required)
-	require.NoError(t, err)
-	require.NotNil(t, got)
+	requireNoError(t, err)
+	requireNotNil(t, got)
 
-	assert.Equal(t, profiles.TokenKindOAuth, got.Kind,
+	assertEqual(t, profiles.TokenKindOAuth, got.Kind,
 		"empty Profile.Scopes must be classified as OAuth")
-	assert.True(t, inspector.grantsCalled,
+	assertTrue(t, inspector.grantsCalled,
 		"OAuth path must call GetProfileGrants")
-	assert.False(t, got.Comparison.HasMissing(),
+	assertFalse(t, got.Comparison.HasMissing(),
 		"add_linodes implies linodes:read_write, so nothing is missing")
 }
 
@@ -116,11 +113,11 @@ func TestValidateScopesReportsMissing(t *testing.T) {
 	}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, required)
-	require.NoError(t, err, "missing scopes must not surface as an error")
-	require.NotNil(t, got)
+	requireNoError(t, err, "missing scopes must not surface as an error")
+	requireNotNil(t, got)
 
-	assert.True(t, got.Comparison.HasMissing())
-	assert.Equal(t, []profiles.Scope{
+	assertTrue(t, got.Comparison.HasMissing())
+	assertEqual(t, []profiles.Scope{
 		profiles.ScopeLinodesReadWrite,
 		profiles.ScopeVolumesReadOnly,
 	}, got.Comparison.Missing)
@@ -136,11 +133,11 @@ func TestValidateScopesProfileErrorWrapped(t *testing.T) {
 	inspector := &fakeInspector{profileErr: apiErr}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, nil)
-	require.Error(t, err)
-	assert.Nil(t, got, "result must be nil on profile fetch failure")
-	require.ErrorIs(t, err, profiles.ErrProfileFetchFailed,
+	requireError(t, err)
+	assertNil(t, got, "result must be nil on profile fetch failure")
+	requireErrorIs(t, err, profiles.ErrProfileFetchFailed,
 		"error must wrap profiles.ErrProfileFetchFailed for callers to pattern-match")
-	require.ErrorIs(t, err, apiErr,
+	requireErrorIs(t, err, apiErr,
 		"wrapper must preserve the underlying API error in the chain")
 }
 
@@ -157,11 +154,11 @@ func TestValidateScopesGrantsErrorWrapped(t *testing.T) {
 	}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, nil)
-	require.Error(t, err)
-	assert.Nil(t, got)
-	require.ErrorIs(t, err, profiles.ErrGrantsFetchFailed,
+	requireError(t, err)
+	assertNil(t, got)
+	requireErrorIs(t, err, profiles.ErrGrantsFetchFailed,
 		"OAuth-path failure must wrap profiles.ErrGrantsFetchFailed")
-	require.ErrorIs(t, err, apiErr)
+	requireErrorIs(t, err, apiErr)
 }
 
 // TestTokenKindString locks in the user-facing names so log messages
@@ -169,7 +166,7 @@ func TestValidateScopesGrantsErrorWrapped(t *testing.T) {
 func TestTokenKindString(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "Unknown", profiles.TokenKindUnknown.String())
-	assert.Equal(t, "PAT", profiles.TokenKindPAT.String())
-	assert.Equal(t, "OAuth", profiles.TokenKindOAuth.String())
+	assertEqual(t, "Unknown", profiles.TokenKindUnknown.String())
+	assertEqual(t, "PAT", profiles.TokenKindPAT.String())
+	assertEqual(t, "OAuth", profiles.TokenKindOAuth.String())
 }

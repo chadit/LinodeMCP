@@ -3,8 +3,6 @@ package profiles_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
@@ -24,9 +22,9 @@ const (
 func TestParsePATScopesEmpty(t *testing.T) {
 	t.Parallel()
 
-	assert.Nil(t, profiles.ParsePATScopes(""))
-	assert.Nil(t, profiles.ParsePATScopes("   "))
-	assert.Nil(t, profiles.ParsePATScopes("\t\n"))
+	assertNil(t, profiles.ParsePATScopes(""))
+	assertNil(t, profiles.ParsePATScopes("   "))
+	assertNil(t, profiles.ParsePATScopes("\t\n"))
 }
 
 // TestParsePATScopesSplits the canonical PAT format: space-delimited
@@ -36,7 +34,7 @@ func TestParsePATScopesSplits(t *testing.T) {
 
 	got := profiles.ParsePATScopes("linodes:read_write volumes:read_only domains:read_write")
 
-	assert.ElementsMatch(
+	assertElementsMatch(
 		t,
 		[]profiles.Scope{
 			profiles.ScopeLinodesReadWrite,
@@ -60,9 +58,9 @@ func TestParsePATScopesDedupes(t *testing.T) {
 	input := scope + " " + scope + " volumes:read_only"
 
 	got := profiles.ParsePATScopes(input)
-	assert.Len(t, got, 2)
-	assert.Contains(t, got, profiles.ScopeLinodesReadWrite)
-	assert.Contains(t, got, profiles.ScopeVolumesReadOnly)
+	assertLen(t, got, 2)
+	assertContains(t, got, profiles.ScopeLinodesReadWrite)
+	assertContains(t, got, profiles.ScopeVolumesReadOnly)
 }
 
 // TestParsePATScopesPreservesWildcard locks in that "*" (the all-access
@@ -72,7 +70,7 @@ func TestParsePATScopesPreservesWildcard(t *testing.T) {
 	t.Parallel()
 
 	got := profiles.ParsePATScopes("*")
-	assert.Equal(t, []profiles.Scope{profiles.ScopeWildcard}, got)
+	assertEqual(t, []profiles.Scope{profiles.ScopeWildcard}, got)
 }
 
 // TestFlattenGrantsNil verifies the nil-grants safety contract. A token
@@ -81,7 +79,7 @@ func TestParsePATScopesPreservesWildcard(t *testing.T) {
 func TestFlattenGrantsNil(t *testing.T) {
 	t.Parallel()
 
-	assert.Nil(t, profiles.FlattenGrants(nil))
+	assertNil(t, profiles.FlattenGrants(nil))
 }
 
 // TestFlattenGrantsEmpty covers the PAT path: PATs return a 200 with
@@ -90,7 +88,7 @@ func TestFlattenGrantsNil(t *testing.T) {
 func TestFlattenGrantsEmpty(t *testing.T) {
 	t.Parallel()
 
-	assert.Empty(t, profiles.FlattenGrants(&linode.Grants{}))
+	assertEmpty(t, profiles.FlattenGrants(&linode.Grants{}))
 }
 
 // TestFlattenGrantsGlobalAccess walks the GlobalGrants AccountAccess
@@ -102,14 +100,14 @@ func TestFlattenGrantsGlobalAccess(t *testing.T) {
 	rw := profiles.FlattenGrants(&linode.Grants{
 		Global: linode.GlobalGrants{AccountAccess: permReadWrite},
 	})
-	assert.Contains(t, rw, profiles.ScopeAccountReadOnly)
-	assert.Contains(t, rw, profiles.ScopeAccountReadWrite)
+	assertContains(t, rw, profiles.ScopeAccountReadOnly)
+	assertContains(t, rw, profiles.ScopeAccountReadWrite)
 
 	ro := profiles.FlattenGrants(&linode.Grants{
 		Global: linode.GlobalGrants{AccountAccess: permReadOnly},
 	})
-	assert.Contains(t, ro, profiles.ScopeAccountReadOnly)
-	assert.NotContains(t, ro, profiles.ScopeAccountReadWrite,
+	assertContains(t, ro, profiles.ScopeAccountReadOnly)
+	assertNotContains(t, ro, profiles.ScopeAccountReadWrite,
 		"read_only must not imply write")
 }
 
@@ -142,7 +140,7 @@ func TestFlattenGrantsAddFlags(t *testing.T) {
 		profiles.ScopeVolumesReadWrite,
 		profiles.ScopeVPCReadWrite,
 	} {
-		assert.Contains(t, got, want)
+		assertContains(t, got, want)
 	}
 }
 
@@ -165,12 +163,12 @@ func TestFlattenGrantsPerResource(t *testing.T) {
 		},
 	})
 
-	assert.Contains(t, got, profiles.ScopeLinodesReadWrite)
-	assert.Contains(t, got, profiles.ScopeLinodesReadOnly)
-	assert.Contains(t, got, profiles.ScopeDomainsReadOnly)
-	assert.NotContains(t, got, profiles.ScopeDomainsReadWrite,
+	assertContains(t, got, profiles.ScopeLinodesReadWrite)
+	assertContains(t, got, profiles.ScopeLinodesReadOnly)
+	assertContains(t, got, profiles.ScopeDomainsReadOnly)
+	assertNotContains(t, got, profiles.ScopeDomainsReadWrite,
 		"read_only domain grant must not imply :read_write")
-	assert.NotContains(t, got, profiles.ScopeVolumesReadOnly,
+	assertNotContains(t, got, profiles.ScopeVolumesReadOnly,
 		"empty permissions grant must contribute nothing")
 }
 
@@ -196,7 +194,7 @@ func TestFlattenGrantsSortedDeduplicated(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 2, count, "should produce exactly two linode scopes (no duplicates)")
+	assertEqual(t, 2, count, "should produce exactly two linode scopes (no duplicates)")
 }
 
 // TestCompareScopesAllPresent covers the happy path: every required
@@ -209,8 +207,8 @@ func TestCompareScopesAllPresent(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadOnly, profiles.ScopeVolumesReadOnly},
 	)
 
-	assert.False(t, got.HasMissing())
-	assert.False(t, got.HasExcess())
+	assertFalse(t, got.HasMissing())
+	assertFalse(t, got.HasExcess())
 }
 
 // TestCompareScopesMissingReportsGap verifies the missing-set path:
@@ -228,8 +226,8 @@ func TestCompareScopesMissingReportsGap(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadWrite},
 	)
 
-	assert.True(t, got.HasMissing())
-	assert.Equal(
+	assertTrue(t, got.HasMissing())
+	assertEqual(
 		t,
 		[]profiles.Scope{
 			profiles.ScopeDomainsReadWrite,
@@ -254,9 +252,9 @@ func TestCompareScopesExcessIsLeastPrivilegeSignal(t *testing.T) {
 		},
 	)
 
-	assert.False(t, got.HasMissing())
-	assert.True(t, got.HasExcess())
-	assert.Equal(t, []profiles.Scope{profiles.ScopeVolumesReadWrite}, got.Excess)
+	assertFalse(t, got.HasMissing())
+	assertTrue(t, got.HasExcess())
+	assertEqual(t, []profiles.Scope{profiles.ScopeVolumesReadWrite}, got.Excess)
 }
 
 // TestCompareScopesWildcardMatchesEverything verifies that a token
@@ -274,9 +272,9 @@ func TestCompareScopesWildcardMatchesEverything(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeWildcard},
 	)
 
-	assert.False(t, got.HasMissing(),
+	assertFalse(t, got.HasMissing(),
 		"wildcard token must satisfy every required scope")
-	assert.False(t, got.HasExcess(),
+	assertFalse(t, got.HasExcess(),
 		"wildcard alone is not 'excess' since it is the literal grant")
 }
 
@@ -292,7 +290,7 @@ func TestCompareScopesRequiredWildcardIsNoOp(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadOnly},
 	)
 
-	assert.False(t, got.HasMissing(),
+	assertFalse(t, got.HasMissing(),
 		"wildcard in required list must not produce a missing entry")
 }
 
@@ -307,7 +305,7 @@ func TestCompareScopesEmptyRequiredAlwaysPasses(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadWrite},
 	)
 
-	assert.False(t, got.HasMissing())
-	assert.True(t, got.HasExcess(),
+	assertFalse(t, got.HasMissing())
+	assertTrue(t, got.HasExcess(),
 		"a token with scope vs empty required is still 'excess' (least privilege violated)")
 }
