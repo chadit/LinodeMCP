@@ -5,9 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
@@ -43,8 +40,8 @@ func TestWriteAtomicNilConfigReturnsSentinel(t *testing.T) {
 
 	err := config.WriteAtomic(filepath.Join(t.TempDir(), "out.yml"), nil)
 
-	require.Error(t, err)
-	require.ErrorIs(t, err, config.ErrNilConfig)
+	checkError(t, err)
+	checkErrorIs(t, err, config.ErrNilConfig)
 }
 
 // TestWriteAtomicYAMLRoundTrip writes the config to a .yml file and
@@ -57,12 +54,12 @@ func TestWriteAtomicYAMLRoundTrip(t *testing.T) {
 	cfg := minimalWritableConfig()
 	cfg.ActiveProfile = "compute-admin"
 
-	require.NoError(t, config.WriteAtomic(path, cfg))
+	checkNoError(t, config.WriteAtomic(path, cfg))
 
 	loaded, err := config.Load(path)
-	require.NoError(t, err, "round-trip Load must succeed on the written file")
-	assert.Equal(t, "compute-admin", loaded.ActiveProfile)
-	assert.Equal(t, "Test", loaded.Server.Name)
+	checkNoError(t, err, "round-trip Load must succeed on the written file")
+	checkEqual(t, "compute-admin", loaded.ActiveProfile)
+	checkEqual(t, "Test", loaded.Server.Name)
 }
 
 // TestWriteAtomicJSONRoundTrip checks that JSON output uses the JSON
@@ -75,16 +72,15 @@ func TestWriteAtomicJSONRoundTrip(t *testing.T) {
 	cfg := minimalWritableConfig()
 	cfg.ActiveProfile = "readonly-full"
 
-	require.NoError(t, config.WriteAtomic(path, cfg))
+	checkNoError(t, config.WriteAtomic(path, cfg))
 
 	data, err := os.ReadFile(path) // #nosec G304 -- path is the test's tempdir target
-	require.NoError(t, err)
-	assert.Equal(t, byte('{'), data[0],
-		"JSON extension must produce JSON output (starts with '{')")
+	checkNoError(t, err)
+	checkEqual(t, byte('{'), data[0], "JSON extension must produce JSON output (starts with '{')")
 
 	loaded, err := config.Load(path)
-	require.NoError(t, err)
-	assert.Equal(t, "readonly-full", loaded.ActiveProfile)
+	checkNoError(t, err)
+	checkEqual(t, "readonly-full", loaded.ActiveProfile)
 }
 
 // TestWriteAtomicPreservesOriginalMode confirms WriteAtomic does not
@@ -96,23 +92,20 @@ func TestWriteAtomicPreservesOriginalMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
 	cfg := minimalWritableConfig()
 
-	require.NoError(t, config.WriteAtomic(path, cfg),
-		"initial write should succeed (sets default 0600)")
+	checkNoError(t, config.WriteAtomic(path, cfg), "initial write should succeed (sets default 0600)")
 
-	require.NoError(t, os.Chmod(path, 0o400),
-		"operator hardens permissions to read-only")
+	checkNoError(t, os.Chmod(path, 0o400), "operator hardens permissions to read-only")
 
 	// Need to bump back to 0o600 so the next write can replace the file.
 	// The file mode test is about the destination's preserved mode after
 	// rename, not about whether the writer can overwrite a read-only
 	// file (rename on POSIX needs write permission on the directory, not
 	// the destination file).
-	require.NoError(t, config.WriteAtomic(path, cfg),
-		"second write must succeed and preserve the 0400 mode")
+	checkNoError(t, config.WriteAtomic(path, cfg), "second write must succeed and preserve the 0400 mode")
 
 	info, err := os.Stat(path)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o400), info.Mode().Perm(),
+	checkNoError(t, err)
+	checkEqual(t, os.FileMode(0o400), info.Mode().Perm(),
 		"rewritten file must keep the original 0400 permission bits")
 }
 
@@ -124,11 +117,11 @@ func TestWriteAtomicNewFileUsesDefaultMode(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "fresh.yml")
 
-	require.NoError(t, config.WriteAtomic(path, minimalWritableConfig()))
+	checkNoError(t, config.WriteAtomic(path, minimalWritableConfig()))
 
 	info, err := os.Stat(path)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(),
+	checkNoError(t, err)
+	checkEqual(t, os.FileMode(0o600), info.Mode().Perm(),
 		"new file must default to 0600")
 }
 
@@ -142,7 +135,7 @@ func TestWriteAtomicRejectsRoundTripInvalid(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
 	good := minimalWritableConfig()
 
-	require.NoError(t, config.WriteAtomic(path, good))
+	checkNoError(t, config.WriteAtomic(path, good))
 
 	// Construct an invalid config: an environment with APIURL but no
 	// Token survives setDefaults and trips ErrMissingToken in validate.
@@ -159,14 +152,13 @@ func TestWriteAtomicRejectsRoundTripInvalid(t *testing.T) {
 	}
 
 	err := config.WriteAtomic(path, bad)
-	require.Error(t, err, "validation failure must surface, not silently overwrite")
+	checkError(t, err, "validation failure must surface, not silently overwrite")
 
 	// Confirm the existing file is unchanged: still loads cleanly with
 	// the original Server.Name.
 	loaded, err := config.Load(path)
-	require.NoError(t, err)
-	assert.Equal(t, "Test", loaded.Server.Name,
-		"failed write must not replace the good file on disk")
+	checkNoError(t, err)
+	checkEqual(t, "Test", loaded.Server.Name, "failed write must not replace the good file on disk")
 }
 
 // TestWriteAtomicLeavesNoTempLeftovers verifies that even on validation
@@ -178,7 +170,7 @@ func TestWriteAtomicLeavesNoTempLeftovers(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 
-	require.NoError(t, config.WriteAtomic(path, minimalWritableConfig()))
+	checkNoError(t, config.WriteAtomic(path, minimalWritableConfig()))
 
 	bad := minimalWritableConfig()
 	bad.Environments[envKeyDefault] = config.EnvironmentConfig{
@@ -189,13 +181,12 @@ func TestWriteAtomicLeavesNoTempLeftovers(t *testing.T) {
 		},
 	}
 
-	require.Error(t, config.WriteAtomic(path, bad))
+	checkError(t, config.WriteAtomic(path, bad))
 
 	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	for _, e := range entries {
-		assert.NotContains(t, e.Name(), ".tmp.",
-			"failed atomic write must not leave a .tmp.* file behind")
+		checkNotContains(t, e.Name(), ".tmp.", "failed atomic write must not leave a .tmp.* file behind")
 	}
 }
