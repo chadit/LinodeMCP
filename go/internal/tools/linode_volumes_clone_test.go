@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -26,16 +24,16 @@ func TestLinodeVolumeCloneTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_volume_clone", tool.Name)
-		assert.NotEmpty(t, tool.Description)
-		require.NotNil(t, handler)
-		assert.Contains(t, tool.Description, "WARNING")
+		checkEqual(t, "linode_volume_clone", tool.Name)
+		expectNotEmpty(t, tool.Description)
+		expectNotNil(t, handler)
+		expectContains(t, tool.Description, "WARNING")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyVolumeID)
-		assert.Contains(t, props, keyLabel)
-		assert.Contains(t, props, keyConfirm)
-		assert.Contains(t, props, keyDryRun)
+		expectContains(t, props, keyVolumeID)
+		expectContains(t, props, keyLabel)
+		expectContains(t, props, keyConfirm)
+		expectContains(t, props, keyDryRun)
 	})
 
 	validationTests := []struct {
@@ -59,9 +57,9 @@ func TestLinodeVolumeCloneTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError)
+			expectNoError(t, err)
+			expectNotNil(t, result)
+			expectTrue(t, result.IsError)
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -75,15 +73,15 @@ func TestLinodeVolumeCloneTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
-			assert.Equal(t, "/volumes/333/clone", r.URL.Path)
-			assert.Equal(t, http.MethodPost, r.Method)
+			checkEqual(t, "/volumes/333/clone", r.URL.Path)
+			checkEqual(t, http.MethodPost, r.Method)
 
 			var body map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			assert.Equal(t, labelDataVol, body[keyLabel])
+			checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+			checkEqual(t, labelDataVol, body[keyLabel])
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(volume))
+			checkNoError(t, json.NewEncoder(w).Encode(volume))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -98,29 +96,33 @@ func TestLinodeVolumeCloneTool(t *testing.T) {
 			keyConfirm:  true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError)
-		assert.Equal(t, int32(1), requestCount.Load())
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError)
+		checkEqual(t, int32(1), requestCount.Load())
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		assert.Contains(t, textContent.Text, "cloned successfully")
-		assert.Contains(t, textContent.Text, labelDataVol)
+		expectTrue(t, ok)
+		expectContains(t, textContent.Text, "cloned successfully")
+		expectContains(t, textContent.Text, labelDataVol)
 	})
 }
 
 func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 	t.Parallel()
 
-	var methodsSeen []string
+	var requestCount atomic.Int32
+	var sawPost atomic.Bool
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		methodsSeen = append(methodsSeen, r.Method)
-		assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
-		assert.Equal(t, "/volumes/333", r.URL.Path)
+		requestCount.Add(1)
+		if r.Method == http.MethodPost {
+			sawPost.Store(true)
+		}
+		checkEqual(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+		checkEqual(t, "/volumes/333", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: testVolumeLabel, Region: regionUSEast}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: testVolumeLabel, Region: regionUSEast}))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -151,11 +153,11 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 			keyDryRun:   true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, errLabelRequired)
-		assert.Equal(t, int32(0), requestCount.Load())
+		checkEqual(t, int32(0), requestCount.Load())
 	})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -164,17 +166,18 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 		keyDryRun:   true,
 	}))
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-	require.Equal(t, []string{http.MethodGet}, methodsSeen)
+	expectNoError(t, err)
+	expectNotNil(t, result)
+	expectFalse(t, result.IsError)
+	expectEqual(t, int32(1), requestCount.Load())
+	expectFalse(t, sawPost.Load(), "dry_run must not issue POST")
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, true, body[keyDryRun])
-	assert.Equal(t, "linode_volume_clone", body["tool"])
+	expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	checkEqual(t, true, body[keyDryRun])
+	checkEqual(t, "linode_volume_clone", body["tool"])
 
 	would, _ := body["would_execute"].(map[string]any)
-	assert.Equal(t, "POST", would["method"])
-	assert.Equal(t, "/volumes/333/clone", would["path"])
+	checkEqual(t, "POST", would["method"])
+	checkEqual(t, "/volumes/333/clone", would["path"])
 }

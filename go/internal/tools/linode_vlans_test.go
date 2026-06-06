@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -27,24 +26,24 @@ func TestLinodeVLANsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vlans_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyPage, "schema should include page")
-		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only schema should not include confirm")
+		checkEqual(t, "linode_vlans_list", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		checkEqual(t, profiles.CapRead, capability, "tool should be read capability")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.InputSchema.Properties, keyPage, "schema should include page")
+		expectContains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
+		expectNotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only schema should not include confirm")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/vlans", r.URL.Path, "request path should match")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/networking/vlans", r.URL.Path, "request path should match")
+			checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: []map[string]any{{keyLabel: vlanLabelApp, "region": regionUSEast, "linodes": []int{123}}},
 				keyPage: 1, keyPages: 1, keyResults: 1,
 			}), "encoding response should not fail")
@@ -60,22 +59,22 @@ func TestLinodeVLANsListTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, vlanLabelApp, "response should contain VLAN label")
-		assert.Contains(t, textContent.Text, regionUSEast, "response should contain VLAN region")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, vlanLabelApp, "response should contain VLAN label")
+		expectContains(t, textContent.Text, regionUSEast, "response should contain VLAN region")
 	})
 
 	t.Run("api error returns tool error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/vlans", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/networking/vlans", r.URL.Path, "request path should match")
 			http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
 		}))
 		defer srv.Close()
@@ -87,9 +86,9 @@ func TestLinodeVLANsListTool(t *testing.T) {
 
 		result, err := handler(t.Context(), mcp.CallToolRequest{})
 
-		require.NoError(t, err, "handler should return tool errors without Go errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		expectNoError(t, err, "handler should return tool errors without Go errors")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to retrieve linode_vlans_list")
 	})
 
@@ -119,9 +118,9 @@ func TestLinodeVLANsListTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
-				require.NoError(t, err, "handler should return tool errors without Go errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid pagination should be an error result")
+				expectNoError(t, err, "handler should return tool errors without Go errors")
+				expectNotNil(t, result, "result should not be nil")
+				expectTrue(t, result.IsError, "invalid pagination should be an error result")
 				assertErrorContains(t, result, testCase.wantMessage)
 			})
 		}
@@ -136,24 +135,24 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vlan_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyRegionID, "schema should include region_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyLabel, "schema should include label")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "mutating schema should include confirm")
+		checkEqual(t, "linode_vlan_delete", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		checkEqual(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.InputSchema.Properties, keyRegionID, "schema should include region_id")
+		expectContains(t, tool.InputSchema.Properties, keyLabel, "schema should include label")
+		expectContains(t, tool.InputSchema.Properties, keyConfirm, "mutating schema should include confirm")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, "/networking/vlans/us-east/app-vlan", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/networking/vlans/us-east/app-vlan", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -164,12 +163,12 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, vlanLabelApp, "response should include VLAN label")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, vlanLabelApp, "response should include VLAN label")
 	})
 
 	t.Run("confirm rejects before client", func(t *testing.T) {
@@ -201,9 +200,9 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should return tool error without Go error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				expectNoError(t, err, "handler should return tool error without Go error")
+				expectNotNil(t, result, "result should not be nil")
+				expectTrue(t, result.IsError, "missing or invalid confirm should be an error result")
 				assertErrorContains(t, result, errConfirmEqualsTrue)
 			})
 		}
@@ -241,9 +240,9 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
-				require.NoError(t, err, "handler should return tool error without Go error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid path params should be an error result")
+				expectNoError(t, err, "handler should return tool error without Go error")
+				expectNotNil(t, result, "result should not be nil")
+				expectTrue(t, result.IsError, "invalid path params should be an error result")
 				assertErrorContains(t, result, testCase.wantMessage)
 			})
 		}
@@ -253,8 +252,8 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, "/networking/vlans/us-east/app-vlan", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/networking/vlans/us-east/app-vlan", r.URL.Path, "request path should match")
 			http.Error(w, `{\"errors\":[{\"reason\":\"forbidden\"}]}`, http.StatusForbidden)
 		}))
 		defer srv.Close()
@@ -266,9 +265,9 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err, "handler should return tool errors without Go errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		expectNoError(t, err, "handler should return tool errors without Go errors")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "linode_vlan_delete failed")
 	})
 }
@@ -283,21 +282,25 @@ func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVLANDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+		expectContains(t, tool.InputSchema.Properties, "dry_run")
 	})
 
 	t.Run("preview lists and filters without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		var methodsSeen []string
+		var requestCount atomic.Int32
+		var sawDelete atomic.Bool
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/networking/vlans", r.URL.Path, "dry_run must hit the VLAN list endpoint")
+			requestCount.Add(1)
+			if r.Method == http.MethodDelete {
+				sawDelete.Store(true)
+			}
+			checkEqual(t, "/networking/vlans", r.URL.Path, "dry_run must hit the VLAN list endpoint")
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 					keyData: []map[string]any{
 						{keyLabel: "other-vlan", keyRegion: regionUSEast},
 						{keyLabel: vlanLabelApp, keyRegion: regionUSEast},
@@ -325,30 +328,31 @@ func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError)
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		expectTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_vlan_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, true, body[keyDryRun])
+		checkEqual(t, "linode_vlan_delete", body["tool"])
 
 		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/networking/vlans/"+regionUSEast+"/"+vlanLabelApp, would["path"])
+		expectTrue(t, isWouldObject)
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/networking/vlans/"+regionUSEast+"/"+vlanLabelApp, would["path"])
 
 		// current_state must be the matched VLAN, not the whole list.
 		state, stateIsObject := body["current_state"].(map[string]any)
-		require.True(t, stateIsObject)
-		assert.Equal(t, vlanLabelApp, state[keyLabel])
+		expectTrue(t, stateIsObject)
+		checkEqual(t, vlanLabelApp, state[keyLabel])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue GET (list), never DELETE")
+		checkEqual(t, int32(1), requestCount.Load(),
+			"dry_run must only issue one GET list request")
+		expectFalse(t, sawDelete.Load(), "dry_run must never issue DELETE")
 	})
 
 	t.Run("preview errors when VLAN not found", func(t *testing.T) {
@@ -356,7 +360,7 @@ func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: []map[string]any{}, keyPage: 1, keyPages: 1, keyResults: 0,
 			}))
 		}))
@@ -374,9 +378,9 @@ func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError,
 			"dry_run on a non-existent VLAN must surface a not-found error, like the real delete would")
 		assertErrorContains(t, result, "VLAN not found")
 	})
@@ -391,9 +395,9 @@ func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, keyRegionID)
 	})
 }

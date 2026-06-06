@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -24,9 +23,9 @@ func TestLinodeVPCsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_list", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -38,9 +37,9 @@ func TestLinodeVPCsListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs", r.URL.Path, "request path should match")
+			checkEqual(t, "/vpcs", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: vpcs, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
@@ -56,14 +55,14 @@ func TestLinodeVPCsListTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelProdVPC, "response should contain prod-vpc")
-		assert.Contains(t, textContent.Text, "dev-vpc", "response should contain dev-vpc")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelProdVPC, "response should contain prod-vpc")
+		expectContains(t, textContent.Text, "dev-vpc", "response should contain dev-vpc")
 	})
 
 	t.Run("filter by label", func(t *testing.T) {
@@ -77,7 +76,7 @@ func TestLinodeVPCsListTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: vpcs, keyPage: 1, keyPages: 1, keyResults: 3,
 			}), "encoding response should not fail")
 		}))
@@ -93,15 +92,15 @@ func TestLinodeVPCsListTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelProdVPC, "response should contain prod-vpc")
-		assert.Contains(t, textContent.Text, "staging-prod", "response should contain staging-prod")
-		assert.NotContains(t, textContent.Text, "dev-vpc", "response should not contain dev-vpc")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelProdVPC, "response should contain prod-vpc")
+		expectContains(t, textContent.Text, "staging-prod", "response should contain staging-prod")
+		expectNotContains(t, textContent.Text, "dev-vpc", "response should not contain dev-vpc")
 	})
 }
 
@@ -118,9 +117,9 @@ func TestLinodeVPCGetTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_get", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -136,9 +135,9 @@ func TestLinodeVPCGetTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -149,9 +148,9 @@ func TestLinodeVPCGetTool(t *testing.T) {
 		vpc := linode.VPC{ID: 123, Label: labelProdVPC, Region: regionUSEast, Description: "Production VPC"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123", r.URL.Path, "request path should match")
+			checkEqual(t, "/vpcs/123", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(vpc), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(vpc), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -165,14 +164,14 @@ func TestLinodeVPCGetTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelProdVPC, "response should contain VPC label")
-		assert.Contains(t, textContent.Text, regionUSEast, "response should contain VPC region")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelProdVPC, "response should contain VPC label")
+		expectContains(t, textContent.Text, regionUSEast, "response should contain VPC region")
 	})
 }
 
@@ -186,9 +185,9 @@ func TestLinodeVPCIPsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_ips_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_ips_list", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -202,9 +201,9 @@ func TestLinodeVPCIPsListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/ips", r.URL.Path, "request path should match")
+			checkEqual(t, "/vpcs/ips", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: ips, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
@@ -220,14 +219,14 @@ func TestLinodeVPCIPsListTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "10.0.0.1", "response should contain first IP")
-		assert.Contains(t, textContent.Text, "10.0.1.1", "response should contain second IP")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "10.0.0.1", "response should contain first IP")
+		expectContains(t, textContent.Text, "10.0.1.1", "response should contain second IP")
 	})
 }
 
@@ -245,18 +244,18 @@ func TestLinodeVPCIPListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_ip_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_ip_list", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run(caseMissingVPCID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, errVPCIDRequired)
 	})
 
@@ -269,9 +268,9 @@ func TestLinodeVPCIPListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/456/ips", r.URL.Path, "request path should match")
+			checkEqual(t, "/vpcs/456/ips", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: ips, keyPage: 1, keyPages: 1, keyResults: 1,
 			}), "encoding response should not fail")
 		}))
@@ -287,13 +286,13 @@ func TestLinodeVPCIPListTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: "456"})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "10.0.0.5", "response should contain IP address")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "10.0.0.5", "response should contain IP address")
 	})
 }
 
@@ -311,18 +310,18 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_subnet_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_subnet_list", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run(caseMissingVPCID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, errVPCIDRequired)
 	})
 
@@ -335,9 +334,9 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123/subnets", r.URL.Path, "request path should match")
+			checkEqual(t, "/vpcs/123/subnets", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: subnets, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
@@ -353,14 +352,14 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelWebSubnet, "response should contain web-subnet")
-		assert.Contains(t, textContent.Text, "db-subnet", "response should contain db-subnet")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelWebSubnet, "response should contain web-subnet")
+		expectContains(t, textContent.Text, "db-subnet", "response should contain db-subnet")
 	})
 }
 
@@ -378,9 +377,9 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_subnet_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_subnet_get", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -396,9 +395,9 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -409,9 +408,9 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 		subnet := linode.VPCSubnet{ID: 10, Label: labelWebSubnet, IPv4: cidrV4}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
+			checkEqual(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(subnet), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(subnet), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -425,14 +424,14 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123", keySubnetID: "10"})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelWebSubnet, "response should contain subnet label")
-		assert.Contains(t, textContent.Text, cidrV4, "response should contain subnet CIDR")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelWebSubnet, "response should contain subnet label")
+		expectContains(t, textContent.Text, cidrV4, "response should contain subnet CIDR")
 	})
 }
 
@@ -449,15 +448,15 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
+		checkEqual(t, "linode_vpc_create", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.Description, "WARNING", "tool description should contain WARNING")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "label", "schema should include label")
-		assert.Contains(t, props, "region", "schema should include region")
-		assert.Contains(t, props, "confirm", "schema should include confirm")
+		expectContains(t, props, "label", "schema should include label")
+		expectContains(t, props, "region", "schema should include region")
+		expectContains(t, props, "confirm", "schema should include confirm")
 	})
 
 	validationTests := []struct {
@@ -474,9 +473,9 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -487,10 +486,10 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 		vpc := linode.VPC{ID: 999, Label: labelTestVPC, Region: regionUSEast, Description: "Test VPC"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/vpcs", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(vpc), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(vpc), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -504,14 +503,14 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyLabel: labelTestVPC, keyRegion: regionUSEast, keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelTestVPC, "response should contain VPC label")
-		assert.Contains(t, textContent.Text, "999", "response should contain VPC ID")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelTestVPC, "response should contain VPC label")
+		expectContains(t, textContent.Text, "999", "response should contain VPC ID")
 	})
 }
 
@@ -529,14 +528,14 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_update", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "vpc_id", "schema should include vpc_id")
-		assert.Contains(t, props, "label", "schema should include label")
-		assert.Contains(t, props, "confirm", "schema should include confirm")
+		expectContains(t, props, "vpc_id", "schema should include vpc_id")
+		expectContains(t, props, "label", "schema should include label")
+		expectContains(t, props, "confirm", "schema should include confirm")
 	})
 
 	validationTests := []struct {
@@ -552,9 +551,9 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -565,10 +564,10 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 		vpc := linode.VPC{ID: 123, Label: "updated-vpc", Region: regionUSEast, Description: "Updated VPC"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			checkEqual(t, "/vpcs/123", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(vpc), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(vpc), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -582,13 +581,13 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: float64(123), keyLabel: "updated-vpc", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "modified successfully", "response should confirm update")
 	})
 }
 
@@ -606,10 +605,10 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
+		checkEqual(t, "linode_vpc_delete", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.Description, "WARNING", "tool description should contain WARNING")
 	})
 
 	validationTests := []struct {
@@ -625,9 +624,9 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -636,8 +635,8 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/vpcs/123", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer srv.Close()
@@ -652,13 +651,13 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "removed successfully", "response should confirm deletion")
 	})
 }
 
@@ -671,19 +670,23 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVPCDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+		expectContains(t, tool.InputSchema.Properties, "dry_run",
 			"schema must advertise the dry_run boolean to the model")
 	})
 
 	t.Run("preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		var methodsSeen []string
+		var requestCount atomic.Int32
+		var sawDelete atomic.Bool
 
 		vpcBody := `{"id":123,"label":"prod-vpc","region":"us-east","subnets":[]}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
+			requestCount.Add(1)
+			if r.Method == http.MethodDelete {
+				sawDelete.Store(true)
+			}
 
 			if r.Method != http.MethodGet {
 				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
@@ -695,14 +698,16 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 
 			if r.URL.Path == "/vpcs/123" {
-				_, _ = w.Write([]byte(vpcBody))
+				_, writeErr := w.Write([]byte(vpcBody))
+				checkNoError(t, writeErr, "writing VPC response should not fail")
 
 				return
 			}
 
 			// The Tier A walk also lists subnets; an empty page keeps this
 			// subtest on the no-mutation and preview-shape contract.
-			_, _ = w.Write([]byte(`{}`))
+			_, writeErr := w.Write([]byte(`{}`))
+			checkNoError(t, writeErr, "writing subnet list response should not fail")
 		}))
 		defer srv.Close()
 
@@ -717,35 +722,35 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError)
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		expectTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_vpc_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, true, body[keyDryRun])
+		checkEqual(t, "linode_vpc_delete", body["tool"])
 
 		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/vpcs/123", would["path"])
+		expectTrue(t, isWouldObject)
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/vpcs/123", would["path"])
 
-		require.NotEmpty(t, methodsSeen, "dry_run must read state")
-		assert.NotContains(t, methodsSeen, http.MethodDelete,
-			"dry_run must never issue a DELETE")
+		expectTrue(t, requestCount.Load() > 0, "dry_run must read state")
+		expectFalse(t, sawDelete.Load(), "dry_run must never issue a DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method)
+			checkEqual(t, http.MethodGet, r.Method)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":123,"label":"prod-vpc"}`))
+			_, writeErr := w.Write([]byte(`{"id":123,"label":"prod-vpc"}`))
+			checkNoError(t, writeErr, "writing VPC response should not fail")
 		}))
 		defer srv.Close()
 
@@ -760,9 +765,9 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError,
 			"dry_run without confirm must succeed; confirm only gates real execution")
 	})
 
@@ -773,9 +778,9 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, errVPCIDRequired)
 	})
 }
@@ -793,15 +798,15 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_subnet_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_subnet_create", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "vpc_id", "schema should include vpc_id")
-		assert.Contains(t, props, "label", "schema should include label")
-		assert.Contains(t, props, keyIPv4, "schema should include ipv4")
-		assert.Contains(t, props, "confirm", "schema should include confirm")
+		expectContains(t, props, "vpc_id", "schema should include vpc_id")
+		expectContains(t, props, "label", "schema should include label")
+		expectContains(t, props, keyIPv4, "schema should include ipv4")
+		expectContains(t, props, "confirm", "schema should include confirm")
 	})
 
 	validationTests := []struct {
@@ -819,9 +824,9 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -832,10 +837,10 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 		subnet := linode.VPCSubnet{ID: 50, Label: labelWebSubnet, IPv4: cidrV4}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123/subnets", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/vpcs/123/subnets", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(subnet), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(subnet), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -851,14 +856,14 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, labelWebSubnet, "response should contain subnet label")
-		assert.Contains(t, textContent.Text, "50", "response should contain subnet ID")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, labelWebSubnet, "response should contain subnet label")
+		expectContains(t, textContent.Text, "50", "response should contain subnet ID")
 	})
 }
 
@@ -875,15 +880,15 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_subnet_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_vpc_subnet_update", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "vpc_id", "schema should include vpc_id")
-		assert.Contains(t, props, "subnet_id", "schema should include subnet_id")
-		assert.Contains(t, props, "label", "schema should include label")
-		assert.Contains(t, props, "confirm", "schema should include confirm")
+		expectContains(t, props, "vpc_id", "schema should include vpc_id")
+		expectContains(t, props, "subnet_id", "schema should include subnet_id")
+		expectContains(t, props, "label", "schema should include label")
+		expectContains(t, props, "confirm", "schema should include confirm")
 	})
 
 	validationTests := []struct {
@@ -901,9 +906,9 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -914,10 +919,10 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 		subnet := linode.VPCSubnet{ID: 10, Label: labelUpdatedSubnet, IPv4: cidrV4}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			checkEqual(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(subnet), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(subnet), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -933,13 +938,13 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "modified successfully", "response should confirm update")
 	})
 }
 
@@ -957,10 +962,10 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_subnet_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
+		checkEqual(t, "linode_vpc_subnet_delete", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.Description, "WARNING", "tool description should contain WARNING")
 	})
 
 	validationTests := []struct {
@@ -977,9 +982,9 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -988,8 +993,8 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer srv.Close()
@@ -1006,13 +1011,13 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "deleted", "response should confirm deletion")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "deleted", "response should confirm deletion")
 	})
 }
 
@@ -1025,24 +1030,29 @@ func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVPCSubnetDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+		expectContains(t, tool.InputSchema.Properties, "dry_run",
 			"schema must advertise the dry_run boolean to the model")
 	})
 
 	t.Run("preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		var methodsSeen []string
+		var requestCount atomic.Int32
+		var sawDelete atomic.Bool
 
 		subnetBody := `{"id":10,"label":"web-subnet","ipv4":"10.0.0.0/24","linodes":[]}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path)
+			requestCount.Add(1)
+			if r.Method == http.MethodDelete {
+				sawDelete.Store(true)
+			}
+			checkEqual(t, "/vpcs/123/subnets/10", r.URL.Path)
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(subnetBody))
+				_, writeErr := w.Write([]byte(subnetBody))
+				checkNoError(t, writeErr, "writing subnet response should not fail")
 
 				return
 			}
@@ -1064,34 +1074,36 @@ func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError)
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		expectTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_vpc_subnet_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, true, body[keyDryRun])
+		checkEqual(t, "linode_vpc_subnet_delete", body["tool"])
 
 		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/vpcs/123/subnets/10", would["path"])
+		expectTrue(t, isWouldObject)
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/vpcs/123/subnets/10", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		checkEqual(t, int32(1), requestCount.Load(),
+			"dry_run must only issue a single GET")
+		expectFalse(t, sawDelete.Load(), "dry_run must never issue DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method)
+			checkEqual(t, http.MethodGet, r.Method)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":10,"label":"web-subnet"}`))
+			_, writeErr := w.Write([]byte(`{"id":10,"label":"web-subnet"}`))
+			checkNoError(t, writeErr, "writing subnet response should not fail")
 		}))
 		defer srv.Close()
 
@@ -1107,9 +1119,9 @@ func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError,
 			"dry_run without confirm must succeed; confirm only gates real execution")
 	})
 
@@ -1123,9 +1135,9 @@ func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, errVPCIDRequired)
 	})
 
@@ -1139,9 +1151,9 @@ func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, errSubnetIDRequired)
 	})
 }

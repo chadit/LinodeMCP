@@ -7,6 +7,9 @@ import (
 	"testing"
 )
 
+// Helpers named expect* stop the current test with t.Fatalf when the expectation fails.
+// Helpers named check* record non-fatal failures with t.Errorf and let the test continue.
+
 func expectationMessage(msg []string) string {
 	if len(msg) == 0 {
 		return ""
