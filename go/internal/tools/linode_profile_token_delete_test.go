@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -31,30 +29,30 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeProfileTokenDeleteTool(cfg)
 
-		assert.Equal(t, "linode_profile_token_delete", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_profile_token_delete", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyProfileTokenID, "schema should include token_id")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-		assert.Contains(t, props, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Required, keyProfileTokenID, "token_id must be required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+		expectContainsWithMode(t, false, props, keyProfileTokenID, "schema should include token_id")
+		expectContainsWithMode(t, false, props, keyConfirm, "schema should include confirm")
+		expectContainsWithMode(t, false, props, keyDryRun, "schema should include dry_run")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyProfileTokenID, "token_id must be required")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "confirm must be required")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, "/profile/tokens/12345", r.URL.Path, "request path should include token id")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			assert.Equal(t, http.NoBody, r.Body, "request should not include a body")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token id")
+			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.NoBody, r.Body, "request should not include a body")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		defer srv.Close()
 
@@ -63,12 +61,12 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err, "handler should not return a Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "success should not be an error result")
+		expectNoError(t, err, "handler should not return a Go error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "success should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Profile token revoked successfully", "response should include success message")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "Profile token revoked successfully", "response should include success message")
 	})
 
 	t.Run("dry run previews delete without client call", func(t *testing.T) {
@@ -87,17 +85,17 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyDryRun: true}))
 
-		require.NoError(t, err, "handler should not return a Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry run should not be an error result")
+		expectNoError(t, err, "handler should not return a Go error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "dry run should not be an error result")
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
 		would, ok := body["would_execute"].(map[string]any)
-		require.True(t, ok, "dry run response should include would_execute")
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/profile/tokens/12345", would["path"])
-		assert.Equal(t, int32(0), requestCount.Load(), "dry run should not call the DELETE endpoint")
+		expectTrue(t, ok, "dry run response should include would_execute")
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/profile/tokens/12345", would["path"])
+		checkEqual(t, int32(0), requestCount.Load(), "dry run should not call the DELETE endpoint")
 	})
 
 	t.Run("confirm guard rejects before client call", func(t *testing.T) {
@@ -136,10 +134,10 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should return validation as a tool result")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid confirm should be an error result")
-				assert.Equal(t, int32(0), requestCount.Load(), "client must not be called when confirm is invalid")
+				expectNoError(t, err, "handler should return validation as a tool result")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "invalid confirm should be an error result")
+				checkEqual(t, int32(0), requestCount.Load(), "client must not be called when confirm is invalid")
 				assertErrorContains(t, result, profileTokenDeleteConfirmText)
 			})
 		}
@@ -179,10 +177,10 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
-				require.NoError(t, err, "handler should return validation as a tool result")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid token_id should be an error result")
-				assert.Equal(t, int32(0), requestCount.Load(), "client must not be called when token_id is invalid")
+				expectNoError(t, err, "handler should return validation as a tool result")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "invalid token_id should be an error result")
+				checkEqual(t, int32(0), requestCount.Load(), "client must not be called when token_id is invalid")
 				assertErrorContains(t, result, testCase.want)
 			})
 		}
@@ -192,11 +190,11 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, "/profile/tokens/12345", r.URL.Path, "request path should include token id")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token id")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		defer srv.Close()
 
@@ -205,9 +203,9 @@ func TestLinodeProfileTokenDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyProfileTokenID: 12345.0, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		expectNoError(t, err, "handler should return API failures as tool errors")
+		expectNotNil(t, result, "result should not be nil")
+		checkTrueWithMode(t, false, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to delete linode_profile_token_delete")
 		assertErrorContains(t, result, errForbidden)
 	})
