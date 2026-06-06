@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/cli"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -34,16 +31,26 @@ func TestRunProfileCloneCopiesBuiltinIntoUserDefined(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 0, exitCode, "clone must succeed: %s", stderr.String())
-	assert.Contains(t, stdout.String(), "profile my-compute cloned from compute-admin")
+	if exitCode != 0 {
+		t.Fatalf("clone must succeed: %s", stderr.String())
+	}
+
+	wantContains(t, "stdout", stdout.String(), "profile my-compute cloned from compute-admin")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
 
 	cloned, ok := reloaded.Profiles["my-compute"]
-	require.True(t, ok, "cloned profile must appear in user profiles after reload")
-	assert.NotEmpty(t, cloned.AllowedTools,
-		"cloned profile must carry the source's allowed_tools")
+
+	if !ok {
+		t.Fatalf("cloned profile must appear in user profiles after reload")
+	}
+
+	if len(cloned.AllowedTools) == 0 {
+		t.Fatalf("cloned profile must carry the source's allowed_tools")
+	}
 }
 
 // TestRunProfileCloneRefusesBuiltinDestinationName prevents the user
@@ -65,8 +72,11 @@ func TestRunProfileCloneRefusesBuiltinDestinationName(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "built-in profile name")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "built-in profile name")
 }
 
 // TestRunProfileCloneRefusesEmptyDestination guards against an empty
@@ -86,8 +96,11 @@ func TestRunProfileCloneRefusesEmptyDestination(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "cannot be empty")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "cannot be empty")
 }
 
 // TestRunProfileCloneRefusesUnknownSource locks in the source-exists
@@ -107,15 +120,23 @@ func TestRunProfileCloneRefusesUnknownSource(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "source profile")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "source profile")
 
 	// Confirm no entry was written under either name.
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
 
 	_, exists := reloaded.Profiles["my-clone"]
-	assert.False(t, exists, "failed clone must not leave a stub on disk")
+
+	if exists {
+		t.Fatalf("failed clone must not leave a stub on disk")
+	}
 }
 
 // TestRunProfileCloneRefusesExistingUserDefined prevents silent
@@ -127,12 +148,15 @@ func TestRunProfileCloneRefusesExistingUserDefined(t *testing.T) {
 	path := writableConfig(t)
 
 	// First clone to create the user-defined entry.
-	require.Equal(t, 0, cli.RunProfileClone(
+
+	if exitCode := cli.RunProfileClone(
 		[]string{profiles.BuiltinDefault, "my-prof"},
 		path,
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-	))
+	); exitCode != 0 {
+		t.Fatalf("initial clone exit code = %d, want 0", exitCode)
+	}
 
 	var stderr bytes.Buffer
 
@@ -143,8 +167,11 @@ func TestRunProfileCloneRefusesExistingUserDefined(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode, "second clone to the same dst must be refused")
-	assert.Contains(t, stderr.String(), "already exists")
+	if exitCode != 1 {
+		t.Fatalf("second clone exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "already exists")
 }
 
 // TestRunProfileCloneZeroArgsReturnsUsage covers the arity guard.
@@ -155,8 +182,11 @@ func TestRunProfileCloneZeroArgsReturnsUsage(t *testing.T) {
 
 	exitCode := cli.RunProfileClone(nil, "", &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, exitCode)
-	assert.Contains(t, stderr.String(), "Usage:")
+	if exitCode != cli.ExitUsageError {
+		t.Fatalf("exit code = %d, want %d", exitCode, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
 
 // TestRunProfileDeleteRemovesUserDefined is the happy path: a
@@ -168,12 +198,15 @@ func TestRunProfileDeleteRemovesUserDefined(t *testing.T) {
 	path := writableConfig(t)
 
 	// Stage a user-defined profile to delete.
-	require.Equal(t, 0, cli.RunProfileClone(
+
+	if exitCode := cli.RunProfileClone(
 		[]string{profiles.BuiltinDefault, "to-delete"},
 		path,
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-	))
+	); exitCode != 0 {
+		t.Fatalf("initial clone exit code = %d, want 0", exitCode)
+	}
 
 	var stdout, stderr bytes.Buffer
 
@@ -184,14 +217,22 @@ func TestRunProfileDeleteRemovesUserDefined(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 0, exitCode, "delete must succeed: %s", stderr.String())
-	assert.Contains(t, stdout.String(), "profile to-delete deleted")
+	if exitCode != 0 {
+		t.Fatalf("delete must succeed: %s", stderr.String())
+	}
+
+	wantContains(t, "stdout", stdout.String(), "profile to-delete deleted")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
 
 	_, exists := reloaded.Profiles["to-delete"]
-	assert.False(t, exists, "deleted profile must be gone from the config")
+
+	if exists {
+		t.Fatalf("deleted profile must be gone from the config")
+	}
 }
 
 // TestRunProfileDeleteRefusesBuiltin verifies the safety guard:
@@ -212,9 +253,13 @@ func TestRunProfileDeleteRefusesBuiltin(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "built-in")
-	assert.Contains(t, stderr.String(), "disable")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "built-in")
+
+	wantContains(t, "stderr", stderr.String(), "disable")
 }
 
 // TestRunProfileDeleteRefusesUnknown verifies the existence guard:
@@ -234,8 +279,11 @@ func TestRunProfileDeleteRefusesUnknown(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "not found")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "not found")
 }
 
 // TestRunProfileDeleteRefusesActiveProfile covers the safety guard
@@ -247,18 +295,24 @@ func TestRunProfileDeleteRefusesActiveProfile(t *testing.T) {
 	path := writableConfig(t)
 
 	// Stage and activate a user-defined profile.
-	require.Equal(t, 0, cli.RunProfileClone(
+
+	if exitCode := cli.RunProfileClone(
 		[]string{profiles.BuiltinDefault, activeClone},
 		path,
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-	))
-	require.Equal(t, 0, cli.RunProfileUse(
+	); exitCode != 0 {
+		t.Fatalf("initial clone exit code = %d, want 0", exitCode)
+	}
+
+	if exitCode := cli.RunProfileUse(
 		[]string{activeClone},
 		path,
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-	))
+	); exitCode != 0 {
+		t.Fatalf("profile use exit code = %d, want 0", exitCode)
+	}
 
 	var stderr bytes.Buffer
 
@@ -269,15 +323,22 @@ func TestRunProfileDeleteRefusesActiveProfile(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "active profile")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "active profile")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
 
 	_, exists := reloaded.Profiles[activeClone]
-	assert.True(t, exists,
-		"refused delete must not remove the entry from disk")
+
+	if !exists {
+		t.Fatalf("refused delete must not remove the entry from disk")
+	}
 }
 
 // TestRunProfileDeleteZeroArgsReturnsUsage covers the arity guard.
@@ -288,6 +349,9 @@ func TestRunProfileDeleteZeroArgsReturnsUsage(t *testing.T) {
 
 	exitCode := cli.RunProfileDelete(nil, "", &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, exitCode)
-	assert.Contains(t, stderr.String(), "Usage:")
+	if exitCode != cli.ExitUsageError {
+		t.Fatalf("exit code = %d, want %d", exitCode, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
