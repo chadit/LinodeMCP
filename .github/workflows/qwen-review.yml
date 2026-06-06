@@ -361,7 +361,7 @@ jobs:
           def clipped(text: str, limit: int = 12000) -> str:
               if len(text) <= limit:
                   return text
-              return text[:limit] + f"\n\n... truncated {len(text) - limit} bytes; download qwen-review artifact for full output ..."
+              return text[:limit] + f"\n\n... truncated {len(text) - limit} characters; download qwen-review artifact for full output ..."
 
           lines = [
               '# Qwen review result',
