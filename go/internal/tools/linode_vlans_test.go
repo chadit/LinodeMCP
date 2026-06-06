@@ -289,13 +289,16 @@ func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
+
 			checkEqual(t, "/networking/vlans", r.URL.Path, "dry_run must hit the VLAN list endpoint")
 
 			if r.Method == http.MethodGet {

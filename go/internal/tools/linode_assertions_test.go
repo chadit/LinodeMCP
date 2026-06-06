@@ -26,6 +26,7 @@ func failExpectationf(t *testing.T, fatal bool, format string, args ...any) {
 
 	if fatal {
 		t.Fatalf(format, args...)
+
 		return
 	}
 

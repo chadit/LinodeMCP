@@ -112,13 +112,16 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 	t.Parallel()
 
 	var requestCount atomic.Int32
+
 	var sawPost atomic.Bool
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
+
 		if r.Method == http.MethodPost {
 			sawPost.Store(true)
 		}
+
 		checkEqual(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
 		checkEqual(t, "/volumes/333", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")

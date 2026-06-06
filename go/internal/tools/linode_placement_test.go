@@ -217,13 +217,16 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
+
 			checkEqual(t, http.MethodGet, r.Method, "dry_run should fetch state with GET")
 			checkEqual(t, "/placement/groups/528", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")

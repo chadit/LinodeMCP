@@ -678,12 +678,14 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		vpcBody := `{"id":123,"label":"prod-vpc","region":"us-east","subnets":[]}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
@@ -1038,15 +1040,18 @@ func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		subnetBody := `{"id":10,"label":"web-subnet","ipv4":"10.0.0.0/24","linodes":[]}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
+
 			checkEqual(t, "/vpcs/123/subnets/10", r.URL.Path)
 
 			if r.Method == http.MethodGet {

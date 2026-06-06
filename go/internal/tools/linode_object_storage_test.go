@@ -2258,15 +2258,18 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		keyBody := `{"id":77,"label":"backups-key","access_key":"AKIA-EXAMPLE","limited":false}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
+
 			checkEqual(t, "/object-storage/keys/77", r.URL.Path)
 
 			if r.Method == http.MethodGet {
@@ -2870,15 +2873,18 @@ func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		bucketBody := `{"label":"my-bucket","region":"us-east-1","size":1024,"objects":3}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
+
 			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket", r.URL.Path)
 
 			if r.Method == http.MethodGet {
@@ -3013,15 +3019,18 @@ func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
+
 		var sawDelete atomic.Bool
 
 		sslBody := `{"ssl":true}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
+
 			if r.Method == http.MethodDelete {
 				sawDelete.Store(true)
 			}
+
 			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
 
 			if r.Method == http.MethodGet {
