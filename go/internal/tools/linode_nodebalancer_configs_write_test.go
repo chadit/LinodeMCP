@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
+
+// expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
 
 func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 	t.Parallel()
@@ -27,16 +27,16 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_config_delete", tool.Name)
-		assert.Equal(t, profiles.CapDestroy, capability)
-		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID)
-		assert.Contains(t, tool.InputSchema.Properties, keyConfigID)
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm)
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID)
-		assert.Contains(t, tool.InputSchema.Required, keyConfigID)
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm)
-		require.NotNil(t, handler)
+		checkEqual(t, "linode_nodebalancer_config_delete", tool.Name)
+		checkEqual(t, profiles.CapDestroy, capability)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID)
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID)
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm)
+		expectNotNil(t, handler)
 	})
 
 	validationTests := []struct {
@@ -62,9 +62,9 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError)
+			expectNoError(t, err)
+			expectNotNil(t, result)
+			checkTrueWithMode(t, false, result.IsError)
 			assertErrorContains(t, result, tt.want)
 		})
 	}
@@ -76,18 +76,18 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methods = append(methods, r.Method)
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run must only issue GET")
+			checkEqual(t, http.MethodGet, r.Method, "dry_run must only issue GET")
 			w.Header().Set("Content-Type", "application/json")
 			// The Phase 2 dependency walk also reads the config's backend nodes,
 			// so the preview issues a second GET beyond the config-list fetch.
 			if r.URL.Path == "/nodebalancers/123/configs/456/nodes" {
-				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{}}))
+				checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{}}))
 
 				return
 			}
 
-			assert.Equal(t, "/nodebalancers/123/configs", r.URL.Path)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyID: 456, keyPort: 80}}}))
+			checkEqual(t, "/nodebalancers/123/configs", r.URL.Path)
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyID: 456, keyPort: 80}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -95,25 +95,25 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigDeleteTool(srvCfg)
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyDryRun: true}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError, "dry_run should not require confirm")
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		checkFalseWithMode(t, false, result.IsError, "dry_run should not require confirm")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		assert.Contains(t, textContent.Text, `"dry_run": true`)
-		assert.Contains(t, textContent.Text, `"method": "DELETE"`)
-		assert.Contains(t, textContent.Text, `"path": "/nodebalancers/123/configs/456"`)
-		assert.NotContains(t, methods, http.MethodDelete, "dry_run must not send DELETE")
+		expectTrue(t, ok)
+		expectContainsWithMode(t, false, textContent.Text, `"dry_run": true`)
+		expectContainsWithMode(t, false, textContent.Text, `"method": "DELETE"`)
+		expectContainsWithMode(t, false, textContent.Text, `"path": "/nodebalancers/123/configs/456"`)
+		expectNotContains(t, methods, http.MethodDelete, "dry_run must not send DELETE")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method)
-			assert.Equal(t, "/nodebalancers/123/configs/456", r.URL.Path)
-			assert.Empty(t, r.URL.RawQuery)
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodDelete, r.Method)
+			checkEqual(t, "/nodebalancers/123/configs/456", r.URL.Path)
+			checkEmpty(t, r.URL.RawQuery)
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.WriteHeader(http.StatusOK)
 		}))
 		t.Cleanup(srv.Close)
@@ -122,13 +122,13 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigDeleteTool(srvCfg)
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		checkFalseWithMode(t, false, result.IsError)
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		assert.Contains(t, textContent.Text, "removed")
-		assert.Contains(t, textContent.Text, "456")
+		expectTrue(t, ok)
+		expectContainsWithMode(t, false, textContent.Text, "removed")
+		expectContainsWithMode(t, false, textContent.Text, "456")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -137,7 +137,7 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -145,9 +145,9 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigDeleteTool(srvCfg)
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		checkTrueWithMode(t, false, result.IsError)
 		assertErrorContains(t, result, "Failed to delete config 456 from NodeBalancer 123")
 		assertErrorContains(t, result, errForbidden)
 	})

@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
+
+// expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
 
 func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 	t.Parallel()
@@ -27,14 +27,14 @@ func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_vpc_list", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyPage, "schema should include page")
-		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
-		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_nodebalancer_vpc_list", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPage, "schema should include page")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -54,9 +54,9 @@ func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -65,12 +65,12 @@ func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/nodebalancers/123/vpcs", r.URL.Path, "request path should match")
-			assert.Equal(t, "page=2&page_size=50", r.URL.RawQuery, "request query should include pagination")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/nodebalancers/123/vpcs", r.URL.Path, "request path should match")
+			checkEqual(t, "page=2&page_size=50", r.URL.RawQuery, "request query should include pagination")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: []map[string]any{{keyVPCID: 456, keySubnetID: 789, "ipv4_range": cidrV4}},
 				keyPage: 2, keyPages: 3, keyResults: 1,
 			}))
@@ -86,15 +86,15 @@ func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPage: float64(2), keyPageSize: float64(50)}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "vpc_id", "response should contain VPC configuration")
-		assert.Contains(t, textContent.Text, "456", "response should contain VPC ID")
-		assert.Contains(t, textContent.Text, "789", "response should contain subnet ID")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "vpc_id", "response should contain VPC configuration")
+		expectContainsWithMode(t, false, textContent.Text, "456", "response should contain VPC ID")
+		expectContainsWithMode(t, false, textContent.Text, "789", "response should contain subnet ID")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -103,7 +103,7 @@ func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -116,9 +116,9 @@ func TestLinodeNodeBalancerVPCListTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to list VPC configurations for NodeBalancer 123")
 		assertErrorContains(t, result, errForbidden)
 	})
