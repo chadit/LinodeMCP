@@ -8,9 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -29,7 +26,7 @@ func TestClientCreateStackScriptDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -38,8 +35,8 @@ func TestClientCreateStackScriptDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	_, err := client.CreateStackScript(t.Context(), &linode.CreateStackScriptRequest{Label: stackScriptLabelFixture, Script: "#!/bin/bash", Images: []string{privateImage15Fixture}})
 
-	require.Error(t, err, "CreateStackScript should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "CreateStackScript must not retry and replay a mutating request")
+	requireError(t, err, "CreateStackScript should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "CreateStackScript must not retry and replay a mutating request")
 }
 
 func TestClientUpdateStackScriptSuccess(t *testing.T) {
@@ -60,25 +57,25 @@ func TestClientUpdateStackScriptSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/linode/stackscripts/12345", r.URL.Path, "request path should include StackScript ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/linode/stackscripts/12345", r.URL.Path, "request path should include StackScript ID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
 			return
 		}
 
-		assert.Equal(t, label, body[keyLabel])
-		assert.Equal(t, script, body["script"])
-		assert.Equal(t, []any{privateImage15Fixture}, body["images"])
-		assert.Equal(t, description, body[keyDescription])
-		assert.Equal(t, isPublic, body["is_public"])
-		assert.Equal(t, revNote, body["rev_note"])
+		checkEqual(t, label, body[keyLabel])
+		checkEqual(t, script, body["script"])
+		checkEqual(t, []any{privateImage15Fixture}, body["images"])
+		checkEqual(t, description, body[keyDescription])
+		checkEqual(t, isPublic, body["is_public"])
+		checkEqual(t, revNote, body["rev_note"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.StackScript{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.StackScript{
 			ID:       stackScriptIDFixture,
 			Label:    label,
 			Script:   script,
@@ -93,10 +90,10 @@ func TestClientUpdateStackScriptSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, stackScriptIDFixture, result.ID)
-	assert.Equal(t, label, result.Label)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkEqual(t, stackScriptIDFixture, result.ID)
+	checkEqual(t, label, result.Label)
 }
 
 func TestClientUpdateStackScriptRejectsInvalidID(t *testing.T) {
@@ -112,9 +109,9 @@ func TestClientUpdateStackScriptRejectsInvalidID(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateStackScript(t.Context(), 0, &linode.UpdateStackScriptRequest{})
 
-	require.Error(t, err, "UpdateStackScript should reject invalid IDs")
-	require.ErrorIs(t, err, linode.ErrStackScriptIDPositive, "error should expose invalid StackScript ID sentinel")
-	assert.False(t, called.Load(), "invalid StackScript ID should not reach upstream server")
+	requireError(t, err, "UpdateStackScript should reject invalid IDs")
+	requireErrorIs(t, err, linode.ErrStackScriptIDPositive, "error should expose invalid StackScript ID sentinel")
+	checkEqual(t, false, called.Load(), "invalid StackScript ID should not reach upstream server")
 }
 
 func TestClientUpdateStackScriptRejectsEmptyRequest(t *testing.T) {
@@ -130,9 +127,9 @@ func TestClientUpdateStackScriptRejectsEmptyRequest(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, nil)
 
-	require.Error(t, err, "UpdateStackScript should reject nil update requests")
-	require.ErrorIs(t, err, linode.ErrStackScriptUpdateRequired, "error should expose empty update sentinel")
-	assert.False(t, called.Load(), "empty StackScript update should not reach upstream server")
+	requireError(t, err, "UpdateStackScript should reject nil update requests")
+	requireErrorIs(t, err, linode.ErrStackScriptUpdateRequired, "error should expose empty update sentinel")
+	checkEqual(t, false, called.Load(), "empty StackScript update should not reach upstream server")
 }
 
 func TestClientUpdateStackScriptAPIError(t *testing.T) {
@@ -140,7 +137,7 @@ func TestClientUpdateStackScriptAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "script is invalid"}},
 		}))
 	}))
@@ -152,8 +149,8 @@ func TestClientUpdateStackScriptAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	require.Error(t, err, "UpdateStackScript should return API errors")
-	assert.ErrorContains(t, err, "script is invalid")
+	apiErr := requireAPIError(t, err, "UpdateStackScript should return API errors")
+	checkEqual(t, "script is invalid", apiErr.Message)
 }
 
 func TestClientUpdateStackScriptNetworkError(t *testing.T) {
@@ -169,11 +166,8 @@ func TestClientUpdateStackScriptNetworkError(t *testing.T) {
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	require.Error(t, err, "UpdateStackScript should wrap network errors")
-
-	var networkErr *linode.NetworkError
-	require.ErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
-	assert.Equal(t, "UpdateStackScript", networkErr.Operation)
+	networkErr := requireNetworkError(t, err, "UpdateStackScript should wrap network errors")
+	checkEqual(t, "UpdateStackScript", networkErr.Operation)
 }
 
 func TestClientUpdateStackScriptHonorsCircuitBreakerWithoutRetry(t *testing.T) {
@@ -187,7 +181,7 @@ func TestClientUpdateStackScriptHonorsCircuitBreakerWithoutRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -196,13 +190,13 @@ func TestClientUpdateStackScriptHonorsCircuitBreakerWithoutRetry(t *testing.T) {
 	cfg := &config.Config{Resilience: config.ResilienceConfig{CircuitBreakerThreshold: 1, CircuitBreakerTimeout: time.Hour}}
 	client := linode.NewClient(srv.URL, "test-token", cfg, linode.WithMaxRetries(2))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
-	require.Error(t, err, "first UpdateStackScript should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UpdateStackScript must not retry and replay a mutating request")
+	requireError(t, err, "first UpdateStackScript should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UpdateStackScript must not retry and replay a mutating request")
 
 	_, err = client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
-	require.Error(t, err, "second UpdateStackScript should be blocked by circuit breaker")
-	require.ErrorIs(t, err, linode.ErrCircuitOpen, "open breaker rejects without calling upstream")
-	assert.Equal(t, int32(1), calls.Load(), "open breaker must not invoke upstream")
+	requireError(t, err, "second UpdateStackScript should be blocked by circuit breaker")
+	requireErrorIs(t, err, linode.ErrCircuitOpen, "open breaker rejects without calling upstream")
+	checkEqual(t, int32(1), calls.Load(), "open breaker must not invoke upstream")
 }
 
 func TestClientUpdateStackScriptDoesNotRetry(t *testing.T) {
@@ -213,7 +207,7 @@ func TestClientUpdateStackScriptDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -225,6 +219,6 @@ func TestClientUpdateStackScriptDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	require.Error(t, err, "UpdateStackScript should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UpdateStackScript must not retry and replay a mutating request")
+	requireError(t, err, "UpdateStackScript should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UpdateStackScript must not retry and replay a mutating request")
 }
