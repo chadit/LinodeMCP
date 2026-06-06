@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -35,44 +33,44 @@ func TestLinodeImageUploadTool(t *testing.T) {
 
 		tool, capability, handler := tools.NewLinodeImageUploadTool(&config.Config{})
 
-		assert.Equal(t, imageUploadToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assertEqual(t, imageUploadToolName, tool.Name, "tool name should match")
+		assertEqual(t, profiles.CapWrite, capability, "tool should be write capability")
+		assertNotEmpty(t, tool.Description, "tool should have a description")
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyLabel, "schema should include label")
-		assert.Contains(t, props, keyRegion, "schema should include region")
-		assert.Contains(t, props, keyDescription, "schema should include description")
-		assert.Contains(t, props, "cloud_init", "schema should include cloud_init")
-		assert.Contains(t, props, keyTags, "schema should include tags")
-		assert.Contains(t, props, keyConfirm, "mutating upload tool must require confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyLabel, "label must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyRegion, "region must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-		require.NotNil(t, handler, "handler should not be nil")
+		assertContains(t, props, keyLabel, "schema should include label")
+		assertContains(t, props, keyRegion, "schema should include region")
+		assertContains(t, props, keyDescription, "schema should include description")
+		assertContains(t, props, "cloud_init", "schema should include cloud_init")
+		assertContains(t, props, keyTags, "schema should include tags")
+		assertContains(t, props, keyConfirm, "mutating upload tool must require confirm")
+		assertContains(t, tool.InputSchema.Required, keyLabel, "label must be marked required")
+		assertContains(t, tool.InputSchema.Required, keyRegion, "region must be marked required")
+		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+		requireNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assertEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			assertEqual(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
+			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
+			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+			if !assertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
 				return
 			}
 
-			assert.Equal(t, imageUploadLabelFixture, body[keyLabel])
-			assert.Equal(t, regionUSEast, body["region"])
-			assert.Equal(t, "custom upload", body[keyDescription])
-			assert.Equal(t, true, body["cloud_init"])
-			assert.Equal(t, []any{envProd, imageUploadTagWeb}, body[keyTags])
+			assertEqual(t, imageUploadLabelFixture, body[keyLabel])
+			assertEqual(t, regionUSEast, body["region"])
+			assertEqual(t, "custom upload", body[keyDescription])
+			assertEqual(t, true, body["cloud_init"])
+			assertEqual(t, []any{envProd, imageUploadTagWeb}, body[keyTags])
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				"image": map[string]any{
 					keyBetaID:      "private/99",
 					keyLabel:       imageUploadLabelFixture,
@@ -96,14 +94,14 @@ func TestLinodeImageUploadTool(t *testing.T) {
 			keyConfirm:     true,
 		}))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		requireNoError(t, err, "handler should not return an error")
+		requireNotNil(t, result, "result should not be nil")
+		assertFalse(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Image upload", "response should include success message")
-		assert.Contains(t, textContent.Text, "private/99", "response should include image ID")
-		assert.Contains(t, textContent.Text, imageUploadTargetFixture, "response should include upload target")
+		requireTrue(t, ok, "content should be TextContent")
+		assertContains(t, textContent.Text, "Image upload", "response should include success message")
+		assertContains(t, textContent.Text, "private/99", "response should include image ID")
+		assertContains(t, textContent.Text, imageUploadTargetFixture, "response should include upload target")
 	})
 }
 
@@ -131,10 +129,10 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			requireNoError(t, err)
+			requireNotNil(t, result)
+			assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
+			assertEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
 		})
 	}
 
@@ -161,11 +159,11 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "invalid input should be an error result")
+			requireNoError(t, err)
+			requireNotNil(t, result)
+			assertTrue(t, result.IsError, "invalid input should be an error result")
 			assertErrorContains(t, result, tt.want)
-			assert.Equal(t, int32(0), calls.Load(), "validation must happen before client call")
+			assertEqual(t, int32(0), calls.Load(), "validation must happen before client call")
 		})
 	}
 
@@ -174,7 +172,7 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 		}))
@@ -187,9 +185,9 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 			keyConfirm: true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "upstream API error should be an error result")
+		requireNoError(t, err)
+		requireNotNil(t, result)
+		assertTrue(t, result.IsError, "upstream API error should be an error result")
 		assertErrorContains(t, result, "Failed to upload image")
 	})
 }
@@ -214,7 +212,7 @@ func imageUploadHandlerWithCallCounter(
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"image":     map[string]any{keyBetaID: "private/99"},
 			"upload_to": imageUploadTargetFixture,
 		}))

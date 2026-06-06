@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -25,14 +24,14 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeImageDeleteTool(cfg)
 
-		assert.Equal(t, "linode_image_delete", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyImageID, "schema should include image_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "destructive tool must require confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyImageID, "image_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-		require.NotNil(t, handler, "handler should not be nil")
+		assertEqual(t, "linode_image_delete", tool.Name, "tool name should match")
+		assertEqual(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		assertNotEmpty(t, tool.Description, "tool should have a description")
+		assertContains(t, tool.InputSchema.Properties, keyImageID, "schema should include image_id")
+		assertContains(t, tool.InputSchema.Properties, keyConfirm, "destructive tool must require confirm")
+		assertContains(t, tool.InputSchema.Required, keyImageID, "image_id must be marked required")
+		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+		requireNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -75,11 +74,11 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "invalid delete request should be an error result")
+			requireNoError(t, err)
+			requireNotNil(t, result)
+			assertTrue(t, result.IsError, "invalid delete request should be an error result")
 			assertErrorContains(t, result, tt.wantContains)
-			assert.False(t, called.Load(), "validation should reject before client call")
+			assertFalse(t, called.Load(), "validation should reject before client call")
 		})
 	}
 
@@ -90,12 +89,12 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, "/images/private%2F12345", r.URL.EscapedPath(), "request path should include encoded image ID")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assertEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assertEqual(t, "/images/private%2F12345", r.URL.EscapedPath(), "request path should include encoded image ID")
+			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
+			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.WriteHeader(http.StatusOK)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		defer srv.Close()
 
@@ -106,13 +105,13 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyImageID: privateImage12345Fixture, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		requireNoError(t, err, "handler should not return an error")
+		requireNotNil(t, result, "result should not be nil")
+		assertFalse(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "deleted successfully", "response should include success message")
-		assert.Equal(t, int32(1), requestCount.Load(), "delete should make one request")
+		requireTrue(t, ok, "content should be TextContent")
+		assertContains(t, textContent.Text, "deleted successfully", "response should include success message")
+		assertEqual(t, int32(1), requestCount.Load(), "delete should make one request")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -120,7 +119,7 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errNotFound}},
 			}))
 		}))
@@ -133,9 +132,9 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyImageID: privateImage12345Fixture, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "client failure should be an error result")
+		requireNoError(t, err)
+		requireNotNil(t, result)
+		assertTrue(t, result.IsError, "client failure should be an error result")
 		assertErrorContains(t, result, "linode_image_delete failed")
 	})
 }
@@ -148,20 +147,25 @@ func TestLinodeImageDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+		assertContains(t, tool.InputSchema.Properties, "dry_run")
 	})
 
 	t.Run("preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
+		var methodsMu sync.Mutex
+
 		var methodsSeen []string
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsMu.Lock()
+
 			methodsSeen = append(methodsSeen, r.Method)
+			methodsMu.Unlock()
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 					keyBetaID: "private/12345", keyLabel: "my-image",
 				}))
 
@@ -183,22 +187,27 @@ func TestLinodeImageDeleteToolDryRun(t *testing.T) {
 			keyDryRun:  true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireNotNil(t, result)
+		requireFalse(t, result.IsError)
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		requireTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_image_delete", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assertEqual(t, true, body[keyDryRun])
+		assertEqual(t, "linode_image_delete", body["tool"])
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/images/private/12345", would["path"])
+		assertEqual(t, "DELETE", would["method"])
+		assertEqual(t, "/images/private/12345", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+		methodsMu.Lock()
+
+		seen := append([]string(nil), methodsSeen...)
+		methodsMu.Unlock()
+
+		assertEqual(t, []string{http.MethodGet}, seen,
 			"dry_run must only issue a single GET, never DELETE")
 	})
 
@@ -208,8 +217,8 @@ func TestLinodeImageDeleteToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeImageDeleteTool(&config.Config{})
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
 
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, errImageIDNonEmpty)
 	})
 }
