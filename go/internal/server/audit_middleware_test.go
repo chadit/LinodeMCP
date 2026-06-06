@@ -3,9 +3,6 @@ package server_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/server"
 )
@@ -26,7 +23,7 @@ func TestAuditMiddlewareWritesEventOnSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	sink := audit.NewCapturingSink()
 	srv.SetAuditSink(sink)
@@ -34,19 +31,19 @@ func TestAuditMiddlewareWritesEventOnSuccess(t *testing.T) {
 	_ = srv.HandleMessage(t.Context(), []byte(helloCallMessage))
 
 	events := sink.Events()
-	require.NotEmpty(t, events, "audit middleware must produce at least one event")
+	requireNotEmpty(t, events, "audit middleware must produce at least one event")
 
 	helloEvent := findEventByTool(events, "hello")
-	require.NotNil(t, helloEvent, "audit middleware must record an event for the hello call")
+	requireNotNil(t, helloEvent, "audit middleware must record an event for the hello call")
 
-	assert.Equal(t, audit.CapabilityMeta, helloEvent.ToolCapability,
+	assertEqual(t, audit.CapabilityMeta, helloEvent.ToolCapability,
 		"hello carries the CapMeta tag")
-	assert.Equal(t, audit.StatusSuccess, helloEvent.Status,
+	assertEqual(t, audit.StatusSuccess, helloEvent.Status,
 		"hello returns a successful result")
-	assert.GreaterOrEqual(t, helloEvent.LatencyMS, int64(0),
+	assertGreaterOrEqual(t, helloEvent.LatencyMS, int64(0),
 		"latency populates from Finalize")
-	assert.Nil(t, helloEvent.Error, "successful call has nil Error pointer")
-	assert.Equal(t, "Auditor", helloEvent.Args["name"],
+	assertNil(t, helloEvent.Error, "successful call has nil Error pointer")
+	assertEqual(t, "Auditor", helloEvent.Args["name"],
 		"args carry the request's arguments verbatim when not sensitive")
 }
 
@@ -58,7 +55,7 @@ func TestSetAuditSinkNilRestoresNoop(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	// Install a capturing sink, then clear it. After clearing, the
 	// next tool call must not crash and must not feed the previous
@@ -69,7 +66,7 @@ func TestSetAuditSinkNilRestoresNoop(t *testing.T) {
 
 	_ = srv.HandleMessage(t.Context(), []byte(helloCallMessage))
 
-	assert.Empty(t, sink.Events(),
+	assertEmpty(t, sink.Events(),
 		"previously-installed sink must not receive events after SetAuditSink(nil)")
 }
 
@@ -119,7 +116,7 @@ func TestAuditMiddlewareRedactsPIIWhenFlagOn(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	sink := audit.NewCapturingSink()
 	srv.SetAuditSink(sink)
@@ -129,21 +126,21 @@ func TestAuditMiddlewareRedactsPIIWhenFlagOn(t *testing.T) {
 
 	events := sink.Events()
 	helloEvent := findEventByTool(events, "hello")
-	require.NotNil(t, helloEvent)
+	requireNotNil(t, helloEvent)
 
-	assert.True(t, audit.IsRedacted(helloEvent.Args["phone"]),
+	assertTrue(t, audit.IsRedacted(helloEvent.Args["phone"]),
 		"phone is PII and must be redacted when redact_pii=true")
-	assert.True(t, audit.IsRedacted(helloEvent.Args["tax_id"]))
-	assert.True(t, audit.IsRedacted(helloEvent.Args["address_1"]))
-	assert.True(t, audit.IsRedacted(helloEvent.Args["city"]))
-	assert.True(t, audit.IsRedacted(helloEvent.Args["token"]),
+	assertTrue(t, audit.IsRedacted(helloEvent.Args["tax_id"]))
+	assertTrue(t, audit.IsRedacted(helloEvent.Args["address_1"]))
+	assertTrue(t, audit.IsRedacted(helloEvent.Args["city"]))
+	assertTrue(t, audit.IsRedacted(helloEvent.Args["token"]),
 		"credential is always redacted regardless of redact_pii")
-	assert.Equal(t, "us", helloEvent.Args["country"],
+	assertEqual(t, "us", helloEvent.Args["country"],
 		"country is a non-sensitive filter, must pass through")
-	assert.Equal(t, "Auditor", helloEvent.Args["name"],
+	assertEqual(t, "Auditor", helloEvent.Args["name"],
 		"non-PII non-credential args pass through")
-	assert.Contains(t, helloEvent.ArgsRedacted, "phone")
-	assert.Contains(t, helloEvent.ArgsRedacted, "token")
+	assertContains(t, helloEvent.ArgsRedacted, "phone")
+	assertContains(t, helloEvent.ArgsRedacted, "token")
 }
 
 // TestAuditMiddlewareLeavesPIIWhenFlagOff is the inverse: with the
@@ -154,7 +151,7 @@ func TestAuditMiddlewareLeavesPIIWhenFlagOff(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	sink := audit.NewCapturingSink()
 	srv.SetAuditSink(sink)
@@ -165,16 +162,16 @@ func TestAuditMiddlewareLeavesPIIWhenFlagOff(t *testing.T) {
 
 	events := sink.Events()
 	helloEvent := findEventByTool(events, "hello")
-	require.NotNil(t, helloEvent)
+	requireNotNil(t, helloEvent)
 
-	assert.Equal(t, "+1-555-0100", helloEvent.Args["phone"],
+	assertEqual(t, "+1-555-0100", helloEvent.Args["phone"],
 		"PII passes through when redact_pii=false")
-	assert.Equal(t, "TX-99", helloEvent.Args["tax_id"])
-	assert.Equal(t, "123 Main St", helloEvent.Args["address_1"])
-	assert.Equal(t, "Springfield", helloEvent.Args["city"])
-	assert.True(t, audit.IsRedacted(helloEvent.Args["token"]),
+	assertEqual(t, "TX-99", helloEvent.Args["tax_id"])
+	assertEqual(t, "123 Main St", helloEvent.Args["address_1"])
+	assertEqual(t, "Springfield", helloEvent.Args["city"])
+	assertTrue(t, audit.IsRedacted(helloEvent.Args["token"]),
 		"credential is redacted even with redact_pii=false")
-	assert.NotContains(t, helloEvent.ArgsRedacted, "phone",
+	assertNotContains(t, helloEvent.ArgsRedacted, "phone",
 		"PII names absent from ArgsRedacted when flag is off")
-	assert.Contains(t, helloEvent.ArgsRedacted, "token")
+	assertContains(t, helloEvent.ArgsRedacted, "token")
 }

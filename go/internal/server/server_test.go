@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -85,9 +83,9 @@ func TestNew(t *testing.T) {
 		t.Parallel()
 
 		srv, err := server.New(nil)
-		require.Error(t, err, "New with nil config should return an error")
-		assert.Nil(t, srv, "server should be nil when config is nil")
-		assert.ErrorIs(t, err, server.ErrConfigNil, "error should be ErrConfigNil")
+		requireError(t, err, "New with nil config should return an error")
+		assertNil(t, srv, "server should be nil when config is nil")
+		assertErrorIs(t, err, server.ErrConfigNil, "error should be ErrConfigNil")
 	})
 
 	t.Run("valid config creates server with full-access profile", func(t *testing.T) {
@@ -102,10 +100,10 @@ func TestNew(t *testing.T) {
 
 		srv, err := server.New(cfg)
 
-		require.NoError(t, err, "New with valid config should not return an error")
-		require.NotNil(t, srv, "server should not be nil with valid config")
-		assert.NotEmpty(t, srv.Tools(), "full-access should register every tool")
-		assert.Equal(
+		requireNoError(t, err, "New with valid config should not return an error")
+		requireNotNil(t, srv, "server should not be nil with valid config")
+		assertNotEmpty(t, srv.Tools(), "full-access should register every tool")
+		assertEqual(
 			t,
 			profiles.BuiltinFullAccess,
 			srv.ActiveProfile().Name,
@@ -120,9 +118,9 @@ func TestNew(t *testing.T) {
 		cfg.Server = config.ServerConfig{Name: "TestMCP", LogLevel: logLevelInfo}
 
 		srv, err := server.New(cfg)
-		require.NoError(t, err, "New should succeed with valid config")
+		requireNoError(t, err, "New should succeed with valid config")
 
-		assert.NotEmpty(t, srv.Tools(), "should have at least one tool registered")
+		assertNotEmpty(t, srv.Tools(), "should have at least one tool registered")
 	})
 }
 
@@ -142,12 +140,12 @@ func TestToolWrapperMethods(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err, "New should succeed with valid config")
+	requireNoError(t, err, "New should succeed with valid config")
 
 	for _, tool := range srv.Tools() {
-		assert.NotEmpty(t, tool.Name(), "tool name should not be empty")
-		assert.NotEmpty(t, tool.Description(), "tool description should not be empty")
-		assert.NotNil(t, tool.InputSchema(), "tool input schema should not be nil")
+		assertNotEmpty(t, tool.Name(), "tool name should not be empty")
+		assertNotEmpty(t, tool.Description(), "tool description should not be empty")
+		assertNotNil(t, tool.InputSchema(), "tool input schema should not be nil")
 	}
 }
 
@@ -370,29 +368,29 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 	for _, descriptor := range descriptors {
 		registeredNames[descriptor.Name] = struct{}{}
 		if capability, ok := want[descriptor.Name]; ok {
-			assert.Equal(t, capability, descriptor.Capability, "descriptor capability should match")
+			assertEqual(t, capability, descriptor.Capability, "descriptor capability should match")
 			delete(want, descriptor.Name)
 		}
 	}
 
-	assert.NotContains(t, registeredNames, "linode_account_entity_transfers", "deprecated entity transfer list tool should not be registered")
-	assert.NotContains(t, registeredNames, "linode_account_entity_transfer_create", "deprecated entity-transfer create route should not be registered")
-	assert.NotContains(t, registeredNames, "linode_account_entity_transfer_get", "deprecated entity transfer get tool should not be registered")
-	assert.Empty(t, want, "expected descriptors should be registered")
+	assertNotContains(t, registeredNames, "linode_account_entity_transfers", "deprecated entity transfer list tool should not be registered")
+	assertNotContains(t, registeredNames, "linode_account_entity_transfer_create", "deprecated entity-transfer create route should not be registered")
+	assertNotContains(t, registeredNames, "linode_account_entity_transfer_get", "deprecated entity transfer get tool should not be registered")
+	assertEmpty(t, want, "expected descriptors should be registered")
 }
 
 func TestDeprecatedAccountEntityTransfersListToolRemoved(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	require.NoError(t, err, "server should initialize")
+	requireNoError(t, err, "server should initialize")
 
 	for _, tool := range srv.Tools() {
-		assert.NotEqual(t, "linode_account_entity_transfers", tool.Name(), "deprecated entity transfer list tool should not be registered")
+		assertNotEqual(t, "linode_account_entity_transfers", tool.Name(), "deprecated entity transfer list tool should not be registered")
 	}
 
 	for _, descriptor := range srv.ToolCatalog() {
-		assert.NotEqual(t, "linode_account_entity_transfers", descriptor.Name, "deprecated entity transfer list tool should not be in the catalog")
+		assertNotEqual(t, "linode_account_entity_transfers", descriptor.Name, "deprecated entity transfer list tool should not be in the catalog")
 	}
 }
 
@@ -413,12 +411,12 @@ func TestToolWrapperExecuteReturnsError(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err, "New should succeed with valid config")
-	require.NotEmpty(t, srv.Tools(), "server should have registered tools")
+	requireNoError(t, err, "New should succeed with valid config")
+	requireNotEmpty(t, srv.Tools(), "server should have registered tools")
 
 	result, execErr := srv.Tools()[0].Execute(t.Context(), nil)
-	assert.Nil(t, result, "Execute should return nil result")
-	assert.ErrorIs(t, execErr, server.ErrExecuteNotImplemented, "Execute should return ErrExecuteNotImplemented")
+	assertNil(t, result, "Execute should return nil result")
+	assertErrorIs(t, execErr, server.ErrExecuteNotImplemented, "Execute should return ErrExecuteNotImplemented")
 }
 
 // TestShutdownReturnsImmediatelyWithNoInflight verifies that Shutdown does
@@ -431,7 +429,7 @@ func TestShutdownReturnsImmediatelyWithNoInflight(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
-	require.NoError(t, srv.Shutdown(ctx), "Shutdown should return nil with no in-flight handlers")
+	requireNoError(t, srv.Shutdown(ctx), "Shutdown should return nil with no in-flight handlers")
 }
 
 // TestShutdownDrainsInflightHandlers dispatches a blocking tool call through
@@ -456,7 +454,7 @@ func TestShutdownDrainsInflightHandlers(t *testing.T) {
 		defer close(dispatchDone)
 
 		response := srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
-		assert.NotNil(t, response, "HandleMessage should return a JSON-RPC response")
+		assertNotNil(t, response, "HandleMessage should return a JSON-RPC response")
 	}()
 
 	waitForHandlerEntry(t, handlerEntered)
@@ -478,7 +476,7 @@ func TestShutdownDrainsInflightHandlers(t *testing.T) {
 
 	close(releaseHandler)
 
-	require.NoError(t, <-shutdownDone, "Shutdown should drain the in-flight call")
+	requireNoError(t, <-shutdownDone, "Shutdown should drain the in-flight call")
 	waitForDispatchDone(t, dispatchDone)
 }
 
@@ -505,7 +503,7 @@ func TestShutdownTimesOutOnStuckHandler(t *testing.T) {
 		defer close(dispatchDone)
 
 		response := srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
-		assert.NotNil(t, response, "HandleMessage should return a JSON-RPC response")
+		assertNotNil(t, response, "HandleMessage should return a JSON-RPC response")
 	}()
 
 	waitForHandlerEntry(t, handlerEntered)
@@ -517,8 +515,8 @@ func TestShutdownTimesOutOnStuckHandler(t *testing.T) {
 
 	close(releaseHandler)
 
-	require.Error(t, err, "Shutdown should return an error when the drain times out")
-	require.ErrorIs(t, err, context.DeadlineExceeded, "Shutdown should wrap the context error")
+	requireError(t, err, "Shutdown should return an error when the drain times out")
+	requireErrorIs(t, err, context.DeadlineExceeded, "Shutdown should wrap the context error")
 	waitForDispatchDone(t, dispatchDone)
 }
 
@@ -548,7 +546,7 @@ func newTestServerWithAPIURL(t *testing.T, apiURL string) *server.Server {
 	}
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err, "test server construction should succeed")
+	requireNoError(t, err, "test server construction should succeed")
 
 	return srv
 }
@@ -576,7 +574,8 @@ func newBlockingAccountServer(t *testing.T, handlerEntered chan<- struct{}, rele
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{}`))
+		_, err := w.Write([]byte(`{}`))
+		assertNoError(t, err, "blocking account response should write")
 	}))
 }
 
@@ -613,77 +612,77 @@ func TestHelloToolHandlerDispatch(t *testing.T) {
 
 	result, err := handler(t.Context(), request)
 
-	require.NoError(t, err, "hello handler should not return an error")
-	require.NotNil(t, result, "hello handler should return a result")
-	require.Len(t, result.Content, 1, "result should have exactly one content item")
+	requireNoError(t, err, "hello handler should not return an error")
+	requireNotNil(t, result, "hello handler should return a result")
+	requireLen(t, result.Content, 1, "result should have exactly one content item")
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "first content item should be TextContent")
-	assert.Contains(t, textContent.Text, "Hello, Test!", "greeting should contain the provided name")
+	requireTrue(t, ok, "first content item should be TextContent")
+	assertContains(t, textContent.Text, "Hello, Test!", "greeting should contain the provided name")
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigList(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_list", Capability: profiles.CapRead})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_list", Capability: profiles.CapRead})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigNodesList(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_nodes_list", Capability: profiles.CapRead})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_nodes_list", Capability: profiles.CapRead})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigNodeGet(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigCreate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerNodeCreate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_create", Capability: profiles.CapWrite})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_create", Capability: profiles.CapWrite})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerNodeDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_delete", Capability: profiles.CapDestroy})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_delete", Capability: profiles.CapDestroy})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigUpdate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigRebuild(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_rebuild", Capability: profiles.CapWrite})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_rebuild", Capability: profiles.CapWrite})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy})
+	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy})
 }
