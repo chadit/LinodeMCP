@@ -3,11 +3,10 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/profiles/builder"
@@ -67,15 +66,27 @@ func callDraftHandler(
 	req.Params.Arguments = args
 
 	result, err := handler(t.Context(), req)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	if err != nil {
+		t.Fatalf("unexpected handler error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected non-nil handler result")
+	}
+
+	if len(result.Content) == 0 {
+		t.Fatal("expected handler result content")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "result content must be TextContent")
+	if !ok {
+		t.Fatal("result content must be TextContent")
+	}
 
 	var out map[string]any
-
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &out))
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Fatalf("unmarshal response JSON: %v", err)
+	}
 
 	return out
 }
@@ -91,10 +102,10 @@ func TestDraftNewRegistration(t *testing.T) {
 		fixtureResolver(),
 	)
 
-	assert.Equal(t, "linode_profile_draft_new", tool.Name)
-	assert.NotEmpty(t, tool.Description)
-	assert.Equal(t, profiles.CapMeta, capability)
-	assert.NotNil(t, handler)
+	checkEqual(t, "linode_profile_draft_new", tool.Name)
+	expectNotEmpty(t, tool.Description)
+	checkEqual(t, profiles.CapMeta, capability)
+	expectNotNil(t, handler)
 }
 
 // TestDraftNewCreatesEmptyDraft is the no-clone-from happy path.
@@ -108,16 +119,16 @@ func TestDraftNewCreatesEmptyDraft(t *testing.T) {
 
 	out := callDraftHandler(t, handler, map[string]any{keyName: draftFixtureName})
 
-	assert.Equal(t, draftFixtureName, out[keyName])
-	assert.Empty(t, out["description"])
-	assert.Equal(t, []any{}, out["allowed_tools"])
-	assert.Equal(t, []any{}, out["allowed_environments"])
-	assert.Equal(t, []any{}, out["required_token_scopes"])
-	assert.Equal(t, false, out["allow_yolo"])
+	checkEqual(t, draftFixtureName, out[keyName])
+	checkEmpty(t, out["description"])
+	checkEqual(t, []any{}, out["allowed_tools"])
+	checkEqual(t, []any{}, out["allowed_environments"])
+	checkEqual(t, []any{}, out["required_token_scopes"])
+	checkEqual(t, false, out["allow_yolo"])
 
 	// Registry side-effect: the draft is now retrievable.
 	_, ok := reg.Get(draftFixtureName)
-	assert.True(t, ok, "draft must be registered after _new returns")
+	checkTrueWithMode(t, false, ok, "draft must be registered after _new returns")
 }
 
 // TestDraftNewClonesFromSource covers the clone_from path: every
@@ -135,12 +146,12 @@ func TestDraftNewClonesFromSource(t *testing.T) {
 
 	src := fixtureSourceProfile()
 
-	assert.Equal(t, draftFixtureName, out[keyName])
-	assert.Equal(t, src.Description, out["description"])
-	assert.Equal(t, anySlice(src.AllowedTools), out["allowed_tools"])
-	assert.Equal(t, anySlice(src.AllowedEnvironments), out["allowed_environments"])
-	assert.Equal(t, anySlice(src.RequiredTokenScopes), out["required_token_scopes"])
-	assert.Equal(t, src.AllowYolo, out["allow_yolo"])
+	checkEqual(t, draftFixtureName, out[keyName])
+	checkEqual(t, src.Description, out["description"])
+	checkEqual(t, anySlice(src.AllowedTools), out["allowed_tools"])
+	checkEqual(t, anySlice(src.AllowedEnvironments), out["allowed_environments"])
+	checkEqual(t, anySlice(src.RequiredTokenScopes), out["required_token_scopes"])
+	checkEqual(t, src.AllowYolo, out["allow_yolo"])
 }
 
 // TestDraftNewRefusesMissingName covers the validation guard. The
@@ -154,7 +165,9 @@ func TestDraftNewRefusesMissingName(t *testing.T) {
 
 	_, err := handler(t.Context(), mcp.CallToolRequest{})
 
-	require.ErrorIs(t, err, tools.ErrDraftNameMissing)
+	if !errors.Is(err, tools.ErrDraftNameMissing) {
+		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
+	}
 }
 
 // TestDraftNewRefusesUnknownCloneSource covers the unknown-source path.
@@ -174,10 +187,12 @@ func TestDraftNewRefusesUnknownCloneSource(t *testing.T) {
 
 	_, err := handler(t.Context(), req)
 
-	require.ErrorIs(t, err, tools.ErrCloneSourceMissing)
+	if !errors.Is(err, tools.ErrCloneSourceMissing) {
+		t.Fatalf("expected error %v, got %v", tools.ErrCloneSourceMissing, err)
+	}
 
 	_, exists := reg.Get(draftFixtureName)
-	assert.False(t, exists, "failed _new must not leave a draft behind")
+	checkFalseWithMode(t, false, exists, "failed _new must not leave a draft behind")
 }
 
 // TestDraftNewRefusesDuplicateName surfaces the underlying
@@ -196,7 +211,9 @@ func TestDraftNewRefusesDuplicateName(t *testing.T) {
 
 	_, err := handler(t.Context(), req)
 
-	require.ErrorIs(t, err, builder.ErrDraftExists)
+	if !errors.Is(err, builder.ErrDraftExists) {
+		t.Fatalf("expected error %v, got %v", builder.ErrDraftExists, err)
+	}
 }
 
 // TestDraftShowReturnsLiveDraftState reads the draft back. Mirrors
@@ -208,15 +225,15 @@ func TestDraftShowReturnsLiveDraftState(t *testing.T) {
 	reg := builder.NewRegistry()
 	src := fixtureSourceProfile()
 	_, err := reg.Create(draftFixtureName, &src)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
 
 	out := callDraftHandler(t, showHandler, map[string]any{keyName: draftFixtureName})
 
-	assert.Equal(t, draftFixtureName, out[keyName])
-	assert.Equal(t, src.Description, out["description"])
-	assert.Equal(t, anySlice(src.AllowedTools), out["allowed_tools"])
+	checkEqual(t, draftFixtureName, out[keyName])
+	checkEqual(t, src.Description, out["description"])
+	checkEqual(t, anySlice(src.AllowedTools), out["allowed_tools"])
 }
 
 // TestDraftShowRefusesUnknown covers the typo / expired-session path.
@@ -233,7 +250,9 @@ func TestDraftShowRefusesUnknown(t *testing.T) {
 
 	_, err := showHandler(t.Context(), req)
 
-	require.ErrorIs(t, err, builder.ErrDraftNotFound)
+	if !errors.Is(err, builder.ErrDraftNotFound) {
+		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
+	}
 }
 
 // TestDraftShowRefusesMissingName mirrors the _new validation guard.
@@ -245,7 +264,9 @@ func TestDraftShowRefusesMissingName(t *testing.T) {
 
 	_, err := showHandler(t.Context(), mcp.CallToolRequest{})
 
-	require.ErrorIs(t, err, tools.ErrDraftNameMissing)
+	if !errors.Is(err, tools.ErrDraftNameMissing) {
+		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
+	}
 }
 
 // TestDraftDiscardRemovesDraft is the happy path. The discarded
@@ -256,17 +277,17 @@ func TestDraftDiscardRemovesDraft(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(draftFixtureName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
 
 	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftFixtureName})
 
-	assert.Equal(t, draftFixtureName, out[keyName])
-	assert.Equal(t, true, out["discarded"])
+	checkEqual(t, draftFixtureName, out[keyName])
+	checkEqual(t, true, out["discarded"])
 
 	_, exists := reg.Get(draftFixtureName)
-	assert.False(t, exists, "discard must remove the draft from the registry")
+	checkFalseWithMode(t, false, exists, "discard must remove the draft from the registry")
 }
 
 // TestDraftDiscardIdempotent covers the unknown-name path. Discard
@@ -280,8 +301,8 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 
 	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftNonexistent})
 
-	assert.Equal(t, draftNonexistent, out[keyName])
-	assert.Equal(t, false, out["discarded"])
+	checkEqual(t, draftNonexistent, out[keyName])
+	checkEqual(t, false, out["discarded"])
 }
 
 // TestDraftDiscardRefusesMissingName mirrors _new and _show.
@@ -293,7 +314,9 @@ func TestDraftDiscardRefusesMissingName(t *testing.T) {
 
 	_, err := discardHandler(t.Context(), mcp.CallToolRequest{})
 
-	require.ErrorIs(t, err, tools.ErrDraftNameMissing)
+	if !errors.Is(err, tools.ErrDraftNameMissing) {
+		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
+	}
 }
 
 // TestDraftToolsRespectContextCancellation locks the cancellation
@@ -317,9 +340,17 @@ func TestDraftToolsRespectContextCancellation(t *testing.T) {
 	_, errShow := showHandler(ctx, mcp.CallToolRequest{})
 	_, errDiscard := discardHandler(ctx, mcp.CallToolRequest{})
 
-	require.ErrorIs(t, errNew, context.Canceled)
-	require.ErrorIs(t, errShow, context.Canceled)
-	require.ErrorIs(t, errDiscard, context.Canceled)
+	if !errors.Is(errNew, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, errNew)
+	}
+
+	if !errors.Is(errShow, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, errShow)
+	}
+
+	if !errors.Is(errDiscard, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, errDiscard)
+	}
 }
 
 // anySlice converts a []string to the []any shape json.Unmarshal
