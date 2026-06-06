@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -21,6 +19,9 @@ import (
 const accountUserGrantsUpdateToolName = "linode_account_user_grants_update"
 
 func TestLinodeAccountUserGrantsUpdateToolDefinition(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cfg := &config.Config{}
@@ -42,6 +43,9 @@ func TestLinodeAccountUserGrantsUpdateToolDefinition(t *testing.T) {
 }
 
 func TestLinodeAccountUserGrantsUpdateRequiresConfirm(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := []struct {
@@ -75,6 +79,9 @@ func TestLinodeAccountUserGrantsUpdateRequiresConfirm(t *testing.T) {
 }
 
 func TestLinodeAccountUserGrantsUpdateRejectsInvalidRequest(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := []struct {
@@ -124,6 +131,9 @@ func TestLinodeAccountUserGrantsUpdateRejectsInvalidRequest(t *testing.T) {
 }
 
 func TestLinodeAccountUserGrantsUpdateSuccess(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -173,6 +183,9 @@ func TestLinodeAccountUserGrantsUpdateSuccess(t *testing.T) {
 }
 
 func TestLinodeAccountUserGrantsUpdateAPIError(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

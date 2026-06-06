@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -26,6 +24,9 @@ const (
 )
 
 func TestLinodeAccountSupportTicketAttachmentCreateTool(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("definition", func(t *testing.T) {
@@ -153,6 +154,9 @@ func TestLinodeAccountSupportTicketAttachmentCreateTool(t *testing.T) {
 }
 
 func TestLinodeAccountSupportTicketAttachmentCreateToolRejectsInvalidInput(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := []struct {
@@ -198,6 +202,9 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolRejectsInvalidInput(t *te
 }
 
 func TestLinodeAccountSupportTicketAttachmentCreateToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(dryRunNoCallServer(t))

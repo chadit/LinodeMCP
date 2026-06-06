@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -37,6 +35,9 @@ const (
 )
 
 func TestLinodeAccountUserUpdateToolDefinition(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cfg := &config.Config{}
@@ -59,6 +60,9 @@ func TestLinodeAccountUserUpdateToolDefinition(t *testing.T) {
 }
 
 func TestLinodeAccountUserUpdateRequiresConfirm(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := []struct {
@@ -98,6 +102,9 @@ func TestLinodeAccountUserUpdateRequiresConfirm(t *testing.T) {
 }
 
 func TestLinodeAccountUserUpdateRejectsInvalidRequest(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := accountUserUpdateInvalidCases()
@@ -123,6 +130,9 @@ func TestLinodeAccountUserUpdateRejectsInvalidRequest(t *testing.T) {
 }
 
 func TestLinodeAccountUserUpdateSuccess(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +172,9 @@ func TestLinodeAccountUserUpdateSuccess(t *testing.T) {
 }
 
 func TestLinodeAccountUserUpdateAllowsEmptySSHKeys(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +198,9 @@ func TestLinodeAccountUserUpdateAllowsEmptySSHKeys(t *testing.T) {
 }
 
 func TestLinodeAccountUserUpdateAPIError(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

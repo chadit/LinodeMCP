@@ -10,8 +10,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -21,6 +19,9 @@ import (
 const accountUserDeleteToolName = "linode_account_user_delete"
 
 func TestLinodeAccountUserDeleteToolDefinition(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cfg := &config.Config{}
@@ -39,6 +40,9 @@ func TestLinodeAccountUserDeleteToolDefinition(t *testing.T) {
 }
 
 func TestLinodeAccountUserDeleteRequiresConfirm(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := []struct {
@@ -78,6 +82,9 @@ func TestLinodeAccountUserDeleteRequiresConfirm(t *testing.T) {
 }
 
 func TestLinodeAccountUserDeleteRejectsInvalidUsername(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	cases := []struct {
@@ -113,6 +120,9 @@ func TestLinodeAccountUserDeleteRejectsInvalidUsername(t *testing.T) {
 }
 
 func TestLinodeAccountUserDeleteSuccess(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +153,9 @@ func TestLinodeAccountUserDeleteSuccess(t *testing.T) {
 }
 
 func TestLinodeAccountUserDeleteAPIError(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
