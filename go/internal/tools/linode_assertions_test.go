@@ -64,6 +64,7 @@ func checkTrueWithMode(t *testing.T, fatal, actual bool, msg ...string) {
 	}
 }
 
+// expectFalse is fatal so callers may safely rely on the false condition after it returns.
 func expectFalse(t *testing.T, actual bool, msg ...string) {
 	t.Helper()
 	checkFalseWithMode(t, true, actual, msg...)
