@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -25,16 +23,16 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeImageShareGroupImageDeleteTool(cfg)
 
-		assert.Equal(t, "linode_image_sharegroup_image_delete", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyImageID, "schema should include image_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "destructive tool must require confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyShareGroupID, "sharegroup_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyImageID, "image_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-		require.NotNil(t, handler, "handler should not be nil")
+		shareGroupAssertEqual(t, "linode_image_sharegroup_image_delete", tool.Name, "tool name should match")
+		shareGroupAssertEqual(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		shareGroupAssertNotEmpty(t, tool.Description, "tool should have a description")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, keyImageID, "schema should include image_id")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, keyConfirm, "destructive tool must require confirm")
+		shareGroupAssertContains(t, tool.InputSchema.Required, keyShareGroupID, "sharegroup_id must be marked required")
+		shareGroupAssertContains(t, tool.InputSchema.Required, keyImageID, "image_id must be marked required")
+		shareGroupAssertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+		shareGroupRequireNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -76,11 +74,11 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "invalid image delete request should be an error result")
+			shareGroupRequireNoError(t, err)
+			shareGroupRequireNotNil(t, result)
+			shareGroupAssertTrue(t, result.IsError, "invalid image delete request should be an error result")
 			assertErrorContains(t, result, tt.wantContains)
-			assert.False(t, called.Load(), "validation should reject before client call")
+			shareGroupAssertFalse(t, called.Load(), "validation should reject before client call")
 		})
 	}
 
@@ -91,12 +89,12 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestCount.Add(1)
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, "/images/sharegroups/1234/images/5678", r.URL.Path, "request path should include share group and image IDs")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			shareGroupAssertEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			shareGroupAssertEqual(t, "/images/sharegroups/1234/images/5678", r.URL.Path, "request path should include share group and image IDs")
+			shareGroupAssertEmpty(t, r.URL.RawQuery, "request query should be empty")
+			shareGroupAssertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.WriteHeader(http.StatusOK)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		defer srv.Close()
 
@@ -107,13 +105,13 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		shareGroupRequireNoError(t, err, "handler should not return an error")
+		shareGroupRequireNotNil(t, result, "result should not be nil")
+		shareGroupAssertFalse(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "removed", "response should include success message")
-		assert.Equal(t, int32(1), requestCount.Load(), "delete should make one request")
+		shareGroupRequireTrue(t, ok, "content should be TextContent")
+		shareGroupAssertContains(t, textContent.Text, "removed", "response should include success message")
+		shareGroupAssertEqual(t, int32(1), requestCount.Load(), "delete should make one request")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -121,7 +119,7 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errNotFound}},
 			}))
 		}))
@@ -134,9 +132,9 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "client failure should be an error result")
+		shareGroupRequireNoError(t, err)
+		shareGroupRequireNotNil(t, result)
+		shareGroupAssertTrue(t, result.IsError, "client failure should be an error result")
 		assertErrorContains(t, result, "linode_image_sharegroup_image_delete failed")
 	})
 }
@@ -150,7 +148,7 @@ func TestLinodeImageShareGroupImageDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupImageDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, "dry_run")
 	})
 
 	t.Run("preview without mutating", func(t *testing.T) {
@@ -160,12 +158,12 @@ func TestLinodeImageShareGroupImageDeleteToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/images/sharegroups/1234", r.URL.Path,
+			shareGroupAssertEqual(t, "/images/sharegroups/1234", r.URL.Path,
 				"dry_run must GET the parent share group")
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: 1234}))
+				shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: 1234}))
 
 				return
 			}
@@ -186,21 +184,21 @@ func TestLinodeImageShareGroupImageDeleteToolDryRun(t *testing.T) {
 			keyDryRun:       true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
+		shareGroupRequireNoError(t, err)
+		shareGroupRequireNotNil(t, result)
+		shareGroupRequireFalse(t, result.IsError)
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		shareGroupRequireTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, "linode_image_sharegroup_image_delete", body["tool"])
+		shareGroupRequireNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		shareGroupAssertEqual(t, "linode_image_sharegroup_image_delete", body["tool"])
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/images/sharegroups/1234/images/5678", would["path"])
+		shareGroupAssertEqual(t, "DELETE", would["method"])
+		shareGroupAssertEqual(t, "/images/sharegroups/1234/images/5678", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+		shareGroupAssertEqual(t, []string{http.MethodGet}, methodsSeen,
 			"dry_run must only issue a single GET, never DELETE")
 	})
 
@@ -213,8 +211,8 @@ func TestLinodeImageShareGroupImageDeleteToolDryRun(t *testing.T) {
 			keyDryRun:       true,
 		}))
 
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		shareGroupRequireNoError(t, err)
+		shareGroupAssertTrue(t, result.IsError)
 		assertErrorContains(t, result, "image_id must be a positive integer")
 	})
 }

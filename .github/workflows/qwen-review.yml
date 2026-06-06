@@ -105,7 +105,7 @@ jobs:
             --max-session-turns 4 \
             --max-wall-time 180s \
             --output-format text \
-            --prompt "$(cat qwen-review/prompt.txt)" \
+            < qwen-review/prompt.txt \
             > qwen-review/review.raw 2> qwen-review/qwen.stderr
           rc=$?
           set -e

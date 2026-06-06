@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -27,42 +25,42 @@ func TestLinodeImageShareGroupImagesAddTool(t *testing.T) {
 
 		tool, capability, handler := tools.NewLinodeImageShareGroupImagesAddTool(&config.Config{})
 
-		assert.Equal(t, imageShareGroupImagesAddToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyImages, "schema should include images")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "mutating add tool must require confirm")
-		require.NotNil(t, handler, "handler should not be nil")
+		shareGroupAssertEqual(t, imageShareGroupImagesAddToolName, tool.Name, "tool name should match")
+		shareGroupAssertEqual(t, profiles.CapWrite, capability, "tool should be write capability")
+		shareGroupAssertNotEmpty(t, tool.Description, "tool should have a description")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, keyImages, "schema should include images")
+		shareGroupAssertContains(t, tool.InputSchema.Properties, keyConfirm, "mutating add tool must require confirm")
+		shareGroupRequireNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/images/sharegroups/54321/images", r.URL.Path, "request path should include share group ID")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			shareGroupAssertEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			shareGroupAssertEqual(t, "/images/sharegroups/54321/images", r.URL.Path, "request path should include share group ID")
+			shareGroupAssertEmpty(t, r.URL.RawQuery, "request query should be empty")
+			shareGroupAssertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+			if !shareGroupAssertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
 				return
 			}
 
-			if !assert.Len(t, body[keyImages], 1) {
+			if !shareGroupAssertLen(t, body[keyImages], 1) {
 				return
 			}
 
 			image, ok := body[keyImages].([]any)[0].(map[string]any)
-			if !assert.True(t, ok, "image payload should be an object") {
+			if !shareGroupAssertTrue(t, ok, "image payload should be an object") {
 				return
 			}
 
-			assert.Equal(t, imagePrivate15Fixture, image[keyBetaID])
+			shareGroupAssertEqual(t, imagePrivate15Fixture, image[keyBetaID])
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyBetaID:      "shared/1",
 				keyLabel:       "Linux Debian",
 				keyDescription: "Official Debian Linux image for server deployment",
@@ -78,13 +76,13 @@ func TestLinodeImageShareGroupImagesAddTool(t *testing.T) {
 			keyConfirm:      true,
 		}))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		shareGroupRequireNoError(t, err, "handler should not return an error")
+		shareGroupRequireNotNil(t, result, "result should not be nil")
+		shareGroupAssertFalse(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Added image", "response should include success message")
-		assert.Contains(t, textContent.Text, "shared/1", "response should include image ID")
+		shareGroupRequireTrue(t, ok, "content should be TextContent")
+		shareGroupAssertContains(t, textContent.Text, "Added image", "response should include success message")
+		shareGroupAssertContains(t, textContent.Text, "shared/1", "response should include image ID")
 	})
 }
 
@@ -112,10 +110,10 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			shareGroupRequireNoError(t, err)
+			shareGroupRequireNotNil(t, result)
+			shareGroupAssertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
+			shareGroupAssertEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
 		})
 	}
 
@@ -129,9 +127,9 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 			keyConfirm:      true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		shareGroupRequireNoError(t, err)
+		shareGroupRequireNotNil(t, result)
+		shareGroupAssertTrue(t, result.IsError)
 		assertErrorContains(t, result, "sharegroup_id must be a positive integer")
 	})
 
@@ -158,10 +156,10 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "invalid images should be an error result")
-			assert.Equal(t, int32(0), calls.Load(), "images validation must happen before client call")
+			shareGroupRequireNoError(t, err)
+			shareGroupRequireNotNil(t, result)
+			shareGroupAssertTrue(t, result.IsError, "invalid images should be an error result")
+			shareGroupAssertEqual(t, int32(0), calls.Load(), "images validation must happen before client call")
 		})
 	}
 
@@ -170,7 +168,7 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 		}))
@@ -183,9 +181,9 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 			keyConfirm:      true,
 		}))
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "upstream API error should be an error result")
+		shareGroupRequireNoError(t, err)
+		shareGroupRequireNotNil(t, result)
+		shareGroupAssertTrue(t, result.IsError, "upstream API error should be an error result")
 		assertErrorContains(t, result, "Failed to add image to share group")
 	})
 }
