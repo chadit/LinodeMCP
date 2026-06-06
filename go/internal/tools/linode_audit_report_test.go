@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -32,11 +30,11 @@ func TestLinodeAuditReportDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeAuditReportTool(&config.Config{})
 
-	assert.Equal(t, "linode_audit_report", tool.Name)
-	assert.Equal(t, profiles.CapMeta, capability, "report is CapMeta so every profile can read it")
-	require.NotNil(t, handler)
-	assert.Contains(t, tool.InputSchema.Properties, "name")
-	assert.Contains(t, tool.InputSchema.Required, "name")
+	checkEqual(t, "linode_audit_report", tool.Name)
+	checkEqual(t, profiles.CapMeta, capability, "report is CapMeta so every profile can read it")
+	requireNotNil(t, handler)
+	checkContains(t, tool.InputSchema.Properties, "name")
+	checkContains(t, tool.InputSchema.Required, "name")
 }
 
 // TestLinodeAuditReportUnknownName returns an error result rather than
@@ -47,9 +45,9 @@ func TestLinodeAuditReportUnknownName(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditReportTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "does-not-exist"}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.IsError)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkTrue(t, result.IsError)
 }
 
 // TestLinodeAuditReportSummary runs a list-of-destroys report against
@@ -61,7 +59,7 @@ func TestLinodeAuditReportSummary(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	requireNoError(t, os.MkdirAll(auditDir, 0o750))
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusSuccess, 1),
@@ -84,21 +82,21 @@ func TestLinodeAuditReportSummary(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditReportTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "destroys"}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.IsError)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkFalse(t, result.IsError)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	requireTrue(t, ok)
 
 	var decoded reportResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
-	assert.Equal(t, "destroys", decoded.Name)
-	assert.Equal(t, config.ReportOutputSummary, decoded.Output)
-	assert.Equal(t, 3, decoded.TotalEvents, "three destroy events match, the read event is excluded")
-	require.Len(t, decoded.Rows, 2, "instance_delete and volume_delete buckets")
-	assert.Equal(t, 2, decoded.Rows[0].Count, "instance_delete is the higher bucket")
+	requireNoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
+	checkEqual(t, "destroys", decoded.Name)
+	checkEqual(t, config.ReportOutputSummary, decoded.Output)
+	checkEqual(t, 3, decoded.TotalEvents, "three destroy events match, the read event is excluded")
+	requireLen(t, decoded.Rows, 2, "instance_delete and volume_delete buckets")
+	checkEqual(t, 2, decoded.Rows[0].Count, "instance_delete is the higher bucket")
 }
 
 // TestLinodeAuditReportListLimit returns matching events as a list and
@@ -108,7 +106,7 @@ func TestLinodeAuditReportListLimit(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	requireNoError(t, os.MkdirAll(auditDir, 0o750))
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
@@ -131,15 +129,15 @@ func TestLinodeAuditReportListLimit(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditReportTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "recent-reads"}))
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	requireTrue(t, ok)
 
 	var decoded reportResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
-	assert.Equal(t, config.ReportOutputList, decoded.Output)
-	assert.Equal(t, 2, decoded.TotalEvents, "capped at the report's limit")
-	assert.Len(t, decoded.Events, 2)
+	requireNoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
+	checkEqual(t, config.ReportOutputList, decoded.Output)
+	checkEqual(t, 2, decoded.TotalEvents, "capped at the report's limit")
+	checkLen(t, decoded.Events, 2)
 }

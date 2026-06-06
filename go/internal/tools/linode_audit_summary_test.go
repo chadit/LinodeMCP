@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -31,13 +29,13 @@ func TestLinodeAuditSummaryDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeAuditSummaryTool(&config.Config{})
 
-	assert.Equal(t, "linode_audit_summary", tool.Name)
-	assert.Equal(t, profiles.CapMeta, capability, "summary is CapMeta so every profile can read it")
-	require.NotNil(t, handler)
+	checkEqual(t, "linode_audit_summary", tool.Name)
+	checkEqual(t, profiles.CapMeta, capability, "summary is CapMeta so every profile can read it")
+	requireNotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	for _, param := range []string{keySince, "group_by", "include_meta"} {
-		assert.Contains(t, props, param, "schema should declare %q", param)
+		checkContains(t, props, param, "schema should declare %q", param)
 	}
 }
 
@@ -49,7 +47,7 @@ func TestLinodeAuditSummaryCountsByToolStatus(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	requireNoError(t, os.MkdirAll(auditDir, 0o750))
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
@@ -61,15 +59,15 @@ func TestLinodeAuditSummaryCountsByToolStatus(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditSummaryTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.IsError)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkFalse(t, result.IsError)
 
 	decoded := decodeSummaryResult(t, result)
-	assert.Equal(t, 3, decoded.TotalEvents, "meta event excluded by default")
-	require.Len(t, decoded.Rows, 2, "two tool+status buckets among non-meta events")
-	assert.Equal(t, "linode_instance_list", decoded.Rows[0].Groups["tool"], "highest count first")
-	assert.Equal(t, 2, decoded.Rows[0].Count)
+	checkEqual(t, 3, decoded.TotalEvents, "meta event excluded by default")
+	requireLen(t, decoded.Rows, 2, "two tool+status buckets among non-meta events")
+	checkEqual(t, "linode_instance_list", decoded.Rows[0].Groups["tool"], "highest count first")
+	checkEqual(t, 2, decoded.Rows[0].Count)
 }
 
 // TestLinodeAuditSummaryInvalidGroupBy verifies an unknown group_by
@@ -82,13 +80,13 @@ func TestLinodeAuditSummaryInvalidGroupBy(t *testing.T) {
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		"group_by": []any{"bogus"},
 	}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.IsError, "unknown group_by column must produce an error result")
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkTrue(t, result.IsError, "unknown group_by column must produce an error result")
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
-	assert.Contains(t, textContent.Text, "group_by")
+	requireTrue(t, ok)
+	checkContains(t, textContent.Text, "group_by")
 }
 
 // decodeSummaryResult extracts and decodes the tool's JSON response.
@@ -96,11 +94,11 @@ func decodeSummaryResult(t *testing.T, result *mcp.CallToolResult) summaryResult
 	t.Helper()
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
+	requireTrue(t, ok, "content should be TextContent")
 
 	var decoded summaryResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
+	requireNoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
 
 	return decoded
 }
