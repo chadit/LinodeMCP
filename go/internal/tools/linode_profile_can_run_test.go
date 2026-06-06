@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -69,15 +67,15 @@ func callCanRun(t *testing.T, profile func() profiles.Profile, calls []any) map[
 	req.Params.Arguments = map[string]any{"calls": calls}
 
 	result, err := handler(t.Context(), req)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
+	expectNoError(t, err)
+	expectNotNil(t, result)
+	expectFalse(t, result.IsError)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "result content must be TextContent")
+	expectTrue(t, ok, "result content must be TextContent")
 
 	var out map[string]any
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &out))
+	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &out))
 
 	return out
 }
@@ -87,13 +85,13 @@ func canRunResults(t *testing.T, body map[string]any) []map[string]any {
 	t.Helper()
 
 	raw, ok := body["results"].([]any)
-	require.True(t, ok, "results must be an array")
+	expectTrue(t, ok, "results must be an array")
 
 	out := make([]map[string]any, 0, len(raw))
 
 	for _, entry := range raw {
 		row, isMap := entry.(map[string]any)
-		require.True(t, isMap, "each result must be an object")
+		expectTrue(t, isMap, "each result must be an object")
 
 		out = append(out, row)
 	}
@@ -116,33 +114,33 @@ func TestLinodeProfileCanRunTool(t *testing.T) {
 		t.Parallel()
 
 		tool, capability, _ := tools.NewLinodeProfileCanRunTool(canRunFixtureCatalog, canRunFixtureProfile)
-		assert.Equal(t, canRunToolName, tool.Name)
-		assert.Equal(t, profiles.CapMeta, capability)
-		assert.Contains(t, tool.InputSchema.Properties, "calls")
+		checkEqual(t, canRunToolName, tool.Name)
+		checkEqual(t, profiles.CapMeta, capability)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, "calls")
 	})
 
 	t.Run("classifies every refusal category and the allow path", func(t *testing.T) {
 		t.Parallel()
 
 		body := callCanRun(t, canRunFixtureProfile, allFiveCalls)
-		assert.Equal(t, "compute-readonly", body["active_profile"])
+		checkEqual(t, "compute-readonly", body["active_profile"])
 
 		results := canRunResults(t, body)
-		require.Len(t, results, 5)
+		expectLen(t, results, 5)
 
-		assert.Equal(t, true, results[0]["allowed"])
+		checkEqual(t, true, results[0]["allowed"])
 
-		assert.Equal(t, false, results[1]["allowed"])
-		assert.Equal(t, "environment not permitted by profile", results[1]["reason"])
+		checkEqual(t, false, results[1]["allowed"])
+		checkEqual(t, "environment not permitted by profile", results[1]["reason"])
 
-		assert.Equal(t, false, results[2]["allowed"])
-		assert.Equal(t, "tool not in profile's allowed_tools", results[2]["reason"])
+		checkEqual(t, false, results[2]["allowed"])
+		checkEqual(t, "tool not in profile's allowed_tools", results[2]["reason"])
 
-		assert.Equal(t, false, results[3]["allowed"])
-		assert.Contains(t, results[3]["reason"], "(CapDestroy)")
+		checkEqual(t, false, results[3]["allowed"])
+		expectContainsWithMode(t, false, results[3]["reason"], "(CapDestroy)")
 
-		assert.Equal(t, false, results[4]["allowed"])
-		assert.Equal(t, "tool name not registered", results[4]["reason"])
+		checkEqual(t, false, results[4]["allowed"])
+		checkEqual(t, "tool name not registered", results[4]["reason"])
 	})
 
 	t.Run("summary buckets and invariant", func(t *testing.T) {
@@ -151,31 +149,33 @@ func TestLinodeProfileCanRunTool(t *testing.T) {
 		body := callCanRun(t, canRunFixtureProfile, allFiveCalls)
 
 		summary, summaryIsMap := body["summary"].(map[string]any)
-		require.True(t, summaryIsMap)
-		assert.InDelta(t, float64(5), summary["total"], 0)
-		assert.InDelta(t, float64(1), summary["allowed"], 0)
+		expectTrue(t, summaryIsMap)
+		expectNumericEqual(t, float64(5), summary["total"])
+		expectNumericEqual(t, float64(1), summary["allowed"])
 
 		blocked, blockedIsFloat := summary["blocked"].(float64)
-		require.True(t, blockedIsFloat)
-		assert.InDelta(t, float64(4), blocked, 0)
+		expectTrue(t, blockedIsFloat)
+		expectNumericEqual(t, float64(4), blocked)
 
 		buckets, bucketsIsMap := summary["blocked_by_reason"].(map[string]any)
-		require.True(t, bucketsIsMap)
-		assert.InDelta(t, float64(1), buckets["unregistered"], 0)
-		assert.InDelta(t, float64(1), buckets["profile_block"], 0)
-		assert.InDelta(t, float64(1), buckets["environment_block"], 0)
-		assert.InDelta(t, float64(1), buckets["capability_block"], 0)
+		expectTrue(t, bucketsIsMap)
+		expectNumericEqual(t, float64(1), buckets["unregistered"])
+		expectNumericEqual(t, float64(1), buckets["profile_block"])
+		expectNumericEqual(t, float64(1), buckets["environment_block"])
+		expectNumericEqual(t, float64(1), buckets["capability_block"])
 
 		var bucketSum float64
 
 		for _, value := range buckets {
 			count, isFloat := value.(float64)
-			require.True(t, isFloat)
+			expectTrue(t, isFloat)
 
 			bucketSum += count
 		}
 
-		assert.LessOrEqual(t, bucketSum, blocked, "sum(blocked_by_reason) must be <= blocked")
+		if bucketSum > blocked {
+			t.Errorf("expected %v <= %v%s", bucketSum, blocked, expectationMessage([]string{"sum(blocked_by_reason) must be <= blocked"}))
+		}
 	})
 
 	t.Run("empty allowed_environments permits any environment", func(t *testing.T) {
@@ -189,8 +189,8 @@ func TestLinodeProfileCanRunTool(t *testing.T) {
 		}
 
 		results := canRunResults(t, callCanRun(t, provider, []any{canRunCall(canRunReadTool, canRunEnvDev)}))
-		require.Len(t, results, 1)
-		assert.Equal(t, true, results[0]["allowed"], "unrestricted env profile allows any environment")
+		expectLen(t, results, 1)
+		checkEqual(t, true, results[0]["allowed"], "unrestricted env profile allows any environment")
 	})
 
 	t.Run("wildcard allowed_environments permits any environment", func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestLinodeProfileCanRunTool(t *testing.T) {
 		}
 
 		results := canRunResults(t, callCanRun(t, provider, []any{canRunCall(canRunReadTool, canRunEnvDev)}))
-		require.Len(t, results, 1)
-		assert.Equal(t, true, results[0]["allowed"])
+		expectLen(t, results, 1)
+		checkEqual(t, true, results[0]["allowed"])
 	})
 }
