@@ -6,9 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -43,12 +40,12 @@ func TestValidateScopesNoTokenReturnsSentinel(t *testing.T) {
 	cfg := configWithEnv("https://example.invalid", "")
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	got, err := srv.ValidateScopes(t.Context())
-	require.Error(t, err)
-	assert.Nil(t, got, "result must be nil when no token configured")
-	require.ErrorIs(t, err, profiles.ErrTokenNotConfigured,
+	requireError(t, err)
+	assertNil(t, got, "result must be nil when no token configured")
+	requireErrorIs(t, err, profiles.ErrTokenNotConfigured,
 		"missing token must surface as ErrTokenNotConfigured so callers can match it")
 }
 
@@ -60,10 +57,10 @@ func TestValidateScopesPATPathSucceeds(t *testing.T) {
 	t.Parallel()
 
 	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile", r.URL.Path,
+		assertEqual(t, "/profile", r.URL.Path,
 			"PAT path must only hit /profile (no /profile/grants)")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{
+		assertNoError(t, json.NewEncoder(w).Encode(linode.Profile{
 			Username: "u",
 			Scopes:   "*",
 		}))
@@ -73,14 +70,14 @@ func TestValidateScopesPATPathSucceeds(t *testing.T) {
 	cfg := configWithEnv(httpSrv.URL, "pat-token")
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	got, err := srv.ValidateScopes(t.Context())
-	require.NoError(t, err)
-	require.NotNil(t, got)
+	requireNoError(t, err)
+	requireNotNil(t, got)
 
-	assert.Equal(t, profiles.TokenKindPAT, got.Kind)
-	assert.False(t, got.Comparison.HasMissing(),
+	assertEqual(t, profiles.TokenKindPAT, got.Kind)
+	assertFalse(t, got.Comparison.HasMissing(),
 		"wildcard PAT must satisfy every required scope")
 }
 
@@ -93,7 +90,7 @@ func TestValidateScopesMissingScopesReportedInComparison(t *testing.T) {
 
 	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{
+		assertNoError(t, json.NewEncoder(w).Encode(linode.Profile{
 			Username: "u",
 			Scopes:   "linodes:read_only",
 		}))
@@ -103,12 +100,12 @@ func TestValidateScopesMissingScopesReportedInComparison(t *testing.T) {
 	cfg := configWithEnv(httpSrv.URL, "pat-token")
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	got, err := srv.ValidateScopes(t.Context())
-	require.NoError(t, err, "missing scopes must not surface as an error")
-	require.NotNil(t, got)
-	assert.True(t, got.Comparison.HasMissing(),
+	requireNoError(t, err, "missing scopes must not surface as an error")
+	requireNotNil(t, got)
+	assertTrue(t, got.Comparison.HasMissing(),
 		"full-access profile needs more scopes than linodes:read_only")
 }
 
@@ -120,17 +117,17 @@ func TestProfileIsElevated(t *testing.T) {
 
 	defaultCfg := baseTestConfig()
 	srv, err := server.New(defaultCfg)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	defaultProfile := srv.ActiveProfile()
-	assert.False(t, profiles.ProfileIsElevated(&defaultProfile),
+	assertFalse(t, profiles.ProfileIsElevated(&defaultProfile),
 		"default profile is read-only and must not be classified elevated")
 
 	fullCfg := configWithEnv("https://example.invalid", "tok")
 	fullSrv, err := server.New(fullCfg)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	fullProfile := fullSrv.ActiveProfile()
-	assert.True(t, profiles.ProfileIsElevated(&fullProfile),
+	assertTrue(t, profiles.ProfileIsElevated(&fullProfile),
 		"full-access carries :read_write scopes and must be classified elevated")
 }

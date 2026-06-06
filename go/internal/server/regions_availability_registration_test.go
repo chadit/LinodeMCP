@@ -3,9 +3,6 @@ package server_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
@@ -14,7 +11,7 @@ func TestRegionAvailabilityToolsRegisteredAsRead(t *testing.T) {
 
 	srv := newCapabilityTestServer(t)
 	infos := srv.ToolInfos()
-	require.NotEmpty(t, infos, "server must expose registered tools")
+	requireNotEmpty(t, infos, "server must expose registered tools")
 
 	wantTools := map[string]struct {
 		wantRegionID bool
@@ -31,19 +28,19 @@ func TestRegionAvailabilityToolsRegisteredAsRead(t *testing.T) {
 			continue
 		}
 
-		assert.Equal(t, profiles.CapRead, info.Capability, "region availability tools are read-only routes")
-		assert.Contains(t, info.InputSchema.Properties, "environment", "environment parameter should be exported")
-		assert.NotContains(t, info.InputSchema.Properties, "confirm", "read-only route should not require confirm")
+		assertEqual(t, profiles.CapRead, info.Capability, "region availability tools are read-only routes")
+		assertContains(t, info.InputSchema.Properties, "environment", "environment parameter should be exported")
+		assertNotContains(t, info.InputSchema.Properties, "confirm", "read-only route should not require confirm")
 
 		if want.wantRegionID {
-			assert.Contains(t, info.InputSchema.Properties, "region_id", "region_id parameter should be exported")
-			assert.Contains(t, info.InputSchema.Required, "region_id", "region_id should be required")
+			assertContains(t, info.InputSchema.Properties, "region_id", "region_id parameter should be exported")
+			assertContains(t, info.InputSchema.Required, "region_id", "region_id should be required")
 		}
 
 		found[info.Name] = true
 	}
 
 	for name := range wantTools {
-		assert.True(t, found[name], "%s should be registered", name)
+		assertTruef(t, found[name], "%s should be registered", name)
 	}
 }

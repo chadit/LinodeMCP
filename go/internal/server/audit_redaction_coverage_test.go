@@ -4,9 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -54,7 +51,7 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 
 	srv := newCapabilityTestServer(t)
 	infos := srv.AllToolInfos()
-	require.NotEmpty(t, infos, "server must register at least one tool")
+	requireNotEmpty(t, infos, "server must register at least one tool")
 
 	redactionSet := audit.RedactionFieldSet()
 
@@ -69,7 +66,7 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 			}
 
 			_, redacted := redactionSet[argName]
-			assert.True(
+			assertTruef(
 				t, redacted,
 				"tool %q declares arg %q which looks sensitive (matches one of %v) "+
 					"but is not in the audit redaction list; add it to "+
@@ -133,7 +130,7 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 
 	srv := newCapabilityTestServer(t)
 	infos := srv.AllToolInfos()
-	require.NotEmpty(t, infos, "server must register at least one tool")
+	requireNotEmpty(t, infos, "server must register at least one tool")
 
 	piiSet := audit.RedactionFieldSetPII()
 	credSet := audit.RedactionFieldSet()
@@ -150,7 +147,7 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 
 			_, inPII := piiSet[argName]
 			_, inCred := credSet[argName]
-			assert.True(
+			assertTruef(
 				t, inPII || inCred,
 				"tool %q declares arg %q which looks like PII (matches one of %v) "+
 					"but is not in the PII redaction list; add it to "+

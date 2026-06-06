@@ -3,9 +3,6 @@ package server_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/server"
@@ -50,38 +47,38 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 	cfg := baseTestConfig()
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err, "default-profile server must construct cleanly")
-	require.NotNil(t, srv)
+	requireNoError(t, err, "default-profile server must construct cleanly")
+	requireNotNil(t, srv)
 
-	assert.Equal(t, profiles.BuiltinDefault, srv.ActiveProfile().Name,
+	assertEqual(t, profiles.BuiltinDefault, srv.ActiveProfile().Name,
 		"unset ActiveProfile must resolve to the built-in default")
 
 	names := toolNames(srv)
-	assert.Contains(t, names, toolInstancesList,
+	assertContainsf(t, names, toolInstancesList,
 		"default profile must expose read tools like %s", toolInstancesList)
-	assert.Contains(t, names, toolAccountPaymentGet,
+	assertContainsf(t, names, toolAccountPaymentGet,
 		"default profile must expose read tools like %s", toolAccountPaymentGet)
-	assert.Contains(t, names, toolVolumeTypeList,
+	assertContainsf(t, names, toolVolumeTypeList,
 		"default profile must expose read tools like %s", toolVolumeTypeList)
-	assert.Contains(t, names, toolObjectEndpointsList,
+	assertContainsf(t, names, toolObjectEndpointsList,
 		"default profile must expose read tools like %s", toolObjectEndpointsList)
-	assert.Contains(t, names, toolInstanceVolumeList,
+	assertContainsf(t, names, toolInstanceVolumeList,
 		"default profile must expose read tools like %s", toolInstanceVolumeList)
-	assert.NotContains(t, names, toolInstanceCreate,
+	assertNotContainsf(t, names, toolInstanceCreate,
 		"default profile must not expose write tools like %s", toolInstanceCreate)
-	assert.NotContains(t, names, toolBucketAccessAllow,
+	assertNotContainsf(t, names, toolBucketAccessAllow,
 		"default profile must not expose write tools like %s", toolBucketAccessAllow)
-	assert.NotContains(t, names, toolMonitorAlertCreate,
+	assertNotContainsf(t, names, toolMonitorAlertCreate,
 		"default profile must not expose write tools like %s", toolMonitorAlertCreate)
-	assert.NotContains(t, names, toolMonitorTokenCreate,
+	assertNotContainsf(t, names, toolMonitorTokenCreate,
 		"default profile must not expose write tools like %s", toolMonitorTokenCreate)
-	assert.NotContains(t, names, toolMonitorAlertDelete,
+	assertNotContainsf(t, names, toolMonitorAlertDelete,
 		"default profile must not expose destructive tools like %s", toolMonitorAlertDelete)
-	assert.NotContains(t, names, toolMonitorAlertUpdate,
+	assertNotContainsf(t, names, toolMonitorAlertUpdate,
 		"default profile must not expose write tools like %s", toolMonitorAlertUpdate)
 
 	for _, info := range srv.ToolInfos() {
-		assert.Containsf(
+		assertContainsf(
 			t,
 			[]profiles.Capability{profiles.CapRead, profiles.CapMeta},
 			info.Capability,
@@ -94,7 +91,7 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 	// drifts with new tool additions, so the assertion is a floor: at least
 	// one tool must have been filtered out, and the registered list must
 	// stay smaller than the full inventory.
-	require.NotEmpty(t, names, "default profile should still expose its read surface")
+	requireNotEmpty(t, names, "default profile should still expose its read surface")
 }
 
 // TestNewFullAccessRegistersEverything verifies the opposite end of the
@@ -108,35 +105,35 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 	full := fullAccessConfig()
 
 	srv, err := server.New(full)
-	require.NoError(t, err, "full-access server must construct cleanly")
-	require.NotNil(t, srv)
+	requireNoError(t, err, "full-access server must construct cleanly")
+	requireNotNil(t, srv)
 
-	assert.Equal(t, profiles.BuiltinFullAccess, srv.ActiveProfile().Name)
+	assertEqual(t, profiles.BuiltinFullAccess, srv.ActiveProfile().Name)
 
 	names := toolNames(srv)
-	assert.Contains(t, names, toolInstanceCreate,
+	assertContainsf(t, names, toolInstanceCreate,
 		"full-access must expose write tools like %s", toolInstanceCreate)
-	assert.Contains(t, names, toolInstancesList,
+	assertContainsf(t, names, toolInstancesList,
 		"full-access must continue to expose read tools like %s", toolInstancesList)
-	assert.Contains(t, names, toolVolumeTypeList,
+	assertContainsf(t, names, toolVolumeTypeList,
 		"full-access must expose read tools like %s", toolVolumeTypeList)
-	assert.Contains(t, names, toolInstanceVolumeList,
+	assertContainsf(t, names, toolInstanceVolumeList,
 		"full-access must continue to expose read tools like %s", toolInstanceVolumeList)
-	assert.Contains(t, names, toolBucketAccessAllow,
+	assertContainsf(t, names, toolBucketAccessAllow,
 		"full-access must expose write tools like %s", toolBucketAccessAllow)
-	assert.Contains(t, names, toolMonitorAlertCreate,
+	assertContainsf(t, names, toolMonitorAlertCreate,
 		"full-access must expose write tools like %s", toolMonitorAlertCreate)
-	assert.Contains(t, names, toolMonitorTokenCreate,
+	assertContainsf(t, names, toolMonitorTokenCreate,
 		"full-access must expose write tools like %s", toolMonitorTokenCreate)
-	assert.Contains(t, names, toolMonitorAlertDelete,
+	assertContainsf(t, names, toolMonitorAlertDelete,
 		"full-access must expose destructive tools like %s", toolMonitorAlertDelete)
-	assert.Contains(t, names, toolMonitorAlertUpdate,
+	assertContainsf(t, names, toolMonitorAlertUpdate,
 		"full-access must expose write tools like %s", toolMonitorAlertUpdate)
-	assert.NotContains(t, names, toolAccountEntityTransferAccept,
+	assertNotContains(t, names, toolAccountEntityTransferAccept,
 		"deprecated entity-transfer accept route must not be registered")
 
 	for _, tool := range srv.Tools() {
-		assert.NotEqual(t, toolAccountEntityTransferAccept, tool.Name(),
+		assertNotEqual(t, toolAccountEntityTransferAccept, tool.Name(),
 			"deprecated entity-transfer accept handler must not be dispatchable")
 	}
 
@@ -144,9 +141,9 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 	// tool set. Comparing against a default-profile sibling avoids hard
 	// coding a count that drifts with new tools.
 	defaultSrv, err := server.New(baseTestConfig())
-	require.NoError(t, err, "default sibling must construct cleanly")
+	requireNoError(t, err, "default sibling must construct cleanly")
 
-	assert.Greater(t, len(names), len(defaultSrv.Tools()),
+	assertGreater(t, len(names), len(defaultSrv.Tools()),
 		"full-access must register strictly more tools than default")
 }
 
@@ -164,9 +161,9 @@ func TestNewDisabledBuiltinFailsStartup(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	require.Error(t, err, "construction must fail when active built-in is disabled")
-	assert.Nil(t, srv, "server must be nil when construction fails")
-	assert.ErrorIs(t, err, profiles.ErrActiveProfileDisabled,
+	requireError(t, err, "construction must fail when active built-in is disabled")
+	assertNil(t, srv, "server must be nil when construction fails")
+	assertErrorIs(t, err, profiles.ErrActiveProfileDisabled,
 		"error must wrap profiles.ErrActiveProfileDisabled so callers can detect it")
 }
 
@@ -181,9 +178,9 @@ func TestNewUnknownProfileFailsStartup(t *testing.T) {
 	cfg.ActiveProfile = "definitely-not-a-real-profile"
 
 	srv, err := server.New(cfg)
-	require.Error(t, err, "construction must fail when active profile is unknown")
-	assert.Nil(t, srv, "server must be nil when construction fails")
-	assert.ErrorIs(t, err, profiles.ErrActiveProfileUnknown,
+	requireError(t, err, "construction must fail when active profile is unknown")
+	assertNil(t, srv, "server must be nil when construction fails")
+	assertErrorIs(t, err, profiles.ErrActiveProfileUnknown,
 		"error must wrap profiles.ErrActiveProfileUnknown so callers can detect it")
 }
 
@@ -205,12 +202,12 @@ func TestNewUserDefinedProfileRegistersExactlyListedTools(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	require.NoError(t, err, "user-defined profile must construct cleanly")
-	require.NotNil(t, srv)
+	requireNoError(t, err, "user-defined profile must construct cleanly")
+	requireNotNil(t, srv)
 
-	assert.Equal(t, profileSingleTool, srv.ActiveProfile().Name)
+	assertEqual(t, profileSingleTool, srv.ActiveProfile().Name)
 
 	names := toolNames(srv)
-	assert.ElementsMatch(t, []string{toolVolumesList}, names,
+	assertElementsMatch(t, []string{toolVolumesList}, names,
 		"user-defined profile with one allowed tool must register exactly that tool")
 }
