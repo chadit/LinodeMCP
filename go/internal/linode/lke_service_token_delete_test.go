@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -17,25 +14,33 @@ func TestClientDeleteLKEServiceTokenSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/lke/clusters/123/servicetoken", r.URL.Path, "request path should match documented service token route")
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-
-		body, err := io.ReadAll(r.Body)
-		if !assert.NoError(t, err, "reading request body should not fail") {
-			return
+		if r.URL.Path != "/lke/clusters/123/servicetoken" {
+			t.Errorf("request path = %q, want %q", r.URL.Path, "/lke/clusters/123/servicetoken")
 		}
 
-		assert.Empty(t, body, "DELETE service token request should not send a body")
+		if r.Method != http.MethodDelete {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodDelete)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading request body failed: %v", err)
+		}
+
+		if len(body) != 0 {
+			t.Errorf("DELETE service token request body = %q, want empty", string(body))
+		}
 
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
 
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	client := linode.NewClient(srv.URL, lkeTestToken, nil, linode.WithMaxRetries(2))
 
 	err := client.DeleteLKEServiceToken(t.Context(), 123)
-
-	require.NoError(t, err, "DeleteLKEServiceToken should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("DeleteLKEServiceToken returned error: %v", err)
+	}
 }
 
 func TestClientDeleteLKEServiceTokenDoesNotRetryTransientError(t *testing.T) {
@@ -45,16 +50,27 @@ func TestClientDeleteLKEServiceTokenDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, "/lke/clusters/123/servicetoken", r.URL.Path, "request path should match documented service token route")
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+
+		if r.URL.Path != "/lke/clusters/123/servicetoken" {
+			t.Errorf("request path = %q, want %q", r.URL.Path, "/lke/clusters/123/servicetoken")
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodDelete)
+		}
+
 		http.Error(w, "temporary failure", http.StatusInternalServerError)
 	}))
 	t.Cleanup(srv.Close)
 
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	client := linode.NewClient(srv.URL, lkeTestToken, nil, linode.WithMaxRetries(2))
 
 	err := client.DeleteLKEServiceToken(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected DeleteLKEServiceToken to return transient error")
+	}
 
-	require.Error(t, err, "DeleteLKEServiceToken should return the transient error")
-	assert.Equal(t, int32(1), calls.Load(), "DELETE service token must not be retried")
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("DELETE service token calls = %d, want 1", got)
+	}
 }
