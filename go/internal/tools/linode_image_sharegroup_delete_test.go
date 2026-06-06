@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -149,8 +150,14 @@ func TestLinodeImageShareGroupDeleteToolDryRun(t *testing.T) {
 
 		var methodsSeen []string
 
+		var methodsSeenMu sync.Mutex
+
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeenMu.Lock()
+
 			methodsSeen = append(methodsSeen, r.Method)
+
+			methodsSeenMu.Unlock()
 			shareGroupAssertEqual(t, "/images/sharegroups/1234", r.URL.Path)
 
 			if r.Method == http.MethodGet {
@@ -189,7 +196,13 @@ func TestLinodeImageShareGroupDeleteToolDryRun(t *testing.T) {
 		shareGroupAssertEqual(t, "DELETE", would["method"])
 		shareGroupAssertEqual(t, "/images/sharegroups/1234", would["path"])
 
-		shareGroupAssertEqual(t, []string{http.MethodGet}, methodsSeen,
+		methodsSeenMu.Lock()
+
+		seenMethods := append([]string(nil), methodsSeen...)
+
+		methodsSeenMu.Unlock()
+
+		shareGroupAssertEqual(t, []string{http.MethodGet}, seenMethods,
 			"dry_run must only issue a single GET, never DELETE")
 	})
 
