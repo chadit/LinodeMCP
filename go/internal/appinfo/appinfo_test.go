@@ -3,8 +3,6 @@ package appinfo_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/chadit/LinodeMCP/internal/appinfo"
 )
 
@@ -13,8 +11,19 @@ func TestGet(t *testing.T) {
 
 	info := appinfo.Get()
 
-	assert.Equal(t, appinfo.Version, info.Version)
-	assert.Equal(t, appinfo.APIVersion, info.APIVersion)
-	assert.Equal(t, "unknown", info.BuildDate)
-	assert.NotEmpty(t, info.Platform)
+	if got, want := info.Version, appinfo.Version; got != want {
+		t.Fatalf("Version = %q, want %q", got, want)
+	}
+
+	if got, want := info.APIVersion, appinfo.APIVersion; got != want {
+		t.Fatalf("APIVersion = %q, want %q", got, want)
+	}
+
+	if got, want := info.BuildDate, "unknown"; got != want {
+		t.Fatalf("BuildDate = %q, want %q", got, want)
+	}
+
+	if info.Platform == "" {
+		t.Fatal("Platform is empty")
+	}
 }
