@@ -8,9 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -30,40 +27,38 @@ func TestClientDeleteManagedContactSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteManagedContact(t.Context(), 567)
 
-	require.NoError(t, err, "DeleteManagedContact should succeed on 200 response")
+	requireNoError(t, err, "DeleteManagedContact should succeed on 200 response")
 }
 
 func TestClientDeleteManagedContactAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteManagedContact(t.Context(), 567)
 
-	require.Error(t, err, "DeleteManagedContact should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "DeleteManagedContact should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientDeleteManagedContactNetworkError(t *testing.T) {
@@ -72,11 +67,9 @@ func TestClientDeleteManagedContactNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteManagedContact(t.Context(), 567)
 
-	require.Error(t, err, "DeleteManagedContact should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
-	assert.Equal(t, "DeleteManagedContact", netErr.Operation)
+	requireError(t, err, "DeleteManagedContact should fail when the server is unreachable")
+	netErr := requireNetworkError(t, err, "error should be a NetworkError")
+	checkEqual(t, "DeleteManagedContact", netErr.Operation)
 }
 
 func TestClientDeleteManagedContactDoesNotRetryTransientError(t *testing.T) {
@@ -86,18 +79,18 @@ func TestClientDeleteManagedContactDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	err := client.DeleteManagedContact(t.Context(), 567)
 
-	require.Error(t, err, "DeleteManagedContact should return the transient failure")
-	assert.Equal(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
+	requireError(t, err, "DeleteManagedContact should return the transient failure")
+	checkEqual(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
 }
 
 func TestClientListManagedContactsSuccess(t *testing.T) {
@@ -120,25 +113,25 @@ func TestClientListManagedContactsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(contacts))
+		checkNoError(t, json.NewEncoder(w).Encode(contacts))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListManagedContacts(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListManagedContacts should succeed on 200 response")
-	require.NotNil(t, result)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, managedContactName, result.Data[0].Name)
-	assert.Equal(t, managedContactEmail, result.Data[0].Email)
-	assert.Equal(t, managedContactGroup, *result.Data[0].Group)
-	assert.Equal(t, managedContactPhone, *result.Data[0].Phone.Primary)
+	requireNoError(t, err, "ListManagedContacts should succeed on 200 response")
+	requireNotNil(t, result)
+	requireLenOne(t, result.Data)
+	checkEqual(t, managedContactName, result.Data[0].Name)
+	checkEqual(t, managedContactEmail, result.Data[0].Email)
+	checkEqual(t, managedContactGroup, *result.Data[0].Group)
+	checkEqual(t, managedContactPhone, *result.Data[0].Phone.Primary)
 }
 
 func TestClientListManagedContactsRetriesTransientError(t *testing.T) {
@@ -147,17 +140,17 @@ func TestClientListManagedContactsRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
+		checkEqual(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedContact]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedContact]{
 			Data:    []linode.ManagedContact{{Name: managedContactName}},
 			Page:    1,
 			Pages:   1,
@@ -169,43 +162,41 @@ func TestClientListManagedContactsRetriesTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	result, err := client.ListManagedContacts(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only Managed contacts list should retry transient failures")
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+	requireNoError(t, err, "read-only Managed contacts list should retry transient failures")
+	requireNotNil(t, result)
+	checkEqual(t, int32(2), calls.Load(), "client should retry once")
 }
 
 func TestClientListManagedContactsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListManagedContacts(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListManagedContacts should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "ListManagedContacts should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientCreateManagedContactSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, managedContactAuthHeader, r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, managedContactAuthHeader, r.Header.Get("Authorization"))
 
 		var got linode.CreateManagedContactRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
 
 		if got.Name == nil || got.Email == nil || got.Group == nil || got.Phone == nil || got.Phone.Primary == nil {
 			t.Errorf("request body missing managed contact fields: %#v", got)
@@ -213,13 +204,13 @@ func TestClientCreateManagedContactSuccess(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, managedContactName, *got.Name)
-		assert.Equal(t, managedContactEmail, *got.Email)
-		assert.Equal(t, managedContactGroup, *got.Group)
-		assert.Equal(t, managedContactPhone, *got.Phone.Primary)
+		checkEqual(t, managedContactName, *got.Name)
+		checkEqual(t, managedContactEmail, *got.Email)
+		checkEqual(t, managedContactGroup, *got.Group)
+		checkEqual(t, managedContactPhone, *got.Phone.Primary)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedContact{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedContact{
 			ID:      567,
 			Name:    managedContactName,
 			Email:   managedContactEmail,
@@ -244,12 +235,12 @@ func TestClientCreateManagedContactSuccess(t *testing.T) {
 
 	contact, err := client.CreateManagedContact(t.Context(), req)
 
-	require.NoError(t, err, "CreateManagedContact should succeed on 200 response")
-	require.NotNil(t, contact)
-	assert.Equal(t, 567, contact.ID)
-	assert.Equal(t, managedContactName, contact.Name)
-	assert.Equal(t, managedContactEmail, contact.Email)
-	assert.Equal(t, managedContactUpdated, contact.Updated)
+	requireNoError(t, err, "CreateManagedContact should succeed on 200 response")
+	requireNotNil(t, contact)
+	checkEqual(t, 567, contact.ID)
+	checkEqual(t, managedContactName, contact.Name)
+	checkEqual(t, managedContactEmail, contact.Email)
+	checkEqual(t, managedContactUpdated, contact.Updated)
 }
 
 func TestClientCreateManagedContactNetworkError(t *testing.T) {
@@ -261,21 +252,20 @@ func TestClientCreateManagedContactNetworkError(t *testing.T) {
 
 	_, err := client.CreateManagedContact(t.Context(), &linode.CreateManagedContactRequest{Name: &contactName})
 
-	require.Error(t, err, "CreateManagedContact should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	requireError(t, err, "CreateManagedContact should fail when the server is unreachable")
+	netErr := requireNetworkError(t, err, "error should be a NetworkError")
+	checkEqual(t, "CreateManagedContact", netErr.Operation)
 }
 
 func TestClientCreateManagedContactAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"managed contact could not be created"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -285,11 +275,9 @@ func TestClientCreateManagedContactAPIError(t *testing.T) {
 
 	_, err := client.CreateManagedContact(t.Context(), &linode.CreateManagedContactRequest{Name: &contactName})
 
-	require.Error(t, err, "CreateManagedContact should fail on 400 response")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	requireError(t, err, "CreateManagedContact should fail on 400 response")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 func TestClientCreateManagedContactDoesNotRetry(t *testing.T) {
@@ -300,11 +288,11 @@ func TestClientCreateManagedContactDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedContactsPath, r.URL.Path, "request path should be /managed/contacts")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -314,8 +302,8 @@ func TestClientCreateManagedContactDoesNotRetry(t *testing.T) {
 
 	_, err := client.CreateManagedContact(t.Context(), &linode.CreateManagedContactRequest{Name: &contactName})
 
-	require.Error(t, err, "CreateManagedContact should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "CreateManagedContact must not retry and replay a mutating request")
+	requireError(t, err, "CreateManagedContact should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "CreateManagedContact must not retry and replay a mutating request")
 }
 
 func TestClientUpdateManagedContactSuccess(t *testing.T) {
@@ -333,31 +321,31 @@ func TestClientUpdateManagedContactSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 
 		var got linode.UpdateManagedContactRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
 
-		if assert.NotNil(t, got.Name) {
-			assert.Equal(t, managedContactName, *got.Name)
+		if checkNotNil(t, got.Name) {
+			checkEqual(t, managedContactName, *got.Name)
 		}
 
-		if assert.NotNil(t, got.Email) {
-			assert.Equal(t, managedContactEmail, *got.Email)
+		if checkNotNil(t, got.Email) {
+			checkEqual(t, managedContactEmail, *got.Email)
 		}
 
-		if assert.NotNil(t, got.Group) {
-			assert.Equal(t, managedContactGroup, *got.Group)
+		if checkNotNil(t, got.Group) {
+			checkEqual(t, managedContactGroup, *got.Group)
 		}
 
-		if assert.NotNil(t, got.Phone) && assert.NotNil(t, got.Phone.Primary) {
-			assert.Equal(t, managedContactPhone, *got.Phone.Primary)
+		if checkNotNil(t, got.Phone) && checkNotNil(t, got.Phone.Primary) {
+			checkEqual(t, managedContactPhone, *got.Phone.Primary)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(updatedContact))
+		checkNoError(t, json.NewEncoder(w).Encode(updatedContact))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -369,20 +357,20 @@ func TestClientUpdateManagedContactSuccess(t *testing.T) {
 		Phone: &linode.UpdateManagedContactPhone{Primary: &primaryPhone},
 	})
 
-	require.NoError(t, err, "UpdateManagedContact should succeed on 200 response")
-	require.NotNil(t, result)
-	assert.Equal(t, managedContactName, result.Name)
-	assert.Equal(t, managedContactEmail, result.Email)
+	requireNoError(t, err, "UpdateManagedContact should succeed on 200 response")
+	requireNotNil(t, result)
+	checkEqual(t, managedContactName, result.Name)
+	checkEqual(t, managedContactEmail, result.Email)
 }
 
 func TestClientUpdateManagedContactAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -390,11 +378,9 @@ func TestClientUpdateManagedContactAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{Name: &name})
 
-	require.Error(t, err, "UpdateManagedContact should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "UpdateManagedContact should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientUpdateManagedContactNetworkError(t *testing.T) {
@@ -404,11 +390,9 @@ func TestClientUpdateManagedContactNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{Name: &name})
 
-	require.Error(t, err, "UpdateManagedContact should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
-	assert.Equal(t, "UpdateManagedContact", netErr.Operation)
+	requireError(t, err, "UpdateManagedContact should fail when the server is unreachable")
+	netErr := requireNetworkError(t, err, "error should be a NetworkError")
+	checkEqual(t, "UpdateManagedContact", netErr.Operation)
 }
 
 func TestClientUpdateManagedContactDoesNotRetry(t *testing.T) {
@@ -418,9 +402,9 @@ func TestClientUpdateManagedContactDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		checkEqual(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -428,6 +412,6 @@ func TestClientUpdateManagedContactDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	_, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{Name: &name})
 
-	require.Error(t, err, "mutating Managed contact update should not retry transient failures")
-	assert.Equal(t, int32(1), calls.Load(), "client should call update exactly once")
+	requireError(t, err, "mutating Managed contact update should not retry transient failures")
+	checkEqual(t, int32(1), calls.Load(), "client should call update exactly once")
 }
