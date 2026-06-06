@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -37,25 +35,25 @@ func TestLinodeProfileTokensTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeProfileTokensTool(cfg)
 
-		assert.Equal(t, "linode_profile_tokens", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "profile tokens should be read-only")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_profile_tokens", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		checkEqual(t, profiles.CapRead, capability, "profile tokens should be read-only")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyPage, "schema should expose optional page")
-		assert.Contains(t, props, keyPageSize, "schema should expose optional page_size")
+		expectContainsWithMode(t, false, props, keyPage, "schema should expose optional page")
+		expectContainsWithMode(t, false, props, keyPageSize, "schema should expose optional page_size")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+			checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
+			checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
 				Data: []linode.ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
 				Page: 1, Pages: 1, Results: 1,
 			}))
@@ -74,12 +72,12 @@ func TestLinodeProfileTokensTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2.0, keyPageSize: 25.0}))
 
-		require.NoError(t, err, "handler should not return a Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "success should not be an error result")
+		expectNoError(t, err, "handler should not return a Go error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "success should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, profileTokenLabel, "response should include token label")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, profileTokenLabel, "response should include token label")
 	})
 
 	t.Run("invalid pagination", func(t *testing.T) {
@@ -107,12 +105,12 @@ func TestLinodeProfileTokensTool(t *testing.T) {
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := handler(t.Context(), req)
 
-				require.NoError(t, err, "validation failures are returned as error results")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid pagination should be rejected before client call")
+				expectNoError(t, err, "validation failures are returned as error results")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "invalid pagination should be rejected before client call")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe pagination validation")
+				expectTrue(t, ok, "content should be TextContent")
+				expectContainsWithMode(t, false, textContent.Text, testCase.wantMessage, "response should describe pagination validation")
 			})
 		}
 	})
@@ -123,7 +121,7 @@ func TestLinodeProfileTokensTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		defer srv.Close()
 
@@ -139,12 +137,12 @@ func TestLinodeProfileTokensTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 
-		require.NoError(t, err, "upstream failures are returned as error results")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "upstream API error should be an error result")
+		expectNoError(t, err, "upstream failures are returned as error results")
+		expectNotNil(t, result, "result should not be nil")
+		checkTrueWithMode(t, false, result.IsError, "upstream API error should be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve linode_profile_tokens")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "Failed to retrieve linode_profile_tokens")
 	})
 }
 
@@ -154,21 +152,21 @@ func TestLinodeProfileTokenUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeProfileTokenUpdateTool(cfg)
 
-	assert.Equal(t, "linode_profile_token_update", tool.Name, "tool name should match")
-	assert.Equal(t, profiles.CapAdmin, capability, "profile token update should be admin-capable")
-	require.NotNil(t, handler, "handler should not be nil")
+	checkEqual(t, "linode_profile_token_update", tool.Name, "tool name should match")
+	checkEqual(t, profiles.CapAdmin, capability, "profile token update should be admin-capable")
+	expectNotNil(t, handler, "handler should not be nil")
 
 	props := tool.InputSchema.Properties
 
-	assert.Contains(t, props, profileTokenIDParam, "schema should include token_id")
-	assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	expectContainsWithMode(t, false, props, profileTokenIDParam, "schema should include token_id")
+	expectContainsWithMode(t, false, props, keyConfirm, "schema should include confirm")
 
 	for _, field := range []string{keyExpiry, keyLabel, profileTokenScopesField} {
-		assert.Contains(t, props, field, "schema should include documented body field")
+		expectContainsWithMode(t, false, props, field, "schema should include documented body field")
 	}
 
-	assert.Contains(t, tool.InputSchema.Required, profileTokenIDParam, "token_id must be required")
-	assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+	expectContainsWithMode(t, false, tool.InputSchema.Required, profileTokenIDParam, "token_id must be required")
+	expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "confirm must be required")
 }
 
 func TestLinodeProfileTokenUpdateRequiresConfirm(t *testing.T) {
@@ -206,11 +204,11 @@ func TestLinodeProfileTokenUpdateRequiresConfirm(t *testing.T) {
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-			require.NoError(t, err, "confirm failures are returned as tool errors")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "confirm failure should be an error result")
+			expectNoError(t, err, "confirm failures are returned as tool errors")
+			expectNotNil(t, result, "result should not be nil")
+			checkTrueWithMode(t, false, result.IsError, "confirm failure should be an error result")
 			assertErrorContains(t, result, errConfirmEqualsTrue)
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			checkEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
 		})
 	}
 }
@@ -241,9 +239,9 @@ func TestLinodeProfileTokenUpdateValidation(t *testing.T) {
 			_, _, handler := tools.NewLinodeProfileTokenUpdateTool(&config.Config{})
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
-			require.NoError(t, err, "validation failures are returned as tool errors")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid input should be rejected")
+			expectNoError(t, err, "validation failures are returned as tool errors")
+			expectNotNil(t, result, "result should not be nil")
+			checkTrueWithMode(t, false, result.IsError, "invalid input should be rejected")
 			assertErrorContains(t, result, testCase.want)
 		})
 	}
@@ -253,31 +251,31 @@ func TestLinodeProfileTokenUpdateToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
 			return
 		}
 
-		assert.Equal(t, profileTokenLabel, body[keyLabel])
-		assert.Equal(t, profileTokenUpdatedScopes, body[profileTokenScopesField])
+		checkEqual(t, profileTokenLabel, body[keyLabel])
+		checkEqual(t, profileTokenUpdatedScopes, body[profileTokenScopesField])
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes}))
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(profileTokenUpdateConfig(srv.URL))
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes, keyConfirm: true}))
 
-	require.NoError(t, err, "handler should not return a Go error")
-	require.NotNil(t, result, "result should not be nil")
-	assert.False(t, result.IsError, "success should not be an error result")
+	expectNoError(t, err, "handler should not return a Go error")
+	expectNotNil(t, result, "result should not be nil")
+	checkFalseWithMode(t, false, result.IsError, "success should not be an error result")
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
-	assert.Contains(t, textContent.Text, profileTokenLabel, "response should include token label")
+	expectTrue(t, ok, "content should be TextContent")
+	expectContainsWithMode(t, false, textContent.Text, profileTokenLabel, "response should include token label")
 }
 
 func TestLinodeProfileTokenUpdateToolDryRun(t *testing.T) {
@@ -286,36 +284,36 @@ func TestLinodeProfileTokenUpdateToolDryRun(t *testing.T) {
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(&config.Config{})
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: false, keyDryRun: true}))
 
-	require.NoError(t, err, "dry-run should not return a Go error")
-	require.NotNil(t, result, "result should not be nil")
-	assert.False(t, result.IsError, "dry-run should not require confirm")
+	expectNoError(t, err, "dry-run should not return a Go error")
+	expectNotNil(t, result, "result should not be nil")
+	checkFalseWithMode(t, false, result.IsError, "dry-run should not require confirm")
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
-	assert.Contains(t, textContent.Text, "PUT", "dry-run should show method")
-	assert.Contains(t, textContent.Text, "/profile/tokens/12345", "dry-run should show path")
-	assert.Contains(t, textContent.Text, profileTokenLabel, "dry-run should show body")
-	assert.Contains(t, textContent.Text, "side_effects", "dry-run should surface side effects")
-	assert.Contains(t, textContent.Text, "label is set to", "side effect should describe the label change")
+	expectTrue(t, ok, "content should be TextContent")
+	expectContainsWithMode(t, false, textContent.Text, "PUT", "dry-run should show method")
+	expectContainsWithMode(t, false, textContent.Text, "/profile/tokens/12345", "dry-run should show path")
+	expectContainsWithMode(t, false, textContent.Text, profileTokenLabel, "dry-run should show body")
+	expectContainsWithMode(t, false, textContent.Text, "side_effects", "dry-run should surface side effects")
+	expectContainsWithMode(t, false, textContent.Text, "label is set to", "side effect should describe the label change")
 }
 
 func TestLinodeProfileTokenUpdateAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(profileTokenUpdateConfig(srv.URL))
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: true}))
 
-	require.NoError(t, err, "API failures are returned as tool errors")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.IsError, "upstream API error should be an error result")
+	expectNoError(t, err, "API failures are returned as tool errors")
+	expectNotNil(t, result, "result should not be nil")
+	checkTrueWithMode(t, false, result.IsError, "upstream API error should be an error result")
 	assertErrorContains(t, result, "Failed to update linode_profile_token_update")
 	assertErrorContains(t, result, errForbidden)
 }

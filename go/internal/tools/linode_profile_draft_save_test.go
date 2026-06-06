@@ -3,13 +3,12 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -49,7 +48,7 @@ func writableSaveConfig(t *testing.T) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "config.yml")
-	require.NoError(t, os.WriteFile(path, []byte(minimalConfigYAML), 0o600))
+	expectNoError(t, os.WriteFile(path, []byte(minimalConfigYAML), 0o600))
 
 	return path
 }
@@ -72,10 +71,10 @@ func TestSaveRegistration(t *testing.T) {
 		staticConfigPath("/dev/null"),
 	)
 
-	assert.Equal(t, "linode_profile_draft_save", tool.Name)
-	assert.NotEmpty(t, tool.Description)
-	assert.Equal(t, profiles.CapMeta, capability)
-	assert.NotNil(t, handler)
+	checkEqual(t, "linode_profile_draft_save", tool.Name)
+	expectNotEmpty(t, tool.Description)
+	checkEqual(t, profiles.CapMeta, capability)
+	expectNotNil(t, handler)
 }
 
 // TestSaveCreatesNewProfile is the happy path for a brand-new
@@ -88,7 +87,7 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(saveDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.Description = "saved via test"
 	draft.AllowedTools = []string{toolHello, toolInstanceBoot}
@@ -100,21 +99,22 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 		keyConfirm: true,
 	})
 
-	require.Equal(t, saveDraftName, out[keyName])
-	assert.Equal(t, true, out["is_new"])
+	expectEqual(t, saveDraftName, out[keyName])
+	checkEqual(t, true, out["is_new"])
 	added, _ := out["added_tools"].([]any)
-	assert.ElementsMatch(t, []any{toolHello, toolInstanceBoot}, added)
-	assert.Empty(t, out["removed_tools"])
+	expectStringAnyElementsMatch(t, []string{toolHello, toolInstanceBoot}, added, "save diff must report added tools")
+
+	checkEmpty(t, out["removed_tools"])
 
 	// Disk side-effect: reload config and confirm the new profile
 	// landed with the right contents.
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	stored, ok := reloaded.Profiles[saveDraftName]
-	require.True(t, ok, "saved profile must appear in cfg.Profiles after reload")
-	assert.Equal(t, "saved via test", stored.Description)
-	assert.ElementsMatch(t, []string{toolHello, toolInstanceBoot}, stored.AllowedTools)
+	expectTrue(t, ok, "saved profile must appear in cfg.Profiles after reload")
+	checkEqual(t, "saved via test", stored.Description)
+	expectStringElementsMatch(t, []string{toolHello, toolInstanceBoot}, stored.AllowedTools, "saved profile tools must round-trip")
 }
 
 // TestSaveUpdatesExistingProfile is the round-trip update case. The
@@ -127,7 +127,7 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 
 	// Stage an existing user-defined profile.
 	priorCfg, err := config.Load(path)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	priorCfg.Profiles = map[string]config.UserProfileConfig{
 		saveDraftName: {
@@ -135,11 +135,11 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 			AllowedTools: []string{toolHello},
 		},
 	}
-	require.NoError(t, config.WriteAtomic(path, priorCfg))
+	expectNoError(t, config.WriteAtomic(path, priorCfg))
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(saveDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.Description = "updated"
 	draft.AllowedTools = []string{toolInstanceBoot}
@@ -151,18 +151,18 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 		keyConfirm: true,
 	})
 
-	assert.Equal(t, false, out["is_new"])
+	checkEqual(t, false, out["is_new"])
 	added, _ := out["added_tools"].([]any)
-	assert.Equal(t, []any{toolInstanceBoot}, added)
+	checkEqual(t, []any{toolInstanceBoot}, added)
 
 	removed, _ := out["removed_tools"].([]any)
-	assert.Equal(t, []any{toolHello}, removed)
+	checkEqual(t, []any{toolHello}, removed)
 
 	changes, _ := out["changed_fields"].(map[string]any)
-	require.Contains(t, changes, "description")
+	expectContains(t, changes, "description")
 	descChange, _ := changes["description"].(map[string]any)
-	assert.Equal(t, "prior", descChange["old"])
-	assert.Equal(t, "updated", descChange["new"])
+	checkEqual(t, "prior", descChange["old"])
+	checkEqual(t, "updated", descChange["new"])
 }
 
 // TestSaveRefusesMissingConfirm guards the destructive operation
@@ -173,11 +173,11 @@ func TestSaveRefusesMissingConfirm(t *testing.T) {
 
 	path := writableSaveConfig(t)
 	originalBytes, err := os.ReadFile(path)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	reg := builder.NewRegistry()
 	_, err = reg.Create(saveDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
 
@@ -185,13 +185,14 @@ func TestSaveRefusesMissingConfirm(t *testing.T) {
 	req.Params.Arguments = map[string]any{keyName: saveDraftName}
 
 	_, err = handler(t.Context(), req)
-	require.ErrorIs(t, err, tools.ErrConfirmRequired)
+	if !errors.Is(err, tools.ErrConfirmRequired) {
+		t.Fatalf("expected error %v, got %v", tools.ErrConfirmRequired, err)
+	}
 
 	// File untouched.
 	finalBytes, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, originalBytes, finalBytes,
-		"refused save must not write to disk")
+	expectNoError(t, err)
+	checkEqual(t, originalBytes, finalBytes, "refused save must not write to disk")
 }
 
 // TestSaveRefusesBuiltinName covers the built-in-shadow guard. The
@@ -203,7 +204,7 @@ func TestSaveRefusesBuiltinName(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(profiles.BuiltinComputeAdmin, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
 
@@ -214,7 +215,9 @@ func TestSaveRefusesBuiltinName(t *testing.T) {
 	}
 
 	_, err = handler(t.Context(), req)
-	require.ErrorIs(t, err, tools.ErrSaveBuiltinName)
+	if !errors.Is(err, tools.ErrSaveBuiltinName) {
+		t.Fatalf("expected error %v, got %v", tools.ErrSaveBuiltinName, err)
+	}
 }
 
 // TestSaveRefusesUnknownDraft surfaces builder.ErrDraftNotFound when
@@ -234,7 +237,9 @@ func TestSaveRefusesUnknownDraft(t *testing.T) {
 	}
 
 	_, err := handler(t.Context(), req)
-	require.ErrorIs(t, err, builder.ErrDraftNotFound)
+	if !errors.Is(err, builder.ErrDraftNotFound) {
+		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
+	}
 }
 
 // TestSaveRefusesMissingName covers the validation guard.
@@ -248,7 +253,9 @@ func TestSaveRefusesMissingName(t *testing.T) {
 	req.Params.Arguments = map[string]any{keyConfirm: true}
 
 	_, err := handler(t.Context(), req)
-	require.ErrorIs(t, err, tools.ErrDraftNameMissing)
+	if !errors.Is(err, tools.ErrDraftNameMissing) {
+		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
+	}
 }
 
 // TestSaveRefusesEmptyConfigPath surfaces ErrConfigPathUnknown when
@@ -259,7 +266,7 @@ func TestSaveRefusesEmptyConfigPath(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(saveDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(""))
 
@@ -270,7 +277,9 @@ func TestSaveRefusesEmptyConfigPath(t *testing.T) {
 	}
 
 	_, err = handler(t.Context(), req)
-	require.ErrorIs(t, err, tools.ErrConfigPathUnknown)
+	if !errors.Is(err, tools.ErrConfigPathUnknown) {
+		t.Fatalf("expected error %v, got %v", tools.ErrConfigPathUnknown, err)
+	}
 }
 
 // TestSaveRespectsContextCancellation locks the cancellation
@@ -285,7 +294,9 @@ func TestSaveRespectsContextCancellation(t *testing.T) {
 	cancel()
 
 	_, err := handler(ctx, mcp.CallToolRequest{})
-	require.ErrorIs(t, err, context.Canceled)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, err)
+	}
 }
 
 // TestSaveResultIsValidJSON verifies the response decodes cleanly
@@ -299,7 +310,7 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(saveDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.AllowedTools = []string{toolHello}
 
@@ -312,17 +323,17 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 	}
 
 	result, err := handler(t.Context(), req)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	expectTrue(t, ok)
 
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &payload))
+	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &payload))
 
-	assert.Contains(t, payload, "name")
-	assert.Contains(t, payload, "is_new")
-	assert.Contains(t, payload, "added_tools")
-	assert.Contains(t, payload, "removed_tools")
-	assert.Contains(t, payload, "changed_fields")
+	expectContainsWithMode(t, false, payload, "name")
+	expectContainsWithMode(t, false, payload, "is_new")
+	expectContainsWithMode(t, false, payload, "added_tools")
+	expectContainsWithMode(t, false, payload, "removed_tools")
+	expectContainsWithMode(t, false, payload, "changed_fields")
 }

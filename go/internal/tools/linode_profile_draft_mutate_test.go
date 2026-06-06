@@ -3,11 +3,10 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/profiles/builder"
@@ -54,17 +53,33 @@ func callMutateHandler(
 	req.Params.Arguments = args
 
 	result, err := handler(t.Context(), req)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	expectNoError(t, err)
+	expectNotNil(t, result)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "result content must be TextContent")
+	expectTrue(t, ok, "result content must be TextContent")
 
 	var out map[string]any
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &out))
+	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &out))
 
 	return out
+}
+
+func expectStringAnyElementsMatch(t *testing.T, expected []string, actual []any, msg string) {
+	t.Helper()
+
+	actualStrings := make([]string, len(actual))
+	for index, value := range actual {
+		text, ok := value.(string)
+		if !ok {
+			t.Fatalf("element %d must be a string, got %T", index, value)
+		}
+
+		actualStrings[index] = text
+	}
+
+	expectStringElementsMatch(t, expected, actualStrings, msg)
 }
 
 // TestDraftAddToolsRegistration locks in the CapMeta tag and tool
@@ -80,10 +95,10 @@ func TestDraftAddToolsRegistration(t *testing.T) {
 		staticCatalog(mutateFixtureCatalog()),
 	)
 
-	assert.Equal(t, "linode_profile_draft_add_tools", tool.Name)
-	assert.NotEmpty(t, tool.Description)
-	assert.Equal(t, profiles.CapMeta, capability)
-	assert.NotNil(t, handler)
+	checkEqual(t, "linode_profile_draft_add_tools", tool.Name)
+	expectNotEmpty(t, tool.Description)
+	checkEqual(t, profiles.CapMeta, capability)
+	expectNotNil(t, handler)
 }
 
 // TestDraftAddToolsAddsLiterals exercises the no-wildcard path.
@@ -93,7 +108,7 @@ func TestDraftAddToolsAddsLiterals(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
 		reg,
@@ -105,17 +120,14 @@ func TestDraftAddToolsAddsLiterals(t *testing.T) {
 		keyTools: []any{toolInstanceBoot, toolHello},
 	})
 
-	require.Equal(t, mutateDraftName, out[keyName])
+	expectEqual(t, mutateDraftName, out[keyName])
 	added, ok := out["added"].([]any)
-	require.True(t, ok)
-	assert.ElementsMatch(t, []any{toolHello, toolInstanceBoot}, added)
+	expectTrue(t, ok)
+	expectStringAnyElementsMatch(t, []string{toolHello, toolInstanceBoot}, added, "added tools must match literals")
 
-	draft, _ := reg.Get(mutateDraftName)
-	assert.ElementsMatch(
-		t,
-		[]string{toolHello, toolInstanceBoot},
-		draft.AllowedTools,
-	)
+	draft, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	expectStringElementsMatch(t, []string{toolHello, toolInstanceBoot}, draft.AllowedTools, "draft tools must match added literals")
 }
 
 // TestDraftAddToolsExpandsWildcards verifies the wildcard path.
@@ -126,7 +138,7 @@ func TestDraftAddToolsExpandsWildcards(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
 		reg,
@@ -139,11 +151,7 @@ func TestDraftAddToolsExpandsWildcards(t *testing.T) {
 	})
 
 	added, _ := out["added"].([]any)
-	assert.ElementsMatch(
-		t,
-		[]any{toolInstanceBoot, toolInstanceReboot, "linode_instance_shutdown"},
-		added,
-	)
+	expectStringAnyElementsMatch(t, []string{toolInstanceBoot, toolInstanceReboot, "linode_instance_shutdown"}, added, "wildcard expansion must return exact instance tools")
 }
 
 // TestDraftAddToolsDedupesAgainstExisting confirms the no-duplicate
@@ -154,7 +162,7 @@ func TestDraftAddToolsDedupesAgainstExisting(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
 		reg,
@@ -174,11 +182,11 @@ func TestDraftAddToolsDedupesAgainstExisting(t *testing.T) {
 	})
 
 	added, _ := out["added"].([]any)
-	assert.Empty(t, added, "second add of the same literal must report empty added list")
+	checkEmpty(t, added, "second add of the same literal must report empty added list")
 
-	draft, _ := reg.Get(mutateDraftName)
-	assert.Equal(t, []string{toolHello}, draft.AllowedTools,
-		"draft must contain the literal once, not twice")
+	draft, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	checkEqual(t, []string{toolHello}, draft.AllowedTools, "draft must contain the literal once, not twice")
 }
 
 // TestDraftAddToolsRefusesUnknownDraft surfaces ErrDraftNotFound
@@ -200,7 +208,9 @@ func TestDraftAddToolsRefusesUnknownDraft(t *testing.T) {
 	}
 
 	_, err := handler(t.Context(), req)
-	require.ErrorIs(t, err, builder.ErrDraftNotFound)
+	if !errors.Is(err, builder.ErrDraftNotFound) {
+		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
+	}
 }
 
 // TestDraftAddToolsRefusesMissingName covers the validation guard.
@@ -214,7 +224,9 @@ func TestDraftAddToolsRefusesMissingName(t *testing.T) {
 	)
 
 	_, err := handler(t.Context(), mcp.CallToolRequest{})
-	require.ErrorIs(t, err, tools.ErrDraftNameMissing)
+	if !errors.Is(err, tools.ErrDraftNameMissing) {
+		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
+	}
 }
 
 // TestDraftRemoveToolsRemovesLiterals is the happy path: literal
@@ -224,7 +236,7 @@ func TestDraftRemoveToolsRemovesLiterals(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.AllowedTools = []string{toolInstanceBoot, toolInstanceReboot, toolHello}
 
@@ -236,14 +248,11 @@ func TestDraftRemoveToolsRemovesLiterals(t *testing.T) {
 	})
 
 	removed, _ := out["removed"].([]any)
-	assert.Equal(t, []any{toolHello}, removed)
+	checkEqual(t, []any{toolHello}, removed)
 
-	updated, _ := reg.Get(mutateDraftName)
-	assert.ElementsMatch(
-		t,
-		[]string{toolInstanceBoot, toolInstanceReboot},
-		updated.AllowedTools,
-	)
+	updated, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	expectStringElementsMatch(t, []string{toolInstanceBoot, toolInstanceReboot}, updated.AllowedTools, "remaining draft tools must match literals")
 }
 
 // TestDraftRemoveToolsExpandsWildcardsAgainstDraft confirms that
@@ -255,7 +264,7 @@ func TestDraftRemoveToolsExpandsWildcardsAgainstDraft(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.AllowedTools = []string{toolInstanceBoot, toolInstanceReboot, toolHello}
 
@@ -267,14 +276,11 @@ func TestDraftRemoveToolsExpandsWildcardsAgainstDraft(t *testing.T) {
 	})
 
 	removed, _ := out["removed"].([]any)
-	assert.ElementsMatch(
-		t,
-		[]any{toolInstanceBoot, toolInstanceReboot},
-		removed,
-	)
+	expectStringAnyElementsMatch(t, []string{toolInstanceBoot, toolInstanceReboot}, removed, "wildcard removal must return exact instance tools")
 
-	updated, _ := reg.Get(mutateDraftName)
-	assert.Equal(t, []string{toolHello}, updated.AllowedTools)
+	updated, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	checkEqual(t, []string{toolHello}, updated.AllowedTools)
 }
 
 // TestDraftRemoveToolsNoMatchIsBenign returns an empty removed list
@@ -284,7 +290,7 @@ func TestDraftRemoveToolsNoMatchIsBenign(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.AllowedTools = []string{toolHello}
 
@@ -296,10 +302,11 @@ func TestDraftRemoveToolsNoMatchIsBenign(t *testing.T) {
 	})
 
 	removed, _ := out["removed"].([]any)
-	assert.Empty(t, removed)
+	checkEmpty(t, removed)
 
-	updated, _ := reg.Get(mutateDraftName)
-	assert.Equal(t, []string{toolHello}, updated.AllowedTools)
+	updated, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	checkEqual(t, []string{toolHello}, updated.AllowedTools)
 }
 
 // TestDraftRemoveToolsRefusesUnknownDraft surfaces ErrDraftNotFound.
@@ -316,7 +323,9 @@ func TestDraftRemoveToolsRefusesUnknownDraft(t *testing.T) {
 	}
 
 	_, err := handler(t.Context(), req)
-	require.ErrorIs(t, err, builder.ErrDraftNotFound)
+	if !errors.Is(err, builder.ErrDraftNotFound) {
+		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
+	}
 }
 
 // TestDraftSetRegistersAndIsCapMeta covers the static contract.
@@ -326,10 +335,10 @@ func TestDraftSetRegistersAndIsCapMeta(t *testing.T) {
 	reg := builder.NewRegistry()
 	tool, capability, handler := tools.NewLinodeProfileDraftSetTool(reg)
 
-	assert.Equal(t, "linode_profile_draft_set", tool.Name)
-	assert.NotEmpty(t, tool.Description)
-	assert.Equal(t, profiles.CapMeta, capability)
-	assert.NotNil(t, handler)
+	checkEqual(t, "linode_profile_draft_set", tool.Name)
+	expectNotEmpty(t, tool.Description)
+	checkEqual(t, profiles.CapMeta, capability)
+	expectNotNil(t, handler)
 }
 
 // TestDraftSetEnvironmentsOnly verifies that the handler only
@@ -340,7 +349,7 @@ func TestDraftSetEnvironmentsOnly(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	draft, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	draft.AllowedEnvironments = []string{"old-env"}
 	draft.RequiredTokenScopes = []string{"scope:read"}
@@ -354,17 +363,21 @@ func TestDraftSetEnvironmentsOnly(t *testing.T) {
 	})
 
 	changes, _ := out["changes"].(map[string]any)
-	require.Contains(t, changes, "allowed_environments")
-	assert.NotContains(t, changes, "required_token_scopes",
-		"unspecified fields must not appear in changes")
-	assert.NotContains(t, changes, "allow_yolo")
+	expectContains(t, changes, "allowed_environments")
 
-	updated, _ := reg.Get(mutateDraftName)
-	assert.Equal(t, []string{envProd}, updated.AllowedEnvironments)
-	assert.Equal(t, []string{"scope:read"}, updated.RequiredTokenScopes,
-		"untouched field must keep its prior value")
-	assert.True(t, updated.AllowYolo,
-		"untouched flag must keep its prior value")
+	if contains(changes, "required_token_scopes") {
+		t.Errorf("expected %v not to contain %v%s", changes, "required_token_scopes", expectationMessage([]string{"unspecified fields must not appear in changes"}))
+	}
+
+	if contains(changes, "allow_yolo") {
+		t.Errorf("expected %v not to contain %v%s", changes, "allow_yolo", "")
+	}
+
+	updated, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	checkEqual(t, []string{envProd}, updated.AllowedEnvironments)
+	checkEqual(t, []string{"scope:read"}, updated.RequiredTokenScopes, "untouched field must keep its prior value")
+	checkTrueWithMode(t, false, updated.AllowYolo, "untouched flag must keep its prior value")
 }
 
 // TestDraftSetAllowYoloFlipsCleanly covers the bool field.
@@ -375,7 +388,7 @@ func TestDraftSetAllowYoloFlipsCleanly(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
 
@@ -385,10 +398,11 @@ func TestDraftSetAllowYoloFlipsCleanly(t *testing.T) {
 	})
 
 	changes, _ := out["changes"].(map[string]any)
-	assert.Equal(t, true, changes["allow_yolo"])
+	checkEqual(t, true, changes["allow_yolo"])
 
-	updated, _ := reg.Get(mutateDraftName)
-	assert.True(t, updated.AllowYolo)
+	updated, found := reg.Get(mutateDraftName)
+	expectTrue(t, found)
+	checkTrueWithMode(t, false, updated.AllowYolo)
 }
 
 // TestDraftSetMultipleFieldsAtOnce confirms that a single call can
@@ -398,7 +412,7 @@ func TestDraftSetMultipleFieldsAtOnce(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
 
@@ -410,8 +424,7 @@ func TestDraftSetMultipleFieldsAtOnce(t *testing.T) {
 	})
 
 	changes, _ := out["changes"].(map[string]any)
-	assert.Len(t, changes, 3,
-		"every supplied field must appear in changes")
+	checkLen(t, changes, 3, "every supplied field must appear in changes")
 }
 
 // TestDraftSetEmptyCallNoOps covers the call-with-just-name path.
@@ -421,14 +434,14 @@ func TestDraftSetEmptyCallNoOps(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create(mutateDraftName, nil)
-	require.NoError(t, err)
+	expectNoError(t, err)
 
 	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
 
 	out := callMutateHandler(t, handler, map[string]any{keyName: mutateDraftName})
 
 	changes, _ := out["changes"].(map[string]any)
-	assert.Empty(t, changes)
+	checkEmpty(t, changes)
 }
 
 // TestDraftSetRefusesUnknownDraft surfaces ErrDraftNotFound when any
@@ -446,7 +459,9 @@ func TestDraftSetRefusesUnknownDraft(t *testing.T) {
 	}
 
 	_, err := handler(t.Context(), req)
-	require.ErrorIs(t, err, builder.ErrDraftNotFound)
+	if !errors.Is(err, builder.ErrDraftNotFound) {
+		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
+	}
 }
 
 // TestDraftMutatorsRespectContextCancellation locks the cancellation
@@ -469,7 +484,15 @@ func TestDraftMutatorsRespectContextCancellation(t *testing.T) {
 	_, errRemove := removeHandler(ctx, mcp.CallToolRequest{})
 	_, errSet := setHandler(ctx, mcp.CallToolRequest{})
 
-	require.ErrorIs(t, errAdd, context.Canceled)
-	require.ErrorIs(t, errRemove, context.Canceled)
-	require.ErrorIs(t, errSet, context.Canceled)
+	if !errors.Is(errAdd, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, errAdd)
+	}
+
+	if !errors.Is(errRemove, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, errRemove)
+	}
+
+	if !errors.Is(errSet, context.Canceled) {
+		t.Fatalf("expected error %v, got %v", context.Canceled, errSet)
+	}
 }
