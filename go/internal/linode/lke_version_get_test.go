@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -19,40 +16,80 @@ func TestClientGetLKEVersionSuccess(t *testing.T) {
 	version := linode.LKEVersion{ID: lkeVersion129}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/lke/versions/1.29", r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/lke/versions/1.29" {
+			t.Errorf("request path = %q, want %q", r.URL.Path, "/lke/versions/1.29")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("request query = %q, want empty", r.URL.RawQuery)
+		}
+
+		if got := r.Header.Get("Authorization"); got != lkeAuthHeader {
+			t.Errorf("Authorization header = %q, want %q", got, lkeAuthHeader)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(version))
+
+		if err := json.NewEncoder(w).Encode(version); err != nil {
+			t.Errorf("encoding response failed: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetLKEVersion(t.Context(), lkeVersion129)
+	client := linode.NewClient(srv.URL, lkeTestToken, nil, linode.WithMaxRetries(0))
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, lkeVersion129, result.ID)
+	result, err := client.GetLKEVersion(t.Context(), lkeVersion129)
+	if err != nil {
+		t.Fatalf("GetLKEVersion returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("GetLKEVersion result is nil")
+	}
+
+	if result.ID != lkeVersion129 {
+		t.Fatalf("result ID = %q, want %q", result.ID, lkeVersion129)
+	}
 }
 
 func TestClientGetLKEVersionEscapesPathSegment(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/lke/versions/1.29/edge", r.URL.Path, "request path should include decoded version ID")
-		assert.Equal(t, "/lke/versions/1.29%2Fedge", r.URL.EscapedPath(), "version ID should be one encoded path segment")
+		if r.URL.Path != "/lke/versions/1.29/edge" {
+			t.Errorf("decoded path = %q, want %q", r.URL.Path, "/lke/versions/1.29/edge")
+		}
+
+		if got := r.URL.EscapedPath(); got != "/lke/versions/1.29%2Fedge" {
+			t.Errorf("escaped path = %q, want %q", got, "/lke/versions/1.29%2Fedge")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.LKEVersion{ID: lkeVersionWithSlash}))
+
+		if err := json.NewEncoder(w).Encode(linode.LKEVersion{ID: lkeVersionWithSlash}); err != nil {
+			t.Errorf("encoding response failed: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetLKEVersion(t.Context(), lkeVersionWithSlash)
+	client := linode.NewClient(srv.URL, lkeTestToken, nil, linode.WithMaxRetries(0))
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, lkeVersionWithSlash, result.ID)
+	result, err := client.GetLKEVersion(t.Context(), lkeVersionWithSlash)
+	if err != nil {
+		t.Fatalf("GetLKEVersion returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("GetLKEVersion result is nil")
+	}
+
+	if result.ID != lkeVersionWithSlash {
+		t.Fatalf("result ID = %q, want %q", result.ID, lkeVersionWithSlash)
+	}
 }
 
 func TestClientGetLKEVersionError(t *testing.T) {
@@ -60,17 +97,25 @@ func TestClientGetLKEVersionError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}))
+		}); err != nil {
+			t.Errorf("encoding error response failed: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetLKEVersion(t.Context(), lkeVersion129)
+	client := linode.NewClient(srv.URL, lkeTestToken, nil, linode.WithMaxRetries(0))
 
-	require.Error(t, err)
-	assert.Nil(t, result)
+	result, err := client.GetLKEVersion(t.Context(), lkeVersion129)
+	if err == nil {
+		t.Fatal("expected GetLKEVersion to return error")
+	}
+
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
 }
 
 func TestClientGetLKEVersionRetriesReadOnlyRoute(t *testing.T) {
@@ -82,22 +127,36 @@ func TestClientGetLKEVersionRetriesReadOnlyRoute(t *testing.T) {
 		call := atomic.AddInt32(&calls, 1)
 		if call == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("encoding error response failed: %v", err)
+			}
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.LKEVersion{ID: lkeVersion129}))
+
+		if err := json.NewEncoder(w).Encode(linode.LKEVersion{ID: lkeVersion129}); err != nil {
+			t.Errorf("encoding response failed: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	result, err := client.GetLKEVersion(t.Context(), lkeVersion129)
+	client := linode.NewClient(srv.URL, lkeTestToken, nil, linode.WithMaxRetries(1))
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls, "read-only GET route may retry transient failures")
+	result, err := client.GetLKEVersion(t.Context(), lkeVersion129)
+	if err != nil {
+		t.Fatalf("GetLKEVersion returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("GetLKEVersion result is nil")
+	}
+
+	if calls != 2 {
+		t.Fatalf("read-only GET calls = %d, want 2", calls)
+	}
 }
