@@ -67,7 +67,7 @@ func TestLinodeAuditExportWritesNDJSON(t *testing.T) {
 	checkEqual(t, "ndjson", decoded.Format)
 	checkEqual(t, 2, decoded.RecordCount)
 
-	t.Cleanup(func() { requireNoError(t, os.Remove(decoded.Path), "remove exported audit file") })
+	t.Cleanup(func() { checkNoError(t, os.Remove(decoded.Path), "remove exported audit file") })
 
 	body, err := os.ReadFile(decoded.Path)
 	requireNoError(t, err)

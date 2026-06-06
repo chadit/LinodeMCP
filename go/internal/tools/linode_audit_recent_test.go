@@ -318,7 +318,7 @@ func writeAuditLog(t *testing.T, path string, events []audit.Event) {
 	file, err := os.Create(path) //nolint:gosec // path from test tmp dir
 	requireNoError(t, err, "create %s", path)
 
-	defer func() { requireNoError(t, file.Close(), "close %s", path) }()
+	defer func() { checkNoError(t, file.Close(), "close %s", path) }()
 
 	encoder := json.NewEncoder(file)
 	for i := range events {
