@@ -27,7 +27,7 @@ func TestLinodeLKEClusterCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEClusterCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -42,27 +42,27 @@ func TestLinodeLKEClusterCreateToolDryRun(t *testing.T) {
 			keyNodePools:  lkePoolSnapshot,
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_lke_cluster_create", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_lke_cluster_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/lke/clusters", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, "/lke/clusters", would["path"])
+		expectNil(t, body["current_state"], "create has no existing resource to preview")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-cluster side effect")
+		expectLen(t, sideEffects, 1, "create surfaces the new-cluster side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, labelTestCluster, "side effect should name the new cluster")
+		expectTrue(t, gotString)
+		expectContainsWithMode(t, false, effect, labelTestCluster, "side effect should name the new cluster")
 
 		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns that node-pool billing starts immediately")
+		expectLen(t, warnings, 1, "create warns that node-pool billing starts immediately")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -75,8 +75,8 @@ func TestLinodeLKEClusterCreateToolDryRun(t *testing.T) {
 			keyNodePools:  lkePoolSnapshot,
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		checkTrueWithMode(t, false, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
