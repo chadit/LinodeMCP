@@ -374,16 +374,16 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_config_node_get", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyNodeID, "schema should include node_id")
-		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		assert.Contains(t, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		assert.Contains(t, tool.InputSchema.Required, keyNodeID, "schema should require node_id")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_nodebalancer_config_node_get", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeID, "schema should include node_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeID, "schema should require node_id")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -411,9 +411,9 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -422,12 +422,12 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeBalancerNodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP,
 				keyWeight: 100, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
 			}))
@@ -443,15 +443,15 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "192.0.2.10:80", "response should contain node address")
-		assert.Contains(t, textContent.Text, "web-1", "response should contain node label")
-		assert.Contains(t, textContent.Text, "789", "response should contain node ID")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "192.0.2.10:80", "response should contain node address")
+		expectContainsWithMode(t, false, textContent.Text, "web-1", "response should contain node label")
+		expectContainsWithMode(t, false, textContent.Text, "789", "response should contain node ID")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -460,7 +460,7 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -473,9 +473,9 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to retrieve node 789 for NodeBalancer 123 config 456")
 		assertErrorContains(t, result, errForbidden)
 	})
@@ -493,19 +493,19 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_config_create", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should require write capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyPort, "schema should include port")
-		assert.Contains(t, tool.InputSchema.Properties, keySSLCert, "schema should include ssl_cert")
-		assert.Contains(t, tool.InputSchema.Properties, keySSLKey, "schema should include ssl_key")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		assert.Contains(t, tool.InputSchema.Required, keyPort, "schema should require port")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_nodebalancer_config_create", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapWrite, capability, "tool should require write capability")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPort, "schema should include port")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySSLCert, "schema should include ssl_cert")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySSLKey, "schema should include ssl_key")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyPort, "schema should require port")
+		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	confirmTests := []struct {
@@ -521,9 +521,9 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, "confirm=true")
 		})
 	}
@@ -555,9 +555,9 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -566,27 +566,27 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/nodebalancers/123/configs", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/nodebalancers/123/configs", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			var body map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
 			port, portOK := body[keyPort].(float64)
-			assert.True(t, portOK, "request body port should be numeric")
-			assert.Equal(t, 80, int(port), "request body should include port")
-			assert.Equal(t, protocolHTTP, body[keyProtocol], "request body should include protocol")
-			assert.Equal(t, valueRoundRobin, body[keyAlgorithm], "request body should include algorithm")
-			assert.Equal(t, valueNone, body[keyStickiness], "request body should include stickiness")
-			assert.Equal(t, protocolHTTP, body[keyCheck], "request body should include check")
+			checkTrueWithMode(t, false, portOK, "request body port should be numeric")
+			checkEqual(t, 80, int(port), "request body should include port")
+			checkEqual(t, protocolHTTP, body[keyProtocol], "request body should include protocol")
+			checkEqual(t, valueRoundRobin, body[keyAlgorithm], "request body should include algorithm")
+			checkEqual(t, valueNone, body[keyStickiness], "request body should include stickiness")
+			checkEqual(t, protocolHTTP, body[keyCheck], "request body should include check")
 			checkInterval, ok := body[keyCheckInterval].(float64)
-			assert.True(t, ok, "request body check_interval should be numeric")
-			assert.Equal(t, 10, int(checkInterval), "request body should include check_interval")
-			assert.Equal(t, "/health", body[keyCheckPath], "request body should include check_path")
+			checkTrueWithMode(t, false, ok, "request body check_interval should be numeric")
+			checkEqual(t, 10, int(checkInterval), "request body should include check_interval")
+			checkEqual(t, "/health", body[keyCheckPath], "request body should include check_path")
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -599,15 +599,15 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: "/health", keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "config", "response should contain created config")
-		assert.Contains(t, textContent.Text, "456", "response should contain config ID")
-		assert.Contains(t, textContent.Text, "NodeBalancer 123", "response should include parent NodeBalancer")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "config", "response should contain created config")
+		expectContainsWithMode(t, false, textContent.Text, "456", "response should contain config ID")
+		expectContainsWithMode(t, false, textContent.Text, "NodeBalancer 123", "response should include parent NodeBalancer")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -616,7 +616,7 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -629,9 +629,9 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 
 		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: "/health", keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to create config for NodeBalancer 123")
 		assertErrorContains(t, result, errForbidden)
 	})
