@@ -50,6 +50,7 @@ func checkEqualWithMode(t *testing.T, fatal bool, expected, actual any, msg ...s
 	}
 }
 
+// expectTrue is fatal so guarded type assertions can be used immediately after it returns.
 func expectTrue(t *testing.T, actual bool, msg ...string) {
 	t.Helper()
 	checkTrueWithMode(t, true, actual, msg...)
