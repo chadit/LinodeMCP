@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -33,14 +30,14 @@ func TestClientListProfileTokensSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, int64(0), r.ContentLength, "GET request should not send a body")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
+		checkEqual(t, int64(0), r.ContentLength, "GET request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(tokens))
+		checkNoError(t, json.NewEncoder(w).Encode(tokens), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -48,28 +45,28 @@ func TestClientListProfileTokensSuccess(t *testing.T) {
 
 	result, err := client.ListProfileTokens(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListProfileTokens should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 1, result.Page)
-	assert.Equal(t, 1, result.Pages)
-	assert.Equal(t, 1, result.Results)
-	require.Len(t, result.Data, 1)
-	assert.InEpsilon(t, float64(67890), result.Data[0][keyID], 0.001)
-	assert.Equal(t, profileTokenLabel, result.Data[0][keyLabel])
+	requireNoError(t, err, "ListProfileTokens should succeed on 200 response")
+	requireNotNil(t, result, "result should not be nil")
+	checkEqual(t, 1, result.Page, "values differ")
+	checkEqual(t, 1, result.Pages, "values differ")
+	checkEqual(t, 1, result.Results, "values differ")
+	requireLenOne(t, result.Data)
+	checkEqual(t, float64(67890), result.Data[0][keyID], "values differ")
+	checkEqual(t, profileTokenLabel, result.Data[0][keyLabel], "values differ")
 }
 
 func TestClientListProfileTokensPagination(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
 			Data: []linode.ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
 			Page: 2,
-		}))
+		}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -77,21 +74,21 @@ func TestClientListProfileTokensPagination(t *testing.T) {
 
 	result, err := client.ListProfileTokens(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListProfileTokens should accept pagination")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
+	requireNoError(t, err, "ListProfileTokens should accept pagination")
+	requireNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page, "values differ")
 }
 
 func TestClientListProfileTokensAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -99,11 +96,10 @@ func TestClientListProfileTokensAPIError(t *testing.T) {
 
 	_, err := client.ListProfileTokens(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListProfileTokens should fail on 403 response")
+	requireError(t, err, "ListProfileTokens should fail on 403 response")
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "ListProfileTokens should return APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	apiErr := requireAPIError(t, err, "ListProfileTokens should return APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode, "values differ")
 }
 
 func TestClientListProfileTokensRetriesTransientError(t *testing.T) {
@@ -115,18 +111,18 @@ func TestClientListProfileTokensRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}), "expected no error")
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
 			Data: []linode.ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
-		}))
+		}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -134,31 +130,31 @@ func TestClientListProfileTokensRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListProfileTokens(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListProfileTokens should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	requireNoError(t, err, "ListProfileTokens should succeed after retry")
+	requireNotNil(t, result, "result should not be nil")
+	requireLenOne(t, result.Data)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 func TestClientUpdateProfileTokenSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
 			return
 		}
 
-		assert.Equal(t, profileTokenLabel, body[keyLabel])
-		assert.Equal(t, profileTokenUpdatedScopes, body["scopes"])
+		checkEqual(t, profileTokenLabel, body[keyLabel], "values differ")
+		checkEqual(t, profileTokenUpdatedScopes, body["scopes"], "values differ")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: profileTokenLabel}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: profileTokenLabel}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -166,21 +162,21 @@ func TestClientUpdateProfileTokenSuccess(t *testing.T) {
 
 	result, err := client.UpdateProfileToken(t.Context(), "12345", linode.UpdateProfileTokenRequest{keyLabel: profileTokenLabel, "scopes": profileTokenUpdatedScopes})
 
-	require.NoError(t, err, "UpdateProfileToken should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.InEpsilon(t, float64(12345), (*result)[keyID], 0.001)
-	assert.Equal(t, profileTokenLabel, (*result)[keyLabel])
+	requireNoError(t, err, "UpdateProfileToken should succeed on 200 response")
+	requireNotNil(t, result, "result should not be nil")
+	checkEqual(t, float64(12345), (*result)[keyID], "values differ")
+	checkEqual(t, profileTokenLabel, (*result)[keyLabel], "values differ")
 }
 
 func TestClientUpdateProfileTokenEscapesTokenID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/profile/tokens/12%2F..%2F34%3Fx=1", r.URL.EscapedPath(), "path parameter should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "escaped query marker must stay in path")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/profile/tokens/12%2F..%2F34%3Fx=1", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "escaped query marker must stay in path")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345)}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345)}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -188,7 +184,7 @@ func TestClientUpdateProfileTokenEscapesTokenID(t *testing.T) {
 
 	_, err := client.UpdateProfileToken(t.Context(), "12/../34?x=1", linode.UpdateProfileTokenRequest{keyLabel: profileTokenLabel})
 
-	require.NoError(t, err, "UpdateProfileToken should escape path parameters")
+	requireNoError(t, err, "UpdateProfileToken should escape path parameters")
 }
 
 func TestClientUpdateProfileTokenAPIError(t *testing.T) {
@@ -197,7 +193,7 @@ func TestClientUpdateProfileTokenAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -205,12 +201,11 @@ func TestClientUpdateProfileTokenAPIError(t *testing.T) {
 
 	_, err := client.UpdateProfileToken(t.Context(), "12345", linode.UpdateProfileTokenRequest{keyLabel: profileTokenLabel})
 
-	require.Error(t, err, "non-transient API failure should return an error")
+	requireError(t, err, "non-transient API failure should return an error")
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := requireAPIError(t, err, "expected API error")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode, "values differ")
+	checkEqual(t, errForbidden, apiErr.Message, "values differ")
 }
 
 func TestClientUpdateProfileTokenNoRetryOnTransientFailure(t *testing.T) {
@@ -222,7 +217,7 @@ func TestClientUpdateProfileTokenNoRetryOnTransientFailure(t *testing.T) {
 		requestCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -230,6 +225,6 @@ func TestClientUpdateProfileTokenNoRetryOnTransientFailure(t *testing.T) {
 
 	_, err := client.UpdateProfileToken(t.Context(), "12345", linode.UpdateProfileTokenRequest{keyLabel: profileTokenLabel})
 
-	require.Error(t, err, "transient failure should return an error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating token update must not retry")
+	requireError(t, err, "transient failure should return an error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating token update must not retry")
 }

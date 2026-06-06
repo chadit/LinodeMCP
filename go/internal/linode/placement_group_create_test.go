@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -30,17 +27,17 @@ func TestClientCreatePlacementGroupSuccess(t *testing.T) {
 	created := linode.PlacementGroup{ID: 123, Label: request.Label, Region: request.Region, PlacementGroupType: request.PlacementGroupType, PlacementGroupPolicy: request.PlacementGroupPolicy, IsCompliant: true}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
 
 		var got linode.CreatePlacementGroupRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, request, &got)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "expected no error")
+		checkEqual(t, request, &got, "values differ")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(created))
+		checkNoError(t, json.NewEncoder(w).Encode(created), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -48,10 +45,10 @@ func TestClientCreatePlacementGroupSuccess(t *testing.T) {
 
 	got, err := client.CreatePlacementGroup(t.Context(), request)
 
-	require.NoError(t, err, "CreatePlacementGroup should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, created.ID, got.ID)
-	assert.Equal(t, created.Label, got.Label)
+	requireNoError(t, err, "CreatePlacementGroup should succeed on 200 response")
+	requireNotNil(t, got, "result should not be nil")
+	checkEqual(t, created.ID, got.ID, "values differ")
+	checkEqual(t, created.Label, got.Label, "values differ")
 }
 
 func TestClientCreatePlacementGroupDoesNotRetryTransientError(t *testing.T) {
@@ -61,11 +58,11 @@ func TestClientCreatePlacementGroupDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPlacementGroupCreateError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPlacementGroupCreateError}}}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -73,6 +70,6 @@ func TestClientCreatePlacementGroupDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.CreatePlacementGroup(t.Context(), &linode.CreatePlacementGroupRequest{Label: "pg-test", Region: managedServiceRegion, PlacementGroupType: placementGroupTypeAntiAffinityTest, PlacementGroupPolicy: placementGroupPolicyStrictTest})
 
-	require.Error(t, err, "CreatePlacementGroup should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "placement group creation must not be retried")
+	requireError(t, err, "CreatePlacementGroup should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "placement group creation must not be retried")
 }
