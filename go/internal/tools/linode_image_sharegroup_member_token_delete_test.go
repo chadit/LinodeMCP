@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -150,8 +151,14 @@ func TestLinodeImageShareGroupMemberTokenDeleteToolDryRun(t *testing.T) {
 
 		var pathsSeen []string
 
+		var pathsSeenMu sync.Mutex
+
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			pathsSeenMu.Lock()
+
 			pathsSeen = append(pathsSeen, r.Method+" "+r.URL.Path)
+
+			pathsSeenMu.Unlock()
 			shareGroupAssertEqual(t, "/images/sharegroups/1234", r.URL.Path,
 				"dry_run must GET the parent group, not the member token")
 
@@ -189,7 +196,13 @@ func TestLinodeImageShareGroupMemberTokenDeleteToolDryRun(t *testing.T) {
 		shareGroupAssertEqual(t, "DELETE", would["method"])
 		shareGroupAssertEqual(t, "/images/sharegroups/1234/members/"+shareGroupTokenGetUUID, would["path"])
 
-		shareGroupRequireLen(t, pathsSeen, 1, "dry_run must issue exactly one GET")
+		pathsSeenMu.Lock()
+
+		seenPaths := append([]string(nil), pathsSeen...)
+
+		pathsSeenMu.Unlock()
+
+		shareGroupRequireLen(t, seenPaths, 1, "dry_run must issue exactly one GET")
 	})
 
 	t.Run("still validates token_uuid", func(t *testing.T) {

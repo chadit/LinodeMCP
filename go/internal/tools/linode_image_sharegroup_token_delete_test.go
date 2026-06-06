@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -166,8 +167,14 @@ func TestLinodeImageShareGroupTokenDeleteToolDryRun(t *testing.T) {
 
 		var pathsSeen []string
 
+		var pathsSeenMu sync.Mutex
+
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			pathsSeenMu.Lock()
+
 			pathsSeen = append(pathsSeen, r.Method+" "+r.URL.Path)
+
+			pathsSeenMu.Unlock()
 
 			if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/sharegroup") {
 				w.Header().Set("Content-Type", "application/json")
@@ -205,8 +212,14 @@ func TestLinodeImageShareGroupTokenDeleteToolDryRun(t *testing.T) {
 		shareGroupAssertEqual(t, "DELETE", would["method"])
 		shareGroupAssertEqual(t, "/images/sharegroups/tokens/"+shareGroupTokenGetUUID, would["path"])
 
-		shareGroupRequireLen(t, pathsSeen, 1, "dry_run must issue exactly one GET")
-		shareGroupAssertContains(t, pathsSeen[0], "/sharegroup",
+		pathsSeenMu.Lock()
+
+		seenPaths := append([]string(nil), pathsSeen...)
+
+		pathsSeenMu.Unlock()
+
+		shareGroupRequireLen(t, seenPaths, 1, "dry_run must issue exactly one GET")
+		shareGroupAssertContains(t, seenPaths[0], "/sharegroup",
 			"dry_run must resolve the parent group, not fetch the token secret")
 	})
 
