@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -32,15 +29,15 @@ func TestClientListFirewallTemplatesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallTemplates, r.URL.Path, "request path should match")
-		assert.Equal(t, "2", r.URL.Query().Get("page"), "page query should match")
-		assert.Equal(t, "50", r.URL.Query().Get("page_size"), "page_size query should match")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Empty(t, r.URL.Query()["unexpected"], "request should not include extra query parameters")
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, endpointFirewallTemplates, r.URL.Path, "request path should match")
+		stdCheckEqual(t, "2", r.URL.Query().Get("page"), "page query should match")
+		stdCheckEqual(t, "50", r.URL.Query().Get("page_size"), "page_size query should match")
+		stdCheckEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		stdCheckEmpty(t, r.URL.Query()["unexpected"], "request should not include extra query parameters")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(templates))
+		stdCheckNoError(t, json.NewEncoder(w).Encode(templates))
 	}))
 	defer srv.Close()
 
@@ -48,24 +45,24 @@ func TestClientListFirewallTemplatesSuccess(t *testing.T) {
 
 	result, err := client.ListFirewallTemplates(t.Context(), 2, 50)
 
-	require.NoError(t, err, "ListFirewallTemplates should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1, "result should include one template")
-	assert.Equal(t, purposeVPC, result.Data[0].Slug)
-	assert.Equal(t, policyDrop, result.Data[0].Rules.InboundPolicy)
-	assert.Equal(t, 2, result.Page)
+	stdMustNoError(t, err, "ListFirewallTemplates should succeed on 200 response")
+	stdMustNotNil(t, result, "result should not be nil")
+	stdMustLen(t, result.Data, 1, "result should include one template")
+	stdCheckEqual(t, purposeVPC, result.Data[0].Slug)
+	stdCheckEqual(t, policyDrop, result.Data[0].Rules.InboundPolicy)
+	stdCheckEqual(t, 2, result.Page)
 }
 
 func TestClientListFirewallTemplatesHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallTemplates, r.URL.Path, "request path should match")
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, endpointFirewallTemplates, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		stdCheckNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -73,11 +70,11 @@ func TestClientListFirewallTemplatesHTTPError(t *testing.T) {
 
 	_, err := client.ListFirewallTemplates(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListFirewallTemplates should fail on HTTP error")
+	stdMustError(t, err, "ListFirewallTemplates should fail on HTTP error")
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	apiErr := stdAPIError(t, err, "error should wrap APIError")
+
+	stdCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListFirewallTemplatesRetriesTransientFailure(t *testing.T) {
@@ -89,24 +86,24 @@ func TestClientListFirewallTemplatesRetriesTransientFailure(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			hj, ok := w.(http.Hijacker)
-			if !assert.True(t, ok, "response writer should support hijacking") {
+			if !stdCheckTrue(t, ok, "response writer should support hijacking") {
 				return
 			}
 
 			conn, _, err := hj.Hijack()
-			if !assert.NoError(t, err) {
+			if !stdCheckNoError(t, err) {
 				return
 			}
 
-			assert.NoError(t, conn.Close())
+			stdCheckNoError(t, conn.Close())
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallTemplates, r.URL.Path, "request path should match")
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, endpointFirewallTemplates, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.FirewallTemplate]{
+		stdCheckNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.FirewallTemplate]{
 			Data: []linode.FirewallTemplate{{Slug: purposePublic}},
 		}))
 	}))
@@ -116,11 +113,11 @@ func TestClientListFirewallTemplatesRetriesTransientFailure(t *testing.T) {
 
 	result, err := client.ListFirewallTemplates(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListFirewallTemplates should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1, "result should include one template")
-	assert.Equal(t, purposePublic, result.Data[0].Slug)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+	stdMustNoError(t, err, "ListFirewallTemplates should succeed after retry")
+	stdMustNotNil(t, result, "result should not be nil")
+	stdMustLen(t, result.Data, 1, "result should include one template")
+	stdCheckEqual(t, purposePublic, result.Data[0].Slug)
+	stdCheckEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
 }
 
 func TestClientGetFirewallTemplateSuccess(t *testing.T) {
@@ -140,14 +137,14 @@ func TestClientGetFirewallTemplateSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallTemplates+"/public", r.URL.Path, "request path should match")
-		assert.Equal(t, "1", r.URL.Query().Get("page"), "page query should match")
-		assert.Equal(t, "25", r.URL.Query().Get("page_size"), "page_size query should match")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, endpointFirewallTemplates+"/public", r.URL.Path, "request path should match")
+		stdCheckEqual(t, "1", r.URL.Query().Get("page"), "page query should match")
+		stdCheckEqual(t, "25", r.URL.Query().Get("page_size"), "page_size query should match")
+		stdCheckEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(templates))
+		stdCheckNoError(t, json.NewEncoder(w).Encode(templates))
 	}))
 	defer srv.Close()
 
@@ -155,11 +152,11 @@ func TestClientGetFirewallTemplateSuccess(t *testing.T) {
 
 	result, err := client.GetFirewallTemplate(t.Context(), purposePublic, 1, 25)
 
-	require.NoError(t, err, "GetFirewallTemplate should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1, "result should include one template")
-	assert.Equal(t, purposePublic, result.Data[0].Slug)
-	assert.Equal(t, policyDrop, result.Data[0].Rules.InboundPolicy)
+	stdMustNoError(t, err, "GetFirewallTemplate should succeed on 200 response")
+	stdMustNotNil(t, result, "result should not be nil")
+	stdMustLen(t, result.Data, 1, "result should include one template")
+	stdCheckEqual(t, purposePublic, result.Data[0].Slug)
+	stdCheckEqual(t, policyDrop, result.Data[0].Rules.InboundPolicy)
 }
 
 func TestClientGetFirewallTemplateRejectsInvalidSlug(t *testing.T) {
@@ -183,9 +180,9 @@ func TestClientGetFirewallTemplateRejectsInvalidSlug(t *testing.T) {
 
 			_, err := client.GetFirewallTemplate(t.Context(), slug, 0, 0)
 
-			require.Error(t, err, "GetFirewallTemplate should reject invalid slug")
-			require.ErrorIs(t, err, linode.ErrInvalidFirewallTemplateSlug)
-			assert.False(t, called.Load(), "client should not call API for invalid slug")
+			stdMustError(t, err, "GetFirewallTemplate should reject invalid slug")
+			stdMustErrorIs(t, err, linode.ErrInvalidFirewallTemplateSlug)
+			stdCheckFalse(t, called.Load(), "client should not call API for invalid slug")
 		})
 	}
 }
@@ -194,12 +191,12 @@ func TestClientGetFirewallTemplateHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallTemplates+"/vpc", r.URL.Path, "request path should match")
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, endpointFirewallTemplates+"/vpc", r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
-		assert.NoError(t, writeErr)
+		stdCheckNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -207,11 +204,11 @@ func TestClientGetFirewallTemplateHTTPError(t *testing.T) {
 
 	_, err := client.GetFirewallTemplate(t.Context(), purposeVPC, 0, 0)
 
-	require.Error(t, err, "GetFirewallTemplate should fail on HTTP error")
+	stdMustError(t, err, "GetFirewallTemplate should fail on HTTP error")
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusNotFound, apiErr.StatusCode)
+	apiErr := stdAPIError(t, err, "error should wrap APIError")
+
+	stdCheckEqual(t, http.StatusNotFound, apiErr.StatusCode)
 }
 
 func TestClientGetFirewallTemplateRetriesTransientFailure(t *testing.T) {
@@ -223,24 +220,24 @@ func TestClientGetFirewallTemplateRetriesTransientFailure(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			hj, ok := w.(http.Hijacker)
-			if !assert.True(t, ok, "response writer should support hijacking") {
+			if !stdCheckTrue(t, ok, "response writer should support hijacking") {
 				return
 			}
 
 			conn, _, err := hj.Hijack()
-			if !assert.NoError(t, err) {
+			if !stdCheckNoError(t, err) {
 				return
 			}
 
-			assert.NoError(t, conn.Close())
+			stdCheckNoError(t, conn.Close())
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallTemplates+"/vpc", r.URL.Path, "request path should match")
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, endpointFirewallTemplates+"/vpc", r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.FirewallTemplate]{
+		stdCheckNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.FirewallTemplate]{
 			Data: []linode.FirewallTemplate{{Slug: purposeVPC}},
 		}))
 	}))
@@ -250,9 +247,9 @@ func TestClientGetFirewallTemplateRetriesTransientFailure(t *testing.T) {
 
 	result, err := client.GetFirewallTemplate(t.Context(), purposeVPC, 0, 0)
 
-	require.NoError(t, err, "GetFirewallTemplate should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1, "result should include one template")
-	assert.Equal(t, purposeVPC, result.Data[0].Slug)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+	stdMustNoError(t, err, "GetFirewallTemplate should succeed after retry")
+	stdMustNotNil(t, result, "result should not be nil")
+	stdMustLen(t, result.Data, 1, "result should include one template")
+	stdCheckEqual(t, purposeVPC, result.Data[0].Slug)
+	stdCheckEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
 }
