@@ -3,16 +3,17 @@ package linode_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -79,31 +80,31 @@ func TestClientCreateProfileTokenSuccess(t *testing.T) {
 	profileToken := linode.ProfileToken{keyCreated: "2024-05-01T00:01:01", keyTFAConfirmExpiry: profileTokenExpiryFixture, keyID: float64(321), keyLabel: profileTokenLabelFixture, profileTokenScopesKey: profileTokenScopesFixture, keyToken: profileTokenSecretFixture}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var got linode.CreateProfileTokenRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
-		assert.Equal(t, profileTokenExpiryFixture, got.Expiry)
-		assert.Equal(t, profileTokenLabelFixture, got.Label)
-		assert.Equal(t, profileTokenScopesFixture, got.Scopes)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
+		checkEqual(t, profileTokenExpiryFixture, got.Expiry)
+		checkEqual(t, profileTokenLabelFixture, got.Label)
+		checkEqual(t, profileTokenScopesFixture, got.Scopes)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(profileToken))
+		checkNoError(t, json.NewEncoder(w).Encode(profileToken))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	result, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Expiry: profileTokenExpiryFixture, Label: profileTokenLabelFixture, Scopes: profileTokenScopesFixture})
 
-	require.NoError(t, err, "CreateProfileToken should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.InEpsilon(t, float64(321), (*result)[keyID], 0.001)
-	assert.Equal(t, profileTokenLabelFixture, (*result)[keyLabel])
-	assert.Equal(t, profileTokenScopesFixture, (*result)[profileTokenScopesKey])
-	assert.Equal(t, profileTokenSecretFixture, (*result)[keyToken])
+	mustNoError(t, err, "CreateProfileToken should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkInEpsilon(t, float64(321), (*result)[keyID], 0.001)
+	checkEqual(t, profileTokenLabelFixture, (*result)[keyLabel])
+	checkEqual(t, profileTokenScopesFixture, (*result)[profileTokenScopesKey])
+	checkEqual(t, profileTokenSecretFixture, (*result)[keyToken])
 }
 
 // TestClientCreateProfileTokenAPIError verifies API errors propagate.
@@ -111,25 +112,25 @@ func TestClientCreateProfileTokenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
 
-	require.Error(t, err, "CreateProfileToken should fail on 403 response")
+	mustError(t, err, "CreateProfileToken should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientCreateProfileTokenDoesNotRetryTransientError verifies token
@@ -143,15 +144,15 @@ func TestClientCreateProfileTokenDoesNotRetryTransientError(t *testing.T) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
 
-	require.Error(t, err, "CreateProfileToken should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "personal access token creation must not be retried")
+	mustError(t, err, "CreateProfileToken should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "personal access token creation must not be retried")
 }
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -166,19 +167,19 @@ func TestClientGetProfileSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile", r.URL.Path, "request path should be /profile")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, "/profile", r.URL.Path, "request path should be /profile")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(profile), "encoding profile response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(profile), "encoding profile response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetProfile(t.Context())
 
-	require.NoError(t, err, "GetProfile should succeed on 200 response")
-	assert.Equal(t, "testuser", result.Username, "username should match the API response")
-	assert.Equal(t, "test@example.com", result.Email, "email should match the API response")
+	mustNoError(t, err, "GetProfile should succeed on 200 response")
+	checkEqual(t, "testuser", result.Username, "username should match the API response")
+	checkEqual(t, "test@example.com", result.Email, "email should match the API response")
 }
 
 // TestClientGetProfileWithScopes verifies that a personal access token
@@ -196,15 +197,15 @@ func TestClientGetProfileWithScopes(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(profile))
+		checkNoError(t, json.NewEncoder(w).Encode(profile))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "tok", nil, linode.WithMaxRetries(0))
 	result, err := client.GetProfile(t.Context())
 
-	require.NoError(t, err)
-	assert.Equal(t, "linodes:read_write domains:read_only", result.Scopes,
+	mustNoError(t, err)
+	checkEqual(t, "linodes:read_write domains:read_only", result.Scopes,
 		"PAT scopes from /profile must round-trip into Profile.Scopes")
 }
 
@@ -230,28 +231,28 @@ func TestClientGetProfileGrantsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/grants", r.URL.Path,
+		checkEqual(t, "/profile/grants", r.URL.Path,
 			"request path should be /profile/grants")
-		assert.Equal(t, "Bearer oauth-token", r.Header.Get("Authorization"))
+		checkEqual(t, "Bearer oauth-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "oauth-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetProfileGrants(t.Context())
 
-	require.NoError(t, err, "GetProfileGrants should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, linode.GrantPermission("read_write"), got.Global.AccountAccess,
+	mustNoError(t, err, "GetProfileGrants should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, linode.GrantPermission("read_write"), got.Global.AccountAccess,
 		"global account_access must round-trip")
-	assert.True(t, got.Global.AddLinodes,
+	checkTrue(t, got.Global.AddLinodes,
 		"global add_linodes must round-trip")
-	require.Len(t, got.Linode, 1)
-	assert.Equal(t, "web-1", got.Linode[0].Label)
-	assert.Equal(t, linode.GrantPermission("read_write"), got.Linode[0].Permissions)
-	require.Len(t, got.Domain, 1)
-	assert.Equal(t, linode.GrantPermission("read_only"), got.Domain[0].Permissions)
+	mustLen(t, got.Linode, 1)
+	checkEqual(t, "web-1", got.Linode[0].Label)
+	checkEqual(t, linode.GrantPermission("read_write"), got.Linode[0].Permissions)
+	mustLen(t, got.Domain, 1)
+	checkEqual(t, linode.GrantPermission("read_only"), got.Domain[0].Permissions)
 }
 
 func TestClientGetProfilePreferencesSuccess(t *testing.T) {
@@ -263,42 +264,42 @@ func TestClientGetProfilePreferencesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, int64(0), r.ContentLength, "GET request should not send a body")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, int64(0), r.ContentLength, "GET request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(preferences), "encoding preferences response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(preferences), "encoding preferences response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetProfilePreferences(t.Context())
 
-	require.NoError(t, err, "GetProfilePreferences should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, preferences, *got)
+	mustNoError(t, err, "GetProfilePreferences should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, preferences, *got)
 }
 
 func TestClientGetProfilePreferencesUnauthorized(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
+		checkEqual(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
 		w.WriteHeader(http.StatusUnauthorized)
 		_, err := w.Write([]byte(`{}`))
-		assert.NoError(t, err, "writing error response should not fail")
+		checkNoError(t, err, "writing error response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfilePreferences(t.Context())
 
-	require.Error(t, err, "GetProfilePreferences should fail on 401 response")
+	mustError(t, err, "GetProfilePreferences should fail on 401 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "GetProfilePreferences must return APIError on 401")
-	assert.Equal(t, http.StatusUnauthorized, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "GetProfilePreferences must return APIError on 401")
+	checkEqual(t, http.StatusUnauthorized, apiErr.StatusCode)
 }
 
 // TestClientGetProfileGrantsPATEmpty verifies that a PAT (which doesn't use
@@ -311,17 +312,17 @@ func TestClientGetProfileGrantsPATEmpty(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "pat-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetProfileGrants(t.Context())
 
-	require.NoError(t, err, "empty grants response must parse cleanly")
-	require.NotNil(t, got)
-	assert.Empty(t, got.Linode, "no Linode grants expected on PAT path")
-	assert.Empty(t, got.Global.AccountAccess, "no global permission expected")
+	mustNoError(t, err, "empty grants response must parse cleanly")
+	mustNotNil(t, got)
+	checkEmpty(t, got.Linode, "no Linode grants expected on PAT path")
+	checkEmpty(t, got.Global.AccountAccess, "no global permission expected")
 }
 
 // TestClientGetProfileGrantsUnauthorized confirms 401 propagates as an
@@ -332,7 +333,7 @@ func TestClientGetProfileGrantsUnauthorized(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"errors": []map[string]string{{"reason": "Invalid Token"}},
 		}))
 	}))
@@ -341,12 +342,12 @@ func TestClientGetProfileGrantsUnauthorized(t *testing.T) {
 	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfileGrants(t.Context())
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr,
+	mustErrorAs(t, err, &apiErr,
 		"GetProfileGrants must return APIError on 401")
-	assert.Equal(t, http.StatusUnauthorized, apiErr.StatusCode)
+	checkEqual(t, http.StatusUnauthorized, apiErr.StatusCode)
 }
 
 // TestClientGetProfileUnauthorized verifies that GetProfile returns an
@@ -356,7 +357,7 @@ func TestClientGetProfileUnauthorized(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"errors": []map[string]string{{"reason": "Invalid Token"}},
 		}), "encoding error response should not fail")
 	}))
@@ -365,12 +366,12 @@ func TestClientGetProfileUnauthorized(t *testing.T) {
 	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err, "GetProfile should fail on 401 response")
+	mustError(t, err, "GetProfile should fail on 401 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, 401, apiErr.StatusCode, "status code should be 401 unauthorized")
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, 401, apiErr.StatusCode, "status code should be 401 unauthorized")
 }
 
 func TestClientGetProfileAppSuccess(t *testing.T) {
@@ -379,12 +380,12 @@ func TestClientGetProfileAppSuccess(t *testing.T) {
 	want := linode.ProfileApp{ID: 12345, Label: "Example OAuth App", Scopes: profileAppScopesReadOnly, Website: "https://example.com"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -392,18 +393,18 @@ func TestClientGetProfileAppSuccess(t *testing.T) {
 
 	got, err := client.GetProfileApp(t.Context(), want.ID)
 
-	require.NoError(t, err, "GetProfileApp should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "GetProfileApp should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientGetProfileAppBuildsNumericPath(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/apps/12345", r.URL.EscapedPath(), "request path should include the numeric app id segment")
+		checkEqual(t, "/profile/apps/12345", r.URL.EscapedPath(), "request path should include the numeric app id segment")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345}))
 	}))
 	defer srv.Close()
 
@@ -411,18 +412,18 @@ func TestClientGetProfileAppBuildsNumericPath(t *testing.T) {
 
 	_, err := client.GetProfileApp(t.Context(), 12345)
 
-	require.NoError(t, err, "GetProfileApp should build the numeric app path")
+	mustNoError(t, err, "GetProfileApp should build the numeric app path")
 }
 
 func TestClientGetProfileAppAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -430,12 +431,12 @@ func TestClientGetProfileAppAPIError(t *testing.T) {
 
 	_, err := client.GetProfileApp(t.Context(), 12345)
 
-	require.Error(t, err, "GetProfileApp should fail on 403 response")
+	mustError(t, err, "GetProfileApp should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientGetProfileDeviceSuccess(t *testing.T) {
@@ -444,12 +445,12 @@ func TestClientGetProfileDeviceSuccess(t *testing.T) {
 	want := linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent, keyLastRemoteAddr: profileDeviceRemoteAddr, keyLastAuthenticated: accountUserPasswordCreated}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "method should be GET")
-		assert.Equal(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
-		assert.Empty(t, r.URL.RawQuery, "query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "method should be GET")
+		checkEqual(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
+		checkEmpty(t, r.URL.RawQuery, "query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -457,18 +458,18 @@ func TestClientGetProfileDeviceSuccess(t *testing.T) {
 
 	got, err := client.GetProfileDevice(t.Context(), 12345)
 
-	require.NoError(t, err, "GetProfileDevice should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "GetProfileDevice should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientGetProfileDeviceBuildsNumericPath(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/devices/12345", r.URL.Path, "path should include escaped device id")
+		checkEqual(t, "/profile/devices/12345", r.URL.Path, "path should include escaped device id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345)}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345)}))
 	}))
 	defer srv.Close()
 
@@ -476,18 +477,18 @@ func TestClientGetProfileDeviceBuildsNumericPath(t *testing.T) {
 
 	_, err := client.GetProfileDevice(t.Context(), 12345)
 
-	require.NoError(t, err, "GetProfileDevice should build the numeric device path")
+	mustNoError(t, err, "GetProfileDevice should build the numeric device path")
 }
 
 func TestClientGetProfileDeviceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "method should be GET")
-		assert.Equal(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
+		checkEqual(t, http.MethodGet, r.Method, "method should be GET")
+		checkEqual(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -495,11 +496,14 @@ func TestClientGetProfileDeviceAPIError(t *testing.T) {
 
 	_, err := client.GetProfileDevice(t.Context(), 12345)
 
-	require.Error(t, err, "GetProfileDevice should fail on 403 response")
+	mustError(t, err, "GetProfileDevice should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Contains(t, apiErr.Message, errForbidden)
+	if !errorAsValue(err, &apiErr) {
+		t.Fatalf("error should wrap APIError: %v", err)
+	}
+
+	checkContains(t, apiErr.Message, errForbidden)
 }
 
 func TestClientGetProfileDeviceRetriesTransientError(t *testing.T) {
@@ -511,13 +515,13 @@ func TestClientGetProfileDeviceRetriesTransientError(t *testing.T) {
 		if requestCount.Add(1) == 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent}))
 	}))
 	defer srv.Close()
 
@@ -525,10 +529,10 @@ func TestClientGetProfileDeviceRetriesTransientError(t *testing.T) {
 
 	got, err := client.GetProfileDevice(t.Context(), 12345)
 
-	require.NoError(t, err, "GetProfileDevice should succeed after retry")
-	require.NotNil(t, got, "result should not be nil")
-	assert.InEpsilon(t, float64(12345), (*got)[keyID], 0)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+	mustNoError(t, err, "GetProfileDevice should succeed after retry")
+	mustNotNil(t, got, "result should not be nil")
+	checkInEpsilon(t, float64(12345), (*got)[keyID], 0)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once")
 }
 
 func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
@@ -542,15 +546,15 @@ func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345, Label: "Example OAuth App"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345, Label: "Example OAuth App"}))
 	}))
 	defer srv.Close()
 
@@ -558,10 +562,10 @@ func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
 
 	got, err := client.GetProfileApp(t.Context(), 12345)
 
-	require.NoError(t, err, "GetProfileApp should succeed after retry")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, 12345, got.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
+	mustNoError(t, err, "GetProfileApp should succeed after retry")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, 12345, got.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
 }
 
 func TestClientEnableProfileTFASuccess(t *testing.T) {
@@ -573,29 +577,29 @@ func TestClientEnableProfileTFASuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 
 		body, readErr := io.ReadAll(r.Body)
-		if !assert.NoError(t, readErr, "request body should be readable") {
+		if !checkNoError(t, readErr, "request body should be readable") {
 			return
 		}
 
-		assert.Empty(t, string(body), "request body should be empty")
+		checkEmpty(t, string(body), "request body should be empty")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(response))
+		checkNoError(t, json.NewEncoder(w).Encode(response))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	result, err := client.EnableProfileTFA(t.Context())
 
-	require.NoError(t, err, "EnableProfileTFA should succeed on 200 response")
-	assert.Equal(t, "JBSWY3DPEHPK3PXP", result["secret"], "secret should match the API response")
-	assert.Equal(t, "2026-01-01T00:00:00", result["expiry"], "expiry should match the API response")
+	mustNoError(t, err, "EnableProfileTFA should succeed on 200 response")
+	checkEqual(t, "JBSWY3DPEHPK3PXP", result["secret"], "secret should match the API response")
+	checkEqual(t, "2026-01-01T00:00:00", result["expiry"], "expiry should match the API response")
 }
 
 func TestClientEnableProfileTFANoRetryOnTransientFailure(t *testing.T) {
@@ -605,40 +609,40 @@ func TestClientEnableProfileTFANoRetryOnTransientFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
 	result, err := client.EnableProfileTFA(t.Context())
 
-	require.Error(t, err, "EnableProfileTFA should surface the transient API error")
-	assert.Nil(t, result, "result should be nil on failure")
-	assert.Equal(t, int32(1), calls.Load(), "non-idempotent TFA secret generation must not be retried")
+	mustError(t, err, "EnableProfileTFA should surface the transient API error")
+	checkNil(t, result, "result should be nil on failure")
+	checkEqual(t, int32(1), calls.Load(), "non-idempotent TFA secret generation must not be retried")
 }
 
 func TestClientSendProfilePhoneNumberVerificationCodeSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var body map[string]string
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
 			return
 		}
 
-		assert.Equal(t, profilePhoneISOCode, body["iso_code"])
-		assert.Equal(t, profilePhoneNumber, body["phone_number"])
+		checkEqual(t, profilePhoneISOCode, body["iso_code"])
+		checkEqual(t, profilePhoneNumber, body["phone_number"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -649,7 +653,7 @@ func TestClientSendProfilePhoneNumberVerificationCodeSuccess(t *testing.T) {
 		PhoneNumber: profilePhoneNumber,
 	})
 
-	require.NoError(t, err, "SendProfilePhoneNumberVerificationCode should succeed on 200 response")
+	mustNoError(t, err, "SendProfilePhoneNumberVerificationCode should succeed on 200 response")
 }
 
 func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *testing.T) {
@@ -659,11 +663,11 @@ func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *tes
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 	}))
 	defer srv.Close()
 
@@ -674,20 +678,20 @@ func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *tes
 		PhoneNumber: profilePhoneNumber,
 	})
 
-	require.Error(t, err, "SendProfilePhoneNumberVerificationCode should fail on server error")
-	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
+	mustError(t, err, "SendProfilePhoneNumberVerificationCode should fail on server error")
+	checkEqual(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
 }
 
 func TestClientDeleteProfilePhoneNumberSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -695,7 +699,7 @@ func TestClientDeleteProfilePhoneNumberSuccess(t *testing.T) {
 
 	err := client.DeleteProfilePhoneNumber(t.Context())
 
-	require.NoError(t, err, "DeleteProfilePhoneNumber should succeed on 200 response")
+	mustNoError(t, err, "DeleteProfilePhoneNumber should succeed on 200 response")
 }
 
 func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
@@ -705,11 +709,11 @@ func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 	}))
 	defer srv.Close()
 
@@ -717,28 +721,28 @@ func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	err := client.DeleteProfilePhoneNumber(t.Context())
 
-	require.Error(t, err, "DeleteProfilePhoneNumber should fail on server error")
-	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
+	mustError(t, err, "DeleteProfilePhoneNumber should fail on server error")
+	checkEqual(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
 }
 
 func TestClientVerifyProfilePhoneNumberSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var body map[string]string
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
 			return
 		}
 
-		assert.Equal(t, profilePhoneOTPCode, body["otp_code"])
+		checkEqual(t, profilePhoneOTPCode, body["otp_code"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -746,7 +750,7 @@ func TestClientVerifyProfilePhoneNumberSuccess(t *testing.T) {
 
 	err := client.VerifyProfilePhoneNumber(t.Context(), &linode.ProfilePhoneNumberVerifyRequest{OTPCode: profilePhoneOTPCode})
 
-	require.NoError(t, err, "VerifyProfilePhoneNumber should succeed on 200 response")
+	mustNoError(t, err, "VerifyProfilePhoneNumber should succeed on 200 response")
 }
 
 func TestClientVerifyProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
@@ -756,11 +760,11 @@ func TestClientVerifyProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 	}))
 	defer srv.Close()
 
@@ -768,20 +772,20 @@ func TestClientVerifyProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	err := client.VerifyProfilePhoneNumber(t.Context(), &linode.ProfilePhoneNumberVerifyRequest{OTPCode: profilePhoneOTPCode})
 
-	require.Error(t, err, "VerifyProfilePhoneNumber should fail on server error")
-	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
+	mustError(t, err, "VerifyProfilePhoneNumber should fail on server error")
+	checkEqual(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
 }
 
 func TestClientDeleteProfileAppSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -789,7 +793,7 @@ func TestClientDeleteProfileAppSuccess(t *testing.T) {
 
 	err := client.DeleteProfileApp(t.Context(), 12345)
 
-	require.NoError(t, err, "DeleteProfileApp should succeed on 200 response")
+	mustNoError(t, err, "DeleteProfileApp should succeed on 200 response")
 }
 
 func TestClientDeleteProfileAppAPIErrorDoesNotRetry(t *testing.T) {
@@ -799,11 +803,11 @@ func TestClientDeleteProfileAppAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 	}))
 	defer srv.Close()
 
@@ -811,20 +815,20 @@ func TestClientDeleteProfileAppAPIErrorDoesNotRetry(t *testing.T) {
 
 	err := client.DeleteProfileApp(t.Context(), 12345)
 
-	require.Error(t, err, "DeleteProfileApp should fail on server error")
-	assert.Equal(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
+	mustError(t, err, "DeleteProfileApp should fail on server error")
+	checkEqual(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
 }
 
 func TestClientDeleteProfileDeviceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/profile/devices/67890", r.URL.Path, "request path should include device id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/profile/devices/67890", r.URL.Path, "request path should include device id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -832,7 +836,7 @@ func TestClientDeleteProfileDeviceSuccess(t *testing.T) {
 
 	err := client.DeleteProfileDevice(t.Context(), 67890)
 
-	require.NoError(t, err, "DeleteProfileDevice should succeed on 200 response")
+	mustNoError(t, err, "DeleteProfileDevice should succeed on 200 response")
 }
 
 func TestClientDeleteProfileDeviceAPIErrorDoesNotRetry(t *testing.T) {
@@ -842,11 +846,11 @@ func TestClientDeleteProfileDeviceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/profile/devices/67890", r.URL.Path, "request path should include device id")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/profile/devices/67890", r.URL.Path, "request path should include device id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
 	}))
 	defer srv.Close()
 
@@ -854,8 +858,8 @@ func TestClientDeleteProfileDeviceAPIErrorDoesNotRetry(t *testing.T) {
 
 	err := client.DeleteProfileDevice(t.Context(), 67890)
 
-	require.Error(t, err, "DeleteProfileDevice should fail on server error")
-	assert.Equal(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
+	mustError(t, err, "DeleteProfileDevice should fail on server error")
+	checkEqual(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
 }
 
 func TestClientListAccountMaintenanceSuccess(t *testing.T) {
@@ -875,23 +879,23 @@ func TestClientListAccountMaintenanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(maintenance))
+		checkNoError(t, json.NewEncoder(w).Encode(maintenance))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListAccountMaintenance(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountMaintenance should succeed on 200 response")
-	require.NotNil(t, result)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountMaintenanceLabel, result.Data[0].Entity.Label)
-	assert.Equal(t, "reboot", result.Data[0].Type)
+	mustNoError(t, err, "ListAccountMaintenance should succeed on 200 response")
+	mustNotNil(t, result)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, accountMaintenanceLabel, result.Data[0].Entity.Label)
+	checkEqual(t, "reboot", result.Data[0].Type)
 }
 
 func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
@@ -900,17 +904,17 @@ func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		checkEqual(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountMaintenance]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountMaintenance]{
 			Data:    []linode.AccountMaintenance{{Status: statusPending}},
 			Page:    1,
 			Pages:   1,
@@ -922,30 +926,30 @@ func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	result, err := client.ListAccountMaintenance(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only maintenance list should retry transient failures")
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+	mustNoError(t, err, "read-only maintenance list should retry transient failures")
+	mustNotNil(t, result)
+	checkEqual(t, int32(2), calls.Load(), "client should retry once")
 }
 
 func TestClientListAccountMaintenanceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListAccountMaintenance(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountMaintenance should fail on API errors")
+	mustError(t, err, "ListAccountMaintenance should fail on API errors")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListMaintenancePoliciesSuccess(t *testing.T) {
@@ -966,25 +970,25 @@ func TestClientListMaintenancePoliciesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, http.NoBody, r.Body, "request body should be empty")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, http.NoBody, r.Body, "request body should be empty")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(policies))
+		checkNoError(t, json.NewEncoder(w).Encode(policies))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListMaintenancePolicies(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListMaintenancePolicies should succeed on 200 response")
-	require.NotNil(t, result)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, maintenancePolicySlug, result.Data[0].Slug)
-	assert.Equal(t, maintenancePolicyLabel, result.Data[0].Label)
-	assert.True(t, result.Data[0].IsDefault)
+	mustNoError(t, err, "ListMaintenancePolicies should succeed on 200 response")
+	mustNotNil(t, result)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, maintenancePolicySlug, result.Data[0].Slug)
+	checkEqual(t, maintenancePolicyLabel, result.Data[0].Label)
+	checkTrue(t, result.Data[0].IsDefault)
 }
 
 func TestClientListMaintenancePoliciesRetriesTransientError(t *testing.T) {
@@ -993,17 +997,17 @@ func TestClientListMaintenancePoliciesRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		checkEqual(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.MaintenancePolicy]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.MaintenancePolicy]{
 			Data:    []linode.MaintenancePolicy{{Slug: maintenancePolicySlug}},
 			Page:    1,
 			Pages:   1,
@@ -1015,30 +1019,30 @@ func TestClientListMaintenancePoliciesRetriesTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	result, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only maintenance policies list should retry transient failures")
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+	mustNoError(t, err, "read-only maintenance policies list should retry transient failures")
+	mustNotNil(t, result)
+	checkEqual(t, int32(2), calls.Load(), "client should retry once")
 }
 
 func TestClientListMaintenancePoliciesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListMaintenancePolicies should fail on API errors")
+	mustError(t, err, "ListMaintenancePolicies should fail on API errors")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 // TestClientListInstancesSuccess verifies that ListInstances returns the
@@ -1052,9 +1056,9 @@ func TestClientListInstancesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances", r.URL.Path, "request path should be /linode/instances")
+		checkEqual(t, "/linode/instances", r.URL.Path, "request path should be /linode/instances")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    instances,
 			keyPage:    1,
 			keyPages:   1,
@@ -1066,9 +1070,9 @@ func TestClientListInstancesSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListInstances(t.Context())
 
-	require.NoError(t, err, "ListInstances should succeed on 200 response")
-	assert.Len(t, result, 2, "should return both instances")
-	assert.Equal(t, "web-1", result[0].Label, "first instance label should match")
+	mustNoError(t, err, "ListInstances should succeed on 200 response")
+	checkLen(t, result, 2, "should return both instances")
+	checkEqual(t, "web-1", result[0].Label, "first instance label should match")
 }
 
 // TestClientGetInstanceSuccess verifies that GetInstance returns the correct
@@ -1079,18 +1083,18 @@ func TestClientGetInstanceSuccess(t *testing.T) {
 	instance := linode.Instance{ID: 42, Label: "my-instance", Status: "running"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/42", r.URL.Path, "request path should include the instance ID")
+		checkEqual(t, "/linode/instances/42", r.URL.Path, "request path should include the instance ID")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(instance), "encoding instance response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(instance), "encoding instance response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetInstance(t.Context(), 42)
 
-	require.NoError(t, err, "GetInstance should succeed on 200 response")
-	assert.Equal(t, 42, result.ID, "instance ID should match the request")
-	assert.Equal(t, "my-instance", result.Label, "instance label should match the API response")
+	mustNoError(t, err, "GetInstance should succeed on 200 response")
+	checkEqual(t, 42, result.ID, "instance ID should match the request")
+	checkEqual(t, "my-instance", result.Label, "instance label should match the API response")
 }
 
 // TestClientGetInstanceServerError verifies that GetInstance returns an
@@ -1107,12 +1111,12 @@ func TestClientGetInstanceServerError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetInstance(t.Context(), 1)
 
-	require.Error(t, err, "GetInstance should fail on 500 response")
+	mustError(t, err, "GetInstance should fail on 500 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, 500, apiErr.StatusCode, "status code should be 500 internal server error")
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, 500, apiErr.StatusCode, "status code should be 500 internal server error")
 }
 
 // TestClientListProfileSecurityQuestionsSuccess verifies ListProfileSecurityQuestions sends a GET request to /profile/security-questions.
@@ -1124,12 +1128,12 @@ func TestClientListProfileSecurityQuestionsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(questions), "encoding profile security questions response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(questions), "encoding profile security questions response should not fail")
 	}))
 	defer srv.Close()
 
@@ -1137,14 +1141,14 @@ func TestClientListProfileSecurityQuestionsSuccess(t *testing.T) {
 
 	result, err := client.ListProfileSecurityQuestions(t.Context())
 
-	require.NoError(t, err, "ListProfileSecurityQuestions should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
+	mustNoError(t, err, "ListProfileSecurityQuestions should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
 	items, ok := (*result)["security_questions"].([]any)
-	require.True(t, ok, "security_questions should decode as a JSON array")
-	require.Len(t, items, 1)
+	mustTrue(t, ok, "security_questions should decode as a JSON array")
+	mustLen(t, items, 1)
 	item, ok := items[0].(map[string]any)
-	require.True(t, ok, "security question entry should decode as an object")
-	assert.Equal(t, "What is your favorite color?", item["question"])
+	mustTrue(t, ok, "security question entry should decode as an object")
+	checkEqual(t, "What is your favorite color?", item["question"])
 }
 
 // TestClientListProfileSecurityQuestionsAPIError verifies ListProfileSecurityQuestions propagates API errors.
@@ -1152,10 +1156,10 @@ func TestClientListProfileSecurityQuestionsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+		checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -1163,12 +1167,12 @@ func TestClientListProfileSecurityQuestionsAPIError(t *testing.T) {
 
 	_, err := client.ListProfileSecurityQuestions(t.Context())
 
-	require.Error(t, err, "ListProfileSecurityQuestions should fail on 403 response")
+	mustError(t, err, "ListProfileSecurityQuestions should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListProfileSecurityQuestionsRetriesTransientError verifies the read-only list retries transient failures.
@@ -1178,17 +1182,17 @@ func TestClientListProfileSecurityQuestionsRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+		checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileSecurityQuestions{"security_questions": []map[string]any{{keyID: float64(1)}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileSecurityQuestions{"security_questions": []map[string]any{{keyID: float64(1)}}}))
 	}))
 	defer srv.Close()
 
@@ -1196,9 +1200,9 @@ func TestClientListProfileSecurityQuestionsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListProfileSecurityQuestions(t.Context())
 
-	require.NoError(t, err, "ListProfileSecurityQuestions should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	mustNoError(t, err, "ListProfileSecurityQuestions should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
 }
 
 // TestClientListProfileDevicesSuccess verifies ListProfileDevices sends a GET request to /profile/devices.
@@ -1211,12 +1215,12 @@ func TestClientListProfileDevicesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(devices), "encoding profile devices response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(devices), "encoding profile devices response should not fail")
 	}))
 	defer srv.Close()
 
@@ -1224,12 +1228,12 @@ func TestClientListProfileDevicesSuccess(t *testing.T) {
 
 	result, err := client.ListProfileDevices(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListProfileDevices should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "Mozilla/5.0", result.Data[0]["user_agent"])
-	assert.Equal(t, "192.0.2.1", result.Data[0]["last_remote_addr"])
+	mustNoError(t, err, "ListProfileDevices should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "Mozilla/5.0", result.Data[0]["user_agent"])
+	checkEqual(t, "192.0.2.1", result.Data[0]["last_remote_addr"])
 }
 
 // TestClientListProfileDevicesAPIError verifies ListProfileDevices propagates API errors.
@@ -1237,10 +1241,10 @@ func TestClientListProfileDevicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+		checkEqual(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -1248,12 +1252,12 @@ func TestClientListProfileDevicesAPIError(t *testing.T) {
 
 	_, err := client.ListProfileDevices(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListProfileDevices should fail on 403 response")
+	mustError(t, err, "ListProfileDevices should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListProfileDevicesRetriesTransientError verifies the read-only list retries transient failures.
@@ -1263,17 +1267,17 @@ func TestClientListProfileDevicesRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+		checkEqual(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileDevice]{Data: []linode.ProfileDevice{{keyID: float64(123)}}, Page: 1, Pages: 1, Results: 1}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileDevice]{Data: []linode.ProfileDevice{{keyID: float64(123)}}, Page: 1, Pages: 1, Results: 1}))
 	}))
 	defer srv.Close()
 
@@ -1281,10 +1285,10 @@ func TestClientListProfileDevicesRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListProfileDevices(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListProfileDevices should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	mustNoError(t, err, "ListProfileDevices should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
 }
 
 // TestClientGetProfileNetworkError verifies that GetProfile returns a
@@ -1295,11 +1299,11 @@ func TestClientGetProfileNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err, "GetProfile should fail when server is unreachable")
+	mustError(t, err, "GetProfile should fail when server is unreachable")
 
 	var netErr *linode.NetworkError
 
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
 }
 
 // TestClientHandleResponseRateLimitWithRetryAfter verifies that the client
@@ -1318,14 +1322,14 @@ func TestClientHandleResponseRateLimitWithRetryAfter(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err, "GetProfile should fail on 429 response")
+	mustError(t, err, "GetProfile should fail on 429 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, 429, apiErr.StatusCode, "status code should be 429 too many requests")
-	assert.Contains(t, apiErr.Message, "retry after", "error message should include the retry-after value")
-	assert.Equal(t, 30*time.Second, apiErr.RetryAfter, "RetryAfter field should carry the parsed hint")
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, 429, apiErr.StatusCode, "status code should be 429 too many requests")
+	checkContains(t, apiErr.Message, "retry after", "error message should include the retry-after value")
+	checkEqual(t, 30*time.Second, apiErr.RetryAfter, "RetryAfter field should carry the parsed hint")
 }
 
 // TestClientHandleResponseForbiddenNoBody verifies that the client returns
@@ -1343,12 +1347,12 @@ func TestClientHandleResponseForbiddenNoBody(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err, "GetProfile should fail on 403 response")
+	mustError(t, err, "GetProfile should fail on 403 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, 403, apiErr.StatusCode, "status code should be 403 forbidden")
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, 403, apiErr.StatusCode, "status code should be 403 forbidden")
 }
 
 // TestClientContextCancelled verifies that GetProfile returns an error
@@ -1358,7 +1362,7 @@ func TestClientContextCancelled(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "test"}), "encoding profile response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "test"}), "encoding profile response should not fail")
 	}))
 	defer srv.Close()
 
@@ -1367,7 +1371,7 @@ func TestClientContextCancelled(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfile(ctx)
-	require.Error(t, err, "GetProfile should fail when context is already canceled")
+	mustError(t, err, "GetProfile should fail when context is already canceled")
 }
 
 // TestNewClientConfigOverridesDefaults verifies that NewClient applies
@@ -1399,8 +1403,8 @@ func TestNewClientConfigOverridesDefaults(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", cfg, linode.WithJitter(false))
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err)
-	assert.Equal(t, 6, attempts, "should attempt 1 initial + 5 retries from config")
+	mustError(t, err)
+	checkEqual(t, 6, attempts, "should attempt 1 initial + 5 retries from config")
 }
 
 // TestNewClientOptionsOverrideConfig verifies that caller-supplied options
@@ -1434,8 +1438,8 @@ func TestNewClientOptionsOverrideConfig(t *testing.T) {
 	)
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err)
-	assert.Equal(t, 2, attempts, "should attempt 1 initial + 1 retry from option override")
+	mustError(t, err)
+	checkEqual(t, 2, attempts, "should attempt 1 initial + 1 retry from option override")
 }
 
 // TestNewClientNilConfigUsesDefaults verifies that passing nil config
@@ -1461,8 +1465,8 @@ func TestNewClientNilConfigUsesDefaults(t *testing.T) {
 	)
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err)
-	assert.Equal(t, 4, attempts, "should attempt 1 initial + 3 default retries")
+	mustError(t, err)
+	checkEqual(t, 4, attempts, "should attempt 1 initial + 3 default retries")
 }
 
 // TestClientMalformedJSONResponse verifies that the client returns an error
@@ -1473,18 +1477,18 @@ func TestClientMalformedJSONResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, err := w.Write([]byte(`not json at all`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetProfile(t.Context())
 
-	require.Error(t, err, "GetProfile should fail when response body is not valid JSON")
+	mustError(t, err, "GetProfile should fail when response body is not valid JSON")
 
 	var syntaxErr *json.SyntaxError
 
-	assert.ErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
+	checkErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
 }
 
 // TestClientUpdateProfileSuccess verifies that UpdateProfile sends a PUT
@@ -1501,17 +1505,17 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/profile", r.URL.Path, "request path should be /profile")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/profile", r.URL.Path, "request path should be /profile")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, updateAccountEmail, body["email"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, updateAccountEmail, body["email"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(updatedProfile))
+		checkNoError(t, json.NewEncoder(w).Encode(updatedProfile))
 	}))
 	defer srv.Close()
 
@@ -1522,9 +1526,9 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 		Email: &email,
 	})
 
-	require.NoError(t, err, "UpdateProfile should succeed on 200 response")
-	assert.Equal(t, updateAccountEmail, result.Email)
-	assert.Equal(t, "US/Eastern", result.Timezone)
+	mustNoError(t, err, "UpdateProfile should succeed on 200 response")
+	checkEqual(t, updateAccountEmail, result.Email)
+	checkEqual(t, "US/Eastern", result.Timezone)
 }
 
 // TestClientUpdateProfilePreferencesSuccess verifies that UpdateProfilePreferences
@@ -1533,26 +1537,26 @@ func TestClientUpdateProfilePreferencesSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Empty(t, body, "request body should be an empty JSON object")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEmpty(t, body, "request body should be an empty JSON object")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	result, err := client.UpdateProfilePreferences(t.Context(), nil)
 
-	require.NoError(t, err, "UpdateProfilePreferences should succeed on 200 response")
-	assert.Equal(t, profilePreferenceValueDark, result[profilePreferenceKeyTheme])
+	mustNoError(t, err, "UpdateProfilePreferences should succeed on 200 response")
+	checkEqual(t, profilePreferenceValueDark, result[profilePreferenceKeyTheme])
 }
 
 // TestClientUpdateProfileNetworkError verifies that UpdateProfile returns a
@@ -1564,7 +1568,7 @@ func TestClientUpdateProfilePreferencesAPIError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"field":"theme","reason":"invalid preference"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -1572,12 +1576,12 @@ func TestClientUpdateProfilePreferencesAPIError(t *testing.T) {
 
 	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
 
-	require.Error(t, err, "UpdateProfilePreferences should fail on 400 response")
+	mustError(t, err, "UpdateProfilePreferences should fail on 400 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, 400, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, 400, apiErr.StatusCode)
 }
 
 func TestClientUpdateProfilePreferencesNetworkError(t *testing.T) {
@@ -1587,11 +1591,11 @@ func TestClientUpdateProfilePreferencesNetworkError(t *testing.T) {
 
 	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
 
-	require.Error(t, err, "UpdateProfilePreferences should fail when the server is unreachable")
+	mustError(t, err, "UpdateProfilePreferences should fail when the server is unreachable")
 
 	var netErr *linode.NetworkError
 
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
 }
 
 func TestClientUpdateProfilePreferencesMalformedJSON(t *testing.T) {
@@ -1600,18 +1604,18 @@ func TestClientUpdateProfilePreferencesMalformedJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, err := w.Write([]byte(`not json at all`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
 
-	require.Error(t, err, "UpdateProfilePreferences should fail when response body is not valid JSON")
+	mustError(t, err, "UpdateProfilePreferences should fail when response body is not valid JSON")
 
 	var syntaxErr *json.SyntaxError
 
-	assert.ErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
+	checkErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
 }
 
 func TestClientUpdateProfileNetworkError(t *testing.T) {
@@ -1621,11 +1625,11 @@ func TestClientUpdateProfileNetworkError(t *testing.T) {
 
 	_, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{})
 
-	require.Error(t, err, "UpdateProfile should fail when the server is unreachable")
+	mustError(t, err, "UpdateProfile should fail when the server is unreachable")
 
 	var netErr *linode.NetworkError
 
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
 }
 
 // TestClientUpdateProfileAPIError verifies that UpdateProfile propagates
@@ -1636,7 +1640,7 @@ func TestClientUpdateProfileAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -1644,12 +1648,12 @@ func TestClientUpdateProfileAPIError(t *testing.T) {
 
 	_, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{})
 
-	require.Error(t, err, "UpdateProfile should fail on 400 response")
+	mustError(t, err, "UpdateProfile should fail on 400 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, 400, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, 400, apiErr.StatusCode)
 }
 
 func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
@@ -1660,12 +1664,12 @@ func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/object-storage/buckets/us-east-1", r.URL.Path, "request path should match regional buckets endpoint")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query params")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/object-storage/buckets/us-east-1", r.URL.Path, "request path should match regional buckets endpoint")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query params")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    buckets,
 			keyPage:    1,
 			keyPages:   1,
@@ -1677,19 +1681,19 @@ func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us-east-1")
 
-	require.NoError(t, err, "ListObjectStorageBucketsByRegion should succeed on 200 response")
-	require.Len(t, result, 1, "response should include one bucket")
-	assert.Equal(t, "my-bucket", result[0].Label)
+	mustNoError(t, err, "ListObjectStorageBucketsByRegion should succeed on 200 response")
+	mustLen(t, result, 1, "response should include one bucket")
+	checkEqual(t, "my-bucket", result[0].Label)
 }
 
 func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/object-storage/buckets/us%2Feast%3F1", r.URL.EscapedPath(), "path params should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "path params must not become query params")
+		checkEqual(t, "/object-storage/buckets/us%2Feast%3F1", r.URL.EscapedPath(), "path params should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "path params must not become query params")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.ObjectStorageBucket{},
 			keyPage:    1,
 			keyPages:   1,
@@ -1701,7 +1705,7 @@ func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us/east?1")
 
-	require.NoError(t, err, "escaped path param should round-trip through the client")
+	mustNoError(t, err, "escaped path param should round-trip through the client")
 }
 
 func TestClientListObjectStorageClustersRemoved(t *testing.T) {
@@ -1709,45 +1713,45 @@ func TestClientListObjectStorageClustersRemoved(t *testing.T) {
 
 	_, ok := reflect.TypeFor[*linode.Client]().MethodByName("ListObjectStorageClusters")
 
-	assert.False(t, ok, "deprecated Object Storage clusters route must not be exposed by the Go client")
+	checkFalse(t, ok, "deprecated Object Storage clusters route must not be exposed by the Go client")
 }
 
 func TestClientCancelObjectStorageSuccess(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/object-storage/cancel", r.URL.Path)
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Empty(t, r.URL.RawQuery)
+		checkEqual(t, "/object-storage/cancel", r.URL.Path)
+		checkEqual(t, http.MethodPost, r.Method)
+		checkEmpty(t, r.URL.RawQuery)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(0))
 	err := client.CancelObjectStorage(t.Context())
-	require.NoError(t, err, "CancelObjectStorage should succeed on 200 response")
+	mustNoError(t, err, "CancelObjectStorage should succeed on 200 response")
 }
 
 func TestClientCancelObjectStorageAPIError(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/object-storage/cancel", r.URL.Path)
-		assert.Equal(t, http.MethodPost, r.Method)
+		checkEqual(t, "/object-storage/cancel", r.URL.Path)
+		checkEqual(t, http.MethodPost, r.Method)
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"object storage cannot be canceled"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(0))
 	err := client.CancelObjectStorage(t.Context())
 
-	require.Error(t, err, "CancelObjectStorage should fail on API error")
+	mustError(t, err, "CancelObjectStorage should fail on API error")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 func TestClientCancelObjectStorageDoesNotRetry(t *testing.T) {
@@ -1757,16 +1761,16 @@ func TestClientCancelObjectStorageDoesNotRetry(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, "/object-storage/cancel", r.URL.Path)
-		assert.Equal(t, http.MethodPost, r.Method)
+		checkEqual(t, "/object-storage/cancel", r.URL.Path)
+		checkEqual(t, http.MethodPost, r.Method)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(3))
 	err := client.CancelObjectStorage(t.Context())
-	require.Error(t, err, "CancelObjectStorage should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "CancelObjectStorage must not retry and replay a state-changing request")
+	mustError(t, err, "CancelObjectStorage should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "CancelObjectStorage must not retry and replay a state-changing request")
 }
 
 func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
@@ -1775,15 +1779,15 @@ func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
 	corsEnabled := true
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "public-read", body["acl"])
-		assert.Equal(t, true, body["cors_enabled"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, "public-read", body["acl"])
+		checkEqual(t, true, body["cors_enabled"])
 
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -1795,15 +1799,15 @@ func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
 		CORSEnabled: &corsEnabled,
 	})
 
-	require.NoError(t, err, "AllowObjectStorageBucketAccess should succeed on 200 response")
+	mustNoError(t, err, "AllowObjectStorageBucketAccess should succeed on 200 response")
 }
 
 func TestClientAllowObjectStorageBucketAccessEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/object-storage/buckets/us%2Feast%3F1/..%2Fbucket/access", r.URL.EscapedPath(), "path params should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "path params must not become query params")
+		checkEqual(t, "/object-storage/buckets/us%2Feast%3F1/..%2Fbucket/access", r.URL.EscapedPath(), "path params should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "path params must not become query params")
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -1811,7 +1815,7 @@ func TestClientAllowObjectStorageBucketAccessEscapesPathParams(t *testing.T) {
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	err := client.AllowObjectStorageBucketAccess(t.Context(), "us/east?1", "../bucket", linode.AllowObjectStorageBucketAccessRequest{})
 
-	require.NoError(t, err, "escaped path params should round-trip through the client")
+	mustNoError(t, err, "escaped path params should round-trip through the client")
 }
 
 func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
@@ -1821,19 +1825,19 @@ func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{})
 
-	require.Error(t, err, "AllowObjectStorageBucketAccess should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
+	mustError(t, err, "AllowObjectStorageBucketAccess should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
 }
 
 // TestClientGetAccountTransferSuccess verifies GetAccountTransfer sends a GET
@@ -1854,13 +1858,13 @@ func TestClientGetAccountTransferSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(transfer))
+		checkNoError(t, json.NewEncoder(w).Encode(transfer))
 	}))
 	defer srv.Close()
 
@@ -1868,14 +1872,14 @@ func TestClientGetAccountTransferSuccess(t *testing.T) {
 
 	result, err := client.GetAccountTransfer(t.Context())
 
-	require.NoError(t, err, "GetAccountTransfer should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 10, result.Billable)
-	assert.Equal(t, 4000, result.Quota)
-	assert.Equal(t, 123, result.Used)
-	require.Len(t, result.RegionTransfers, 1)
-	assert.Equal(t, accountTransferRegion, result.RegionTransfers[0].ID)
-	assert.Equal(t, 50, result.RegionTransfers[0].Used)
+	mustNoError(t, err, "GetAccountTransfer should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 10, result.Billable)
+	checkEqual(t, 4000, result.Quota)
+	checkEqual(t, 123, result.Used)
+	mustLen(t, result.RegionTransfers, 1)
+	checkEqual(t, accountTransferRegion, result.RegionTransfers[0].ID)
+	checkEqual(t, 50, result.RegionTransfers[0].Used)
 }
 
 // TestClientGetAccountTransferAPIError verifies GetAccountTransfer propagates
@@ -1884,12 +1888,12 @@ func TestClientGetAccountTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -1897,13 +1901,13 @@ func TestClientGetAccountTransferAPIError(t *testing.T) {
 
 	_, err := client.GetAccountTransfer(t.Context())
 
-	require.Error(t, err, "GetAccountTransfer should fail on 403 response")
+	mustError(t, err, "GetAccountTransfer should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountTransferRetriesTransientError verifies read-only transfer retries.
@@ -1920,10 +1924,10 @@ func TestClientGetAccountTransferRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountTransfer{Used: 123}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountTransfer{Used: 123}))
 	}))
 	defer srv.Close()
 
@@ -1931,10 +1935,10 @@ func TestClientGetAccountTransferRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountTransfer(t.Context())
 
-	require.NoError(t, err, "GetAccountTransfer should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.Used)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountTransfer should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 123, result.Used)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountSettingsSuccess verifies GetAccountSettings sends a GET
@@ -1955,13 +1959,13 @@ func TestClientGetAccountSettingsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		checkNoError(t, json.NewEncoder(w).Encode(settings))
 	}))
 	defer srv.Close()
 
@@ -1969,17 +1973,17 @@ func TestClientGetAccountSettingsSuccess(t *testing.T) {
 
 	result, err := client.GetAccountSettings(t.Context())
 
-	require.NoError(t, err, "GetAccountSettings should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.BackupsEnabled)
-	assert.False(t, result.Managed)
-	assert.True(t, result.NetworkHelper)
-	require.NotNil(t, result.LongviewSubscription)
-	assert.Equal(t, longviewSubscription, *result.LongviewSubscription)
-	require.NotNil(t, result.ObjectStorage)
-	assert.Equal(t, objectStorage, *result.ObjectStorage)
-	assert.Equal(t, "linode_default_but_legacy_config_allowed", result.InterfacesForNewLinodes)
-	assert.Equal(t, maintenancePolicyMigrate, result.MaintenancePolicy)
+	mustNoError(t, err, "GetAccountSettings should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkTrue(t, result.BackupsEnabled)
+	checkFalse(t, result.Managed)
+	checkTrue(t, result.NetworkHelper)
+	mustNotNil(t, result.LongviewSubscription)
+	checkEqual(t, longviewSubscription, *result.LongviewSubscription)
+	mustNotNil(t, result.ObjectStorage)
+	checkEqual(t, objectStorage, *result.ObjectStorage)
+	checkEqual(t, "linode_default_but_legacy_config_allowed", result.InterfacesForNewLinodes)
+	checkEqual(t, maintenancePolicyMigrate, result.MaintenancePolicy)
 }
 
 // TestClientGetAccountSettingsAPIError verifies GetAccountSettings propagates
@@ -1988,12 +1992,12 @@ func TestClientGetAccountSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -2001,13 +2005,13 @@ func TestClientGetAccountSettingsAPIError(t *testing.T) {
 
 	_, err := client.GetAccountSettings(t.Context())
 
-	require.Error(t, err, "GetAccountSettings should fail on 403 response")
+	mustError(t, err, "GetAccountSettings should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountAgreementsSuccess verifies GetAccountAgreements sends a GET
@@ -2023,13 +2027,13 @@ func TestClientGetAccountAgreementsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(agreements))
+		checkNoError(t, json.NewEncoder(w).Encode(agreements))
 	}))
 	defer srv.Close()
 
@@ -2037,12 +2041,12 @@ func TestClientGetAccountAgreementsSuccess(t *testing.T) {
 
 	result, err := client.GetAccountAgreements(t.Context())
 
-	require.NoError(t, err, "GetAccountAgreements should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.BillingAgreement)
-	assert.False(t, result.EUModel)
-	assert.True(t, result.MasterServiceAgreement)
-	assert.True(t, result.PrivacyPolicy)
+	mustNoError(t, err, "GetAccountAgreements should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkTrue(t, result.BillingAgreement)
+	checkFalse(t, result.EUModel)
+	checkTrue(t, result.MasterServiceAgreement)
+	checkTrue(t, result.PrivacyPolicy)
 }
 
 // TestClientGetAccountAgreementsAPIError verifies GetAccountAgreements propagates
@@ -2051,12 +2055,12 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -2064,13 +2068,13 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 
 	_, err := client.GetAccountAgreements(t.Context())
 
-	require.Error(t, err, "GetAccountAgreements should fail on 403 response")
+	mustError(t, err, "GetAccountAgreements should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountNotificationsSuccess verifies ListAccountNotifications sends
@@ -2099,13 +2103,13 @@ func TestClientListAccountNotificationsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(notifications))
+		checkNoError(t, json.NewEncoder(w).Encode(notifications))
 	}))
 	defer srv.Close()
 
@@ -2113,14 +2117,14 @@ func TestClientListAccountNotificationsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountNotifications(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountNotifications should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "Scheduled maintenance", result.Data[0].Label)
-	assert.Equal(t, "major", result.Data[0].Severity)
-	require.NotNil(t, result.Data[0].Entity)
-	assert.Equal(t, "example-linode", result.Data[0].Entity.Label)
+	mustNoError(t, err, "ListAccountNotifications should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "Scheduled maintenance", result.Data[0].Label)
+	checkEqual(t, "major", result.Data[0].Severity)
+	mustNotNil(t, result.Data[0].Entity)
+	checkEqual(t, "example-linode", result.Data[0].Entity.Label)
 }
 
 // TestClientListAccountNotificationsAPIError verifies ListAccountNotifications propagates API errors.
@@ -2128,13 +2132,13 @@ func TestClientListAccountNotificationsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -2142,13 +2146,13 @@ func TestClientListAccountNotificationsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountNotifications(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountNotifications should fail on 403 response")
+	mustError(t, err, "ListAccountNotifications should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountNotificationsRetriesTransientError verifies the read-only notifications lookup retries transient failures.
@@ -2162,15 +2166,15 @@ func TestClientListAccountNotificationsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountNotification]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountNotification]{
 			Data: []linode.AccountNotification{{Label: "Scheduled maintenance"}},
 		}))
 	}))
@@ -2180,9 +2184,9 @@ func TestClientListAccountNotificationsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountNotifications(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountNotifications should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountNotifications should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountAvailabilitySuccess verifies GetAccountAvailability sends
@@ -2197,13 +2201,13 @@ func TestClientGetAccountAvailabilitySuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(availability))
+		checkNoError(t, json.NewEncoder(w).Encode(availability))
 	}))
 	defer srv.Close()
 
@@ -2211,10 +2215,10 @@ func TestClientGetAccountAvailabilitySuccess(t *testing.T) {
 
 	result, err := client.GetAccountAvailability(t.Context(), regionUSEast)
 
-	require.NoError(t, err, "GetAccountAvailability should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, regionUSEast, result.Region)
-	assert.Equal(t, []string{serviceLinodes, serviceNodeBalancers}, result.Available)
+	mustNoError(t, err, "GetAccountAvailability should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, regionUSEast, result.Region)
+	checkEqual(t, []string{serviceLinodes, serviceNodeBalancers}, result.Available)
 }
 
 // TestClientGetAccountAvailabilityEscapesRegion verifies the client encodes path separators.
@@ -2222,10 +2226,10 @@ func TestClientGetAccountAvailabilityEscapesRegion(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/availability/us%2Feast%3Fzone", r.URL.EscapedPath(), "request path should escape region")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/availability/us%2Feast%3Fzone", r.URL.EscapedPath(), "request path should escape region")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: "us/east?zone"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: "us/east?zone"}))
 	}))
 	defer srv.Close()
 
@@ -2233,7 +2237,7 @@ func TestClientGetAccountAvailabilityEscapesRegion(t *testing.T) {
 
 	_, err := client.GetAccountAvailability(t.Context(), "us/east?zone")
 
-	require.NoError(t, err, "GetAccountAvailability should escape path parameters")
+	mustNoError(t, err, "GetAccountAvailability should escape path parameters")
 }
 
 // TestClientGetAccountAvailabilityAPIError verifies GetAccountAvailability propagates API errors.
@@ -2241,12 +2245,12 @@ func TestClientGetAccountAvailabilityAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -2254,13 +2258,13 @@ func TestClientGetAccountAvailabilityAPIError(t *testing.T) {
 
 	_, err := client.GetAccountAvailability(t.Context(), regionUSEast)
 
-	require.Error(t, err, "GetAccountAvailability should fail on 403 response")
+	mustError(t, err, "GetAccountAvailability should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountAvailabilityRetriesTransientError verifies the read-only regional lookup retries transient failures.
@@ -2274,15 +2278,15 @@ func TestClientGetAccountAvailabilityRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: regionUSEast}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: regionUSEast}))
 	}))
 	defer srv.Close()
 
@@ -2290,10 +2294,10 @@ func TestClientGetAccountAvailabilityRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountAvailability(t.Context(), regionUSEast)
 
-	require.NoError(t, err, "GetAccountAvailability should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, regionUSEast, result.Region)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountAvailability should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, regionUSEast, result.Region)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientListAccountAvailabilitySuccess verifies ListAccountAvailability sends
@@ -2313,13 +2317,13 @@ func TestClientListAccountAvailabilitySuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(availability))
+		checkNoError(t, json.NewEncoder(w).Encode(availability))
 	}))
 	defer srv.Close()
 
@@ -2327,12 +2331,12 @@ func TestClientListAccountAvailabilitySuccess(t *testing.T) {
 
 	result, err := client.ListAccountAvailability(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountAvailability should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, regionUSEast, result.Data[0].Region)
-	assert.Equal(t, []string{"Linodes", serviceNodeBalancers}, result.Data[0].Available)
+	mustNoError(t, err, "ListAccountAvailability should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, regionUSEast, result.Data[0].Region)
+	checkEqual(t, []string{"Linodes", serviceNodeBalancers}, result.Data[0].Available)
 }
 
 // TestClientListAccountAvailabilityAPIError verifies ListAccountAvailability propagates API errors.
@@ -2340,13 +2344,13 @@ func TestClientListAccountAvailabilityAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -2354,13 +2358,13 @@ func TestClientListAccountAvailabilityAPIError(t *testing.T) {
 
 	_, err := client.ListAccountAvailability(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountAvailability should fail on 403 response")
+	mustError(t, err, "ListAccountAvailability should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListProfileAppsSuccess verifies ListProfileApps sends a GET
@@ -2376,12 +2380,12 @@ func TestClientListProfileAppsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(apps), "encoding profile apps response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(apps), "encoding profile apps response should not fail")
 	}))
 	defer srv.Close()
 
@@ -2389,15 +2393,15 @@ func TestClientListProfileAppsSuccess(t *testing.T) {
 
 	result, err := client.ListProfileApps(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListProfileApps should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "example-app", result.Data[0].Label)
-	assert.Equal(t, profileAppScopesReadOnly, result.Data[0].Scopes)
-	assert.Equal(t, "example.org", result.Data[0].Website)
-	require.NotNil(t, result.Data[0].ThumbnailURL)
-	assert.Equal(t, thumbnailURL, *result.Data[0].ThumbnailURL)
+	mustNoError(t, err, "ListProfileApps should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "example-app", result.Data[0].Label)
+	checkEqual(t, profileAppScopesReadOnly, result.Data[0].Scopes)
+	checkEqual(t, "example.org", result.Data[0].Website)
+	mustNotNil(t, result.Data[0].ThumbnailURL)
+	checkEqual(t, thumbnailURL, *result.Data[0].ThumbnailURL)
 }
 
 // TestClientListProfileAppsAPIError verifies ListProfileApps propagates API errors.
@@ -2405,10 +2409,10 @@ func TestClientListProfileAppsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+		checkEqual(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -2416,12 +2420,12 @@ func TestClientListProfileAppsAPIError(t *testing.T) {
 
 	_, err := client.ListProfileApps(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListProfileApps should fail on 403 response")
+	mustError(t, err, "ListProfileApps should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListProfileAppsRetriesTransientError verifies the read-only list retries transient failures.
@@ -2431,17 +2435,17 @@ func TestClientListProfileAppsRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+		checkEqual(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AuthorizedApp]{Data: []linode.AuthorizedApp{{ID: 123, Label: "example-app", Scopes: profileAppScopesReadOnly}}, Page: 1, Pages: 1, Results: 1}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AuthorizedApp]{Data: []linode.AuthorizedApp{{ID: 123, Label: "example-app", Scopes: profileAppScopesReadOnly}}, Page: 1, Pages: 1, Results: 1}))
 	}))
 	defer srv.Close()
 
@@ -2449,10 +2453,10 @@ func TestClientListProfileAppsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListProfileApps(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListProfileApps should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	mustNoError(t, err, "ListProfileApps should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
 }
 
 // TestClientListAccountOAuthClientsSuccess verifies ListAccountOAuthClients sends a GET
@@ -2466,12 +2470,12 @@ func TestClientListAccountOAuthClientsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(clients), "encoding oauth clients response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(clients), "encoding oauth clients response should not fail")
 	}))
 	defer srv.Close()
 
@@ -2479,12 +2483,12 @@ func TestClientListAccountOAuthClientsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountOAuthClients(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountOAuthClients should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "example-client", result.Data[0].Label)
-	assert.Equal(t, "https://example.com/oauth/callback", result.Data[0].RedirectURI)
+	mustNoError(t, err, "ListAccountOAuthClients should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "example-client", result.Data[0].Label)
+	checkEqual(t, "https://example.com/oauth/callback", result.Data[0].RedirectURI)
 }
 
 // TestClientListAccountOAuthClientsAPIError verifies ListAccountOAuthClients propagates API errors.
@@ -2492,10 +2496,10 @@ func TestClientListAccountOAuthClientsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -2503,12 +2507,12 @@ func TestClientListAccountOAuthClientsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountOAuthClients(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountOAuthClients should fail on 403 response")
+	mustError(t, err, "ListAccountOAuthClients should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountOAuthClientsRetriesTransientError verifies the read-only list retries transient failures.
@@ -2518,17 +2522,17 @@ func TestClientListAccountOAuthClientsRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.OAuthClient]{Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client"}}, Page: 1, Pages: 1, Results: 1}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.OAuthClient]{Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client"}}, Page: 1, Pages: 1, Results: 1}))
 	}))
 	defer srv.Close()
 
@@ -2536,10 +2540,10 @@ func TestClientListAccountOAuthClientsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountOAuthClients(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountOAuthClients should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	mustNoError(t, err, "ListAccountOAuthClients should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
 }
 
 // TestClientListBetasSuccess verifies ListBetas sends a GET request to /betas with pagination query parameters.
@@ -2564,28 +2568,28 @@ func TestClientListBetasSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/betas", r.URL.Path, "request path should be /betas")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/betas", r.URL.Path, "request path should be /betas")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(betas))
+		checkNoError(t, json.NewEncoder(w).Encode(betas))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListBetas(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListBetas should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "example_open", result.Data[0].ID)
-	assert.Equal(t, "open", result.Data[0].BetaClass)
-	assert.False(t, result.Data[0].GreenlightOnly)
-	assert.Equal(t, "https://example.com/beta", result.Data[0].MoreInfo)
-	assert.Nil(t, result.Data[0].Ended)
+	mustNoError(t, err, "ListBetas should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "example_open", result.Data[0].ID)
+	checkEqual(t, "open", result.Data[0].BetaClass)
+	checkFalse(t, result.Data[0].GreenlightOnly)
+	checkEqual(t, "https://example.com/beta", result.Data[0].MoreInfo)
+	checkNil(t, result.Data[0].Ended)
 }
 
 // TestClientListBetasAPIError verifies ListBetas propagates API errors.
@@ -2593,11 +2597,11 @@ func TestClientListBetasAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/betas", r.URL.Path, "request path should be /betas")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/betas", r.URL.Path, "request path should be /betas")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -2607,12 +2611,12 @@ func TestClientListBetasAPIError(t *testing.T) {
 
 	_, err := client.ListBetas(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListBetas should fail on 403 response")
+	mustError(t, err, "ListBetas should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListBetasRetriesTransientError verifies the read-only list retries transient failures.
@@ -2626,8 +2630,8 @@ func TestClientListBetasRetriesTransientError(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/betas", r.URL.Path, "request path should be /betas")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/betas", r.URL.Path, "request path should be /betas")
 
 		if requestCount.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -2636,7 +2640,7 @@ func TestClientListBetasRetriesTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(betas))
+		checkNoError(t, json.NewEncoder(w).Encode(betas))
 	}))
 	defer srv.Close()
 
@@ -2644,11 +2648,11 @@ func TestClientListBetasRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListBetas(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListBetas should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "example_open", result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only list should retry one transient failure")
+	mustNoError(t, err, "ListBetas should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "example_open", result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only list should retry one transient failure")
 }
 
 // TestClientGetBetaSuccess verifies GetBeta sends a GET request to
@@ -2669,13 +2673,13 @@ func TestClientGetBetaSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(beta))
+		checkNoError(t, json.NewEncoder(w).Encode(beta))
 	}))
 	defer srv.Close()
 
@@ -2683,14 +2687,14 @@ func TestClientGetBetaSuccess(t *testing.T) {
 
 	result, err := client.GetBeta(t.Context(), betaExampleOpen)
 
-	require.NoError(t, err, "GetBeta should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, betaExampleOpen, result.ID)
-	assert.Equal(t, labelExampleOpenBeta, result.Label)
-	require.NotNil(t, result.Description)
-	assert.Equal(t, description, *result.Description)
-	assert.Equal(t, "open", result.BetaClass)
-	assert.False(t, result.GreenlightOnly)
+	mustNoError(t, err, "GetBeta should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, betaExampleOpen, result.ID)
+	checkEqual(t, labelExampleOpenBeta, result.Label)
+	mustNotNil(t, result.Description)
+	checkEqual(t, description, *result.Description)
+	checkEqual(t, "open", result.BetaClass)
+	checkFalse(t, result.GreenlightOnly)
 }
 
 // TestClientGetBetaEscapesID verifies the client encodes path separators.
@@ -2698,9 +2702,9 @@ func TestClientGetBetaEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
+		checkEqual(t, "/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.BetaProgram{ID: "example/open?query"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.BetaProgram{ID: "example/open?query"}))
 	}))
 	defer srv.Close()
 
@@ -2708,7 +2712,7 @@ func TestClientGetBetaEscapesID(t *testing.T) {
 
 	_, err := client.GetBeta(t.Context(), "example/open?query")
 
-	require.NoError(t, err, "GetBeta should escape path parameters")
+	mustNoError(t, err, "GetBeta should escape path parameters")
 }
 
 // TestClientGetBetaAPIError verifies GetBeta propagates API errors.
@@ -2716,11 +2720,11 @@ func TestClientGetBetaAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -2730,13 +2734,13 @@ func TestClientGetBetaAPIError(t *testing.T) {
 
 	_, err := client.GetBeta(t.Context(), betaExampleOpen)
 
-	require.Error(t, err, "GetBeta should fail on 403 response")
+	mustError(t, err, "GetBeta should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetBetaRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -2750,15 +2754,15 @@ func TestClientGetBetaRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.BetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.BetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
 	}))
 	defer srv.Close()
 
@@ -2766,10 +2770,10 @@ func TestClientGetBetaRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetBeta(t.Context(), betaExampleOpen)
 
-	require.NoError(t, err, "GetBeta should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, betaExampleOpen, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
+	mustNoError(t, err, "GetBeta should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, betaExampleOpen, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
 }
 
 // TestClientListAccountBetasSuccess verifies ListAccountBetas sends a GET
@@ -2793,13 +2797,13 @@ func TestClientListAccountBetasSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(betas))
+		checkNoError(t, json.NewEncoder(w).Encode(betas))
 	}))
 	defer srv.Close()
 
@@ -2807,15 +2811,15 @@ func TestClientListAccountBetasSuccess(t *testing.T) {
 
 	result, err := client.ListAccountBetas(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountBetas should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, betaExampleOpen, result.Data[0].ID)
-	assert.Equal(t, labelExampleOpenBeta, result.Data[0].Label)
-	require.NotNil(t, result.Data[0].Description)
-	assert.Equal(t, description, *result.Data[0].Description)
-	assert.Nil(t, result.Data[0].Ended)
+	mustNoError(t, err, "ListAccountBetas should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, betaExampleOpen, result.Data[0].ID)
+	checkEqual(t, labelExampleOpenBeta, result.Data[0].Label)
+	mustNotNil(t, result.Data[0].Description)
+	checkEqual(t, description, *result.Data[0].Description)
+	checkNil(t, result.Data[0].Ended)
 }
 
 // TestClientListAccountBetasAPIError verifies ListAccountBetas propagates API errors.
@@ -2823,13 +2827,13 @@ func TestClientListAccountBetasAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -2837,13 +2841,13 @@ func TestClientListAccountBetasAPIError(t *testing.T) {
 
 	_, err := client.ListAccountBetas(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountBetas should fail on 403 response")
+	mustError(t, err, "ListAccountBetas should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountBetasRetriesTransientError verifies the read-only list retries transient failures.
@@ -2857,15 +2861,15 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountBetaProgram]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountBetaProgram]{
 			Data: []linode.AccountBetaProgram{{ID: betaExampleOpen, Label: labelExampleOpenBeta}},
 		}))
 	}))
@@ -2875,11 +2879,11 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountBetas(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountBetas should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, betaExampleOpen, result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountBetas should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, betaExampleOpen, result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountOAuthClientSuccess verifies GetAccountOAuthClient sends the exact GET request.
@@ -2889,12 +2893,12 @@ func TestClientGetAccountOAuthClientSuccess(t *testing.T) {
 	want := linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyStatus: oauthClientStatus, keyThumbnailURL: oauthClientThumbnailURL, "secret": "server-secret",
 		}))
 	}))
@@ -2904,18 +2908,18 @@ func TestClientGetAccountOAuthClientSuccess(t *testing.T) {
 
 	got, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
 
-	require.NoError(t, err, "GetAccountOAuthClient should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "GetAccountOAuthClient should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientGetAccountOAuthClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
 	}))
 	defer srv.Close()
 
@@ -2923,18 +2927,18 @@ func TestClientGetAccountOAuthClientEscapesClientID(t *testing.T) {
 
 	_, err := client.GetAccountOAuthClient(t.Context(), oauthClientIDWithSeparators)
 
-	require.NoError(t, err, "GetAccountOAuthClient should escape path parameters")
+	mustNoError(t, err, "GetAccountOAuthClient should escape path parameters")
 }
 
 func TestClientGetAccountOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -2942,12 +2946,12 @@ func TestClientGetAccountOAuthClientAPIError(t *testing.T) {
 
 	_, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
 
-	require.Error(t, err, "GetAccountOAuthClient should fail on 403 response")
+	mustError(t, err, "GetAccountOAuthClient should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Contains(t, apiErr.Message, errForbidden)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkContains(t, apiErr.Message, errForbidden)
 }
 
 func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
@@ -2964,7 +2968,7 @@ func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel}))
 	}))
 	defer srv.Close()
 
@@ -2972,10 +2976,10 @@ func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
 
 	got, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
 
-	require.NoError(t, err, "GetAccountOAuthClient should succeed after retry")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, oauthClientID, got.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+	mustNoError(t, err, "GetAccountOAuthClient should succeed after retry")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, oauthClientID, got.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once")
 }
 
 func TestClientUpdateOAuthClientSuccess(t *testing.T) {
@@ -2985,29 +2989,29 @@ func TestClientUpdateOAuthClientSuccess(t *testing.T) {
 	want := linode.OAuthClient{ID: oauthClientID, Label: "updated app", Public: public, RedirectURI: "https://example.com/new-callback", Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var got linode.UpdateOAuthClientRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
 
-		if assert.NotNil(t, got.Label) {
-			assert.Equal(t, want.Label, *got.Label)
+		if checkNotNil(t, got.Label) {
+			checkEqual(t, want.Label, *got.Label)
 		}
 
-		if assert.NotNil(t, got.RedirectURI) {
-			assert.Equal(t, want.RedirectURI, *got.RedirectURI)
+		if checkNotNil(t, got.RedirectURI) {
+			checkEqual(t, want.RedirectURI, *got.RedirectURI)
 		}
 
-		if assert.NotNil(t, got.Public) {
-			assert.Equal(t, public, *got.Public)
+		if checkNotNil(t, got.Public) {
+			checkEqual(t, public, *got.Public)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -3016,18 +3020,18 @@ func TestClientUpdateOAuthClientSuccess(t *testing.T) {
 
 	got, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
 
-	require.NoError(t, err, "UpdateOAuthClient should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "UpdateOAuthClient should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
 	}))
 	defer srv.Close()
 
@@ -3037,18 +3041,18 @@ func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
 
 	_, err := client.UpdateOAuthClient(t.Context(), oauthClientIDWithSeparators, req)
 
-	require.NoError(t, err, "UpdateOAuthClient should escape path parameters")
+	mustNoError(t, err, "UpdateOAuthClient should escape path parameters")
 }
 
 func TestClientUpdateOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -3058,11 +3062,11 @@ func TestClientUpdateOAuthClientAPIError(t *testing.T) {
 
 	_, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
 
-	require.Error(t, err, "UpdateOAuthClient should fail on 403 response")
+	mustError(t, err, "UpdateOAuthClient should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientUpdateOAuthClientDoesNotRetryTransientError(t *testing.T) {
@@ -3082,8 +3086,8 @@ func TestClientUpdateOAuthClientDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
 
-	require.Error(t, err, "UpdateOAuthClient should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client update must not be retried")
+	mustError(t, err, "UpdateOAuthClient should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating OAuth client update must not be retried")
 }
 
 func TestClientCreateOAuthClientSuccess(t *testing.T) {
@@ -3092,19 +3096,19 @@ func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	want := linode.CreatedOAuthClient{ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should match")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var got linode.CreateOAuthClientRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, oauthClientLabel, got.Label)
-		assert.Equal(t, oauthClientRedirectURI, got.RedirectURI)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
+		checkEqual(t, oauthClientLabel, got.Label)
+		checkEqual(t, oauthClientRedirectURI, got.RedirectURI)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -3113,9 +3117,9 @@ func TestClientCreateOAuthClientSuccess(t *testing.T) {
 
 	got, err := client.CreateOAuthClient(t.Context(), req)
 
-	require.NoError(t, err, "CreateOAuthClient should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "CreateOAuthClient should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
@@ -3124,18 +3128,18 @@ func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
 	thumbnailPNG := []byte("png-bytes")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "image/png", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "image/png", r.Header.Get("Content-Type"))
 
 		got, err := io.ReadAll(r.Body)
-		assert.NoError(t, err, "reading thumbnail body should not fail")
-		assert.Equal(t, thumbnailPNG, got, "thumbnail update should send the PNG bytes")
+		checkNoError(t, err, "reading thumbnail body should not fail")
+		checkEqual(t, thumbnailPNG, got, "thumbnail update should send the PNG bytes")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -3143,16 +3147,16 @@ func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, thumbnailPNG)
 
-	require.NoError(t, err, "UpdateOAuthClientThumbnail should succeed on 200 response")
+	mustNoError(t, err, "UpdateOAuthClientThumbnail should succeed on 200 response")
 }
 
 func TestClientUpdateOAuthClientThumbnailEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
 	}))
 	defer srv.Close()
 
@@ -3160,18 +3164,18 @@ func TestClientUpdateOAuthClientThumbnailEscapesClientID(t *testing.T) {
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators, []byte("png-bytes"))
 
-	require.NoError(t, err, "UpdateOAuthClientThumbnail should escape path parameters")
+	mustNoError(t, err, "UpdateOAuthClientThumbnail should escape path parameters")
 }
 
 func TestClientUpdateOAuthClientThumbnailAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -3179,11 +3183,11 @@ func TestClientUpdateOAuthClientThumbnailAPIError(t *testing.T) {
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
 
-	require.Error(t, err, "UpdateOAuthClientThumbnail should fail on 403 response")
+	mustError(t, err, "UpdateOAuthClientThumbnail should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T) {
@@ -3193,7 +3197,7 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
 		http.Error(w, errTemporaryFailure, http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -3202,8 +3206,8 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
 
-	require.Error(t, err, "UpdateOAuthClientThumbnail should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client thumbnail update must not be retried")
+	mustError(t, err, "UpdateOAuthClientThumbnail should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating OAuth client thumbnail update must not be retried")
 }
 
 func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
@@ -3212,14 +3216,14 @@ func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
 	thumbnailPNG := []byte("png-bytes")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "image/png")
 		_, writeErr := w.Write(thumbnailPNG)
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3227,18 +3231,18 @@ func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
 
 	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
 
-	require.NoError(t, err, "GetOAuthClientThumbnail should succeed on 200 response")
-	assert.Equal(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
+	mustNoError(t, err, "GetOAuthClientThumbnail should succeed on 200 response")
+	checkEqual(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
 }
 
 func TestClientGetOAuthClientThumbnailEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "image/png")
 		_, writeErr := w.Write([]byte("png-bytes"))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3246,18 +3250,18 @@ func TestClientGetOAuthClientThumbnailEscapesClientID(t *testing.T) {
 
 	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators)
 
-	require.NoError(t, err, "GetOAuthClientThumbnail should escape path parameters")
+	mustNoError(t, err, "GetOAuthClientThumbnail should escape path parameters")
 }
 
 func TestClientGetOAuthClientThumbnailAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}))
 	}))
 	defer srv.Close()
 
@@ -3265,11 +3269,11 @@ func TestClientGetOAuthClientThumbnailAPIError(t *testing.T) {
 
 	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
 
-	require.Error(t, err, "GetOAuthClientThumbnail should fail on 404 response")
+	mustError(t, err, "GetOAuthClientThumbnail should fail on 404 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusNotFound, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusNotFound, apiErr.StatusCode)
 }
 
 func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
@@ -3289,7 +3293,7 @@ func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
 
 		w.Header().Set("Content-Type", "image/png")
 		_, writeErr := w.Write(thumbnailPNG)
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3297,23 +3301,23 @@ func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
 
 	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
 
-	require.NoError(t, err, "GetOAuthClientThumbnail should succeed after retry")
-	assert.Equal(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GetOAuthClientThumbnail should be retried on transient error")
+	mustNoError(t, err, "GetOAuthClientThumbnail should succeed after retry")
+	checkEqual(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
+	checkEqual(t, int32(2), requestCount.Load(), "read-only GetOAuthClientThumbnail should be retried on transient error")
 }
 
 func TestClientDeleteAccountOAuthClientSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "DELETE request should not send a body")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "DELETE request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3321,19 +3325,19 @@ func TestClientDeleteAccountOAuthClientSuccess(t *testing.T) {
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
 
-	require.NoError(t, err, "DeleteAccountOAuthClient should succeed on 200 response")
+	mustNoError(t, err, "DeleteAccountOAuthClient should succeed on 200 response")
 }
 
 func TestClientDeleteAccountOAuthClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3341,18 +3345,18 @@ func TestClientDeleteAccountOAuthClientEscapesClientID(t *testing.T) {
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientIDWithSeparators)
 
-	require.NoError(t, err, "DeleteAccountOAuthClient should escape path parameters")
+	mustNoError(t, err, "DeleteAccountOAuthClient should escape path parameters")
 }
 
 func TestClientDeleteAccountOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -3360,11 +3364,11 @@ func TestClientDeleteAccountOAuthClientAPIError(t *testing.T) {
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
 
-	require.Error(t, err, "DeleteAccountOAuthClient should fail on 403 response")
+	mustError(t, err, "DeleteAccountOAuthClient should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientDeleteAccountOAuthClientDoesNotRetryTransientError(t *testing.T) {
@@ -3382,8 +3386,8 @@ func TestClientDeleteAccountOAuthClientDoesNotRetryTransientError(t *testing.T) 
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
 
-	require.Error(t, err, "DeleteAccountOAuthClient should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "destructive OAuth client delete must not be retried")
+	mustError(t, err, "DeleteAccountOAuthClient should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "destructive OAuth client delete must not be retried")
 }
 
 func TestClientResetOAuthClientSecretSuccess(t *testing.T) {
@@ -3392,13 +3396,13 @@ func TestClientResetOAuthClientSecretSuccess(t *testing.T) {
 	want := linode.OAuthClientSecret{Secret: "new-secret-once"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "reset secret request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "reset secret request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -3406,20 +3410,20 @@ func TestClientResetOAuthClientSecretSuccess(t *testing.T) {
 
 	got, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
 
-	require.NoError(t, err, "ResetOAuthClientSecret should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "ResetOAuthClientSecret should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientResetOAuthClientSecretEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery/reset-secret", r.URL.EscapedPath(), "path parameter should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery/reset-secret", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret"}))
 	}))
 	defer srv.Close()
 
@@ -3427,18 +3431,18 @@ func TestClientResetOAuthClientSecretEscapesClientID(t *testing.T) {
 
 	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientIDWithSeparators)
 
-	require.NoError(t, err, "ResetOAuthClientSecret should escape path parameters")
+	mustNoError(t, err, "ResetOAuthClientSecret should escape path parameters")
 }
 
 func TestClientResetOAuthClientSecretAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -3446,11 +3450,11 @@ func TestClientResetOAuthClientSecretAPIError(t *testing.T) {
 
 	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
 
-	require.Error(t, err, "ResetOAuthClientSecret should fail on 403 response")
+	mustError(t, err, "ResetOAuthClientSecret should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientResetOAuthClientSecretDoesNotRetryTransientError(t *testing.T) {
@@ -3468,8 +3472,8 @@ func TestClientResetOAuthClientSecretDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
 
-	require.Error(t, err, "ResetOAuthClientSecret should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "credential rotation must not be retried")
+	mustError(t, err, "ResetOAuthClientSecret should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "credential rotation must not be retried")
 }
 
 // TestClientCreateOAuthClientAPIError verifies API errors propagate.
@@ -3479,7 +3483,7 @@ func TestClientCreateOAuthClientAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -3488,11 +3492,11 @@ func TestClientCreateOAuthClientAPIError(t *testing.T) {
 
 	_, err := client.CreateOAuthClient(t.Context(), req)
 
-	require.Error(t, err, "CreateOAuthClient should fail on 403 response")
+	mustError(t, err, "CreateOAuthClient should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 // TestClientCreateOAuthClientDoesNotRetryTransientError verifies creation is not replayed.
@@ -3512,8 +3516,8 @@ func TestClientCreateOAuthClientDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.CreateOAuthClient(t.Context(), req)
 
-	require.Error(t, err, "CreateOAuthClient should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client creation must not be retried")
+	mustError(t, err, "CreateOAuthClient should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating OAuth client creation must not be retried")
 }
 
 // TestClientListAccountEventsSuccess verifies ListAccountEvents sends a GET
@@ -3551,13 +3555,13 @@ func TestClientListAccountEventsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/events", r.URL.Path, "request path should be /account/events")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/events", r.URL.Path, "request path should be /account/events")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(events))
+		checkNoError(t, json.NewEncoder(w).Encode(events))
 	}))
 	defer srv.Close()
 
@@ -3565,17 +3569,17 @@ func TestClientListAccountEventsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountEvents(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountEvents should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, "ticket_create", result.Data[0].Action)
-	assert.Equal(t, "failed", result.Data[0].Status)
-	require.NotNil(t, result.Data[0].Entity)
-	assert.Equal(t, "ticket", result.Data[0].Entity.Type)
-	require.NotNil(t, result.Data[0].Duration)
-	assert.InDelta(t, duration, *result.Data[0].Duration, 0.001)
+	mustNoError(t, err, "ListAccountEvents should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 123, result.Data[0].ID)
+	checkEqual(t, "ticket_create", result.Data[0].Action)
+	checkEqual(t, "failed", result.Data[0].Status)
+	mustNotNil(t, result.Data[0].Entity)
+	checkEqual(t, "ticket", result.Data[0].Entity.Type)
+	mustNotNil(t, result.Data[0].Duration)
+	checkInDelta(t, duration, *result.Data[0].Duration, 0.001)
 }
 
 // TestClientListAccountEventsAPIError verifies ListAccountEvents propagates API errors.
@@ -3583,13 +3587,13 @@ func TestClientListAccountEventsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/events", r.URL.Path, "request path should be /account/events")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/events", r.URL.Path, "request path should be /account/events")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3597,13 +3601,13 @@ func TestClientListAccountEventsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountEvents(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountEvents should fail on 403 response")
+	mustError(t, err, "ListAccountEvents should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountEventsRetriesTransientError verifies the read-only list retries transient failures.
@@ -3617,15 +3621,15 @@ func TestClientListAccountEventsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/events", r.URL.Path, "request path should be /account/events")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/events", r.URL.Path, "request path should be /account/events")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEvent]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEvent]{
 			Data: []linode.AccountEvent{{ID: 123, Action: "ticket_create"}},
 		}))
 	}))
@@ -3635,11 +3639,11 @@ func TestClientListAccountEventsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountEvents(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountEvents should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountEvents should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 123, result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientListAccountChildAccountsSuccess verifies ListAccountChildAccounts sends a GET
@@ -3666,13 +3670,13 @@ func TestClientListAccountChildAccountsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(childAccounts))
+		checkNoError(t, json.NewEncoder(w).Encode(childAccounts))
 	}))
 	defer srv.Close()
 
@@ -3680,14 +3684,14 @@ func TestClientListAccountChildAccountsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountChildAccounts(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountChildAccounts should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, childAccountEUUID, result.Data[0].EUUID)
-	assert.Equal(t, companyAcme, result.Data[0].Company)
-	assert.Equal(t, "11/2024", result.Data[0].CreditCard.Expiry)
-	assert.Equal(t, "0111", result.Data[0].CreditCard.LastFour)
+	mustNoError(t, err, "ListAccountChildAccounts should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, childAccountEUUID, result.Data[0].EUUID)
+	checkEqual(t, companyAcme, result.Data[0].Company)
+	checkEqual(t, "11/2024", result.Data[0].CreditCard.Expiry)
+	checkEqual(t, "0111", result.Data[0].CreditCard.LastFour)
 }
 
 // TestClientListAccountChildAccountsAPIError verifies ListAccountChildAccounts propagates API errors.
@@ -3695,13 +3699,13 @@ func TestClientListAccountChildAccountsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3709,13 +3713,13 @@ func TestClientListAccountChildAccountsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountChildAccounts(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountChildAccounts should fail on 403 response")
+	mustError(t, err, "ListAccountChildAccounts should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountChildAccountsRetriesTransientError verifies the read-only list retries transient failures.
@@ -3729,15 +3733,15 @@ func TestClientListAccountChildAccountsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ChildAccount]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ChildAccount]{
 			Data: []linode.ChildAccount{{EUUID: childAccountEUUID, Company: companyAcme}},
 		}))
 	}))
@@ -3747,11 +3751,11 @@ func TestClientListAccountChildAccountsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountChildAccounts(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountChildAccounts should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, childAccountEUUID, result.Data[0].EUUID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountChildAccounts should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, childAccountEUUID, result.Data[0].EUUID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountEventSuccess verifies GetAccountEvent sends a GET
@@ -3762,22 +3766,22 @@ func TestClientGetAccountEventSuccess(t *testing.T) {
 	want := linode.AccountEvent{ID: 123, Action: "linode_create", Status: statusSuccessful, Username: "test-user"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want), "encoding event response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(want), "encoding event response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetAccountEvent(t.Context(), 123)
 
-	require.NoError(t, err, "GetAccountEvent should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, 123, got.ID)
-	assert.Equal(t, "linode_create", got.Action)
-	assert.Equal(t, statusSuccessful, got.Status)
+	mustNoError(t, err, "GetAccountEvent should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, 123, got.ID)
+	checkEqual(t, "linode_create", got.Action)
+	checkEqual(t, statusSuccessful, got.Status)
 }
 
 // TestClientGetAccountEventAPIError verifies GetAccountEvent propagates API errors.
@@ -3785,17 +3789,17 @@ func TestClientGetAccountEventAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		checkEqual(t, "/account/events/123", r.URL.Path, "request path should include event ID")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr, "writing error response should not fail")
+		checkNoError(t, writeErr, "writing error response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetAccountEvent(t.Context(), 123)
 
-	require.Error(t, err, "GetAccountEvent should fail on 403 response")
+	mustError(t, err, "GetAccountEvent should fail on 403 response")
 }
 
 // TestClientGetAccountEventRetriesTransientError verifies the read-only event lookup retries transient failures.
@@ -3809,24 +3813,24 @@ func TestClientGetAccountEventRetriesTransientError(t *testing.T) {
 		if current == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr, "writing transient error should not fail")
+			checkNoError(t, writeErr, "writing transient error should not fail")
 
 			return
 		}
 
-		assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		checkEqual(t, "/account/events/123", r.URL.Path, "request path should include event ID")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEvent{ID: 123, Action: "linode_create"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountEvent{ID: 123, Action: "linode_create"}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 	result, err := client.GetAccountEvent(t.Context(), 123)
 
-	require.NoError(t, err, "GetAccountEvent should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountEvent should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 123, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientMarkAccountEventSeenSuccess verifies MarkAccountEventSeen sends a POST
@@ -3835,22 +3839,22 @@ func TestClientMarkAccountEventSeenSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		assert.Equal(t, http.NoBody, r.Body, "request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.NoBody, r.Body, "request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr, "writing success response should not fail")
+		checkNoError(t, writeErr, "writing success response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	err := client.MarkAccountEventSeen(t.Context(), 123)
 
-	require.NoError(t, err, "MarkAccountEventSeen should succeed on 200 response")
+	mustNoError(t, err, "MarkAccountEventSeen should succeed on 200 response")
 }
 
 // TestClientMarkAccountEventSeenAPIError verifies MarkAccountEventSeen propagates API errors.
@@ -3858,18 +3862,18 @@ func TestClientMarkAccountEventSeenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr, "writing error response should not fail")
+		checkNoError(t, writeErr, "writing error response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 	err := client.MarkAccountEventSeen(t.Context(), 123)
 
-	require.Error(t, err, "MarkAccountEventSeen should fail on 403 response")
+	mustError(t, err, "MarkAccountEventSeen should fail on 403 response")
 }
 
 // TestClientMarkAccountEventSeenDoesNotRetryTransientError verifies marking an
@@ -3883,15 +3887,15 @@ func TestClientMarkAccountEventSeenDoesNotRetryTransientError(t *testing.T) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr, "writing transient error should not fail")
+		checkNoError(t, writeErr, "writing transient error should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 	err := client.MarkAccountEventSeen(t.Context(), 123)
 
-	require.Error(t, err, "MarkAccountEventSeen should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating event seen request must not be retried")
+	mustError(t, err, "MarkAccountEventSeen should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating event seen request must not be retried")
 }
 
 // TestClientListAccountPaymentMethodsSuccess verifies ListAccountPaymentMethods sends a GET
@@ -3912,13 +3916,13 @@ func TestClientListAccountPaymentMethodsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(methods))
+		checkNoError(t, json.NewEncoder(w).Encode(methods))
 	}))
 	defer srv.Close()
 
@@ -3926,13 +3930,13 @@ func TestClientListAccountPaymentMethodsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountPaymentMethods(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountPaymentMethods should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, paymentMethodCreditCard, result.Data[0].Type)
-	assert.True(t, result.Data[0].IsDefault)
+	mustNoError(t, err, "ListAccountPaymentMethods should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 123, result.Data[0].ID)
+	checkEqual(t, paymentMethodCreditCard, result.Data[0].Type)
+	checkTrue(t, result.Data[0].IsDefault)
 }
 
 // TestClientListAccountPaymentMethodsAPIError verifies ListAccountPaymentMethods propagates API errors.
@@ -3940,13 +3944,13 @@ func TestClientListAccountPaymentMethodsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -3954,13 +3958,13 @@ func TestClientListAccountPaymentMethodsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountPaymentMethods(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountPaymentMethods should fail on 403 response")
+	mustError(t, err, "ListAccountPaymentMethods should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountPaymentMethodsRetriesTransientError verifies the read-only list retries transient failures.
@@ -3974,15 +3978,15 @@ func TestClientListAccountPaymentMethodsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPaymentMethod]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPaymentMethod]{
 			Data: []linode.AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true}},
 		}))
 	}))
@@ -3992,11 +3996,11 @@ func TestClientListAccountPaymentMethodsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountPaymentMethods(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountPaymentMethods should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountPaymentMethods should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 123, result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 func TestClientGetAccountPaymentMethodSuccess(t *testing.T) {
@@ -4005,12 +4009,12 @@ func TestClientGetAccountPaymentMethodSuccess(t *testing.T) {
 	want := linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: "1111"}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -4018,18 +4022,18 @@ func TestClientGetAccountPaymentMethodSuccess(t *testing.T) {
 
 	got, err := client.GetAccountPaymentMethod(t.Context(), "123")
 
-	require.NoError(t, err, "GetAccountPaymentMethod should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, want, *got)
+	mustNoError(t, err, "GetAccountPaymentMethod should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, want, *got)
 }
 
 func TestClientGetAccountPaymentMethodEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
 	}))
 	defer srv.Close()
 
@@ -4037,18 +4041,18 @@ func TestClientGetAccountPaymentMethodEscapesID(t *testing.T) {
 
 	_, err := client.GetAccountPaymentMethod(t.Context(), "123/456?query")
 
-	require.NoError(t, err, "GetAccountPaymentMethod should escape path parameters")
+	mustNoError(t, err, "GetAccountPaymentMethod should escape path parameters")
 }
 
 func TestClientGetAccountPaymentMethodAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -4056,12 +4060,12 @@ func TestClientGetAccountPaymentMethodAPIError(t *testing.T) {
 
 	_, err := client.GetAccountPaymentMethod(t.Context(), "123")
 
-	require.Error(t, err, "GetAccountPaymentMethod should fail on 403 response")
+	mustError(t, err, "GetAccountPaymentMethod should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Contains(t, apiErr.Message, errForbidden)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkContains(t, apiErr.Message, errForbidden)
 }
 
 func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
@@ -4078,7 +4082,7 @@ func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
 	}))
 	defer srv.Close()
 
@@ -4086,22 +4090,22 @@ func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
 
 	got, err := client.GetAccountPaymentMethod(t.Context(), "123")
 
-	require.NoError(t, err, "GetAccountPaymentMethod should succeed after retry")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, 123, got.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+	mustNoError(t, err, "GetAccountPaymentMethod should succeed after retry")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, 123, got.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once")
 }
 
 func TestClientDeleteAccountPaymentMethodSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
-		assert.Empty(t, r.URL.RawQuery, "delete request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		checkEmpty(t, r.URL.RawQuery, "delete request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -4109,16 +4113,16 @@ func TestClientDeleteAccountPaymentMethodSuccess(t *testing.T) {
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
 
-	require.NoError(t, err, "DeleteAccountPaymentMethod should succeed on 200 response")
+	mustNoError(t, err, "DeleteAccountPaymentMethod should succeed on 200 response")
 }
 
 func TestClientDeleteAccountPaymentMethodEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -4126,18 +4130,18 @@ func TestClientDeleteAccountPaymentMethodEscapesID(t *testing.T) {
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123/456?query")
 
-	require.NoError(t, err, "DeleteAccountPaymentMethod should escape path parameters")
+	mustNoError(t, err, "DeleteAccountPaymentMethod should escape path parameters")
 }
 
 func TestClientDeleteAccountPaymentMethodAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -4145,12 +4149,12 @@ func TestClientDeleteAccountPaymentMethodAPIError(t *testing.T) {
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
 
-	require.Error(t, err, "DeleteAccountPaymentMethod should fail on 403 response")
+	mustError(t, err, "DeleteAccountPaymentMethod should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Contains(t, apiErr.Message, errForbidden)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkContains(t, apiErr.Message, errForbidden)
 }
 
 func TestClientDeleteAccountPaymentMethodDoesNotRetryTransientError(t *testing.T) {
@@ -4168,21 +4172,21 @@ func TestClientDeleteAccountPaymentMethodDoesNotRetryTransientError(t *testing.T
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
 
-	require.Error(t, err, "DeleteAccountPaymentMethod should surface transient failures")
-	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE should not be retried")
+	mustError(t, err, "DeleteAccountPaymentMethod should surface transient failures")
+	checkEqual(t, int32(1), requestCount.Load(), "destructive DELETE should not be retried")
 }
 
 func TestClientMakeAccountPaymentMethodDefaultSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
-		assert.Empty(t, r.URL.RawQuery, "make-default request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "make-default request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
+		checkEmpty(t, r.URL.RawQuery, "make-default request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "make-default request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -4190,16 +4194,16 @@ func TestClientMakeAccountPaymentMethodDefaultSuccess(t *testing.T) {
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
 
-	require.NoError(t, err, "MakeAccountPaymentMethodDefault should succeed on 200 response")
+	mustNoError(t, err, "MakeAccountPaymentMethodDefault should succeed on 200 response")
 }
 
 func TestClientMakeAccountPaymentMethodDefaultEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/payment-methods/123%2F456%3Fquery/make-default", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/payment-methods/123%2F456%3Fquery/make-default", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -4207,18 +4211,18 @@ func TestClientMakeAccountPaymentMethodDefaultEscapesID(t *testing.T) {
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123/456?query")
 
-	require.NoError(t, err, "MakeAccountPaymentMethodDefault should escape path parameters")
+	mustNoError(t, err, "MakeAccountPaymentMethodDefault should escape path parameters")
 }
 
 func TestClientMakeAccountPaymentMethodDefaultAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -4226,12 +4230,12 @@ func TestClientMakeAccountPaymentMethodDefaultAPIError(t *testing.T) {
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
 
-	require.Error(t, err, "MakeAccountPaymentMethodDefault should fail on 403 response")
+	mustError(t, err, "MakeAccountPaymentMethodDefault should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Contains(t, apiErr.Message, errForbidden)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkContains(t, apiErr.Message, errForbidden)
 }
 
 func TestClientMakeAccountPaymentMethodDefaultDoesNotRetryTransientError(t *testing.T) {
@@ -4249,8 +4253,8 @@ func TestClientMakeAccountPaymentMethodDefaultDoesNotRetryTransientError(t *test
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
 
-	require.Error(t, err, "MakeAccountPaymentMethodDefault should surface transient failures")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating make-default POST should not be retried")
+	mustError(t, err, "MakeAccountPaymentMethodDefault should surface transient failures")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating make-default POST should not be retried")
 }
 
 func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
@@ -4260,26 +4264,26 @@ func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
 	created := linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: "1111"}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		assert.Empty(t, r.URL.RawQuery, "create request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		checkEmpty(t, r.URL.RawQuery, "create request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var body map[string]any
 
 		decodeErr := json.NewDecoder(r.Body).Decode(&body)
-		assert.NoError(t, decodeErr)
+		checkNoError(t, decodeErr)
 
 		if decodeErr != nil {
 			return
 		}
 
-		assert.Equal(t, paymentMethodCreditCard, body[keyType])
-		assert.Equal(t, true, body[keyIsDefault])
-		assert.Equal(t, map[string]any{keyToken: paymentMethodToken}, body[keyData])
+		checkEqual(t, paymentMethodCreditCard, body[keyType])
+		checkEqual(t, true, body[keyIsDefault])
+		checkEqual(t, map[string]any{keyToken: paymentMethodToken}, body[keyData])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(created))
+		checkNoError(t, json.NewEncoder(w).Encode(created))
 	}))
 	defer srv.Close()
 
@@ -4287,23 +4291,23 @@ func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
 
 	result, err := client.CreateAccountPaymentMethod(t.Context(), request)
 
-	require.NoError(t, err, "CreateAccountPaymentMethod should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 321, result.ID)
-	assert.Equal(t, paymentMethodCreditCard, result.Type)
-	assert.True(t, result.IsDefault)
+	mustNoError(t, err, "CreateAccountPaymentMethod should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 321, result.ID)
+	checkEqual(t, paymentMethodCreditCard, result.Type)
+	checkTrue(t, result.IsDefault)
 }
 
 func TestClientCreateAccountPaymentMethodAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4311,13 +4315,13 @@ func TestClientCreateAccountPaymentMethodAPIError(t *testing.T) {
 
 	_, err := client.CreateAccountPaymentMethod(t.Context(), &linode.CreateAccountPaymentMethodRequest{Type: paymentMethodCreditCard, Data: map[string]any{keyToken: paymentMethodToken}, IsDefault: true})
 
-	require.Error(t, err, "CreateAccountPaymentMethod should fail on 403 response")
+	mustError(t, err, "CreateAccountPaymentMethod should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, "forbidden", apiErr.Message)
 }
 
 func TestClientCreateAccountPaymentMethodDoesNotRetryTransientError(t *testing.T) {
@@ -4327,10 +4331,10 @@ func TestClientCreateAccountPaymentMethodDoesNotRetryTransientError(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4338,8 +4342,8 @@ func TestClientCreateAccountPaymentMethodDoesNotRetryTransientError(t *testing.T
 
 	_, err := client.CreateAccountPaymentMethod(t.Context(), &linode.CreateAccountPaymentMethodRequest{Type: paymentMethodCreditCard, Data: map[string]any{keyToken: paymentMethodToken}, IsDefault: true})
 
-	require.Error(t, err, "CreateAccountPaymentMethod should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating payment method creation must not be retried")
+	mustError(t, err, "CreateAccountPaymentMethod should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating payment method creation must not be retried")
 }
 
 // TestClientListAccountInvoicesSuccess verifies ListAccountInvoices sends a GET
@@ -4360,13 +4364,13 @@ func TestClientListAccountInvoicesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(invoices))
+		checkNoError(t, json.NewEncoder(w).Encode(invoices))
 	}))
 	defer srv.Close()
 
@@ -4374,13 +4378,13 @@ func TestClientListAccountInvoicesSuccess(t *testing.T) {
 
 	result, err := client.ListAccountInvoices(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountInvoices should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 987, result.Data[0].ID)
-	assert.Equal(t, "Invoice 987", result.Data[0].Label)
-	assert.InEpsilon(t, 42.50, result.Data[0].Total, 0.0001)
+	mustNoError(t, err, "ListAccountInvoices should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 987, result.Data[0].ID)
+	checkEqual(t, "Invoice 987", result.Data[0].Label)
+	checkInEpsilon(t, 42.50, result.Data[0].Total, 0.0001)
 }
 
 // TestClientListAccountInvoicesAPIError verifies ListAccountInvoices propagates API errors.
@@ -4388,13 +4392,13 @@ func TestClientListAccountInvoicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4402,13 +4406,13 @@ func TestClientListAccountInvoicesAPIError(t *testing.T) {
 
 	_, err := client.ListAccountInvoices(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountInvoices should fail on 403 response")
+	mustError(t, err, "ListAccountInvoices should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountInvoicesRetriesTransientError verifies the read-only list retries transient failures.
@@ -4422,15 +4426,15 @@ func TestClientListAccountInvoicesRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoice]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoice]{
 			Data: []linode.AccountInvoice{{ID: 987, Label: "Invoice 987"}},
 		}))
 	}))
@@ -4440,11 +4444,11 @@ func TestClientListAccountInvoicesRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountInvoices(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountInvoices should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 987, result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountInvoices should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 987, result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientListAccountPaymentsSuccess verifies ListAccountPayments sends a GET
@@ -4464,13 +4468,13 @@ func TestClientListAccountPaymentsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(payments))
+		checkNoError(t, json.NewEncoder(w).Encode(payments))
 	}))
 	defer srv.Close()
 
@@ -4478,12 +4482,12 @@ func TestClientListAccountPaymentsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountPayments(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountPayments should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 654, result.Data[0].ID)
-	assert.InEpsilon(t, 20.25, result.Data[0].USD, 0.0001)
+	mustNoError(t, err, "ListAccountPayments should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 654, result.Data[0].ID)
+	checkInEpsilon(t, 20.25, result.Data[0].USD, 0.0001)
 }
 
 // TestClientListAccountPaymentsAPIError verifies ListAccountPayments propagates API errors.
@@ -4491,13 +4495,13 @@ func TestClientListAccountPaymentsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4505,13 +4509,13 @@ func TestClientListAccountPaymentsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountPayments(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountPayments should fail on 403 response")
+	mustError(t, err, "ListAccountPayments should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountPaymentsRetriesTransientError verifies the read-only list retries transient failures.
@@ -4525,15 +4529,15 @@ func TestClientListAccountPaymentsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPayment]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPayment]{
 			Data: []linode.AccountPayment{{ID: 654, USD: 20.25}},
 		}))
 	}))
@@ -4543,11 +4547,11 @@ func TestClientListAccountPaymentsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountPayments(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountPayments should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 654, result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountPayments should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 654, result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 func TestClientGetAccountPaymentSuccess(t *testing.T) {
@@ -4556,13 +4560,13 @@ func TestClientGetAccountPaymentSuccess(t *testing.T) {
 	payment := linode.AccountPayment{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(payment))
+		checkNoError(t, json.NewEncoder(w).Encode(payment))
 	}))
 	defer srv.Close()
 
@@ -4570,22 +4574,22 @@ func TestClientGetAccountPaymentSuccess(t *testing.T) {
 
 	result, err := client.GetAccountPayment(t.Context(), 654)
 
-	require.NoError(t, err, "GetAccountPayment should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 654, result.ID)
-	assert.InEpsilon(t, 20.25, result.USD, 0.0001)
+	mustNoError(t, err, "GetAccountPayment should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 654, result.ID)
+	checkInEpsilon(t, 20.25, result.USD, 0.0001)
 }
 
 func TestClientGetAccountPaymentAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4593,13 +4597,13 @@ func TestClientGetAccountPaymentAPIError(t *testing.T) {
 
 	_, err := client.GetAccountPayment(t.Context(), 654)
 
-	require.Error(t, err, "GetAccountPayment should fail on 403 response")
+	mustError(t, err, "GetAccountPayment should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientGetAccountPaymentRetriesTransientError(t *testing.T) {
@@ -4612,15 +4616,15 @@ func TestClientGetAccountPaymentRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPayment{ID: 654, USD: 20.25}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountPayment{ID: 654, USD: 20.25}))
 	}))
 	defer srv.Close()
 
@@ -4628,17 +4632,17 @@ func TestClientGetAccountPaymentRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountPayment(t.Context(), 654)
 
-	require.NoError(t, err, "GetAccountPayment should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 654, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountPayment should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 654, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 func TestClientListAccountEntityTransfersRemoved(t *testing.T) {
 	t.Parallel()
 
 	_, ok := reflect.TypeFor[*linode.Client]().MethodByName("ListAccountEntityTransfers")
-	assert.False(t, ok, "deprecated account entity transfer list client method should be removed")
+	checkFalse(t, ok, "deprecated account entity transfer list client method should be removed")
 }
 
 func TestClientListAccountServiceTransfersSuccess(t *testing.T) {
@@ -4660,13 +4664,13 @@ func TestClientListAccountServiceTransfersSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(transfers))
+		checkNoError(t, json.NewEncoder(w).Encode(transfers))
 	}))
 	defer srv.Close()
 
@@ -4674,25 +4678,25 @@ func TestClientListAccountServiceTransfersSuccess(t *testing.T) {
 
 	result, err := client.ListAccountServiceTransfers(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountServiceTransfers should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountEntityTransferToken, result.Data[0].Token)
-	assert.Equal(t, "pending", result.Data[0].Status)
-	assert.Equal(t, []int{111, 222}, result.Data[0].Entities.Linodes)
+	mustNoError(t, err, "ListAccountServiceTransfers should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, accountEntityTransferToken, result.Data[0].Token)
+	checkEqual(t, "pending", result.Data[0].Status)
+	checkEqual(t, []int{111, 222}, result.Data[0].Entities.Linodes)
 }
 
 func TestClientListAccountServiceTransfersAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4700,13 +4704,13 @@ func TestClientListAccountServiceTransfersAPIError(t *testing.T) {
 
 	_, err := client.ListAccountServiceTransfers(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountServiceTransfers should fail on 403 response")
+	mustError(t, err, "ListAccountServiceTransfers should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientListAccountServiceTransfersRetriesTransientError(t *testing.T) {
@@ -4719,15 +4723,15 @@ func TestClientListAccountServiceTransfersRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEntityTransfer]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEntityTransfer]{
 			Data: []linode.AccountEntityTransfer{{Token: accountEntityTransferToken, Status: "pending"}},
 		}))
 	}))
@@ -4737,11 +4741,11 @@ func TestClientListAccountServiceTransfersRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountServiceTransfers(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountServiceTransfers should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountEntityTransferToken, result.Data[0].Token)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountServiceTransfers should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, accountEntityTransferToken, result.Data[0].Token)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountServiceTransferSuccess verifies GetAccountServiceTransfer sends a GET
@@ -4760,13 +4764,13 @@ func TestClientGetAccountServiceTransferSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -4774,11 +4778,11 @@ func TestClientGetAccountServiceTransferSuccess(t *testing.T) {
 
 	got, err := client.GetAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.NoError(t, err, "GetAccountServiceTransfer should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, accountServiceTransferToken, got.Token)
-	assert.Equal(t, statusPending, got.Status)
-	assert.Equal(t, []int{111, 222}, got.Entities.Linodes)
+	mustNoError(t, err, "GetAccountServiceTransfer should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, accountServiceTransferToken, got.Token)
+	checkEqual(t, statusPending, got.Status)
+	checkEqual(t, []int{111, 222}, got.Entities.Linodes)
 }
 
 // TestClientGetAccountServiceTransferEscapesToken verifies the client encodes path separators.
@@ -4786,10 +4790,10 @@ func TestClientGetAccountServiceTransferEscapesToken(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: "service/token?query"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: "service/token?query"}))
 	}))
 	defer srv.Close()
 
@@ -4797,7 +4801,7 @@ func TestClientGetAccountServiceTransferEscapesToken(t *testing.T) {
 
 	_, err := client.GetAccountServiceTransfer(t.Context(), "service/token?query")
 
-	require.NoError(t, err, "GetAccountServiceTransfer should escape path parameters")
+	mustNoError(t, err, "GetAccountServiceTransfer should escape path parameters")
 }
 
 // TestClientGetAccountServiceTransferAPIError verifies GetAccountServiceTransfer propagates API errors.
@@ -4805,12 +4809,12 @@ func TestClientGetAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4818,13 +4822,13 @@ func TestClientGetAccountServiceTransferAPIError(t *testing.T) {
 
 	_, err := client.GetAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.Error(t, err, "GetAccountServiceTransfer should fail on 403 response")
+	mustError(t, err, "GetAccountServiceTransfer should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountServiceTransferRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -4838,15 +4842,15 @@ func TestClientGetAccountServiceTransferRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: accountServiceTransferToken, Status: statusPending}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: accountServiceTransferToken, Status: statusPending}))
 	}))
 	defer srv.Close()
 
@@ -4854,10 +4858,10 @@ func TestClientGetAccountServiceTransferRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.NoError(t, err, "GetAccountServiceTransfer should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, accountServiceTransferToken, result.Token)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountServiceTransfer should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, accountServiceTransferToken, result.Token)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientDeleteAccountServiceTransferSuccess verifies DeleteAccountServiceTransfer sends a DELETE
@@ -4866,15 +4870,15 @@ func TestClientDeleteAccountServiceTransferSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "DELETE request should not send a body")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "DELETE request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4882,7 +4886,7 @@ func TestClientDeleteAccountServiceTransferSuccess(t *testing.T) {
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.NoError(t, err, "DeleteAccountServiceTransfer should succeed on 200 response")
+	mustNoError(t, err, "DeleteAccountServiceTransfer should succeed on 200 response")
 }
 
 // TestClientDeleteAccountServiceTransferEscapesToken verifies the client encodes path separators.
@@ -4890,12 +4894,12 @@ func TestClientDeleteAccountServiceTransferEscapesToken(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4903,7 +4907,7 @@ func TestClientDeleteAccountServiceTransferEscapesToken(t *testing.T) {
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), "service/token?query")
 
-	require.NoError(t, err, "DeleteAccountServiceTransfer should escape path parameters")
+	mustNoError(t, err, "DeleteAccountServiceTransfer should escape path parameters")
 }
 
 // TestClientDeleteAccountServiceTransferAPIError verifies DeleteAccountServiceTransfer propagates API errors.
@@ -4911,12 +4915,12 @@ func TestClientDeleteAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4924,13 +4928,13 @@ func TestClientDeleteAccountServiceTransferAPIError(t *testing.T) {
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.Error(t, err, "DeleteAccountServiceTransfer should fail on 403 response")
+	mustError(t, err, "DeleteAccountServiceTransfer should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientDeleteAccountServiceTransferDoesNotRetryTransientError verifies
@@ -4944,7 +4948,7 @@ func TestClientDeleteAccountServiceTransferDoesNotRetryTransientError(t *testing
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4952,8 +4956,8 @@ func TestClientDeleteAccountServiceTransferDoesNotRetryTransientError(t *testing
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.Error(t, err, "DeleteAccountServiceTransfer should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating transfer cancellation must not be retried")
+	mustError(t, err, "DeleteAccountServiceTransfer should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating transfer cancellation must not be retried")
 }
 
 // TestClientAcceptAccountServiceTransferSuccess verifies AcceptAccountServiceTransfer sends a POST
@@ -4962,15 +4966,15 @@ func TestClientAcceptAccountServiceTransferSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "POST accept request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "POST accept request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4978,19 +4982,19 @@ func TestClientAcceptAccountServiceTransferSuccess(t *testing.T) {
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.NoError(t, err, "AcceptAccountServiceTransfer should succeed on 200 response")
+	mustNoError(t, err, "AcceptAccountServiceTransfer should succeed on 200 response")
 }
 
 func TestClientAcceptAccountServiceTransferEscapesToken(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/service-transfers/service%2Ftoken%3Fquery/accept", r.URL.EscapedPath(), "path parameter should be escaped")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/service-transfers/service%2Ftoken%3Fquery/accept", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -4998,19 +5002,19 @@ func TestClientAcceptAccountServiceTransferEscapesToken(t *testing.T) {
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), "service/token?query")
 
-	require.NoError(t, err, "AcceptAccountServiceTransfer should escape path parameters")
+	mustNoError(t, err, "AcceptAccountServiceTransfer should escape path parameters")
 }
 
 func TestClientAcceptAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5018,13 +5022,13 @@ func TestClientAcceptAccountServiceTransferAPIError(t *testing.T) {
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.Error(t, err, "AcceptAccountServiceTransfer should fail on 403 response")
+	mustError(t, err, "AcceptAccountServiceTransfer should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientAcceptAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
@@ -5036,7 +5040,7 @@ func TestClientAcceptAccountServiceTransferDoesNotRetryTransientError(t *testing
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5044,22 +5048,22 @@ func TestClientAcceptAccountServiceTransferDoesNotRetryTransientError(t *testing
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
 
-	require.Error(t, err, "AcceptAccountServiceTransfer should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating service transfer acceptance must not be retried")
+	mustError(t, err, "AcceptAccountServiceTransfer should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating service transfer acceptance must not be retried")
 }
 
 func TestClientAccountEntityTransferAcceptRouteRemoved(t *testing.T) {
 	t.Parallel()
 
 	_, exists := reflect.TypeFor[*linode.Client]().MethodByName("AcceptAccountEntityTransfer")
-	assert.False(t, exists, "deprecated account entity-transfer accept client method should not be exposed")
+	checkFalse(t, exists, "deprecated account entity-transfer accept client method should not be exposed")
 }
 
 func TestClientDeleteAccountEntityTransferDeprecatedRouteRemoved(t *testing.T) {
 	t.Parallel()
 
 	_, exists := reflect.TypeFor[*linode.Client]().MethodByName("DeleteAccountEntityTransfer")
-	assert.False(t, exists, "deprecated account entity-transfer delete client method should not be exposed")
+	checkFalse(t, exists, "deprecated account entity-transfer delete client method should not be exposed")
 }
 
 // TestClientGetAccountInvoiceSuccess verifies GetAccountInvoice sends a GET
@@ -5075,13 +5079,13 @@ func TestClientGetAccountInvoiceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(invoice))
+		checkNoError(t, json.NewEncoder(w).Encode(invoice))
 	}))
 	defer srv.Close()
 
@@ -5089,11 +5093,11 @@ func TestClientGetAccountInvoiceSuccess(t *testing.T) {
 
 	result, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
 
-	require.NoError(t, err, "GetAccountInvoice should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, accountInvoiceID, result.ID)
-	assert.Equal(t, "Invoice #12345", result.Label)
-	assert.InDelta(t, 11.00, result.Total, 0.001)
+	mustNoError(t, err, "GetAccountInvoice should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, accountInvoiceID, result.ID)
+	checkEqual(t, "Invoice #12345", result.Label)
+	checkInDelta(t, 11.00, result.Total, 0.001)
 }
 
 // TestClientGetAccountInvoiceAPIError verifies GetAccountInvoice propagates API errors.
@@ -5101,12 +5105,12 @@ func TestClientGetAccountInvoiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5114,13 +5118,13 @@ func TestClientGetAccountInvoiceAPIError(t *testing.T) {
 
 	_, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
 
-	require.Error(t, err, "GetAccountInvoice should fail on 403 response")
+	mustError(t, err, "GetAccountInvoice should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountUsersSuccess verifies ListAccountUsers sends a GET
@@ -5148,13 +5152,13 @@ func TestClientListAccountUsersSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(users))
+		checkNoError(t, json.NewEncoder(w).Encode(users))
 	}))
 	defer srv.Close()
 
@@ -5162,14 +5166,14 @@ func TestClientListAccountUsersSuccess(t *testing.T) {
 
 	result, err := client.ListAccountUsers(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountUsers should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountLoginUsername, result.Data[0].Username)
-	assert.Equal(t, accountUserEmail, result.Data[0].Email)
-	assert.True(t, result.Data[0].Restricted)
-	assert.True(t, result.Data[0].TFAEnabled)
+	mustNoError(t, err, "ListAccountUsers should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, accountLoginUsername, result.Data[0].Username)
+	checkEqual(t, accountUserEmail, result.Data[0].Email)
+	checkTrue(t, result.Data[0].Restricted)
+	checkTrue(t, result.Data[0].TFAEnabled)
 }
 
 // TestClientListAccountUsersAPIError verifies ListAccountUsers propagates API errors.
@@ -5177,12 +5181,12 @@ func TestClientListAccountUsersAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -5190,13 +5194,13 @@ func TestClientListAccountUsersAPIError(t *testing.T) {
 
 	_, err := client.ListAccountUsers(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountUsers should fail on 403 response")
+	mustError(t, err, "ListAccountUsers should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountUsersRetriesTransientError verifies the read-only list retries transient failures.
@@ -5210,15 +5214,15 @@ func TestClientListAccountUsersRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountUser]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountUser]{
 			Data: []linode.AccountUser{{Username: accountLoginUsername, Email: accountUserEmail}},
 		}))
 	}))
@@ -5228,11 +5232,11 @@ func TestClientListAccountUsersRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountUsers(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountUsers should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, accountLoginUsername, result.Data[0].Username)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountUsers should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, accountLoginUsername, result.Data[0].Username)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountUserSuccess verifies GetAccountUser sends a GET
@@ -5251,13 +5255,13 @@ func TestClientGetAccountUserSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(user))
+		checkNoError(t, json.NewEncoder(w).Encode(user))
 	}))
 	defer srv.Close()
 
@@ -5265,12 +5269,12 @@ func TestClientGetAccountUserSuccess(t *testing.T) {
 
 	result, err := client.GetAccountUser(t.Context(), accountLoginUsername)
 
-	require.NoError(t, err, "GetAccountUser should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, accountLoginUsername, result.Username)
-	assert.Equal(t, accountUserEmail, result.Email)
-	assert.True(t, result.Restricted)
-	assert.True(t, result.TFAEnabled)
+	mustNoError(t, err, "GetAccountUser should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, accountLoginUsername, result.Username)
+	checkEqual(t, accountUserEmail, result.Email)
+	checkTrue(t, result.Restricted)
+	checkTrue(t, result.TFAEnabled)
 }
 
 // TestClientGetAccountUserEscapesUsername verifies the client encodes path separators.
@@ -5278,10 +5282,10 @@ func TestClientGetAccountUserEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath())
-		assert.Empty(t, r.URL.RawQuery, "escaped username must not create a query string")
+		checkEqual(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath())
+		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query"}))
 	}))
 	defer srv.Close()
 
@@ -5289,7 +5293,7 @@ func TestClientGetAccountUserEscapesUsername(t *testing.T) {
 
 	_, err := client.GetAccountUser(t.Context(), "user/name?query")
 
-	require.NoError(t, err, "GetAccountUser should escape path parameters")
+	mustNoError(t, err, "GetAccountUser should escape path parameters")
 }
 
 // TestClientGetAccountUserAPIError verifies GetAccountUser propagates API errors.
@@ -5297,11 +5301,11 @@ func TestClientGetAccountUserAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -5309,13 +5313,13 @@ func TestClientGetAccountUserAPIError(t *testing.T) {
 
 	_, err := client.GetAccountUser(t.Context(), accountLoginUsername)
 
-	require.Error(t, err, "GetAccountUser should fail on 403 response")
+	mustError(t, err, "GetAccountUser should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountUserRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -5329,15 +5333,15 @@ func TestClientGetAccountUserRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountLoginUsername, Email: accountUserEmail}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountLoginUsername, Email: accountUserEmail}))
 	}))
 	defer srv.Close()
 
@@ -5345,10 +5349,10 @@ func TestClientGetAccountUserRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountUser(t.Context(), accountLoginUsername)
 
-	require.NoError(t, err, "GetAccountUser should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, accountLoginUsername, result.Username)
-	assert.Equal(t, int32(2), requestCount.Load(), "request should be retried once")
+	mustNoError(t, err, "GetAccountUser should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, accountLoginUsername, result.Username)
+	checkEqual(t, int32(2), requestCount.Load(), "request should be retried once")
 }
 
 // TestClientGetAccountUserGrantsSuccess verifies GetAccountUserGrants sends a GET
@@ -5362,13 +5366,13 @@ func TestClientGetAccountUserGrantsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(grants))
+		checkNoError(t, json.NewEncoder(w).Encode(grants))
 	}))
 	defer srv.Close()
 
@@ -5376,11 +5380,11 @@ func TestClientGetAccountUserGrantsSuccess(t *testing.T) {
 
 	result, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
 
-	require.NoError(t, err, "GetAccountUserGrants should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
-	require.Len(t, result.Linode, 1)
-	assert.Equal(t, 123, result.Linode[0].ID)
+	mustNoError(t, err, "GetAccountUserGrants should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
+	mustLen(t, result.Linode, 1)
+	checkEqual(t, 123, result.Linode[0].ID)
 }
 
 // TestClientGetAccountUserGrantsEscapesUsername verifies the client encodes path separators.
@@ -5388,10 +5392,10 @@ func TestClientGetAccountUserGrantsEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath())
-		assert.Empty(t, r.URL.RawQuery, "escaped username must not create a query string")
+		checkEqual(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath())
+		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
 	}))
 	defer srv.Close()
 
@@ -5399,7 +5403,7 @@ func TestClientGetAccountUserGrantsEscapesUsername(t *testing.T) {
 
 	_, err := client.GetAccountUserGrants(t.Context(), "user/name?query")
 
-	require.NoError(t, err, "GetAccountUserGrants should escape path parameters")
+	mustNoError(t, err, "GetAccountUserGrants should escape path parameters")
 }
 
 // TestClientGetAccountUserGrantsAPIError verifies GetAccountUserGrants propagates API errors.
@@ -5407,11 +5411,11 @@ func TestClientGetAccountUserGrantsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -5419,13 +5423,13 @@ func TestClientGetAccountUserGrantsAPIError(t *testing.T) {
 
 	_, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
 
-	require.Error(t, err, "GetAccountUserGrants should fail on 403 response")
+	mustError(t, err, "GetAccountUserGrants should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountUserGrantsRetriesTransientError verifies the read-only grants lookup retries transient failures.
@@ -5439,15 +5443,15 @@ func TestClientGetAccountUserGrantsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")}}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")}}))
 	}))
 	defer srv.Close()
 
@@ -5455,10 +5459,10 @@ func TestClientGetAccountUserGrantsRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
 
-	require.NoError(t, err, "GetAccountUserGrants should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
-	assert.Equal(t, int32(2), requestCount.Load(), "request should be retried once")
+	mustNoError(t, err, "GetAccountUserGrants should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
+	checkEqual(t, int32(2), requestCount.Load(), "request should be retried once")
 }
 
 // TestClientListAccountLoginsSuccess verifies ListAccountLogins sends a GET
@@ -5481,13 +5485,13 @@ func TestClientListAccountLoginsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(logins))
+		checkNoError(t, json.NewEncoder(w).Encode(logins))
 	}))
 	defer srv.Close()
 
@@ -5495,13 +5499,13 @@ func TestClientListAccountLoginsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountLogins(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListAccountLogins should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, accountLoginUsername, result.Data[0].Username)
-	assert.Equal(t, accountLoginIP, result.Data[0].IP)
+	mustNoError(t, err, "ListAccountLogins should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 123, result.Data[0].ID)
+	checkEqual(t, accountLoginUsername, result.Data[0].Username)
+	checkEqual(t, accountLoginIP, result.Data[0].IP)
 }
 
 // TestClientListAccountLoginsAPIError verifies ListAccountLogins propagates API errors.
@@ -5509,13 +5513,13 @@ func TestClientListAccountLoginsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
-		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
+		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5523,13 +5527,13 @@ func TestClientListAccountLoginsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountLogins(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListAccountLogins should fail on 403 response")
+	mustError(t, err, "ListAccountLogins should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountLoginsRetriesTransientError verifies the read-only list retries transient failures.
@@ -5543,15 +5547,15 @@ func TestClientListAccountLoginsRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
 			Data: []linode.AccountLogin{{ID: 123, Username: accountLoginUsername}},
 		}))
 	}))
@@ -5561,11 +5565,11 @@ func TestClientListAccountLoginsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountLogins(t.Context(), 0, 0)
 
-	require.NoError(t, err, "ListAccountLogins should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountLogins should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, 123, result.Data[0].ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetProfileLoginSuccess verifies GetProfileLogin sends a GET
@@ -5583,13 +5587,13 @@ func TestClientGetProfileLoginSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(login))
+		checkNoError(t, json.NewEncoder(w).Encode(login))
 	}))
 	defer srv.Close()
 
@@ -5597,11 +5601,11 @@ func TestClientGetProfileLoginSuccess(t *testing.T) {
 
 	result, err := client.GetProfileLogin(t.Context(), 123)
 
-	require.NoError(t, err, "GetProfileLogin should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, accountLoginUsername, result.Username)
-	assert.Equal(t, accountLoginIP, result.IP)
+	mustNoError(t, err, "GetProfileLogin should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 123, result.ID)
+	checkEqual(t, accountLoginUsername, result.Username)
+	checkEqual(t, accountLoginIP, result.IP)
 }
 
 // TestClientGetProfileLoginAPIError verifies GetProfileLogin propagates API errors.
@@ -5609,12 +5613,12 @@ func TestClientGetProfileLoginAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5622,13 +5626,13 @@ func TestClientGetProfileLoginAPIError(t *testing.T) {
 
 	_, err := client.GetProfileLogin(t.Context(), 123)
 
-	require.Error(t, err, "GetProfileLogin should fail on 403 response")
+	mustError(t, err, "GetProfileLogin should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetProfileLoginRetriesTransientError verifies the read-only get retries transient failures.
@@ -5642,15 +5646,15 @@ func TestClientGetProfileLoginRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
 	}))
 	defer srv.Close()
 
@@ -5658,10 +5662,10 @@ func TestClientGetProfileLoginRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetProfileLogin(t.Context(), 123)
 
-	require.NoError(t, err, "GetProfileLogin should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetProfileLogin should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 123, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountLoginSuccess verifies GetAccountLogin sends a GET
@@ -5679,13 +5683,13 @@ func TestClientGetAccountLoginSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(login))
+		checkNoError(t, json.NewEncoder(w).Encode(login))
 	}))
 	defer srv.Close()
 
@@ -5693,11 +5697,11 @@ func TestClientGetAccountLoginSuccess(t *testing.T) {
 
 	result, err := client.GetAccountLogin(t.Context(), 123)
 
-	require.NoError(t, err, "GetAccountLogin should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, accountLoginUsername, result.Username)
-	assert.Equal(t, accountLoginIP, result.IP)
+	mustNoError(t, err, "GetAccountLogin should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 123, result.ID)
+	checkEqual(t, accountLoginUsername, result.Username)
+	checkEqual(t, accountLoginIP, result.IP)
 }
 
 // TestClientGetAccountLoginAPIError verifies GetAccountLogin propagates API errors.
@@ -5705,12 +5709,12 @@ func TestClientGetAccountLoginAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5718,13 +5722,13 @@ func TestClientGetAccountLoginAPIError(t *testing.T) {
 
 	_, err := client.GetAccountLogin(t.Context(), 123)
 
-	require.Error(t, err, "GetAccountLogin should fail on 403 response")
+	mustError(t, err, "GetAccountLogin should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountLoginRetriesTransientError verifies the read-only get retries transient failures.
@@ -5738,15 +5742,15 @@ func TestClientGetAccountLoginRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
 	}))
 	defer srv.Close()
 
@@ -5754,10 +5758,10 @@ func TestClientGetAccountLoginRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountLogin(t.Context(), 123)
 
-	require.NoError(t, err, "GetAccountLogin should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountLogin should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 123, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientListAccountInvoiceItemsSuccess verifies ListAccountInvoiceItems sends a GET
@@ -5779,13 +5783,13 @@ func TestClientListAccountInvoiceItemsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(items))
+		checkNoError(t, json.NewEncoder(w).Encode(items))
 	}))
 	defer srv.Close()
 
@@ -5793,12 +5797,12 @@ func TestClientListAccountInvoiceItemsSuccess(t *testing.T) {
 
 	result, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 2, 25)
 
-	require.NoError(t, err, "ListAccountInvoiceItems should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 2, result.Page)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "Nanode 1GB", result.Data[0].Label)
-	assert.InDelta(t, 5.00, result.Data[0].Total, 0.001)
+	mustNoError(t, err, "ListAccountInvoiceItems should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 2, result.Page)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "Nanode 1GB", result.Data[0].Label)
+	checkInDelta(t, 5.00, result.Data[0].Total, 0.001)
 }
 
 // TestClientListAccountInvoiceItemsAPIError verifies ListAccountInvoiceItems propagates API errors.
@@ -5806,12 +5810,12 @@ func TestClientListAccountInvoiceItemsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5819,13 +5823,13 @@ func TestClientListAccountInvoiceItemsAPIError(t *testing.T) {
 
 	_, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 0, 0)
 
-	require.Error(t, err, "ListAccountInvoiceItems should fail on 403 response")
+	mustError(t, err, "ListAccountInvoiceItems should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountInvoiceItemsRetriesTransientError verifies the read-only list retries transient failures.
@@ -5837,8 +5841,8 @@ func TestClientListAccountInvoiceItemsRetriesTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
 
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -5847,7 +5851,7 @@ func TestClientListAccountInvoiceItemsRetriesTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoiceItem]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoiceItem]{
 			Data: []linode.AccountInvoiceItem{{Label: "Nanode 1GB", Total: 5.00}},
 		}))
 	}))
@@ -5857,10 +5861,10 @@ func TestClientListAccountInvoiceItemsRetriesTransientError(t *testing.T) {
 
 	result, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 0, 0)
 
-	require.NoError(t, err, "ListAccountInvoiceItems should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "ListAccountInvoiceItems should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	mustLen(t, result.Data, 1)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountInvoiceRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -5874,15 +5878,15 @@ func TestClientGetAccountInvoiceRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountInvoice{ID: accountInvoiceID, Label: "Invoice #12345"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountInvoice{ID: accountInvoiceID, Label: "Invoice #12345"}))
 	}))
 	defer srv.Close()
 
@@ -5890,10 +5894,10 @@ func TestClientGetAccountInvoiceRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
 
-	require.NoError(t, err, "GetAccountInvoice should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, accountInvoiceID, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountInvoice should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, accountInvoiceID, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountChildAccountSuccess verifies GetAccountChildAccount sends a GET
@@ -5915,13 +5919,13 @@ func TestClientGetAccountChildAccountSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(childAccount))
+		checkNoError(t, json.NewEncoder(w).Encode(childAccount))
 	}))
 	defer srv.Close()
 
@@ -5929,12 +5933,12 @@ func TestClientGetAccountChildAccountSuccess(t *testing.T) {
 
 	result, err := client.GetAccountChildAccount(t.Context(), childAccountEUUID)
 
-	require.NoError(t, err, "GetAccountChildAccount should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, childAccountEUUID, result.EUUID)
-	assert.Equal(t, companyAcme, result.Company)
-	assert.Equal(t, "11/2024", result.CreditCard.Expiry)
-	assert.Equal(t, "0111", result.CreditCard.LastFour)
+	mustNoError(t, err, "GetAccountChildAccount should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, childAccountEUUID, result.EUUID)
+	checkEqual(t, companyAcme, result.Company)
+	checkEqual(t, "11/2024", result.CreditCard.Expiry)
+	checkEqual(t, "0111", result.CreditCard.LastFour)
 }
 
 // TestClientGetAccountChildAccountEscapesEUUID verifies the client encodes path separators.
@@ -5942,9 +5946,9 @@ func TestClientGetAccountChildAccountEscapesEUUID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/child-accounts/child%2Faccount%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/child-accounts/child%2Faccount%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: "child/account?query"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: "child/account?query"}))
 	}))
 	defer srv.Close()
 
@@ -5952,7 +5956,7 @@ func TestClientGetAccountChildAccountEscapesEUUID(t *testing.T) {
 
 	_, err := client.GetAccountChildAccount(t.Context(), "child/account?query")
 
-	require.NoError(t, err, "GetAccountChildAccount should escape path parameters")
+	mustNoError(t, err, "GetAccountChildAccount should escape path parameters")
 }
 
 // TestClientGetAccountChildAccountAPIError verifies GetAccountChildAccount propagates API errors.
@@ -5960,12 +5964,12 @@ func TestClientGetAccountChildAccountAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -5973,13 +5977,13 @@ func TestClientGetAccountChildAccountAPIError(t *testing.T) {
 
 	_, err := client.GetAccountChildAccount(t.Context(), childAccountEUUID)
 
-	require.Error(t, err, "GetAccountChildAccount should fail on 403 response")
+	mustError(t, err, "GetAccountChildAccount should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountChildAccountRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -5993,15 +5997,15 @@ func TestClientGetAccountChildAccountRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: childAccountEUUID, Company: companyAcme}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: childAccountEUUID, Company: companyAcme}))
 	}))
 	defer srv.Close()
 
@@ -6009,10 +6013,10 @@ func TestClientGetAccountChildAccountRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountChildAccount(t.Context(), childAccountEUUID)
 
-	require.NoError(t, err, "GetAccountChildAccount should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, childAccountEUUID, result.EUUID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountChildAccount should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, childAccountEUUID, result.EUUID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientCreateAccountServiceTransferSuccess verifies CreateAccountServiceTransfer
@@ -6027,17 +6031,17 @@ func TestClientCreateAccountServiceTransferSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var got linode.CreateAccountServiceTransferRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
+		checkEqual(t, []int{123, 456}, got.Entities.Linodes)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(want))
+		checkNoError(t, json.NewEncoder(w).Encode(want))
 	}))
 	defer srv.Close()
 
@@ -6046,23 +6050,23 @@ func TestClientCreateAccountServiceTransferSuccess(t *testing.T) {
 
 	got, err := client.CreateAccountServiceTransfer(t.Context(), req)
 
-	require.NoError(t, err, "CreateAccountServiceTransfer should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, statusPending, got.Status)
-	assert.Equal(t, "service-transfer-token", got.Token)
-	assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
+	mustNoError(t, err, "CreateAccountServiceTransfer should succeed on 200 response")
+	mustNotNil(t, got, "result should not be nil")
+	checkEqual(t, statusPending, got.Status)
+	checkEqual(t, "service-transfer-token", got.Token)
+	checkEqual(t, []int{123, 456}, got.Entities.Linodes)
 }
 
 func TestClientCreateAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6071,14 +6075,14 @@ func TestClientCreateAccountServiceTransferAPIError(t *testing.T) {
 
 	got, err := client.CreateAccountServiceTransfer(t.Context(), req)
 
-	require.Error(t, err, "CreateAccountServiceTransfer should return API error")
-	assert.Nil(t, got, "result should be nil on API error")
+	mustError(t, err, "CreateAccountServiceTransfer should return API error")
+	checkNil(t, got, "result should be nil on API error")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
@@ -6090,7 +6094,7 @@ func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6099,8 +6103,8 @@ func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing
 
 	_, err := client.CreateAccountServiceTransfer(t.Context(), req)
 
-	require.Error(t, err, "CreateAccountServiceTransfer should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating service transfer creation must not be retried")
+	mustError(t, err, "CreateAccountServiceTransfer should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating service transfer creation must not be retried")
 }
 
 // TestClientCreateAccountChildAccountTokenSuccess verifies CreateAccountChildAccountToken
@@ -6118,14 +6122,14 @@ func TestClientCreateAccountChildAccountTokenSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "token creation should not send a request body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "token creation should not send a request body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(proxyToken))
+		checkNoError(t, json.NewEncoder(w).Encode(proxyToken))
 	}))
 	defer srv.Close()
 
@@ -6133,13 +6137,13 @@ func TestClientCreateAccountChildAccountTokenSuccess(t *testing.T) {
 
 	result, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
 
-	require.NoError(t, err, "CreateAccountChildAccountToken should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 918, result.ID)
-	assert.Equal(t, "parent1_1234_2024-05-01T00:01:01", result.Label)
-	assert.Equal(t, "*", result.Scopes)
-	assert.Equal(t, "abcdefghijklmnop", result.Token)
-	assert.Equal(t, "2024-05-01T00:16:01", result.Expiry)
+	mustNoError(t, err, "CreateAccountChildAccountToken should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, 918, result.ID)
+	checkEqual(t, "parent1_1234_2024-05-01T00:01:01", result.Label)
+	checkEqual(t, "*", result.Scopes)
+	checkEqual(t, "abcdefghijklmnop", result.Token)
+	checkEqual(t, "2024-05-01T00:16:01", result.Expiry)
 }
 
 // TestClientCreateAccountChildAccountTokenEscapesEUUID verifies the client encodes path separators.
@@ -6147,9 +6151,9 @@ func TestClientCreateAccountChildAccountTokenEscapesEUUID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/child-accounts/child%2Faccount%3Fquery/token", r.URL.EscapedPath(), "path parameter should be escaped")
+		checkEqual(t, "/account/child-accounts/child%2Faccount%3Fquery/token", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProxyUserToken{Token: "proxy-token"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ProxyUserToken{Token: "proxy-token"}))
 	}))
 	defer srv.Close()
 
@@ -6157,7 +6161,7 @@ func TestClientCreateAccountChildAccountTokenEscapesEUUID(t *testing.T) {
 
 	_, err := client.CreateAccountChildAccountToken(t.Context(), "child/account?query")
 
-	require.NoError(t, err, "CreateAccountChildAccountToken should escape path parameters")
+	mustNoError(t, err, "CreateAccountChildAccountToken should escape path parameters")
 }
 
 // TestClientCreateAccountChildAccountTokenAPIError verifies API errors propagate.
@@ -6165,12 +6169,12 @@ func TestClientCreateAccountChildAccountTokenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6178,13 +6182,13 @@ func TestClientCreateAccountChildAccountTokenAPIError(t *testing.T) {
 
 	_, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
 
-	require.Error(t, err, "CreateAccountChildAccountToken should fail on 403 response")
+	mustError(t, err, "CreateAccountChildAccountToken should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError verifies
@@ -6198,7 +6202,7 @@ func TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError(t *testi
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6206,8 +6210,8 @@ func TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError(t *testi
 
 	_, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
 
-	require.Error(t, err, "CreateAccountChildAccountToken should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating token creation must not be retried")
+	mustError(t, err, "CreateAccountChildAccountToken should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating token creation must not be retried")
 }
 
 // TestClientGetAccountBetaSuccess verifies GetAccountBeta sends a GET
@@ -6226,13 +6230,13 @@ func TestClientGetAccountBetaSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(beta))
+		checkNoError(t, json.NewEncoder(w).Encode(beta))
 	}))
 	defer srv.Close()
 
@@ -6240,12 +6244,12 @@ func TestClientGetAccountBetaSuccess(t *testing.T) {
 
 	result, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
 
-	require.NoError(t, err, "GetAccountBeta should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, betaExampleOpen, result.ID)
-	assert.Equal(t, labelExampleOpenBeta, result.Label)
-	require.NotNil(t, result.Description)
-	assert.Equal(t, description, *result.Description)
+	mustNoError(t, err, "GetAccountBeta should succeed on 200 response")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, betaExampleOpen, result.ID)
+	checkEqual(t, labelExampleOpenBeta, result.Label)
+	mustNotNil(t, result.Description)
+	checkEqual(t, description, *result.Description)
 }
 
 // TestClientGetAccountBetaEscapesID verifies the client encodes path separators.
@@ -6253,9 +6257,9 @@ func TestClientGetAccountBetaEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/account/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
+		checkEqual(t, "/account/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: "example/open?query"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: "example/open?query"}))
 	}))
 	defer srv.Close()
 
@@ -6263,7 +6267,7 @@ func TestClientGetAccountBetaEscapesID(t *testing.T) {
 
 	_, err := client.GetAccountBeta(t.Context(), "example/open?query")
 
-	require.NoError(t, err, "GetAccountBeta should escape path parameters")
+	mustNoError(t, err, "GetAccountBeta should escape path parameters")
 }
 
 // TestClientGetAccountBetaAPIError verifies GetAccountBeta propagates API errors.
@@ -6271,12 +6275,12 @@ func TestClientGetAccountBetaAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6284,13 +6288,13 @@ func TestClientGetAccountBetaAPIError(t *testing.T) {
 
 	_, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
 
-	require.Error(t, err, "GetAccountBeta should fail on 403 response")
+	mustError(t, err, "GetAccountBeta should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountBetaRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -6304,15 +6308,15 @@ func TestClientGetAccountBetaRetriesTransientError(t *testing.T) {
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
 	}))
 	defer srv.Close()
 
@@ -6320,10 +6324,10 @@ func TestClientGetAccountBetaRetriesTransientError(t *testing.T) {
 
 	result, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
 
-	require.NoError(t, err, "GetAccountBeta should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, betaExampleOpen, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "GetAccountBeta should succeed after retry")
+	mustNotNil(t, result, "result should not be nil")
+	checkEqual(t, betaExampleOpen, result.ID)
+	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientEnrollAccountBetaSuccess verifies EnrollAccountBeta sends a POST
@@ -6332,19 +6336,19 @@ func TestClientEnrollAccountBetaSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, betaExampleOpen, body["id"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, betaExampleOpen, body["id"])
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6352,7 +6356,7 @@ func TestClientEnrollAccountBetaSuccess(t *testing.T) {
 
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
 
-	require.NoError(t, err, "EnrollAccountBeta should succeed on 200 response")
+	mustNoError(t, err, "EnrollAccountBeta should succeed on 200 response")
 }
 
 // TestClientEnrollAccountBetaAPIError verifies EnrollAccountBeta propagates API errors.
@@ -6360,12 +6364,12 @@ func TestClientEnrollAccountBetaAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6373,13 +6377,13 @@ func TestClientEnrollAccountBetaAPIError(t *testing.T) {
 
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
 
-	require.Error(t, err, "EnrollAccountBeta should fail on 403 response")
+	mustError(t, err, "EnrollAccountBeta should fail on 403 response")
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	require.NotNil(t, apiErr, "APIError should be present")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
+	mustNotNil(t, apiErr, "APIError should be present")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	checkEqual(t, errForbidden, apiErr.Message)
 }
 
 // TestClientEnrollAccountBetaDoesNotRetry verifies the mutating beta enrollment
@@ -6392,11 +6396,11 @@ func TestClientEnrollAccountBetaDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6404,8 +6408,8 @@ func TestClientEnrollAccountBetaDoesNotRetry(t *testing.T) {
 
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
 
-	require.Error(t, err, "EnrollAccountBeta should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "EnrollAccountBeta must not retry and replay a mutating request")
+	mustError(t, err, "EnrollAccountBeta should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "EnrollAccountBeta must not retry and replay a mutating request")
 }
 
 // TestClientAcknowledgeAccountAgreementsSuccess verifies that
@@ -6415,22 +6419,22 @@ func TestClientAcknowledgeAccountAgreementsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, true, body["billing_agreement"])
-		assert.Equal(t, true, body["eu_model"])
-		assert.Equal(t, true, body["master_service_agreement"])
-		assert.NotContains(t, body, "privacy_policy", "omitted fields should not be sent")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, true, body["billing_agreement"])
+		checkEqual(t, true, body["eu_model"])
+		checkEqual(t, true, body["master_service_agreement"])
+		checkNotContains(t, body, "privacy_policy", "omitted fields should not be sent")
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6445,7 +6449,7 @@ func TestClientAcknowledgeAccountAgreementsSuccess(t *testing.T) {
 		MasterServiceAgreement: &masterServiceAgreement,
 	})
 
-	require.NoError(t, err, "AcknowledgeAccountAgreements should succeed on 200 response")
+	mustNoError(t, err, "AcknowledgeAccountAgreements should succeed on 200 response")
 }
 
 // TestClientAcknowledgeAccountAgreementsDoesNotRetry verifies the mutating
@@ -6458,11 +6462,11 @@ func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6471,8 +6475,8 @@ func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
 	privacyPolicy := true
 	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{PrivacyPolicy: &privacyPolicy})
 
-	require.Error(t, err, "AcknowledgeAccountAgreements should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "AcknowledgeAccountAgreements must not retry and replay a mutating request")
+	mustError(t, err, "AcknowledgeAccountAgreements should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "AcknowledgeAccountAgreements must not retry and replay a mutating request")
 }
 
 // TestClientCancelAccountSuccess verifies CancelAccount sends a POST request to
@@ -6481,19 +6485,19 @@ func TestClientCancelAccountSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "moving providers", body["comments"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, "moving providers", body["comments"])
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6502,9 +6506,9 @@ func TestClientCancelAccountSuccess(t *testing.T) {
 	comments := "moving providers"
 	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &comments})
 
-	require.NoError(t, err, "CancelAccount should succeed on 200 response")
-	require.NotNil(t, response, "response should not be nil")
-	assert.Equal(t, "https://example.test/survey", response.SurveyLink)
+	mustNoError(t, err, "CancelAccount should succeed on 200 response")
+	mustNotNil(t, response, "response should not be nil")
+	checkEqual(t, "https://example.test/survey", response.SurveyLink)
 }
 
 // TestClientCancelAccountWithoutComments verifies comments are optional.
@@ -6512,16 +6516,16 @@ func TestClientCancelAccountWithoutComments(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Empty(t, body, "omitted comments should send an empty JSON object")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEmpty(t, body, "omitted comments should send an empty JSON object")
 
 		w.Header().Set("Content-Type", "application/json")
 		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
-		assert.NoError(t, writeErr)
+		checkNoError(t, writeErr)
 	}))
 	defer srv.Close()
 
@@ -6529,9 +6533,9 @@ func TestClientCancelAccountWithoutComments(t *testing.T) {
 
 	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{})
 
-	require.NoError(t, err, "CancelAccount should succeed without comments")
-	require.NotNil(t, response, "response should not be nil")
-	assert.Equal(t, "https://example.test/survey", response.SurveyLink)
+	mustNoError(t, err, "CancelAccount should succeed without comments")
+	mustNotNil(t, response, "response should not be nil")
+	checkEqual(t, "https://example.test/survey", response.SurveyLink)
 }
 
 // TestClientCancelAccountDoesNotRetry verifies account cancellation is not
@@ -6544,11 +6548,11 @@ func TestClientCancelAccountDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6557,8 +6561,8 @@ func TestClientCancelAccountDoesNotRetry(t *testing.T) {
 	errComments := "temporary"
 	_, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &errComments})
 
-	require.Error(t, err, "CancelAccount should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "CancelAccount must not retry and replay a destructive request")
+	mustError(t, err, "CancelAccount should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "CancelAccount must not retry and replay a destructive request")
 }
 
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
@@ -6580,20 +6584,20 @@ func TestClientUpdateAccountSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account", r.URL.Path, "request path should be /account")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account", r.URL.Path, "request path should be /account")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "updated@example.com", body["email"])
-		assert.Equal(t, "Updated", body["first_name"])
-		assert.Equal(t, "123 Main St", body["address_1"])
-		assert.NotContains(t, body, "address_2", "omitted fields should not be sent")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, "updated@example.com", body["email"])
+		checkEqual(t, "Updated", body["first_name"])
+		checkEqual(t, "123 Main St", body["address_1"])
+		checkNotContains(t, body, "address_2", "omitted fields should not be sent")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(updatedAccount))
+		checkNoError(t, json.NewEncoder(w).Encode(updatedAccount))
 	}))
 	defer srv.Close()
 
@@ -6608,10 +6612,10 @@ func TestClientUpdateAccountSuccess(t *testing.T) {
 		Address1:  &address1,
 	})
 
-	require.NoError(t, err, "UpdateAccount should succeed on 200 response")
-	assert.Equal(t, "updated@example.com", result.Email)
-	assert.Equal(t, "Updated", result.FirstName)
-	assert.Equal(t, "123 Main St", result.Address1)
+	mustNoError(t, err, "UpdateAccount should succeed on 200 response")
+	checkEqual(t, "updated@example.com", result.Email)
+	checkEqual(t, "Updated", result.FirstName)
+	checkEqual(t, "123 Main St", result.Address1)
 }
 
 // TestClientUpdateAccountNetworkError verifies that UpdateAccount returns a
@@ -6623,11 +6627,11 @@ func TestClientUpdateAccountNetworkError(t *testing.T) {
 
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
 
-	require.Error(t, err, "UpdateAccount should fail when the server is unreachable")
+	mustError(t, err, "UpdateAccount should fail when the server is unreachable")
 
 	var netErr *linode.NetworkError
 
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
 }
 
 // TestClientUpdateAccountAPIError verifies that UpdateAccount propagates
@@ -6638,7 +6642,7 @@ func TestClientUpdateAccountAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6646,12 +6650,12 @@ func TestClientUpdateAccountAPIError(t *testing.T) {
 
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
 
-	require.Error(t, err, "UpdateAccount should fail on 400 response")
+	mustError(t, err, "UpdateAccount should fail on 400 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 // TestClientUpdateAccountDoesNotRetry verifies the mutating account update is
@@ -6664,11 +6668,11 @@ func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account", r.URL.Path, "request path should be /account")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account", r.URL.Path, "request path should be /account")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6676,8 +6680,8 @@ func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
 
-	require.Error(t, err, "UpdateAccount should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UpdateAccount must not retry and replay a mutating request")
+	mustError(t, err, "UpdateAccount should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UpdateAccount must not retry and replay a mutating request")
 }
 
 // TestClientEnableAccountManagedSuccess verifies that EnableAccountManaged sends a POST
@@ -6686,18 +6690,18 @@ func TestClientEnableAccountManagedSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.Empty(t, body, "request should not include a body")
+		checkNoError(t, err)
+		checkEmpty(t, body, "request should not include a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
@@ -6705,7 +6709,7 @@ func TestClientEnableAccountManagedSuccess(t *testing.T) {
 
 	err := client.EnableAccountManaged(t.Context())
 
-	require.NoError(t, err, "EnableAccountManaged should succeed on 200 response")
+	mustNoError(t, err, "EnableAccountManaged should succeed on 200 response")
 }
 
 // TestClientEnableAccountManagedNetworkError verifies that EnableAccountManaged returns a
@@ -6717,11 +6721,11 @@ func TestClientEnableAccountManagedNetworkError(t *testing.T) {
 
 	err := client.EnableAccountManaged(t.Context())
 
-	require.Error(t, err, "EnableAccountManaged should fail when the server is unreachable")
+	mustError(t, err, "EnableAccountManaged should fail when the server is unreachable")
 
 	var netErr *linode.NetworkError
 
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
 }
 
 // TestClientEnableAccountManagedAPIError verifies that EnableAccountManaged propagates
@@ -6730,11 +6734,11 @@ func TestClientEnableAccountManagedAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"managed could not be enabled"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6742,12 +6746,12 @@ func TestClientEnableAccountManagedAPIError(t *testing.T) {
 
 	err := client.EnableAccountManaged(t.Context())
 
-	require.Error(t, err, "EnableAccountManaged should fail on 400 response")
+	mustError(t, err, "EnableAccountManaged should fail on 400 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 // TestClientEnableAccountManagedDoesNotRetry verifies the mutating managed enable
@@ -6760,11 +6764,11 @@ func TestClientEnableAccountManagedDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6772,8 +6776,8 @@ func TestClientEnableAccountManagedDoesNotRetry(t *testing.T) {
 
 	err := client.EnableAccountManaged(t.Context())
 
-	require.Error(t, err, "EnableAccountManaged should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "EnableAccountManaged must not retry and replay a mutating request")
+	mustError(t, err, "EnableAccountManaged should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "EnableAccountManaged must not retry and replay a mutating request")
 }
 
 // TestClientUpdateAccountSettingsSuccess verifies that UpdateAccountSettings sends a PUT
@@ -6794,21 +6798,21 @@ func TestClientUpdateAccountSettingsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, true, body["backups_enabled"])
-		assert.Equal(t, false, body["network_helper"])
-		assert.Equal(t, maintenancePolicyMigrate, body["maintenance_policy"])
-		assert.NotContains(t, body, "object_storage", "omitted fields should not be sent")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, true, body["backups_enabled"])
+		checkEqual(t, false, body["network_helper"])
+		checkEqual(t, maintenancePolicyMigrate, body["maintenance_policy"])
+		checkNotContains(t, body, "object_storage", "omitted fields should not be sent")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		checkNoError(t, json.NewEncoder(w).Encode(settings))
 	}))
 	defer srv.Close()
 
@@ -6825,10 +6829,10 @@ func TestClientUpdateAccountSettingsSuccess(t *testing.T) {
 		MaintenancePolicy: &maintenancePolicy,
 	})
 
-	require.NoError(t, err, "UpdateAccountSettings should succeed on 200 response")
-	assert.True(t, result.BackupsEnabled)
-	assert.False(t, result.NetworkHelper)
-	assert.Equal(t, maintenancePolicyMigrate, result.MaintenancePolicy)
+	mustNoError(t, err, "UpdateAccountSettings should succeed on 200 response")
+	checkTrue(t, result.BackupsEnabled)
+	checkFalse(t, result.NetworkHelper)
+	checkEqual(t, maintenancePolicyMigrate, result.MaintenancePolicy)
 }
 
 // TestClientUpdateAccountSettingsAPIError verifies that UpdateAccountSettings propagates
@@ -6837,11 +6841,11 @@ func TestClientUpdateAccountSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"field":"maintenance_policy","reason":"invalid maintenance policy"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6849,12 +6853,12 @@ func TestClientUpdateAccountSettingsAPIError(t *testing.T) {
 
 	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
 
-	require.Error(t, err, "UpdateAccountSettings should fail on 400 response")
+	mustError(t, err, "UpdateAccountSettings should fail on 400 response")
 
 	var apiErr *linode.APIError
 
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 // TestClientUpdateAccountSettingsDoesNotRetry verifies the mutating account settings
@@ -6867,11 +6871,11 @@ func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -6879,8 +6883,8 @@ func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 
 	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
 
-	require.Error(t, err, "UpdateAccountSettings should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UpdateAccountSettings must not retry and replay a mutating request")
+	mustError(t, err, "UpdateAccountSettings should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UpdateAccountSettings must not retry and replay a mutating request")
 }
 
 func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
@@ -6903,12 +6907,12 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:   tokens,
 			"page":    2,
 			"pages":   3,
@@ -6920,13 +6924,13 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListImageShareGroupTokens(t.Context(), 2, 25)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, "Backend Services - Engineering", result.Data[0].Label)
-	assert.Equal(t, "13428362-5458-4dad-b14b-8d0d4d648f8c", result.Data[0].TokenUUID)
-	assert.Equal(t, 2, result.Page)
-	assert.Equal(t, 7, result.Results)
+	mustNoError(t, err)
+	mustNotNil(t, result)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, "Backend Services - Engineering", result.Data[0].Label)
+	checkEqual(t, "13428362-5458-4dad-b14b-8d0d4d648f8c", result.Data[0].TokenUUID)
+	checkEqual(t, 2, result.Page)
+	checkEqual(t, 7, result.Results)
 }
 
 func TestClientListImageShareGroupTokensError(t *testing.T) {
@@ -6934,7 +6938,7 @@ func TestClientListImageShareGroupTokensError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -6943,8 +6947,8 @@ func TestClientListImageShareGroupTokensError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListImageShareGroupTokens(t.Context(), 1, 25)
 
-	require.Error(t, err)
-	assert.Nil(t, result)
+	mustError(t, err)
+	checkNil(t, result)
 }
 
 func TestClientListImageShareGroupsSuccess(t *testing.T) {
@@ -6967,12 +6971,12 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    shareGroups,
 			"page":    2,
 			"pages":   3,
@@ -6984,12 +6988,12 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListImageShareGroups(t.Context(), 2, 25)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, imageShareGroupLabel, result.Data[0].Label)
-	assert.Equal(t, 2, result.Page)
-	assert.Equal(t, 7, result.Results)
+	mustNoError(t, err)
+	mustNotNil(t, result)
+	mustLen(t, result.Data, 1)
+	checkEqual(t, imageShareGroupLabel, result.Data[0].Label)
+	checkEqual(t, 2, result.Page)
+	checkEqual(t, 7, result.Results)
 }
 
 func TestClientGetImageShareGroupSuccess(t *testing.T) {
@@ -7010,32 +7014,32 @@ func TestClientGetImageShareGroupSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(shareGroup))
+		checkNoError(t, json.NewEncoder(w).Encode(shareGroup))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetImageShareGroup(t.Context(), 123)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, imageShareGroupLabel, result.Label)
+	mustNoError(t, err)
+	mustNotNil(t, result)
+	checkEqual(t, 123, result.ID)
+	checkEqual(t, imageShareGroupLabel, result.Label)
 }
 
 func TestClientGetImageShareGroupAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]any{{keyReason: "temporary share group failure"}},
 		}))
 	}))
@@ -7044,12 +7048,12 @@ func TestClientGetImageShareGroupAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetImageShareGroup(t.Context(), 123)
 
-	require.Error(t, err)
-	assert.Nil(t, result)
+	mustError(t, err)
+	checkNil(t, result)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, "temporary share group failure", apiErr.Message)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, "temporary share group failure", apiErr.Message)
 }
 
 func TestClientGetImageShareGroupNetworkError(t *testing.T) {
@@ -7058,11 +7062,11 @@ func TestClientGetImageShareGroupNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetImageShareGroup(t.Context(), 123)
 
-	require.Error(t, err, "GetImageShareGroup should fail when server is unreachable")
+	mustError(t, err, "GetImageShareGroup should fail when server is unreachable")
 
 	var netErr *linode.NetworkError
-	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
-	assert.Equal(t, "GetImageShareGroup", netErr.Operation)
+	mustErrorAs(t, err, &netErr, "error should be a NetworkError")
+	checkEqual(t, "GetImageShareGroup", netErr.Operation)
 }
 
 func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
@@ -7085,12 +7089,12 @@ func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
 
 		if requestCount.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -7098,17 +7102,17 @@ func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(shareGroup))
+		checkNoError(t, json.NewEncoder(w).Encode(shareGroup))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	result, err := client.GetImageShareGroup(t.Context(), 123)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), requestCount.Load())
-	assert.Equal(t, imageShareGroupLabel, result.Label)
+	mustNoError(t, err)
+	mustNotNil(t, result)
+	checkEqual(t, int32(2), requestCount.Load())
+	checkEqual(t, imageShareGroupLabel, result.Label)
 }
 
 func TestClientCreateImageShareGroupSuccess(t *testing.T) {
@@ -7125,33 +7129,33 @@ func TestClientCreateImageShareGroupSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
 			return
 		}
 
-		assert.Equal(t, imageShareGroupLabel, body[keyLabel])
-		assert.Equal(t, description, body[keyDescription])
+		checkEqual(t, imageShareGroupLabel, body[keyLabel])
+		checkEqual(t, description, body[keyDescription])
 
-		if !assert.Len(t, body["images"], 1) {
+		if !checkLen(t, body["images"], 1) {
 			return
 		}
 
 		image, ok := body["images"].([]any)[0].(map[string]any)
-		if !assert.True(t, ok, "image payload should be an object") {
+		if !checkTrue(t, ok, "image payload should be an object") {
 			return
 		}
 
-		assert.Equal(t, "private/7", image[keyID])
-		assert.Equal(t, "Linux Debian", image["label"])
+		checkEqual(t, "private/7", image[keyID])
+		checkEqual(t, "Linux Debian", image["label"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
 			ID:           1,
 			UUID:         shareGroupUUIDExample,
 			Label:        imageShareGroupLabel,
@@ -7168,10 +7172,10 @@ func TestClientCreateImageShareGroupSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.CreateImageShareGroup(t.Context(), request)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, imageShareGroupLabel, result.Label)
-	assert.Equal(t, 1, result.ImagesCount)
+	mustNoError(t, err)
+	mustNotNil(t, result)
+	checkEqual(t, imageShareGroupLabel, result.Label)
+	checkEqual(t, 1, result.ImagesCount)
 }
 
 func TestClientCreateImageShareGroupAPIError(t *testing.T) {
@@ -7179,7 +7183,7 @@ func TestClientCreateImageShareGroupAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "label is required"}},
 		}))
 	}))
@@ -7188,8 +7192,8 @@ func TestClientCreateImageShareGroupAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
 
-	require.Error(t, err, "CreateImageShareGroup should return API errors")
-	assert.ErrorContains(t, err, "label is required")
+	mustError(t, err, "CreateImageShareGroup should return API errors")
+	checkErrorContains(t, err, "label is required")
 }
 
 func TestClientCreateImageShareGroupNetworkError(t *testing.T) {
@@ -7202,11 +7206,11 @@ func TestClientCreateImageShareGroupNetworkError(t *testing.T) {
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
 
-	require.Error(t, err, "CreateImageShareGroup should wrap network errors")
+	mustError(t, err, "CreateImageShareGroup should wrap network errors")
 
 	var networkErr *linode.NetworkError
-	require.ErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
-	assert.Equal(t, "CreateImageShareGroup", networkErr.Operation)
+	mustErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
+	checkEqual(t, "CreateImageShareGroup", networkErr.Operation)
 }
 
 func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
@@ -7217,7 +7221,7 @@ func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -7226,8 +7230,8 @@ func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
 
-	require.Error(t, err, "CreateImageShareGroup should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "CreateImageShareGroup must not retry and replay a mutating request")
+	mustError(t, err, "CreateImageShareGroup should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "CreateImageShareGroup must not retry and replay a mutating request")
 }
 
 const (
@@ -7250,24 +7254,24 @@ func TestClientUploadImageSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
 			return
 		}
 
-		assert.Equal(t, uploadImageLabelFixture, body[keyLabel])
-		assert.Equal(t, regionUSEast, body["region"])
-		assert.Equal(t, "custom upload", body[keyDescription])
-		assert.Equal(t, true, body["cloud_init"])
-		assert.Equal(t, []any{uploadImageTagProd, uploadImageTagWeb}, body["tags"])
+		checkEqual(t, uploadImageLabelFixture, body[keyLabel])
+		checkEqual(t, regionUSEast, body["region"])
+		checkEqual(t, "custom upload", body[keyDescription])
+		checkEqual(t, true, body["cloud_init"])
+		checkEqual(t, []any{uploadImageTagProd, uploadImageTagWeb}, body["tags"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"image": linode.Image{
 				ID:          "private/99",
 				Label:       uploadImageLabelFixture,
@@ -7283,11 +7287,11 @@ func TestClientUploadImageSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.UploadImage(t.Context(), request)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, "private/99", result.Image.ID)
-	assert.Equal(t, uploadImageLabelFixture, result.Image.Label)
-	assert.Equal(t, uploadImageTargetFixture, result.UploadTo)
+	mustNoError(t, err)
+	mustNotNil(t, result)
+	checkEqual(t, "private/99", result.Image.ID)
+	checkEqual(t, uploadImageLabelFixture, result.Image.Label)
+	checkEqual(t, uploadImageTargetFixture, result.UploadTo)
 }
 
 func TestClientUploadImageAPIError(t *testing.T) {
@@ -7295,7 +7299,7 @@ func TestClientUploadImageAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "region is required"}},
 		}))
 	}))
@@ -7304,8 +7308,8 @@ func TestClientUploadImageAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture})
 
-	require.Error(t, err, "UploadImage should return API errors")
-	assert.ErrorContains(t, err, "region is required")
+	mustError(t, err, "UploadImage should return API errors")
+	checkErrorContains(t, err, "region is required")
 }
 
 func TestClientUploadImageNetworkError(t *testing.T) {
@@ -7318,11 +7322,11 @@ func TestClientUploadImageNetworkError(t *testing.T) {
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
 
-	require.Error(t, err, "UploadImage should wrap network errors")
+	mustError(t, err, "UploadImage should wrap network errors")
 
 	var networkErr *linode.NetworkError
-	require.ErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
-	assert.Equal(t, "UploadImage", networkErr.Operation)
+	mustErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
+	checkEqual(t, "UploadImage", networkErr.Operation)
 }
 
 func TestClientUploadImageDoesNotRetry(t *testing.T) {
@@ -7333,7 +7337,7 @@ func TestClientUploadImageDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -7342,8 +7346,8 @@ func TestClientUploadImageDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
 
-	require.Error(t, err, "UploadImage should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UploadImage must not retry and replay a mutating request")
+	mustError(t, err, "UploadImage should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UploadImage must not retry and replay a mutating request")
 }
 
 // TestClientListObjectStorageQuotasSuccess verifies that ListObjectStorageQuotas sends a
@@ -7361,18 +7365,18 @@ func TestClientListObjectStorageQuotasSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.Empty(t, body, "request should not include a body")
+		checkNoError(t, err)
+		checkEmpty(t, body, "request should not include a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    quotas,
 			keyPage:    1,
 			keyPages:   1,
@@ -7385,9 +7389,9 @@ func TestClientListObjectStorageQuotasSuccess(t *testing.T) {
 
 	got, err := client.ListObjectStorageQuotas(t.Context())
 
-	require.NoError(t, err, "ListObjectStorageQuotas should succeed on 200 response")
-	require.Len(t, got, 1, "one quota should be returned")
-	assert.Equal(t, quotaID, got[0][keyID])
+	mustNoError(t, err, "ListObjectStorageQuotas should succeed on 200 response")
+	mustLen(t, got, 1, "one quota should be returned")
+	checkEqual(t, quotaID, got[0][keyID])
 }
 
 // TestClientListObjectStorageQuotasRetriesReadOnlyGET verifies the read-only quotas
@@ -7399,19 +7403,19 @@ func TestClientListObjectStorageQuotasRetriesReadOnlyGET(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
 
 		if calls.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-			assert.NoError(t, err)
+			checkNoError(t, err)
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.ObjectStorageQuota{{keyID: "endpoint-type-1"}},
 			keyPage:    1,
 			keyPages:   1,
@@ -7424,7 +7428,345 @@ func TestClientListObjectStorageQuotasRetriesReadOnlyGET(t *testing.T) {
 
 	got, err := client.ListObjectStorageQuotas(t.Context())
 
-	require.NoError(t, err, "ListObjectStorageQuotas should retry and then succeed")
-	require.Len(t, got, 1, "one quota should be returned")
-	assert.Equal(t, int32(2), calls.Load(), "GET quotas should retry once after transient failure")
+	mustNoError(t, err, "ListObjectStorageQuotas should retry and then succeed")
+	mustLen(t, got, 1, "one quota should be returned")
+	checkEqual(t, int32(2), calls.Load(), "GET quotas should retry once after transient failure")
+}
+
+func helperMessage(args []any) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	format, ok := args[0].(string)
+	if ok {
+		if len(args) > 1 {
+			return ": " + fmt.Sprintf(format, args[1:]...)
+		}
+
+		return ": " + format
+	}
+
+	return ": " + fmt.Sprint(args...)
+}
+
+func fail(tb testing.TB, msg string, args ...any) {
+	tb.Helper()
+
+	tb.Fatalf("%s%s", msg, helperMessage(args))
+}
+
+func isNilValue(value any) bool {
+	if value == nil {
+		return true
+	}
+
+	actualValue := reflect.ValueOf(value)
+	kind := actualValue.Kind()
+
+	canBeNil := kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface || kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice
+	if !canBeNil {
+		return false
+	}
+
+	return actualValue.IsNil()
+}
+
+func toFloat64(value any) (float64, bool) {
+	switch actual := value.(type) {
+	case int:
+		return float64(actual), true
+	case int8:
+		return float64(actual), true
+	case int16:
+		return float64(actual), true
+	case int32:
+		return float64(actual), true
+	case int64:
+		return float64(actual), true
+	case time.Duration:
+		return float64(actual), true
+	case uint:
+		return float64(actual), true
+	case uint8:
+		return float64(actual), true
+	case uint16:
+		return float64(actual), true
+	case uint32:
+		return float64(actual), true
+	case uint64:
+		return float64(actual), true
+	case uintptr:
+		return float64(actual), true
+	case float32:
+		return float64(actual), true
+	case float64:
+		return actual, true
+	default:
+		return 0, false
+	}
+}
+
+func containsValue(container, item any) bool {
+	if text, ok := container.(string); ok {
+		needle, ok := item.(string)
+
+		return ok && strings.Contains(text, needle)
+	}
+
+	if isNilValue(container) {
+		return false
+	}
+
+	containerValue := reflect.ValueOf(container)
+	kind := containerValue.Kind()
+
+	if kind == reflect.Map {
+		key := reflect.ValueOf(item)
+		if !key.IsValid() || !key.Type().AssignableTo(containerValue.Type().Key()) {
+			return false
+		}
+
+		return containerValue.MapIndex(key).IsValid()
+	}
+
+	if kind != reflect.Array && kind != reflect.Slice {
+		return false
+	}
+
+	for index := range containerValue.Len() {
+		if reflect.DeepEqual(containerValue.Index(index).Interface(), item) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func errorAsValue(err error, target any) bool {
+	asError := errors.As
+
+	return asError(err, target)
+}
+
+func mustNoError(tb testing.TB, err error, args ...any) {
+	tb.Helper()
+
+	if err != nil {
+		fail(tb, fmt.Sprintf("unexpected error: %v", err), args...)
+	}
+}
+
+func mustError(tb testing.TB, err error, args ...any) {
+	tb.Helper()
+
+	if err == nil {
+		fail(tb, "expected error", args...)
+	}
+}
+
+func checkErrorIs(tb testing.TB, err, target error, args ...any) {
+	tb.Helper()
+
+	if !errors.Is(err, target) {
+		tb.Errorf("expected error %v to match %v%s", err, target, helperMessage(args))
+	}
+}
+
+func mustErrorIs(tb testing.TB, err, target error, args ...any) {
+	tb.Helper()
+
+	if !errors.Is(err, target) {
+		fail(tb, fmt.Sprintf("expected error %v to match %v", err, target), args...)
+	}
+}
+
+func checkErrorAs(tb testing.TB, err error, target any, args ...any) {
+	tb.Helper()
+
+	if !errorAsValue(err, target) {
+		tb.Errorf("expected error %v to match target %T%s", err, target, helperMessage(args))
+	}
+}
+
+func mustErrorAs(tb testing.TB, err error, target any, args ...any) {
+	tb.Helper()
+
+	if !errorAsValue(err, target) {
+		fail(tb, fmt.Sprintf("expected error %v to match target %T", err, target), args...)
+	}
+}
+
+func checkErrorContains(tb testing.TB, err error, substring string, args ...any) {
+	tb.Helper()
+
+	if err == nil || !strings.Contains(fmt.Sprint(err), substring) {
+		tb.Errorf("expected error %v to contain %q%s", err, substring, helperMessage(args))
+	}
+}
+
+func mustErrorContains(tb testing.TB, err error, substring string, args ...any) {
+	tb.Helper()
+
+	if err == nil || !strings.Contains(fmt.Sprint(err), substring) {
+		fail(tb, fmt.Sprintf("expected error %v to contain %q", err, substring), args...)
+	}
+}
+
+func mustNil(tb testing.TB, actual any, args ...any) {
+	tb.Helper()
+
+	if !isNilValue(actual) {
+		fail(tb, fmt.Sprintf("expected nil, got %#v", actual), args...)
+	}
+}
+
+func checkNotNil(tb testing.TB, actual any, args ...any) bool {
+	tb.Helper()
+
+	if isNilValue(actual) {
+		tb.Errorf("expected non-nil value%s", helperMessage(args))
+
+		return false
+	}
+
+	return true
+}
+
+func mustNotNil(tb testing.TB, actual any, args ...any) {
+	tb.Helper()
+
+	if isNilValue(actual) {
+		fail(tb, "expected non-nil value", args...)
+	}
+}
+
+func checkLen(tb testing.TB, actual any, expected int, args ...any) bool {
+	tb.Helper()
+
+	actualLength, ok := valueLen(actual)
+	if !ok || actualLength != expected {
+		tb.Errorf("expected length %d, got %d%s", expected, actualLength, helperMessage(args))
+
+		return false
+	}
+
+	return true
+}
+
+// mustLen uses the package-level valueLen helper from image_assertions_test.go.
+func mustLen(tb testing.TB, actual any, expectedAndArgs ...any) {
+	tb.Helper()
+
+	if len(expectedAndArgs) == 0 {
+		fail(tb, "missing expected length")
+	}
+
+	expected, ok := expectedAndArgs[0].(int)
+	if !ok {
+		fail(tb, fmt.Sprintf("expected length argument must be int, got %T", expectedAndArgs[0]))
+	}
+
+	if !checkLen(tb, actual, expected, expectedAndArgs[1:]...) {
+		tb.FailNow()
+	}
+}
+
+func mustTrue(tb testing.TB, actual bool, args ...any) {
+	tb.Helper()
+
+	if !actual {
+		fail(tb, "expected true", args...)
+	}
+}
+
+func checkFalse(tb testing.TB, actual bool, args ...any) {
+	tb.Helper()
+
+	if actual {
+		tb.Errorf("expected false%s", helperMessage(args))
+	}
+}
+
+func checkContains(tb testing.TB, container, item any, args ...any) {
+	tb.Helper()
+
+	if !containsValue(container, item) {
+		tb.Errorf("expected %#v to contain %#v%s", container, item, helperMessage(args))
+	}
+}
+
+func checkNotContains(tb testing.TB, container, item any, args ...any) {
+	tb.Helper()
+
+	if containsValue(container, item) {
+		tb.Errorf("expected %#v not to contain %#v%s", container, item, helperMessage(args))
+	}
+}
+
+func checkInEpsilon(tb testing.TB, expected, actual any, epsilon float64, args ...any) {
+	tb.Helper()
+
+	expectedFloat, expectedOK := toFloat64(expected)
+	actualFloat, actualOK := toFloat64(actual)
+
+	if !expectedOK || !actualOK || math.Abs(expectedFloat-actualFloat) > math.Abs(expectedFloat)*epsilon {
+		tb.Errorf("expected %#v and %#v to be within epsilon %v%s", expected, actual, epsilon, helperMessage(args))
+	}
+}
+
+func checkInDelta(tb testing.TB, expected, actual any, delta float64, args ...any) {
+	tb.Helper()
+
+	expectedFloat, expectedOK := toFloat64(expected)
+	actualFloat, actualOK := toFloat64(actual)
+
+	if !expectedOK || !actualOK || math.Abs(expectedFloat-actualFloat) > delta {
+		tb.Errorf("expected %#v and %#v to be within delta %v%s", expected, actual, delta, helperMessage(args))
+	}
+}
+
+func checkLess(tb testing.TB, actual, ceiling any, args ...any) {
+	tb.Helper()
+
+	actualFloat, actualOK := toFloat64(actual)
+	ceilingFloat, ceilingOK := toFloat64(ceiling)
+
+	if !actualOK || !ceilingOK || actualFloat >= ceilingFloat {
+		tb.Errorf("expected %#v to be less than %#v%s", actual, ceiling, helperMessage(args))
+	}
+}
+
+func checkGreaterOrEqual(tb testing.TB, actual, floor any, args ...any) {
+	tb.Helper()
+
+	actualFloat, actualOK := toFloat64(actual)
+	floorFloat, floorOK := toFloat64(floor)
+
+	if !actualOK || !floorOK || actualFloat < floorFloat {
+		tb.Errorf("expected %#v to be greater than or equal to %#v%s", actual, floor, helperMessage(args))
+	}
+}
+
+func mustGreaterOrEqual(tb testing.TB, actual, floor any, args ...any) {
+	tb.Helper()
+
+	actualFloat, actualOK := toFloat64(actual)
+	floorFloat, floorOK := toFloat64(floor)
+
+	if !actualOK || !floorOK || actualFloat < floorFloat {
+		fail(tb, fmt.Sprintf("expected %#v to be greater than or equal to %#v", actual, floor), args...)
+	}
+}
+
+func mustNotPanics(tb testing.TB, callback func(), args ...any) {
+	tb.Helper()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			fail(tb, fmt.Sprintf("unexpected panic: %#v", recovered), args...)
+		}
+	}()
+
+	callback()
 }

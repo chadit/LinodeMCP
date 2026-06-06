@@ -9,9 +9,6 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -28,8 +25,8 @@ func TestRateLimiterDisabledWhenRateZero(t *testing.T) {
 	t.Parallel()
 
 	limiter := linode.NewRateLimiter(0)
-	require.Nil(t, limiter, "non-positive rate yields nil (disabled)")
-	require.NoError(t, limiter.Wait(t.Context()), "nil receiver allows immediately")
+	mustNil(t, limiter, "non-positive rate yields nil (disabled)")
+	mustNoError(t, limiter.Wait(t.Context()), "nil receiver allows immediately")
 }
 
 func TestRateLimiterAllowsBurstUpToCapacity(t *testing.T) {
@@ -39,7 +36,7 @@ func TestRateLimiterAllowsBurstUpToCapacity(t *testing.T) {
 	ctx := t.Context()
 
 	for range rateLimitBurstTest {
-		require.NoError(t, limiter.Wait(ctx), "burst within capacity should not block")
+		mustNoError(t, limiter.Wait(ctx), "burst within capacity should not block")
 	}
 }
 
@@ -53,18 +50,18 @@ func TestRateLimiterBlocksBeyondBurst(t *testing.T) {
 		ctx := t.Context()
 
 		for range 60 {
-			require.NoError(t, limiter.Wait(ctx))
+			mustNoError(t, limiter.Wait(ctx))
 		}
 
 		start := time.Now()
 
-		require.NoError(t, limiter.Wait(ctx), "after refill the next token should be granted")
+		mustNoError(t, limiter.Wait(ctx), "after refill the next token should be granted")
 
 		elapsed := time.Since(start)
 
 		// Refill is 1 token/sec at 60/min; first post-burst token arrives
 		// after ~1s of synthetic time.
-		require.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "limiter should have blocked for ~1s of synthetic time")
+		mustGreaterOrEqual(t, elapsed, 900*time.Millisecond, "limiter should have blocked for ~1s of synthetic time")
 	})
 }
 
@@ -76,16 +73,16 @@ func TestRateLimiterCanceledByContext(t *testing.T) {
 		// short-deadline context.
 		limiter := linode.NewRateLimiter(6)
 		for range 6 {
-			require.NoError(t, limiter.Wait(t.Context()))
+			mustNoError(t, limiter.Wait(t.Context()))
 		}
 
 		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 		defer cancel()
 
 		err := limiter.Wait(ctx)
-		require.Error(t, err)
-		require.ErrorIs(t, err, linode.ErrRateLimitWaitCanceled, "ctx cancel surfaces as ErrRateLimitWaitCanceled")
-		require.ErrorIs(t, err, context.DeadlineExceeded, "wraps the underlying ctx error")
+		mustError(t, err)
+		mustErrorIs(t, err, linode.ErrRateLimitWaitCanceled, "ctx cancel surfaces as ErrRateLimitWaitCanceled")
+		mustErrorIs(t, err, context.DeadlineExceeded, "wraps the underlying ctx error")
 	})
 }
 
@@ -101,7 +98,7 @@ func TestRateLimiterRefillCapsAtCapacity(t *testing.T) {
 
 		ctx := t.Context()
 		for range 60 {
-			require.NoError(t, limiter.Wait(ctx), "capped capacity should still allow 60 in burst")
+			mustNoError(t, limiter.Wait(ctx), "capped capacity should still allow 60 in burst")
 		}
 
 		// 61st call must block; ensure it does by using a tight deadline.
@@ -109,7 +106,7 @@ func TestRateLimiterRefillCapsAtCapacity(t *testing.T) {
 		defer cancel()
 
 		err := limiter.Wait(short)
-		require.Error(t, err, "bucket must not over-fill past capacity")
+		mustError(t, err, "bucket must not over-fill past capacity")
 	})
 }
 
@@ -143,8 +140,8 @@ func TestClientHonorsRateLimit(t *testing.T) {
 
 	// First call drains the single-token bucket.
 	_, err := client.GetProfile(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, int32(1), calls.Load(), "first call should hit upstream")
+	mustNoError(t, err)
+	checkEqual(t, int32(1), calls.Load(), "first call should hit upstream")
 
 	// Second call: bucket empty, refill is 1/60 token per second so the next
 	// token is ~60s away. Tight ctx deadline ensures the limiter cancels
@@ -159,6 +156,6 @@ func TestClientHonorsRateLimit(t *testing.T) {
 	defer cancel()
 
 	_, err = client.GetProfile(ctx)
-	require.Error(t, err, "second call must fail (ctx expires before refill)")
-	assert.Equal(t, int32(1), calls.Load(), "limiter must block the second call from reaching upstream")
+	mustError(t, err, "second call must fail (ctx expires before refill)")
+	checkEqual(t, int32(1), calls.Load(), "limiter must block the second call from reaching upstream")
 }
