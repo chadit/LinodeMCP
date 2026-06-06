@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -35,13 +32,12 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
-		assert.Equal(t, "2", r.URL.Query().Get("page"), "page query should match")
-		assert.Equal(t, "50", r.URL.Query().Get("page_size"), "page_size query should match")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+		checkEqual(t, "page=2&page_size=50", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: configs, keyPage: 2, keyPages: 3, keyResults: 1,
 		}), "encoding response should not fail")
 	}))
@@ -50,25 +46,31 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListInstanceConfigs(t.Context(), 123, 2, 50)
 
-	require.NoError(t, err, "ListInstanceConfigs should succeed on 200 response")
-	require.Len(t, got, 1)
-	assert.Equal(t, labelBootConfig, got[0].Label)
-	assert.Equal(t, configKernelLatest, got[0].Kernel)
-	assert.Equal(t, diskID, *got[0].Devices[configDeviceSlotSDA].DiskID)
-	require.NotNil(t, got[0].Helpers)
-	require.NotNil(t, got[0].Helpers.Distro)
-	assert.True(t, *got[0].Helpers.Distro)
-	require.Len(t, got[0].Interfaces, 1)
-	assert.Equal(t, "public", got[0].Interfaces[0].Purpose)
+	requireNoError(t, err, "ListInstanceConfigs should succeed on 200 response")
+	requireLenOne(t, got)
+
+	config := got[0]
+	checkEqual(t, labelBootConfig, config.Label)
+	checkEqual(t, configKernelLatest, config.Kernel)
+	device := config.Devices[configDeviceSlotSDA]
+	requireNotNil(t, device, "SDA device should be present")
+	requireNotNil(t, device.DiskID, "SDA disk ID should be present")
+	checkEqual(t, diskID, *device.DiskID)
+	requireNotNil(t, config.Helpers)
+	requireNotNil(t, config.Helpers.Distro)
+	checkTrue(t, *config.Helpers.Distro)
+	requireLenOne(t, config.Interfaces)
+	checkEqual(t, purposePublic, config.Interfaces[0].Purpose)
 }
 
 func TestClientListInstanceConfigsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+		checkEqual(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}), "encoding error response should not fail")
 	}))
@@ -77,11 +79,9 @@ func TestClientListInstanceConfigsAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListInstanceConfigs(t.Context(), 123, 0, 0)
 
-	require.Error(t, err, "ListInstanceConfigs should fail on API error")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "ListInstanceConfigs should fail on API error")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListInstanceConfigsRejectsInvalidLinodeID(t *testing.T) {
@@ -98,7 +98,11 @@ func TestClientListInstanceConfigsRejectsInvalidLinodeID(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListInstanceConfigs(t.Context(), -1, 0, 0)
 
-	require.Error(t, err, "ListInstanceConfigs should reject invalid linode IDs before request")
-	assert.False(t, called.Load(), "invalid linode ID should not reach upstream server")
-	assert.ErrorIs(t, err, linode.ErrLinodeIDPositive, "error should expose invalid linode ID sentinel")
+	requireError(t, err, "ListInstanceConfigs should reject invalid linode IDs before request")
+
+	if called.Load() {
+		t.Fatalf("invalid linode ID should not reach upstream server")
+	}
+
+	requireErrorIs(t, err, linode.ErrLinodeIDPositive, "error should expose invalid linode ID sentinel")
 }
