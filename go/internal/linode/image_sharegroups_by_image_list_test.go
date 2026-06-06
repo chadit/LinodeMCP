@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -34,12 +31,12 @@ func TestClientListImageShareGroupsByImageSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/private%2F12345/sharegroups", r.URL.EscapedPath(), "request path should include escaped image ID and sharegroups suffix")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/private%2F12345/sharegroups", r.URL.EscapedPath(), "request path should include escaped image ID and sharegroups suffix")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    shareGroups,
 			keyPage:    2,
 			keyPages:   3,
@@ -51,45 +48,45 @@ func TestClientListImageShareGroupsByImageSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListImageShareGroupsByImage(t.Context(), "private/12345", 2, 25)
 
-	require.NoError(t, err)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, imageShareGroupLabel, result.Data[0].Label)
-	assert.Equal(t, 2, result.Page)
-	assert.Equal(t, 3, result.Pages)
-	assert.Equal(t, 51, result.Results)
+	requireNoError(t, err)
+	requireLenOne(t, result.Data)
+	checkEqual(t, imageShareGroupLabel, result.Data[0].Label)
+	checkEqual(t, 2, result.Page)
+	checkEqual(t, 3, result.Pages)
+	checkEqual(t, 51, result.Results)
 }
 
 func TestClientListImageShareGroupsByImageEscapesImageID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/images/private%2F12345%3Fquery%23frag/sharegroups", r.URL.EscapedPath(), "image ID should be one encoded path segment")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, "/images/private%2F12345%3Fquery%23frag/sharegroups", r.URL.EscapedPath(), "image ID should be one encoded path segment")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.ImageShareGroup{}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.ImageShareGroup{}}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListImageShareGroupsByImage(t.Context(), "private/12345?query#frag", 0, 0)
 
-	require.NoError(t, err)
+	requireNoError(t, err)
 }
 
 func TestClientListImageShareGroupsByImageEncodesTraversalMarkers(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/images/%2E%2E/sharegroups", r.URL.EscapedPath(), "standalone traversal marker should be encoded")
+		checkEqual(t, "/images/%2E%2E/sharegroups", r.URL.EscapedPath(), "standalone traversal marker should be encoded")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.ImageShareGroup{}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.ImageShareGroup{}}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListImageShareGroupsByImage(t.Context(), pathTraversalDotDot, 0, 0)
 
-	require.NoError(t, err)
+	requireNoError(t, err)
 }
 
 func TestClientListImageShareGroupsByImageError(t *testing.T) {
@@ -97,7 +94,7 @@ func TestClientListImageShareGroupsByImageError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
 		}))
 	}))
@@ -106,8 +103,8 @@ func TestClientListImageShareGroupsByImageError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListImageShareGroupsByImage(t.Context(), "private/12345", 0, 0)
 
-	require.Error(t, err)
-	assert.Nil(t, result)
+	requireError(t, err)
+	checkNil(t, result)
 }
 
 func TestClientListImageShareGroupsByImageRetriesReadOnlyRoute(t *testing.T) {
@@ -119,7 +116,7 @@ func TestClientListImageShareGroupsByImageRetriesReadOnlyRoute(t *testing.T) {
 		call := atomic.AddInt32(&calls, 1)
 		if call == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -127,14 +124,14 @@ func TestClientListImageShareGroupsByImageRetriesReadOnlyRoute(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.ImageShareGroup{{ID: 1}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.ImageShareGroup{{ID: 1}}}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	result, err := client.ListImageShareGroupsByImage(t.Context(), "private/12345", 0, 0)
 
-	require.NoError(t, err)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, int32(2), calls, "read-only GET route may retry transient failures")
+	requireNoError(t, err)
+	requireLenOne(t, result.Data)
+	checkEqual(t, int32(2), calls, "read-only GET route may retry transient failures")
 }

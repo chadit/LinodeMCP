@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -28,21 +25,21 @@ func TestClientUpdateImageShareGroupSuccess(t *testing.T) {
 	request := &linode.UpdateImageShareGroupRequest{Label: &label, Description: &description}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/images/sharegroups/54321", r.URL.Path, "request path should include share group ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/images/sharegroups/54321", r.URL.Path, "request path should include share group ID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
 			return
 		}
 
-		assert.Equal(t, label, body[keyLabel])
-		assert.Equal(t, description, body[keyDescription])
+		checkEqual(t, label, body[keyLabel])
+		checkEqual(t, description, body[keyDescription])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
 			ID:           imageShareGroupID,
 			UUID:         shareGroupUUIDFixture,
 			Label:        label,
@@ -59,10 +56,10 @@ func TestClientUpdateImageShareGroupSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.UpdateImageShareGroup(t.Context(), imageShareGroupID, request)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, imageShareGroupID, result.ID)
-	assert.Equal(t, label, result.Label)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkEqual(t, imageShareGroupID, result.ID)
+	checkEqual(t, label, result.Label)
 }
 
 func TestClientUpdateImageShareGroupAPIError(t *testing.T) {
@@ -70,7 +67,7 @@ func TestClientUpdateImageShareGroupAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "label is invalid"}},
 		}))
 	}))
@@ -79,8 +76,8 @@ func TestClientUpdateImageShareGroupAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateImageShareGroup(t.Context(), imageShareGroupID, &linode.UpdateImageShareGroupRequest{})
 
-	require.Error(t, err, "UpdateImageShareGroup should return API errors")
-	assert.ErrorContains(t, err, "label is invalid")
+	apiErr := requireAPIError(t, err, "UpdateImageShareGroup should return API errors")
+	checkEqual(t, "label is invalid", apiErr.Message)
 }
 
 func TestClientUpdateImageShareGroupNetworkError(t *testing.T) {
@@ -93,11 +90,10 @@ func TestClientUpdateImageShareGroupNetworkError(t *testing.T) {
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateImageShareGroup(t.Context(), imageShareGroupID, &linode.UpdateImageShareGroupRequest{})
 
-	require.Error(t, err, "UpdateImageShareGroup should wrap network errors")
+	requireError(t, err, "UpdateImageShareGroup should wrap network errors")
 
-	var networkErr *linode.NetworkError
-	require.ErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
-	assert.Equal(t, "UpdateImageShareGroup", networkErr.Operation)
+	networkErr := requireNetworkError(t, err, "network error should wrap as NetworkError")
+	checkEqual(t, "UpdateImageShareGroup", networkErr.Operation)
 }
 
 func TestClientUpdateImageShareGroupDoesNotRetry(t *testing.T) {
@@ -108,7 +104,7 @@ func TestClientUpdateImageShareGroupDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -117,6 +113,6 @@ func TestClientUpdateImageShareGroupDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	_, err := client.UpdateImageShareGroup(t.Context(), imageShareGroupID, &linode.UpdateImageShareGroupRequest{})
 
-	require.Error(t, err, "UpdateImageShareGroup should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UpdateImageShareGroup must not retry and replay a mutating request")
+	requireError(t, err, "UpdateImageShareGroup should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UpdateImageShareGroup must not retry and replay a mutating request")
 }
