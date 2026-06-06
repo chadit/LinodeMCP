@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -43,24 +40,24 @@ func TestClientCreateMonitorServiceAlertDefinitionSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		monitorCheckEqual(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
+		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		var body map[string]any
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if !monitorCheckNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
 			return
 		}
 
-		assert.Equal(t, monitorAlertDefinitionLabel, body[keyLabel])
-		assert.InEpsilon(t, float64(2), body[keySeverity], 0)
-		assert.Equal(t, []any{float64(546), float64(392)}, body["channel_ids"])
-		assert.Contains(t, body, "rule_criteria")
-		assert.Contains(t, body, "trigger_conditions")
+		monitorCheckEqual(t, monitorAlertDefinitionLabel, body[keyLabel])
+		monitorCheckNumericEqual(t, float64(2), body[keySeverity])
+		monitorCheckEqual(t, []any{float64(546), float64(392)}, body["channel_ids"])
+		monitorCheckHasKey(t, body, "rule_criteria")
+		monitorCheckHasKey(t, body, "trigger_conditions")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyID:          monitorAlertDefinitionID,
 			keyLabel:       monitorAlertDefinitionLabel,
 			keyServiceType: monitorServiceTypeDatabase,
@@ -72,53 +69,52 @@ func TestClientCreateMonitorServiceAlertDefinitionSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.CreateMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionCreateRequest())
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, monitorAlertDefinitionID, got.ID)
-	assert.Equal(t, monitorAlertDefinitionLabel, got.Label)
-	assert.Equal(t, monitorServiceTypeDatabase, got.ServiceType)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, monitorAlertDefinitionID, got.ID)
+	monitorCheckEqual(t, monitorAlertDefinitionLabel, got.Label)
+	monitorCheckEqual(t, monitorServiceTypeDatabase, got.ServiceType)
 }
 
 func TestClientCreateMonitorServiceAlertDefinitionEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, monitorServiceEscapedAlertDefinitionsPath, r.URL.EscapedPath(), "request path should be escaped")
+		monitorCheckEqual(t, monitorServiceEscapedAlertDefinitionsPath, r.URL.EscapedPath(), "request path should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: monitorAlertDefinitionID}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: monitorAlertDefinitionID}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.CreateMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeWithSlash, monitorAlertDefinitionCreateRequest())
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, monitorAlertDefinitionID, got.ID)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, monitorAlertDefinitionID, got.ID)
 }
 
 func TestClientCreateMonitorServiceAlertDefinitionAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		monitorCheckEqual(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.CreateMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionCreateRequest())
 
-	require.Error(t, err)
-	assert.Nil(t, got)
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := monitorRequireAPIError(t, err)
+	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	monitorCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientCreateMonitorServiceAlertDefinitionDoesNotRetryTransientError(t *testing.T) {
@@ -127,8 +123,8 @@ func TestClientCreateMonitorServiceAlertDefinitionDoesNotRetryTransientError(t *
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		monitorCheckEqual(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
 		calls.Add(1)
 		http.Error(w, "temporary", http.StatusServiceUnavailable)
 	}))
@@ -137,7 +133,7 @@ func TestClientCreateMonitorServiceAlertDefinitionDoesNotRetryTransientError(t *
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	got, err := client.CreateMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionCreateRequest())
 
-	require.Error(t, err)
-	assert.Nil(t, got)
-	assert.Equal(t, int32(1), calls.Load(), "create route must not retry after transient failure")
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
+	monitorCheckEqual(t, int32(1), calls.Load(), "create route must not retry after transient failure")
 }
