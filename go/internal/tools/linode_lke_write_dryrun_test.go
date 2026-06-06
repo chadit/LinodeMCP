@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -19,6 +16,8 @@ const (
 	lkeNodeGetPath    = "/lke/clusters/123/nodes/abc-123"
 	lkeACLGetPath     = "/lke/clusters/123/control_plane_acl"
 )
+
+// These dry-run tests intentionally discard unused constructor returns and type-assertion ok values when later assertions validate the consumed data.
 
 func TestLinodeLKEClusterCreateToolDryRun(t *testing.T) {
 	t.Parallel()
@@ -419,7 +418,7 @@ func TestLinodeLKEACLDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEACLDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without deleting", func(t *testing.T) {
@@ -432,17 +431,17 @@ func TestLinodeLKEACLDeleteToolDryRun(t *testing.T) {
 			keyClusterID: float64(123),
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_lke_acl_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_lke_acl_delete", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, lkeACLGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, lkeACLGetPath, would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates cluster_id", func(t *testing.T) {
@@ -452,8 +451,8 @@ func TestLinodeLKEACLDeleteToolDryRun(t *testing.T) {
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		checkTrueWithMode(t, false, result.IsError)
 		assertErrorContains(t, result, "cluster_id is required")
 	})
 }
@@ -480,31 +479,31 @@ func TestLinodeLKEClusterDeleteToolDryRunDependencies(t *testing.T) {
 		keyClusterID: float64(55),
 		keyDryRun:    true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	expectNoError(t, err)
+	expectFalse(t, result.IsError)
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_lke_cluster_delete", body["tool"])
+	expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	checkEqual(t, "linode_lke_cluster_delete", body["tool"])
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 2, "each node pool is a cascade-deleted dependency")
+	expectLen(t, deps, 2, "each node pool is a cascade-deleted dependency")
 
 	for _, entry := range deps {
 		dep, ok := entry.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "node_pool", dep["kind"])
-		assert.Equal(t, "cascade_deleted", dep["action"])
+		expectTrue(t, ok)
+		checkEqual(t, "node_pool", dep["kind"])
+		checkEqual(t, "cascade_deleted", dep["action"])
 	}
 
 	warnings, _ := body["warnings"].([]any)
-	require.NotEmpty(t, warnings)
+	expectNotEmpty(t, warnings)
 
 	warning, ok := warnings[0].(string)
-	require.True(t, ok)
-	assert.Contains(t, warning, "5 node(s)")
+	expectTrue(t, ok)
+	expectContainsWithMode(t, false, warning, "5 node(s)")
 
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	expectNotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
 }
 
 // TestLinodeLKEPoolDeleteToolDryRunDependencies exercises the Phase 2 Tier A
@@ -531,25 +530,25 @@ func TestLinodeLKEPoolDeleteToolDryRunDependencies(t *testing.T) {
 		keyPoolID:    float64(10),
 		keyDryRun:    true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	expectNoError(t, err)
+	expectFalse(t, result.IsError)
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_lke_pool_delete", body["tool"])
+	expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	checkEqual(t, "linode_lke_pool_delete", body["tool"])
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 2, "each pool node's backing Linode is a cascade dependency")
+	expectLen(t, deps, 2, "each pool node's backing Linode is a cascade dependency")
 
 	for _, entry := range deps {
 		dep, ok := entry.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "instance", dep["kind"])
-		assert.Equal(t, "cascade_deleted", dep["action"])
+		expectTrue(t, ok)
+		checkEqual(t, "instance", dep["kind"])
+		checkEqual(t, "cascade_deleted", dep["action"])
 	}
 
-	assert.NotEmpty(t, body["warnings"])
-	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+	expectNotEmpty(t, body["warnings"])
+	checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 }
 
 // TestLinodeLKENodeDeleteToolDryRunDependencies exercises the Phase 2 Tier A
@@ -571,21 +570,22 @@ func TestLinodeLKENodeDeleteToolDryRunDependencies(t *testing.T) {
 		keyNodeID:    "abc-123",
 		keyDryRun:    true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	expectNoError(t, err)
+	expectFalse(t, result.IsError)
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_lke_node_delete", body["tool"])
+	expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	checkEqual(t, "linode_lke_node_delete", body["tool"])
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 1, "the node's backing Linode is the dependency")
+	expectLen(t, deps, 1, "the node's backing Linode is the dependency")
 
 	dep, ok := deps[0].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "instance", dep["kind"])
-	assert.Equal(t, "cascade_deleted", dep["action"])
-	assert.InDelta(t, 9100, dep["id"], 0)
+	expectTrue(t, ok)
+	checkEqual(t, "instance", dep["kind"])
+	checkEqual(t, "cascade_deleted", dep["action"])
 
-	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+	expectNumericEqual(t, 9100, dep["id"], "dependency id")
+
+	checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 }
