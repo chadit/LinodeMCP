@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -26,12 +23,12 @@ func TestClientGetImageShareGroupMemberTokenSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/images/sharegroups/123/members/"+shareGroupTokenUUIDFixture, r.URL.Path, "request path should include share group ID and token UUID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/images/sharegroups/123/members/"+shareGroupTokenUUIDFixture, r.URL.Path, "request path should include share group ID and token UUID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(member))
+		checkNoError(t, json.NewEncoder(w).Encode(member))
 	}))
 	defer srv.Close()
 
@@ -39,20 +36,20 @@ func TestClientGetImageShareGroupMemberTokenSuccess(t *testing.T) {
 
 	result, err := client.GetImageShareGroupMemberToken(t.Context(), 123, shareGroupTokenUUIDFixture)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, shareGroupTokenUUIDFixture, result.TokenUUID)
-	assert.Equal(t, "Engineering - Backend", result.Label)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkEqual(t, shareGroupTokenUUIDFixture, result.TokenUUID)
+	checkEqual(t, "Engineering - Backend", result.Label)
 }
 
 func TestClientGetImageShareGroupMemberTokenEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/images/sharegroups/123/members/token%2F..%3Fquery%23frag", r.URL.EscapedPath(), "token UUID should be one encoded path segment")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, "/images/sharegroups/123/members/token%2F..%3Fquery%23frag", r.URL.EscapedPath(), "token UUID should be one encoded path segment")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: "token/..?query#frag"}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: "token/..?query#frag"}))
 	}))
 	defer srv.Close()
 
@@ -60,8 +57,8 @@ func TestClientGetImageShareGroupMemberTokenEscapesPathParams(t *testing.T) {
 
 	result, err := client.GetImageShareGroupMemberToken(t.Context(), 123, "token/..?query#frag")
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	requireNoError(t, err)
+	requireNotNil(t, result)
 }
 
 func TestClientGetImageShareGroupMemberTokenRetriesReadOnlyRoute(t *testing.T) {
@@ -70,7 +67,7 @@ func TestClientGetImageShareGroupMemberTokenRetriesReadOnlyRoute(t *testing.T) {
 	var requestCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/images/sharegroups/123/members/"+shareGroupTokenUUIDFixture, r.URL.Path, "request path should include share group ID and token UUID")
+		checkEqual(t, "/images/sharegroups/123/members/"+shareGroupTokenUUIDFixture, r.URL.Path, "request path should include share group ID and token UUID")
 
 		if requestCount.Add(1) == 1 {
 			http.Error(w, errTemporaryFailure, http.StatusInternalServerError)
@@ -79,7 +76,7 @@ func TestClientGetImageShareGroupMemberTokenRetriesReadOnlyRoute(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: shareGroupTokenUUIDFixture}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: shareGroupTokenUUIDFixture}))
 	}))
 	defer srv.Close()
 
@@ -87,7 +84,7 @@ func TestClientGetImageShareGroupMemberTokenRetriesReadOnlyRoute(t *testing.T) {
 
 	result, err := client.GetImageShareGroupMemberToken(t.Context(), 123, shareGroupTokenUUIDFixture)
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET route should retry once")
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	checkEqual(t, int32(2), requestCount.Load(), "read-only GET route should retry once")
 }
