@@ -130,7 +130,7 @@ func TestLinodeLKEClusterRecycleToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEClusterRecycleTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without recycling", func(t *testing.T) {
@@ -143,17 +143,17 @@ func TestLinodeLKEClusterRecycleToolDryRun(t *testing.T) {
 			keyClusterID: float64(123),
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_lke_cluster_recycle", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_lke_cluster_recycle", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, lkeClusterGetPath+"/recycle", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, lkeClusterGetPath+"/recycle", would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 }
 
@@ -164,7 +164,7 @@ func TestLinodeLKEClusterRegenerateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEClusterRegenerateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview fetches cluster not the service token", func(t *testing.T) {
@@ -177,20 +177,20 @@ func TestLinodeLKEClusterRegenerateToolDryRun(t *testing.T) {
 			keyClusterID: float64(123),
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		preview := dryRunResultText(t, result)
-		assert.NotContains(t, preview, "service_token", "dry_run must not surface the rotated token credential")
+		expectNotContains(t, preview, "service_token", "dry_run must not surface the rotated token credential")
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(preview), &body))
-		assert.Equal(t, "linode_lke_cluster_regenerate", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(preview), &body))
+		checkEqual(t, "linode_lke_cluster_regenerate", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, lkeClusterGetPath+"/regenerate", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, lkeClusterGetPath+"/regenerate", would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 }
 
@@ -201,7 +201,7 @@ func TestLinodeLKEPoolCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEPoolCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview fetches the cluster", func(t *testing.T) {
@@ -216,17 +216,17 @@ func TestLinodeLKEPoolCreateToolDryRun(t *testing.T) {
 			keyCount:     float64(3),
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_lke_pool_create", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_lke_pool_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, lkeClusterGetPath+"/pools", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, lkeClusterGetPath+"/pools", would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates type", func(t *testing.T) {
@@ -238,8 +238,8 @@ func TestLinodeLKEPoolCreateToolDryRun(t *testing.T) {
 			keyCount:     float64(3),
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		checkTrueWithMode(t, false, result.IsError)
 		assertErrorContains(t, result, "type is required")
 	})
 }
