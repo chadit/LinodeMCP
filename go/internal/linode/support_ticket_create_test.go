@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -35,20 +32,20 @@ func TestClientCreateSupportTicketSuccess(t *testing.T) {
 	created := linode.SupportTicket{ID: 987, Summary: request.Summary, Description: request.Description, Status: supportTicketStatusOpen}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		supportCheckEqual(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
+		supportCheckEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		supportCheckEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var got map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, supportTicketSummary, got["summary"])
-		assert.Equal(t, supportTicketDescription, got["description"])
-		assert.InDelta(t, float64(12345), got["linode_id"], 0)
-		assert.Equal(t, supportTicketSeverity, got["severity"])
+		supportCheckNoError(t, json.NewDecoder(r.Body).Decode(&got))
+		supportCheckEqual(t, supportTicketSummary, got["summary"])
+		supportCheckEqual(t, supportTicketDescription, got["description"])
+		supportCheckEqual(t, float64(12345), got["linode_id"])
+		supportCheckEqual(t, supportTicketSeverity, got["severity"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(created))
+		supportCheckNoError(t, json.NewEncoder(w).Encode(created))
 	}))
 	defer srv.Close()
 
@@ -56,21 +53,21 @@ func TestClientCreateSupportTicketSuccess(t *testing.T) {
 
 	got, err := client.CreateSupportTicket(t.Context(), request)
 
-	require.NoError(t, err, "CreateSupportTicket should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, created.ID, got.ID)
-	assert.Equal(t, created.Summary, got.Summary)
+	supportRequireNoError(t, err, "CreateSupportTicket should succeed on 200 response")
+	supportRequireNotNil(t, got, "result should not be nil")
+	supportCheckEqual(t, created.ID, got.ID)
+	supportCheckEqual(t, created.Summary, got.Summary)
 }
 
 func TestClientCreateSupportTicketAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
+		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		supportCheckEqual(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		supportCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -78,9 +75,10 @@ func TestClientCreateSupportTicketAPIError(t *testing.T) {
 
 	got, err := client.CreateSupportTicket(t.Context(), &linode.CreateSupportTicketRequest{Summary: supportTicketSummary, Description: supportTicketDescription})
 
-	require.Error(t, err, "CreateSupportTicket should propagate API errors")
-	assert.Nil(t, got)
-	assert.ErrorContains(t, err, errForbidden)
+	supportRequireError(t, err, "CreateSupportTicket should propagate API errors")
+	supportCheckNil(t, got)
+	apiErr := supportRequireAPIError(t, err, "error should wrap APIError")
+	supportCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientCreateSupportTicketDoesNotRetryTransientError(t *testing.T) {
@@ -90,10 +88,10 @@ func TestClientCreateSupportTicketDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
+		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		supportCheckEqual(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporarySupportTicketError}}}))
+		supportCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporarySupportTicketError}}}))
 	}))
 	defer srv.Close()
 
@@ -101,6 +99,6 @@ func TestClientCreateSupportTicketDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.CreateSupportTicket(t.Context(), &linode.CreateSupportTicketRequest{Summary: supportTicketSummary, Description: supportTicketDescription})
 
-	require.Error(t, err, "CreateSupportTicket should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating support ticket creation must not be retried")
+	supportRequireError(t, err, "CreateSupportTicket should return the transient error")
+	supportCheckEqual(t, int32(1), requestCount.Load(), "mutating support ticket creation must not be retried")
 }

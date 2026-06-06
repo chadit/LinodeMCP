@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -25,17 +22,17 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 	created := linode.SupportTicketAttachment{ID: 654, Filename: supportTicketAttachmentFilename, Size: 128}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		supportCheckEqual(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
+		supportCheckEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		supportCheckEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var got map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, supportTicketAttachmentFile, got["file"])
+		supportCheckNoError(t, json.NewDecoder(r.Body).Decode(&got))
+		supportCheckEqual(t, supportTicketAttachmentFile, got["file"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(created))
+		supportCheckNoError(t, json.NewEncoder(w).Encode(created))
 	}))
 	defer srv.Close()
 
@@ -43,22 +40,22 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 
 	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
 
-	require.NoError(t, err, "CreateSupportTicketAttachment should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, created.ID, got.ID)
-	assert.Equal(t, created.Filename, got.Filename)
-	assert.Equal(t, created.Size, got.Size)
+	supportRequireNoError(t, err, "CreateSupportTicketAttachment should succeed on 200 response")
+	supportRequireNotNil(t, got, "result should not be nil")
+	supportCheckEqual(t, created.ID, got.ID)
+	supportCheckEqual(t, created.Filename, got.Filename)
+	supportCheckEqual(t, created.Size, got.Size)
 }
 
 func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
+		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		supportCheckEqual(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		supportCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -66,9 +63,10 @@ func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
 
 	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
 
-	require.Error(t, err, "CreateSupportTicketAttachment should propagate API errors")
-	assert.Nil(t, got)
-	assert.ErrorContains(t, err, errForbidden)
+	supportRequireError(t, err, "CreateSupportTicketAttachment should propagate API errors")
+	supportCheckNil(t, got)
+	apiErr := supportRequireAPIError(t, err, "error should wrap APIError")
+	supportCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testing.T) {
@@ -78,10 +76,10 @@ func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testin
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
+		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		supportCheckEqual(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: supportTicketAttachmentError}}}))
+		supportCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: supportTicketAttachmentError}}}))
 	}))
 	defer srv.Close()
 
@@ -89,6 +87,6 @@ func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testin
 
 	_, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
 
-	require.Error(t, err, "CreateSupportTicketAttachment should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating support ticket attachment creation must not be retried")
+	supportRequireError(t, err, "CreateSupportTicketAttachment should return the transient error")
+	supportCheckEqual(t, int32(1), requestCount.Load(), "mutating support ticket attachment creation must not be retried")
 }
