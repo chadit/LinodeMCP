@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -17,14 +14,14 @@ func TestClientDisableProfileTFASuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-		assert.Equal(t, int64(0), r.ContentLength, "POST request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
+		checkEqual(t, int64(0), r.ContentLength, "POST request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -32,18 +29,18 @@ func TestClientDisableProfileTFASuccess(t *testing.T) {
 
 	err := client.DisableProfileTFA(t.Context())
 
-	require.NoError(t, err, "DisableProfileTFA should succeed on 200 response")
+	requireNoError(t, err, "DisableProfileTFA should succeed on 200 response")
 }
 
 func TestClientDisableProfileTFAAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -51,10 +48,9 @@ func TestClientDisableProfileTFAAPIError(t *testing.T) {
 
 	err := client.DisableProfileTFA(t.Context())
 
-	require.Error(t, err, "DisableProfileTFA should fail on 403 response")
+	requireError(t, err, "DisableProfileTFA should fail on 403 response")
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "DisableProfileTFA should return APIError")
+	_ = requireAPIError(t, err, "DisableProfileTFA should return APIError")
 }
 
 func TestClientDisableProfileTFANoRetryOnTransientFailure(t *testing.T) {
@@ -64,11 +60,11 @@ func TestClientDisableProfileTFANoRetryOnTransientFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}), "expected no error")
 	}))
 	defer srv.Close()
 
@@ -76,6 +72,6 @@ func TestClientDisableProfileTFANoRetryOnTransientFailure(t *testing.T) {
 
 	err := client.DisableProfileTFA(t.Context())
 
-	require.Error(t, err, "DisableProfileTFA should return the transient error")
-	assert.Equal(t, int32(1), calls.Load(), "security-state-changing POST must not be retried")
+	requireError(t, err, "DisableProfileTFA should return the transient error")
+	checkEqual(t, int32(1), calls.Load(), "security-state-changing POST must not be retried")
 }

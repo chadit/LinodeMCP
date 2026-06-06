@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -20,23 +17,23 @@ func TestClientGetObjectStorageQuotaUsageSuccess(t *testing.T) {
 	usage := linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/object-storage/quotas/obj-bucket-us-ord-1/usage", r.URL.Path, "request path should include quota ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, "/object-storage/quotas/obj-bucket-us-ord-1/usage", r.URL.Path, "request path should include quota ID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"), "values differ")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(usage))
+		checkNoError(t, json.NewEncoder(w).Encode(usage), "expected no error")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj-bucket-us-ord-1")
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, 100, result.QuotaLimit)
-	require.NotNil(t, result.Usage)
-	assert.Equal(t, 10, *result.Usage)
+	requireNoError(t, err, "expected no error")
+	requireNotNil(t, result, "expected non-nil value")
+	checkEqual(t, 100, result.QuotaLimit, "values differ")
+	requireNotNil(t, result.Usage, "expected non-nil value")
+	checkEqual(t, 10, *result.Usage, "values differ")
 }
 
 func TestClientGetObjectStorageQuotaUsageEscapesQuotaID(t *testing.T) {
@@ -45,18 +42,18 @@ func TestClientGetObjectStorageQuotaUsageEscapesQuotaID(t *testing.T) {
 	used := 1
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/object-storage/quotas/obj%2Fbucket%3Funsafe/usage", r.URL.EscapedPath(), "quota ID should be one encoded path segment")
-		assert.Empty(t, r.URL.RawQuery, "encoded path value should not become a query string")
+		checkEqual(t, "/object-storage/quotas/obj%2Fbucket%3Funsafe/usage", r.URL.EscapedPath(), "quota ID should be one encoded path segment")
+		checkEmpty(t, r.URL.RawQuery, "encoded path value should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ObjectStorageQuotaUsage{QuotaLimit: 2, Usage: &used}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ObjectStorageQuotaUsage{QuotaLimit: 2, Usage: &used}), "expected no error")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj/bucket?unsafe")
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	requireNoError(t, err, "expected no error")
+	requireNotNil(t, result, "expected non-nil value")
 }
 
 func TestClientGetObjectStorageQuotaUsageError(t *testing.T) {
@@ -64,17 +61,17 @@ func TestClientGetObjectStorageQuotaUsageError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}))
+		}), "expected no error")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj-bucket-us-ord-1")
 
-	require.Error(t, err)
-	assert.Nil(t, result)
+	requireError(t, err, "expected error")
+	checkNil(t, result, "expected nil")
 }
 
 func TestClientGetObjectStorageQuotaUsageRetriesReadOnlyRoute(t *testing.T) {
@@ -88,22 +85,22 @@ func TestClientGetObjectStorageQuotaUsageRetriesReadOnlyRoute(t *testing.T) {
 		call := atomic.AddInt32(&calls, 1)
 		if call == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}), "expected no error")
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}), "expected no error")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj-bucket-us-ord-1")
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls, "read-only GET route may retry transient failures")
+	requireNoError(t, err, "expected no error")
+	requireNotNil(t, result, "expected non-nil value")
+	checkEqual(t, int32(2), calls, "read-only GET route may retry transient failures")
 }
