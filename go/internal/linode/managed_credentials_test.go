@@ -9,9 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -40,61 +37,61 @@ func TestClientListManagedCredentialsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedCredentialsPath, r.URL.Path, "request path should list managed credentials")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedCredentialsPath, r.URL.Path, "request path should list managed credentials")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(credentials))
+		checkNoError(t, json.NewEncoder(w).Encode(credentials))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListManagedCredentials(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListManagedCredentials should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, 2, got.Page)
-	assert.Equal(t, managedCredentialsLabel, got.Data[0].Label)
-	assert.Equal(t, managedCredentialsLastDecrypted, got.Data[0].LastDecrypted)
+	requireNoError(t, err, "ListManagedCredentials should succeed on 200 response")
+	requireNotNil(t, got)
+	checkEqual(t, 2, got.Page)
+	checkEqual(t, managedCredentialsLabel, got.Data[0].Label)
+	checkEqual(t, managedCredentialsLastDecrypted, got.Data[0].LastDecrypted)
 }
 
 func TestClientGetManagedSSHKeySuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedCredentialsSSHKeyPath, r.URL.Path, "request path should retrieve Managed SSH key")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedCredentialsSSHKeyPath, r.URL.Path, "request path should retrieve Managed SSH key")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		body, readErr := io.ReadAll(r.Body)
-		assert.NoError(t, readErr)
-		assert.Empty(t, body, "GET request should not send a body")
+		checkNoError(t, readErr)
+		checkEmpty(t, body, "GET request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyValue}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyValue}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetManagedSSHKey(t.Context())
 
-	require.NoError(t, err, "GetManagedSSHKey should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, managedSSHKeyValue, got.SSHKey)
+	requireNoError(t, err, "GetManagedSSHKey should succeed on 200 response")
+	requireNotNil(t, got)
+	checkEqual(t, managedSSHKeyValue, got.SSHKey)
 }
 
 func TestClientGetManagedSSHKeyAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedCredentialsSSHKeyPath, r.URL.Path, "request path should retrieve Managed SSH key")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedCredentialsSSHKeyPath, r.URL.Path, "request path should retrieve Managed SSH key")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "restricted users cannot access managed SSH keys"}},
 		}))
 	}))
@@ -103,10 +100,9 @@ func TestClientGetManagedSSHKeyAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetManagedSSHKey(t.Context())
 
-	require.Error(t, err)
-
-	var apiErr *linode.APIError
-	assert.ErrorAs(t, err, &apiErr)
+	requireError(t, err)
+	apiErr := requireAPIError(t, err)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetManagedSSHKeyRetriesTransientRead(t *testing.T) {
@@ -116,11 +112,11 @@ func TestClientGetManagedSSHKeyRetriesTransientRead(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, managedCredentialsSSHKeyPath, r.URL.Path, "request path should retrieve Managed SSH key")
+		checkEqual(t, managedCredentialsSSHKeyPath, r.URL.Path, "request path should retrieve Managed SSH key")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -128,28 +124,28 @@ func TestClientGetManagedSSHKeyRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyValue}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyValue}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetManagedSSHKey(t.Context())
 
-	require.NoError(t, err, "read-only GetManagedSSHKey should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "read-only get should retry once after a transient failure")
-	assert.Equal(t, managedSSHKeyValue, got.SSHKey)
+	requireNoError(t, err, "read-only GetManagedSSHKey should retry transient failures")
+	requireNotNil(t, got)
+	checkEqual(t, int32(2), attempts.Load(), "read-only get should retry once after a transient failure")
+	checkEqual(t, managedSSHKeyValue, got.SSHKey)
 }
 
 func TestClientListManagedCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedCredentialsPath, r.URL.Path, "request path should list managed credentials")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedCredentialsPath, r.URL.Path, "request path should list managed credentials")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "restricted users cannot access managed credentials"}},
 		}))
 	}))
@@ -158,10 +154,9 @@ func TestClientListManagedCredentialsAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListManagedCredentials(t.Context(), 1, 25)
 
-	require.Error(t, err)
-
-	var apiErr *linode.APIError
-	assert.ErrorAs(t, err, &apiErr)
+	requireError(t, err)
+	apiErr := requireAPIError(t, err)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListManagedCredentialsRetriesTransientRead(t *testing.T) {
@@ -171,11 +166,11 @@ func TestClientListManagedCredentialsRetriesTransientRead(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, managedCredentialsPath, r.URL.Path, "request path should list managed credentials")
+		checkEqual(t, managedCredentialsPath, r.URL.Path, "request path should list managed credentials")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -183,7 +178,7 @@ func TestClientListManagedCredentialsRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedCredential]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedCredential]{
 			Data:    []linode.ManagedCredential{{ID: 9991, Label: managedCredentialsLabel}},
 			Page:    1,
 			Pages:   1,
@@ -195,9 +190,9 @@ func TestClientListManagedCredentialsRetriesTransientRead(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListManagedCredentials(t.Context(), 1, 25)
 
-	require.NoError(t, err, "read-only ListManagedCredentials should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry once after a transient failure")
+	requireNoError(t, err, "read-only ListManagedCredentials should retry transient failures")
+	requireNotNil(t, got)
+	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry once after a transient failure")
 }
 
 func TestClientCreateManagedCredentialSuccess(t *testing.T) {
@@ -211,22 +206,22 @@ func TestClientCreateManagedCredentialSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedCredentialsPath, r.URL.Path, "request path should create managed credentials")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedCredentialsPath, r.URL.Path, "request path should create managed credentials")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
+		checkNoError(t, err)
 
 		var got map[string]any
-		assert.NoError(t, json.Unmarshal(body, &got))
-		assert.Equal(t, managedCredentialsLabel, got["label"])
-		assert.Equal(t, managedCredentialsPassword, got["password"])
-		assert.Equal(t, managedCredentialsUsername, got["username"])
+		checkNoError(t, json.Unmarshal(body, &got))
+		checkEqual(t, managedCredentialsLabel, got["label"])
+		checkEqual(t, managedCredentialsPassword, got["password"])
+		checkEqual(t, managedCredentialsUsername, got["username"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{
 			ID:            9991,
 			Label:         managedCredentialsLabel,
 			LastDecrypted: managedCredentialsLastDecrypted,
@@ -237,11 +232,11 @@ func TestClientCreateManagedCredentialSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.CreateManagedCredential(t.Context(), request)
 
-	require.NoError(t, err, "CreateManagedCredential should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, 9991, got.ID)
-	assert.Equal(t, managedCredentialsLabel, got.Label)
-	assert.Equal(t, managedCredentialsLastDecrypted, got.LastDecrypted)
+	requireNoError(t, err, "CreateManagedCredential should succeed on 200 response")
+	requireNotNil(t, got)
+	checkEqual(t, 9991, got.ID)
+	checkEqual(t, managedCredentialsLabel, got.Label)
+	checkEqual(t, managedCredentialsLastDecrypted, got.LastDecrypted)
 }
 
 func TestClientCreateManagedCredentialAPIError(t *testing.T) {
@@ -253,11 +248,11 @@ func TestClientCreateManagedCredentialAPIError(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedCredentialsPath, r.URL.Path, "request path should create managed credentials")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedCredentialsPath, r.URL.Path, "request path should create managed credentials")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "restricted users cannot create managed credentials"}},
 		}))
 	}))
@@ -266,10 +261,9 @@ func TestClientCreateManagedCredentialAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.CreateManagedCredential(t.Context(), request)
 
-	require.Error(t, err)
-
-	var apiErr *linode.APIError
-	assert.ErrorAs(t, err, &apiErr)
+	requireError(t, err)
+	apiErr := requireAPIError(t, err)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientCreateManagedCredentialDoesNotRetry(t *testing.T) {
@@ -279,11 +273,11 @@ func TestClientCreateManagedCredentialDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedCredentialsPath, r.URL.Path, "request path should create managed credentials")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedCredentialsPath, r.URL.Path, "request path should create managed credentials")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -293,8 +287,8 @@ func TestClientCreateManagedCredentialDoesNotRetry(t *testing.T) {
 		Password: managedCredentialsPassword,
 	})
 
-	require.Error(t, err, "CreateManagedCredential should fail on 500 response")
-	assert.Equal(t, int32(1), attempts.Load(), "CreateManagedCredential must not retry and replay a mutating request")
+	requireError(t, err, "CreateManagedCredential should fail on 500 response")
+	checkEqual(t, int32(1), attempts.Load(), "CreateManagedCredential must not retry and replay a mutating request")
 }
 
 func TestClientUpdateManagedCredentialSuccess(t *testing.T) {
@@ -304,41 +298,41 @@ func TestClientUpdateManagedCredentialSuccess(t *testing.T) {
 	updated := linode.ManagedCredential{ID: 9991, Label: label, LastDecrypted: managedCredentialsLastDecrypted}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		var got linode.UpdateManagedCredentialRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
 
-		if assert.NotNil(t, got.Label) {
-			assert.Equal(t, label, *got.Label)
+		if checkNotNil(t, got.Label) {
+			checkEqual(t, label, *got.Label)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(updated))
+		checkNoError(t, json.NewEncoder(w).Encode(updated))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
 
-	require.NoError(t, err, "UpdateManagedCredential should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, 9991, got.ID)
-	assert.Equal(t, label, got.Label)
+	requireNoError(t, err, "UpdateManagedCredential should succeed on 200 response")
+	requireNotNil(t, got)
+	checkEqual(t, 9991, got.ID)
+	checkEqual(t, label, got.Label)
 }
 
 func TestClientUpdateManagedCredentialAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "restricted users cannot update managed credentials"}},
 		}))
 	}))
@@ -348,10 +342,9 @@ func TestClientUpdateManagedCredentialAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
 
-	require.Error(t, err)
-
-	var apiErr *linode.APIError
-	assert.ErrorAs(t, err, &apiErr)
+	requireError(t, err)
+	apiErr := requireAPIError(t, err)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientUpdateManagedCredentialNetworkError(t *testing.T) {
@@ -361,11 +354,9 @@ func TestClientUpdateManagedCredentialNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
 
-	require.Error(t, err)
-
-	var netErr *linode.NetworkError
-	require.ErrorAs(t, err, &netErr)
-	assert.Equal(t, "UpdateManagedCredential", netErr.Operation)
+	requireError(t, err)
+	netErr := requireNetworkError(t, err)
+	checkEqual(t, "UpdateManagedCredential", netErr.Operation)
 }
 
 func TestClientUpdateManagedCredentialDoesNotRetry(t *testing.T) {
@@ -375,9 +366,9 @@ func TestClientUpdateManagedCredentialDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
+		checkEqual(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -387,6 +378,6 @@ func TestClientUpdateManagedCredentialDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	_, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
 
-	require.Error(t, err, "mutating Managed credential update should not retry transient failures")
-	assert.Equal(t, int32(1), calls.Load(), "client should call update exactly once")
+	requireError(t, err, "mutating Managed credential update should not retry transient failures")
+	checkEqual(t, int32(1), calls.Load(), "client should call update exactly once")
 }
