@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -40,11 +37,11 @@ func TestAPIErrorMessage(t *testing.T) {
 
 			msg := tt.apiErr.Error()
 			for _, s := range tt.mustContain {
-				assert.Contains(t, msg, s, "error message should contain %q", s)
+				checkContains(t, msg, s, "error message should contain expected text")
 			}
 
 			for _, s := range tt.mustNotContain {
-				assert.NotContains(t, msg, s, "error message should not contain %q", s)
+				checkNotContains(t, msg, s, "error message should not contain unexpected text")
 			}
 		})
 	}
@@ -75,10 +72,10 @@ func TestAPIErrorStatusChecks(t *testing.T) {
 			t.Parallel()
 
 			err := &linode.APIError{StatusCode: tt.statusCode, Message: "test"}
-			assert.Equal(t, tt.isAuth, err.IsAuthenticationError(), "IsAuthenticationError mismatch for status %d", tt.statusCode)
-			assert.Equal(t, tt.isRateLimit, err.IsRateLimitError(), "IsRateLimitError mismatch for status %d", tt.statusCode)
-			assert.Equal(t, tt.isForbidden, err.IsForbiddenError(), "IsForbiddenError mismatch for status %d", tt.statusCode)
-			assert.Equal(t, tt.isServerError, err.IsServerError(), "IsServerError mismatch for status %d", tt.statusCode)
+			checkEqual(t, tt.isAuth, err.IsAuthenticationError(), "IsAuthenticationError mismatch")
+			checkEqual(t, tt.isRateLimit, err.IsRateLimitError(), "IsRateLimitError mismatch")
+			checkEqual(t, tt.isForbidden, err.IsForbiddenError(), "IsForbiddenError mismatch")
+			checkEqual(t, tt.isServerError, err.IsServerError(), "IsServerError mismatch")
 		})
 	}
 }
@@ -92,9 +89,9 @@ func TestNetworkErrorErrorAndUnwrap(t *testing.T) {
 	inner := errors.New("connection refused")
 	err := &linode.NetworkError{Operation: "GetProfile", Err: inner}
 
-	require.ErrorContains(t, err, "GetProfile", "error message should include the operation name")
-	require.ErrorContains(t, err, "connection refused", "error message should include the underlying cause")
-	assert.Equal(t, inner, err.Unwrap(), "Unwrap should return the original inner error")
+	mustErrorContains(t, err, "GetProfile", "error message should include the operation name")
+	mustErrorContains(t, err, "connection refused", "error message should include the underlying cause")
+	checkEqual(t, inner, err.Unwrap(), "Unwrap should return the original inner error")
 }
 
 // Confirms retryable error formatting and unwrap chain integrity.
@@ -132,15 +129,15 @@ func TestRetryableError(t *testing.T) {
 
 			msg := tt.err.Error()
 			for _, s := range tt.mustContain {
-				assert.Contains(t, msg, s, "error message should contain %q", s)
+				checkContains(t, msg, s, "error message should contain expected text")
 			}
 
 			for _, s := range tt.mustNotContain {
-				assert.NotContains(t, msg, s, "error message should not contain %q", s)
+				checkNotContains(t, msg, s, "error message should not contain unexpected text")
 			}
 
 			if tt.unwrapTarget != nil {
-				assert.ErrorIs(t, tt.err, tt.err.Err, "Unwrap should expose the inner error")
+				checkErrorIs(t, tt.err, tt.err.Err, "Unwrap should expose the inner error")
 			}
 		})
 	}

@@ -9,9 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -19,7 +16,7 @@ func writeRetryTestResponse(t *testing.T, w http.ResponseWriter, body string) {
 	t.Helper()
 
 	_, err := w.Write([]byte(body))
-	assert.NoError(t, err, "writing response should not fail")
+	checkNoError(t, err, "writing response should not fail")
 }
 
 // TestRetryableClientGetProfileSuccessNoRetry verifies that a successful
@@ -32,7 +29,7 @@ func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "user1"}), "encoding profile response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "user1"}), "encoding profile response should not fail")
 	}))
 	defer srv.Close()
 
@@ -46,9 +43,9 @@ func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 	)
 
 	profile, err := client.GetProfile(t.Context())
-	require.NoError(t, err, "GetProfile should succeed on first attempt")
-	assert.Equal(t, "user1", profile.Username, "username should match the API response")
-	assert.Equal(t, int32(1), callCount.Load(), "should only call the API once on success")
+	mustNoError(t, err, "GetProfile should succeed on first attempt")
+	checkEqual(t, "user1", profile.Username, "username should match the API response")
+	checkEqual(t, int32(1), callCount.Load(), "should only call the API once on success")
 }
 
 // TestRetryableClientRetriesOnServerError verifies that the retry client
@@ -68,7 +65,7 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "recovered"}), "encoding recovered profile should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "recovered"}), "encoding recovered profile should not fail")
 	}))
 	defer srv.Close()
 
@@ -82,9 +79,9 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 	)
 
 	profile, err := client.GetProfile(t.Context())
-	require.NoError(t, err, "GetProfile should succeed after retries")
-	assert.Equal(t, "recovered", profile.Username, "username should match the recovered response")
-	assert.Equal(t, int32(3), callCount.Load(), "should retry twice then succeed on third attempt")
+	mustNoError(t, err, "GetProfile should succeed after retries")
+	checkEqual(t, "recovered", profile.Username, "username should match the recovered response")
+	checkEqual(t, int32(3), callCount.Load(), "should retry twice then succeed on third attempt")
 }
 
 // TestRetryableClientNoRetryOnAuthError verifies that authentication errors
@@ -111,8 +108,8 @@ func TestRetryableClientNoRetryOnAuthError(t *testing.T) {
 	)
 
 	_, err := client.GetProfile(t.Context())
-	require.Error(t, err, "GetProfile should fail on auth error")
-	assert.Equal(t, int32(1), callCount.Load(), "should not retry authentication errors")
+	mustError(t, err, "GetProfile should fail on auth error")
+	checkEqual(t, int32(1), callCount.Load(), "should not retry authentication errors")
 }
 
 // TestRetryableClientExhaustsRetries verifies that the retry client gives
@@ -139,9 +136,9 @@ func TestRetryableClientExhaustsRetries(t *testing.T) {
 	)
 
 	_, err := client.GetProfile(t.Context())
-	require.Error(t, err, "GetProfile should fail after exhausting retries")
+	mustError(t, err, "GetProfile should fail after exhausting retries")
 	// 1 initial + 2 retries = 3 total calls.
-	assert.Equal(t, int32(3), callCount.Load(), "should exhaust all retries (1 initial + 2 retries)")
+	checkEqual(t, int32(3), callCount.Load(), "should exhaust all retries (1 initial + 2 retries)")
 }
 
 // TestRetryableClientContextCancelStopsRetry verifies that canceling the
@@ -183,9 +180,9 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	}()
 
 	_, err := client.GetProfile(ctx)
-	require.Error(t, err, "GetProfile should fail when context is canceled")
+	mustError(t, err, "GetProfile should fail when context is canceled")
 	// Should have been canceled before exhausting all retries.
-	assert.Less(t, callCount.Load(), int32(6), "should stop before exhausting all retries")
+	checkLess(t, callCount.Load(), int32(6), "should stop before exhausting all retries")
 	<-done
 }
 
@@ -209,7 +206,7 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
 	}))
 	defer srv.Close()
 
@@ -226,13 +223,13 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 	profile, err := client.GetProfile(t.Context())
 	elapsed := time.Since(start)
 
-	require.NoError(t, err, "GetProfile should succeed after honoring Retry-After")
-	assert.Equal(t, "ok", profile.Username, "should return the recovered profile")
-	assert.Equal(t, int32(2), callCount.Load(), "should call API twice (one 429, one OK)")
+	mustNoError(t, err, "GetProfile should succeed after honoring Retry-After")
+	checkEqual(t, "ok", profile.Username, "should return the recovered profile")
+	checkEqual(t, int32(2), callCount.Load(), "should call API twice (one 429, one OK)")
 	// Retry-After of 1s honored; pure exponential with BaseDelay=1ms would
 	// have completed in microseconds. >=900ms tolerates timer slop while
 	// clearly distinguishing from the backoff path.
-	assert.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "should wait the Retry-After hint, not the BaseDelay backoff")
+	checkGreaterOrEqual(t, elapsed, 900*time.Millisecond, "should wait the Retry-After hint, not the BaseDelay backoff")
 }
 
 // TestRetryClampsRetryAfterToMaxDelay verifies that an absurdly large
@@ -254,7 +251,7 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
 	}))
 	defer srv.Close()
 
@@ -271,10 +268,10 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 	_, err := client.GetProfile(t.Context())
 	elapsed := time.Since(start)
 
-	require.NoError(t, err, "GetProfile should succeed within clamped delay")
+	mustNoError(t, err, "GetProfile should succeed within clamped delay")
 	// 3600s hint must be clamped to 50ms MaxDelay; 200ms ceiling allows
 	// generous CI headroom without admitting an unclamped wait.
-	assert.Less(t, elapsed, 200*time.Millisecond, "Retry-After should be clamped to MaxDelay")
+	checkLess(t, elapsed, 200*time.Millisecond, "Retry-After should be clamped to MaxDelay")
 }
 
 // TestRetryableClientListInstancesRetries verifies that ListInstances
@@ -294,7 +291,7 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.Instance{{ID: 1, Label: "srv-1"}},
 			keyPage:    1,
 			keyPages:   1,
@@ -313,8 +310,8 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 	)
 
 	instances, err := client.ListInstances(t.Context())
-	require.NoError(t, err, "ListInstances should succeed after retry")
-	assert.Len(t, instances, 1, "should return one instance after retry")
+	mustNoError(t, err, "ListInstances should succeed after retry")
+	checkLen(t, instances, 1, "should return one instance after retry")
 }
 
 // TestRetryableClientListInstanceConfigsRetries verifies that ListInstanceConfigs
@@ -325,7 +322,7 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+		checkEqual(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -336,7 +333,7 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.InstanceConfig{{ID: 77, Label: labelBootConfig}},
 			keyPage:    1,
 			keyPages:   1,
@@ -355,9 +352,9 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 	)
 
 	configs, err := client.ListInstanceConfigs(t.Context(), 123, 0, 0)
-	require.NoError(t, err, "ListInstanceConfigs should succeed after retry")
-	assert.Len(t, configs, 1, "should return one config after retry")
-	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+	mustNoError(t, err, "ListInstanceConfigs should succeed after retry")
+	checkLen(t, configs, 1, "should return one config after retry")
+	checkEqual(t, int32(2), callCount.Load(), "should retry once")
 }
 
 // TestRetryableClientGetInstanceInterfaceRetries verifies that GetInstanceInterface
@@ -368,7 +365,7 @@ func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
+		checkEqual(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -379,7 +376,7 @@ func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}), "encoding interface response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}), "encoding interface response should not fail")
 	}))
 	t.Cleanup(srv.Close)
 
@@ -393,10 +390,10 @@ func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
 	)
 
 	instanceInterface, err := client.GetInstanceInterface(t.Context(), 123, 456)
-	require.NoError(t, err, "GetInstanceInterface should succeed after retry")
-	require.NotNil(t, instanceInterface, "interface should be returned")
-	assert.Equal(t, 456, instanceInterface.ID, "interface ID should match")
-	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+	mustNoError(t, err, "GetInstanceInterface should succeed after retry")
+	mustNotNil(t, instanceInterface, "interface should be returned")
+	checkEqual(t, 456, instanceInterface.ID, "interface ID should match")
+	checkEqual(t, int32(2), callCount.Load(), "should retry once")
 }
 
 // TestRetryableClientListInstanceConfigInterfacesRetries verifies that ListInstanceConfigInterfaces
@@ -407,7 +404,7 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
+		checkEqual(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -418,7 +415,7 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode([]linode.ConfigInterfaceResponse{{ID: 101, Purpose: purposePublic}}), "encoding interfaces response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode([]linode.ConfigInterfaceResponse{{ID: 101, Purpose: purposePublic}}), "encoding interfaces response should not fail")
 	}))
 	t.Cleanup(srv.Close)
 
@@ -432,9 +429,9 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 	)
 
 	interfaces, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
-	require.NoError(t, err, "ListInstanceConfigInterfaces should succeed after retry")
-	assert.Len(t, interfaces, 1, "should return one interface after retry")
-	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+	mustNoError(t, err, "ListInstanceConfigInterfaces should succeed after retry")
+	checkLen(t, interfaces, 1, "should return one interface after retry")
+	checkEqual(t, int32(2), callCount.Load(), "should retry once")
 }
 
 // TestRetryableClientGetInstanceConfigInterfaceRetries verifies that GetInstanceConfigInterface
@@ -445,7 +442,7 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+		checkEqual(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -456,7 +453,7 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposePublic}), "encoding interface response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposePublic}), "encoding interface response should not fail")
 	}))
 	t.Cleanup(srv.Close)
 
@@ -470,12 +467,12 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 	)
 
 	configInterface, err := client.GetInstanceConfigInterface(t.Context(), 123, 789, 456)
-	require.NoError(t, err, "GetInstanceConfigInterface should succeed after retry")
-	require.NotNil(t, configInterface, "interface should be returned")
-	assert.Equal(t, purposePublic, configInterface.Purpose, "interface purpose should match")
-	assert.Equal(t, 456, configInterface.ID, "interface ID should match")
-	assert.True(t, configInterface.Active, "interface active flag should match")
-	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+	mustNoError(t, err, "GetInstanceConfigInterface should succeed after retry")
+	mustNotNil(t, configInterface, "interface should be returned")
+	checkEqual(t, purposePublic, configInterface.Purpose, "interface purpose should match")
+	checkEqual(t, 456, configInterface.ID, "interface ID should match")
+	checkTrue(t, configInterface.Active, "interface active flag should match")
+	checkEqual(t, int32(2), callCount.Load(), "should retry once")
 }
 
 // TestRetryableClientGetInstanceRetries verifies that GetInstance retries
@@ -488,7 +485,7 @@ func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/volumes", r.URL.Path, "request path should match")
+		checkEqual(t, "/linode/instances/123/volumes", r.URL.Path, "request path should match")
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -499,7 +496,7 @@ func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.Volume{{ID: 321, Label: "data-volume"}},
 			keyPage:    1,
 			keyPages:   1,
@@ -518,9 +515,9 @@ func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
 	)
 
 	volumes, err := client.ListInstanceVolumes(t.Context(), 123, 0, 0)
-	require.NoError(t, err, "ListInstanceVolumes should succeed after retry")
-	assert.Len(t, volumes, 1, "should return one volume after retry")
-	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+	mustNoError(t, err, "ListInstanceVolumes should succeed after retry")
+	checkLen(t, volumes, 1, "should return one volume after retry")
+	checkEqual(t, int32(2), callCount.Load(), "should retry once")
 }
 
 func TestRetryableClientGetInstanceRetries(t *testing.T) {
@@ -538,7 +535,7 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}), "encoding instance response should not fail")
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}), "encoding instance response should not fail")
 	}))
 	defer srv.Close()
 
@@ -552,8 +549,8 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 	)
 
 	instance, err := client.GetInstance(t.Context(), 99)
-	require.NoError(t, err, "GetInstance should succeed after retry")
-	assert.Equal(t, 99, instance.ID, "instance ID should match the request")
+	mustNoError(t, err, "GetInstance should succeed after retry")
+	checkEqual(t, 99, instance.ID, "instance ID should match the request")
 }
 
 // TestRetryableClientUpdateInstanceSuccess verifies that UpdateInstance sends
@@ -566,8 +563,8 @@ func TestRetryableClientUpdateInstanceSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount.Add(1)
 
-		assert.Equal(t, http.MethodPut, r.Method, "should use PUT method")
-		assert.Equal(t, "/linode/instances/42", r.URL.Path, "endpoint should match")
+		checkEqual(t, http.MethodPut, r.Method, "should use PUT method")
+		checkEqual(t, "/linode/instances/42", r.URL.Path, "endpoint should match")
 
 		w.Header().Set("Content-Type", "application/json")
 		writeRetryTestResponse(t, w, `{"id":42,"label":"updated-label","tags":["prod"],"status":"running"}`)
@@ -589,10 +586,10 @@ func TestRetryableClientUpdateInstanceSuccess(t *testing.T) {
 	}
 
 	instance, err := client.UpdateInstance(t.Context(), 42, req)
-	require.NoError(t, err, "UpdateInstance should succeed")
-	assert.Equal(t, 42, instance.ID, "instance ID should match")
-	assert.Equal(t, "updated-label", instance.Label, "label should match updated value")
-	assert.Equal(t, int32(1), callCount.Load(), "should only call the API once on success")
+	mustNoError(t, err, "UpdateInstance should succeed")
+	checkEqual(t, 42, instance.ID, "instance ID should match")
+	checkEqual(t, "updated-label", instance.Label, "label should match updated value")
+	checkEqual(t, int32(1), callCount.Load(), "should only call the API once on success")
 }
 
 // TestRetryableClientUpdateInstanceRetries verifies that UpdateInstance retries
@@ -628,9 +625,9 @@ func TestRetryableClientUpdateInstanceRetries(t *testing.T) {
 	req := &linode.UpdateInstanceRequest{Label: "updated-ok"}
 
 	instance, err := client.UpdateInstance(t.Context(), 99, req)
-	require.NoError(t, err, "UpdateInstance should succeed after retry")
-	assert.Equal(t, 99, instance.ID, "instance ID should match")
-	assert.Equal(t, int32(2), callCount.Load(), "should retry once then succeed")
+	mustNoError(t, err, "UpdateInstance should succeed after retry")
+	checkEqual(t, 99, instance.ID, "instance ID should match")
+	checkEqual(t, int32(2), callCount.Load(), "should retry once then succeed")
 }
 
 // TestRetryableClientUpdateInstanceNoRetryOnAuthError verifies that
@@ -659,6 +656,6 @@ func TestRetryableClientUpdateInstanceNoRetryOnAuthError(t *testing.T) {
 	req := &linode.UpdateInstanceRequest{Label: "auth-test-label"}
 
 	_, err := client.UpdateInstance(t.Context(), 42, req)
-	require.Error(t, err, "UpdateInstance should return an error on 401")
-	assert.Equal(t, int32(1), callCount.Load(), "should not retry on auth errors")
+	mustError(t, err, "UpdateInstance should return an error on 401")
+	checkEqual(t, int32(1), callCount.Load(), "should not retry on auth errors")
 }

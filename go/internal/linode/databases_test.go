@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -62,12 +59,12 @@ func TestClientListDatabaseEnginesSuccess(t *testing.T) {
 	engines := []linode.DatabaseEngine{{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseEnginesPath, r.URL.Path, "request path should be /databases/engines")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseEnginesPath, r.URL.Path, "request path should be /databases/engines")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    engines,
 			keyPage:    2,
 			keyPages:   3,
@@ -79,20 +76,20 @@ func TestClientListDatabaseEnginesSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListDatabaseEngines(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListDatabaseEngines should succeed on 200 response")
-	require.Len(t, got, 1)
-	assert.Equal(t, databaseEngineID, got[0].ID)
-	assert.Equal(t, databaseEngineMySQL, got[0].Engine)
-	assert.Equal(t, databaseEngineVersion, got[0].Version)
+	mustNoError(t, err, "ListDatabaseEngines should succeed on 200 response")
+	mustLen(t, got, 1)
+	checkEqual(t, databaseEngineID, got[0].ID)
+	checkEqual(t, databaseEngineMySQL, got[0].Engine)
+	checkEqual(t, databaseEngineVersion, got[0].Version)
 }
 
 func TestClientListDatabaseEnginesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseEnginesPath, r.URL.Path, "request path should be /databases/engines")
+		checkEqual(t, databaseEnginesPath, r.URL.Path, "request path should be /databases/engines")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -101,11 +98,11 @@ func TestClientListDatabaseEnginesAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListDatabaseEngines(t.Context(), 0, 0)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListDatabaseTypesSuccess(t *testing.T) {
@@ -124,12 +121,12 @@ func TestClientListDatabaseTypesSuccess(t *testing.T) {
 	}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    types,
 			keyPage:    2,
 			keyPages:   3,
@@ -142,20 +139,20 @@ func TestClientListDatabaseTypesSuccess(t *testing.T) {
 
 	got, err := client.ListDatabaseTypes(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListDatabaseTypes should succeed on 200 response")
-	require.Len(t, got, 1)
-	assert.Equal(t, databaseTypeID, got[0].ID)
-	assert.Equal(t, databaseTypeLabel, got[0].Label)
-	assert.Equal(t, 1, got[0].Engines.MySQL[0].Quantity)
+	mustNoError(t, err, "ListDatabaseTypes should succeed on 200 response")
+	mustLen(t, got, 1)
+	checkEqual(t, databaseTypeID, got[0].ID)
+	checkEqual(t, databaseTypeLabel, got[0].Label)
+	checkEqual(t, 1, got[0].Engines.MySQL[0].Quantity)
 }
 
 func TestClientListDatabaseTypesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		checkEqual(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -164,11 +161,11 @@ func TestClientListDatabaseTypesAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListDatabaseTypes(t.Context(), 0, 0)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
@@ -181,11 +178,11 @@ func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		checkEqual(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -193,7 +190,7 @@ func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    types,
 			keyPage:    1,
 			keyPages:   1,
@@ -205,60 +202,60 @@ func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListDatabaseTypes(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only ListDatabaseTypes should retry transient failures")
-	require.Len(t, got, 1)
-	assert.Equal(t, databaseTypeID, got[0].ID)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only ListDatabaseTypes should retry transient failures")
+	mustLen(t, got, 1)
+	checkEqual(t, databaseTypeID, got[0].ID)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseTypeSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 2, 25)
 
-	require.NoError(t, err, "GetDatabaseType should succeed on 200 response")
-	require.NotNil(t, got, "database type should not be nil")
-	assert.Equal(t, databaseTypeID, got.ID)
-	assert.Equal(t, databaseTypeLabel, got.Label)
+	mustNoError(t, err, "GetDatabaseType should succeed on 200 response")
+	mustNotNil(t, got, "database type should not be nil")
+	checkEqual(t, databaseTypeID, got.ID)
+	checkEqual(t, databaseTypeLabel, got.Label)
 }
 
 func TestClientGetDatabaseTypeEscapesPathSeparators(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseTypeEscapedSeparatorPath, r.URL.EscapedPath(), "request path should escape separators in type id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, databaseTypeEscapedSeparatorPath, r.URL.EscapedPath(), "request path should escape separators in type id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeIDWithSeparators, Label: databaseTypeLabel}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeIDWithSeparators, Label: databaseTypeLabel}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseType(t.Context(), databaseTypeIDWithSeparators, 0, 0)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, databaseTypeIDWithSeparators, got.ID)
+	mustNoError(t, err)
+	mustNotNil(t, got)
+	checkEqual(t, databaseTypeIDWithSeparators, got.ID)
 }
 
 func TestClientGetDatabaseTypeAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		checkEqual(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -267,11 +264,11 @@ func TestClientGetDatabaseTypeAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabaseTypeRetriesTransientRead(t *testing.T) {
@@ -282,11 +279,11 @@ func TestClientGetDatabaseTypeRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		checkEqual(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -294,28 +291,28 @@ func TestClientGetDatabaseTypeRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read failures should be retried")
+	mustNoError(t, err)
+	mustNotNil(t, got)
+	checkEqual(t, int32(2), attempts.Load(), "transient read failures should be retried")
 }
 
 func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"binlog_retention_period": map[string]any{
 				keyDescription: "The minimum amount of time in seconds to keep binlog entries before deletion.",
 				keyExample:     600,
@@ -335,18 +332,18 @@ func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseMySQLConfig(t.Context())
 
-	require.NoError(t, err, "GetDatabaseMySQLConfig should succeed on 200 response")
-	assert.Contains(t, got, "binlog_retention_period")
-	assert.Contains(t, got, "mysql")
+	mustNoError(t, err, "GetDatabaseMySQLConfig should succeed on 200 response")
+	checkContains(t, got, "binlog_retention_period")
+	checkContains(t, got, "mysql")
 }
 
 func TestClientGetDatabaseMySQLConfigAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		checkEqual(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -355,11 +352,11 @@ func TestClientGetDatabaseMySQLConfigAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabaseMySQLConfig(t.Context())
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
@@ -370,11 +367,11 @@ func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		checkEqual(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -382,7 +379,7 @@ func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"mysql": map[string]any{
 				"connect_timeout": map[string]any{keyType: databaseConfigTypeInteger},
 			},
@@ -393,21 +390,21 @@ func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabaseMySQLConfig(t.Context())
 
-	require.NoError(t, err, "read-only GetDatabaseMySQLConfig should retry transient failures")
-	assert.Contains(t, got, "mysql")
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabaseMySQLConfig should retry transient failures")
+	checkContains(t, got, "mysql")
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabasePostgreSQLConfigSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			databasePostgreSQLConfigNamespace: map[string]any{
 				databaseConfigMaxConnections: map[string]any{
 					keyDescription: "Sets the maximum number of concurrent connections.",
@@ -422,17 +419,17 @@ func TestClientGetDatabasePostgreSQLConfigSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
 
-	require.NoError(t, err, "GetDatabasePostgreSQLConfig should succeed on 200 response")
-	assert.Contains(t, got, "pg")
+	mustNoError(t, err, "GetDatabasePostgreSQLConfig should succeed on 200 response")
+	checkContains(t, got, "pg")
 }
 
 func TestClientGetDatabasePostgreSQLConfigAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		checkEqual(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -441,11 +438,11 @@ func TestClientGetDatabasePostgreSQLConfigAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabasePostgreSQLConfig(t.Context())
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
@@ -456,11 +453,11 @@ func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		checkEqual(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -468,7 +465,7 @@ func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			databasePostgreSQLConfigNamespace: map[string]any{
 				databaseConfigMaxConnections: map[string]any{keyType: databaseConfigTypeInteger},
 			},
@@ -479,9 +476,9 @@ func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
 
-	require.NoError(t, err, "read-only GetDatabasePostgreSQLConfig should retry transient failures")
-	assert.Contains(t, got, "pg")
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabasePostgreSQLConfig should retry transient failures")
+	checkContains(t, got, "pg")
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientListDatabaseInstancesSuccess(t *testing.T) {
@@ -490,12 +487,12 @@ func TestClientListDatabaseInstancesSuccess(t *testing.T) {
 	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":     instances,
 			keyPage:    2,
 			keyPages:   3,
@@ -507,20 +504,20 @@ func TestClientListDatabaseInstancesSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListDatabaseInstances(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListDatabaseInstances should succeed on 200 response")
-	require.Len(t, got, 1)
-	assert.Equal(t, databaseInstanceID, got[0].ID)
-	assert.Equal(t, databaseInstanceLabel, got[0].Label)
-	assert.Equal(t, databaseEngineMySQL, got[0].Engine)
+	mustNoError(t, err, "ListDatabaseInstances should succeed on 200 response")
+	mustLen(t, got, 1)
+	checkEqual(t, databaseInstanceID, got[0].ID)
+	checkEqual(t, databaseInstanceLabel, got[0].Label)
+	checkEqual(t, databaseEngineMySQL, got[0].Engine)
 }
 
 func TestClientListDatabaseInstancesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -529,11 +526,11 @@ func TestClientListDatabaseInstancesAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListDatabaseInstances(t.Context(), 0, 0)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
@@ -544,11 +541,11 @@ func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -556,7 +553,7 @@ func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel}},
 		}))
 	}))
@@ -565,9 +562,9 @@ func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListDatabaseInstances(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only ListDatabaseInstances should retry transient failures")
-	require.Len(t, got, 1)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only ListDatabaseInstances should retry transient failures")
+	mustLen(t, got, 1)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
@@ -576,12 +573,12 @@ func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
 	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData:    instances,
 			keyPage:    2,
 			keyPages:   3,
@@ -593,20 +590,20 @@ func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListDatabasePostgreSQLInstances(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListDatabasePostgreSQLInstances should succeed on 200 response")
-	require.Len(t, got, 1)
-	assert.Equal(t, databaseInstanceID, got[0].ID)
-	assert.Equal(t, databaseInstanceLabel, got[0].Label)
-	assert.Equal(t, databaseEnginePostgreSQL, got[0].Engine)
+	mustNoError(t, err, "ListDatabasePostgreSQLInstances should succeed on 200 response")
+	mustLen(t, got, 1)
+	checkEqual(t, databaseInstanceID, got[0].ID)
+	checkEqual(t, databaseInstanceLabel, got[0].Label)
+	checkEqual(t, databaseEnginePostgreSQL, got[0].Engine)
 }
 
 func TestClientListDatabasePostgreSQLInstancesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -615,11 +612,11 @@ func TestClientListDatabasePostgreSQLInstancesAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListDatabasePostgreSQLInstances(t.Context(), 0, 0)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientListDatabasePostgreSQLInstancesRetriesTransientRead(t *testing.T) {
@@ -630,11 +627,11 @@ func TestClientListDatabasePostgreSQLInstancesRetriesTransientRead(t *testing.T)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -642,7 +639,7 @@ func TestClientListDatabasePostgreSQLInstancesRetriesTransientRead(t *testing.T)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel}},
 		}))
 	}))
@@ -651,63 +648,63 @@ func TestClientListDatabasePostgreSQLInstancesRetriesTransientRead(t *testing.T)
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListDatabasePostgreSQLInstances(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only ListDatabasePostgreSQLInstances should retry transient failures")
-	require.Len(t, got, 1)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only ListDatabasePostgreSQLInstances should retry transient failures")
+	mustLen(t, got, 1)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "GetDatabaseInstance should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseInstanceID, got.ID)
-	assert.Equal(t, databaseInstanceLabel, got.Label)
+	mustNoError(t, err, "GetDatabaseInstance should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseInstanceID, got.ID)
+	checkEqual(t, databaseInstanceLabel, got.Label)
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "GetDatabasePostgreSQLInstance should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseInstanceID, got.ID)
-	assert.Equal(t, databaseInstanceLabel, got.Label)
-	assert.Equal(t, databaseEnginePostgreSQL, got.Engine)
+	mustNoError(t, err, "GetDatabasePostgreSQLInstance should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseInstanceID, got.ID)
+	checkEqual(t, databaseInstanceLabel, got.Label)
+	checkEqual(t, databaseEnginePostgreSQL, got.Engine)
 }
 
 func TestClientGetDatabasePostgreSQLInstanceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -716,11 +713,11 @@ func TestClientGetDatabasePostgreSQLInstanceAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabasePostgreSQLInstanceRetriesTransientRead(t *testing.T) {
@@ -731,11 +728,11 @@ func TestClientGetDatabasePostgreSQLInstanceRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -743,46 +740,46 @@ func TestClientGetDatabasePostgreSQLInstanceRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Engine: databaseEnginePostgreSQL}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Engine: databaseEnginePostgreSQL}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "read-only GetDatabasePostgreSQLInstance should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabasePostgreSQLInstance should retry transient failures")
+	mustNotNil(t, got)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseInstanceSSLSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "GetDatabaseInstanceSSL should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
+	mustNoError(t, err, "GetDatabaseInstanceSSL should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
 }
 
 func TestClientGetDatabaseInstanceSSLAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		checkEqual(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -791,11 +788,11 @@ func TestClientGetDatabaseInstanceSSLAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
@@ -806,11 +803,11 @@ func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		checkEqual(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -818,47 +815,47 @@ func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "read-only GetDatabaseInstanceSSL should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabaseInstanceSSL should retry transient failures")
+	mustNotNil(t, got)
+	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSSLSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "GetDatabasePostgreSQLInstanceSSL should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
+	mustNoError(t, err, "GetDatabasePostgreSQLInstanceSSL should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSSLAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		checkEqual(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -867,11 +864,11 @@ func TestClientGetDatabasePostgreSQLInstanceSSLAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSSLRetriesTransientRead(t *testing.T) {
@@ -882,11 +879,11 @@ func TestClientGetDatabasePostgreSQLInstanceSSLRetriesTransientRead(t *testing.T
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		checkEqual(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -894,26 +891,26 @@ func TestClientGetDatabasePostgreSQLInstanceSSLRetriesTransientRead(t *testing.T
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "read-only GetDatabasePostgreSQLInstanceSSL should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabasePostgreSQLInstanceSSL should retry transient failures")
+	mustNotNil(t, got)
+	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseInstanceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -922,11 +919,11 @@ func TestClientGetDatabaseInstanceAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabaseInstanceRetriesTransientRead(t *testing.T) {
@@ -937,11 +934,11 @@ func TestClientGetDatabaseInstanceRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -949,47 +946,47 @@ func TestClientGetDatabaseInstanceRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "read-only GetDatabaseInstance should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabaseInstance should retry transient failures")
+	mustNotNil(t, got)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseInstanceCredentialsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "GetDatabaseInstanceCredentials should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, "linode", got.Username)
-	assert.Equal(t, "secret", got.Password)
+	mustNoError(t, err, "GetDatabaseInstanceCredentials should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, "linode", got.Username)
+	checkEqual(t, "secret", got.Password)
 }
 
 func TestClientGetDatabaseInstanceCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
+		checkEqual(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -998,11 +995,11 @@ func TestClientGetDatabaseInstanceCredentialsAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabaseInstanceCredentialsRetriesTransientRead(t *testing.T) {
@@ -1012,11 +1009,11 @@ func TestClientGetDatabaseInstanceCredentialsRetriesTransientRead(t *testing.T) 
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
+		checkEqual(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -1024,49 +1021,49 @@ func TestClientGetDatabaseInstanceCredentialsRetriesTransientRead(t *testing.T) 
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "read-only GetDatabaseInstanceCredentials should retry transient failures")
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabaseInstanceCredentials should retry transient failures")
+	mustNotNil(t, got)
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientResetDatabaseInstanceCredentialsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "request body should be empty")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "request body should be empty")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "ResetDatabaseInstanceCredentials should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, "linode", got.Username)
-	assert.Equal(t, "secret", got.Password)
+	mustNoError(t, err, "ResetDatabaseInstanceCredentials should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, "linode", got.Username)
+	checkEqual(t, "secret", got.Password)
 }
 
 func TestClientResetDatabaseInstanceCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -1075,11 +1072,11 @@ func TestClientResetDatabaseInstanceCredentialsAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientResetDatabaseInstanceCredentialsDoesNotRetryTransientPost(t *testing.T) {
@@ -1089,10 +1086,10 @@ func TestClientResetDatabaseInstanceCredentialsDoesNotRetryTransientPost(t *test
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1101,38 +1098,38 @@ func TestClientResetDatabaseInstanceCredentialsDoesNotRetryTransientPost(t *test
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "credential reset POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "credential reset POST must not be retried")
 }
 
 func TestClientResetDatabasePostgreSQLInstanceCredentialsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "request body should be empty")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "request body should be empty")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "ResetDatabasePostgreSQLInstanceCredentials should succeed on 200 response")
+	mustNoError(t, err, "ResetDatabasePostgreSQLInstanceCredentials should succeed on 200 response")
 }
 
 func TestClientResetDatabasePostgreSQLInstanceCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -1141,11 +1138,11 @@ func TestClientResetDatabasePostgreSQLInstanceCredentialsAPIError(t *testing.T) 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientResetDatabasePostgreSQLInstanceCredentialsDoesNotRetryTransientPost(t *testing.T) {
@@ -1155,10 +1152,10 @@ func TestClientResetDatabasePostgreSQLInstanceCredentialsDoesNotRetryTransientPo
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1167,8 +1164,8 @@ func TestClientResetDatabasePostgreSQLInstanceCredentialsDoesNotRetryTransientPo
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "PostgreSQL credential reset POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "PostgreSQL credential reset POST must not be retried")
 }
 
 func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
@@ -1189,27 +1186,27 @@ func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		var gotReq linode.CreateDatabaseInstanceRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		assert.Equal(t, expectedReq, gotReq)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		checkEqual(t, expectedReq, gotReq)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.CreateDatabaseInstance(t.Context(), &expectedReq)
 
-	require.NoError(t, err, "CreateDatabaseInstance should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseInstanceID, got.ID)
-	assert.Equal(t, databaseInstanceLabel, got.Label)
+	mustNoError(t, err, "CreateDatabaseInstance should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseInstanceID, got.ID)
+	checkEqual(t, databaseInstanceLabel, got.Label)
 }
 
 func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1219,10 +1216,10 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1231,8 +1228,8 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	_, err := client.CreateDatabaseInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEngineID, Region: regionUSEast})
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent create POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "non-idempotent create POST must not be retried")
 }
 
 func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
@@ -1253,27 +1250,27 @@ func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		var gotReq linode.CreateDatabaseInstanceRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		assert.Equal(t, expectedReq, gotReq)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		checkEqual(t, expectedReq, gotReq)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &expectedReq)
 
-	require.NoError(t, err, "CreateDatabasePostgreSQLInstance should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseInstanceID, got.ID)
-	assert.Equal(t, databaseInstanceLabel, got.Label)
+	mustNoError(t, err, "CreateDatabasePostgreSQLInstance should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseInstanceID, got.ID)
+	checkEqual(t, databaseInstanceLabel, got.Label)
 }
 
 func TestClientCreateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1283,10 +1280,10 @@ func TestClientCreateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1295,28 +1292,28 @@ func TestClientCreateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	_, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEnginePostgreSQLID, Region: regionUSEast})
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL create POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL create POST must not be retried")
 }
 
 func TestClientDeleteDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "delete request should not send a body")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "delete request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "DeleteDatabasePostgreSQLInstance should succeed on 200 response")
+	mustNoError(t, err, "DeleteDatabasePostgreSQLInstance should succeed on 200 response")
 }
 
 func TestClientDeleteDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1326,10 +1323,10 @@ func TestClientDeleteDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1338,8 +1335,8 @@ func TestClientDeleteDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.DeleteDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL delete DELETE must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL delete DELETE must not be retried")
 }
 
 func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
@@ -1360,27 +1357,27 @@ func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		var gotReq linode.UpdateDatabaseInstanceRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		assert.Equal(t, expectedReq, gotReq)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		checkEqual(t, expectedReq, gotReq)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &expectedReq)
 
-	require.NoError(t, err, "UpdateDatabaseInstance should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseInstanceID, got.ID)
-	assert.Equal(t, databaseInstanceLabel, got.Label)
+	mustNoError(t, err, "UpdateDatabaseInstance should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseInstanceID, got.ID)
+	checkEqual(t, databaseInstanceLabel, got.Label)
 }
 
 func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1392,10 +1389,10 @@ func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1404,8 +1401,8 @@ func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	_, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting update PUT must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting update PUT must not be retried")
 }
 
 func TestClientUpdateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
@@ -1426,28 +1423,28 @@ func TestClientUpdateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		var gotReq linode.UpdateDatabaseInstanceRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		assert.Equal(t, expectedReq, gotReq)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		checkEqual(t, expectedReq, gotReq)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.UpdateDatabasePostgreSQLInstance(t.Context(), databaseInstanceID, &expectedReq)
 
-	require.NoError(t, err, "UpdateDatabasePostgreSQLInstance should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, databaseInstanceID, got.ID)
-	assert.Equal(t, databaseInstanceLabel, got.Label)
-	assert.Equal(t, databaseEnginePostgreSQL, got.Engine)
+	mustNoError(t, err, "UpdateDatabasePostgreSQLInstance should succeed on 200 response")
+	mustNotNil(t, got)
+	checkEqual(t, databaseInstanceID, got.ID)
+	checkEqual(t, databaseInstanceLabel, got.Label)
+	checkEqual(t, databaseEnginePostgreSQL, got.Engine)
 }
 
 func TestClientUpdateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1459,10 +1456,10 @@ func TestClientUpdateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1471,28 +1468,28 @@ func TestClientUpdateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	_, err := client.UpdateDatabasePostgreSQLInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting PostgreSQL update PUT must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting PostgreSQL update PUT must not be retried")
 }
 
 func TestClientDeleteDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "delete request should not send a body")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "delete request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "DeleteDatabaseInstance should succeed on 200 response")
+	mustNoError(t, err, "DeleteDatabaseInstance should succeed on 200 response")
 }
 
 func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1502,10 +1499,10 @@ func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1514,28 +1511,28 @@ func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "destructive database DELETE must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "destructive database DELETE must not be retried")
 }
 
 func TestClientPatchDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "patch request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "patch request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "PatchDatabaseInstance should succeed on 200 response")
+	mustNoError(t, err, "PatchDatabaseInstance should succeed on 200 response")
 }
 
 func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1545,10 +1542,10 @@ func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1557,28 +1554,28 @@ func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting patch POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting patch POST must not be retried")
 }
 
 func TestClientSuspendDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "suspend request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "suspend request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "SuspendDatabaseInstance should succeed on 200 response")
+	mustNoError(t, err, "SuspendDatabaseInstance should succeed on 200 response")
 }
 
 func TestClientSuspendDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1588,10 +1585,10 @@ func TestClientSuspendDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1600,28 +1597,28 @@ func TestClientSuspendDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting suspend POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting suspend POST must not be retried")
 }
 
 func TestClientSuspendDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLInstanceSuspendPath, r.URL.Path, "request path should include PostgreSQL instance id and suspend suffix")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "suspend request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLInstanceSuspendPath, r.URL.Path, "request path should include PostgreSQL instance id and suspend suffix")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "suspend request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.SuspendDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "SuspendDatabasePostgreSQLInstance should succeed on 200 response")
+	mustNoError(t, err, "SuspendDatabasePostgreSQLInstance should succeed on 200 response")
 }
 
 func TestClientSuspendDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1631,10 +1628,10 @@ func TestClientSuspendDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLInstanceSuspendPath, r.URL.Path, "request path should include PostgreSQL instance id and suspend suffix")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLInstanceSuspendPath, r.URL.Path, "request path should include PostgreSQL instance id and suspend suffix")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1643,28 +1640,28 @@ func TestClientSuspendDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.SuspendDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting PostgreSQL suspend POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting PostgreSQL suspend POST must not be retried")
 }
 
 func TestClientResumeDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceResumePath, r.URL.Path, "request path should include instance id and resume suffix")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "resume request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceResumePath, r.URL.Path, "request path should include instance id and resume suffix")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "resume request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.ResumeDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "ResumeDatabaseInstance should succeed on 200 response")
+	mustNoError(t, err, "ResumeDatabaseInstance should succeed on 200 response")
 }
 
 func TestClientResumeDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1674,10 +1671,10 @@ func TestClientResumeDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databaseInstanceResumePath, r.URL.Path, "request path should include instance id and resume suffix")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databaseInstanceResumePath, r.URL.Path, "request path should include instance id and resume suffix")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1686,28 +1683,28 @@ func TestClientResumeDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.ResumeDatabaseInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting resume POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting resume POST must not be retried")
 }
 
 func TestClientResumeDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		assert.Equal(t, http.NoBody, r.Body, "resume request should not send a body")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.NoBody, r.Body, "resume request should not send a body")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.NoError(t, err, "ResumeDatabasePostgreSQLInstance should succeed on 200 response")
+	mustNoError(t, err, "ResumeDatabasePostgreSQLInstance should succeed on 200 response")
 }
 
 func TestClientResumeDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1717,10 +1714,10 @@ func TestClientResumeDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
@@ -1729,40 +1726,40 @@ func TestClientResumeDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
 	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), attempts.Load(), "side-effecting PostgreSQL resume POST must not be retried")
+	mustError(t, err)
+	checkEqual(t, int32(1), attempts.Load(), "side-effecting PostgreSQL resume POST must not be retried")
 }
 
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
+		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
 
-	require.NoError(t, err, "GetDatabaseEngine should succeed on 200 response")
-	require.NotNil(t, got, "engine should not be nil")
-	assert.Equal(t, databaseEngineID, got.ID)
-	assert.Equal(t, databaseEngineMySQL, got.Engine)
-	assert.Equal(t, databaseEngineVersion, got.Version)
+	mustNoError(t, err, "GetDatabaseEngine should succeed on 200 response")
+	mustNotNil(t, got, "engine should not be nil")
+	checkEqual(t, databaseEngineID, got.ID)
+	checkEqual(t, databaseEngineMySQL, got.Engine)
+	checkEqual(t, databaseEngineVersion, got.Version)
 }
 
 func TestClientGetDatabaseEngineAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
+		checkEqual(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
 		}))
 	}))
@@ -1771,11 +1768,11 @@ func TestClientGetDatabaseEngineAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
 
-	require.Error(t, err)
+	mustError(t, err)
 
 	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	mustErrorAs(t, err, &apiErr)
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientGetDatabaseEngineRetriesTransientRead(t *testing.T) {
@@ -1786,11 +1783,11 @@ func TestClientGetDatabaseEngineRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		assert.Equal(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
+		checkEqual(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 			}))
 
@@ -1798,14 +1795,14 @@ func TestClientGetDatabaseEngineRetriesTransientRead(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
 
-	require.NoError(t, err, "read-only GetDatabaseEngine should retry transient failures")
-	require.NotNil(t, got, "engine should not be nil")
-	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+	mustNoError(t, err, "read-only GetDatabaseEngine should retry transient failures")
+	mustNotNil(t, got, "engine should not be nil")
+	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
