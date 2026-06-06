@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -26,33 +24,45 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
 
-		assert.Equal(t, "linode_profile_preferences_update", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be a write tool")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyPreferences, "schema should include preferences body")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "write tool must require confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "write tool should expose dry_run")
+		checkEqual(t, "linode_profile_preferences_update", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapWrite, capability, "tool should be a write tool")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPreferences, "schema should include preferences body")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "write tool must require confirm")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "write tool should expose dry_run")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+			checkEqual(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			body, readErr := io.ReadAll(r.Body)
-			if !assert.NoError(t, readErr, "request body should be readable") {
+			if !checkNoError(t, readErr, "request body should be readable") {
 				return
 			}
 
-			assert.JSONEq(t, `{"theme":"dark"}`, string(body), "request body should match tool input")
+			{
+				expectedJSON := `{"theme":"dark"}`
+				actualJSON := string(body)
+
+				var (
+					expectedBody any
+					actualBody   any
+				)
+
+				expectNoError(t, json.Unmarshal([]byte(expectedJSON), &expectedBody))
+				expectNoError(t, json.Unmarshal([]byte(actualJSON), &actualBody))
+				checkEqual(t, expectedBody, actualBody, "request body should match tool input")
+			}
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
 		}))
 		defer srv.Close()
 
@@ -62,12 +72,12 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "dark", "response should include returned preferences")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "dark", "response should include returned preferences")
 	})
 
 	t.Run("dry run previews without put", func(t *testing.T) {
@@ -87,34 +97,34 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry run should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "dry run should not be an error result")
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
 		would, wouldOK := body["would_execute"].(map[string]any)
-		require.True(t, wouldOK, "dry run response should include would_execute")
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/profile/preferences", would["path"])
+		expectTrue(t, wouldOK, "dry run response should include would_execute")
+		checkEqual(t, "PUT", would["method"])
+		checkEqual(t, "/profile/preferences", would["path"])
 		previewBody, previewBodyOK := would["body"].(map[string]any)
-		require.True(t, previewBodyOK, "dry run response should include the request body")
-		assert.Equal(t, profilePreferenceValueDark, previewBody[profilePreferenceKeyTheme], "dry run body should include preference fields")
-		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the PUT endpoint")
+		expectTrue(t, previewBodyOK, "dry run response should include the request body")
+		checkEqual(t, profilePreferenceValueDark, previewBody[profilePreferenceKeyTheme], "dry run body should include preference fields")
+		checkEqual(t, int32(0), calls.Load(), "dry run should not call the PUT endpoint")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "preferences update surfaces a side effect")
+		expectLen(t, sideEffects, 1, "preferences update surfaces a side effect")
 	})
 
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
+			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+			checkEqual(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		defer srv.Close()
 
@@ -124,9 +134,9 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		expectNoError(t, err, "handler should return API failures as tool errors")
+		expectNotNil(t, result, "result should not be nil")
+		checkTrueWithMode(t, false, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to update linode_profile_preferences_update")
 		assertErrorContains(t, result, errForbidden)
 	})
@@ -166,11 +176,11 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
+				expectNoError(t, err, "handler should return validation as a tool error")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "missing or non-true confirm should be an error result")
 				assertErrorContains(t, result, "Set confirm=true to proceed")
-				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
+				checkEqual(t, int32(0), calls.Load(), "confirm rejection should not call the client")
 			})
 		}
 	})
@@ -210,11 +220,11 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid preferences should be an error result")
+				expectNoError(t, err, "handler should return validation as a tool error")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "invalid preferences should be an error result")
 				assertErrorContains(t, result, "preferences must be a non-empty object")
-				assert.Equal(t, int32(0), calls.Load(), "validation rejection should not call the client")
+				checkEqual(t, int32(0), calls.Load(), "validation rejection should not call the client")
 			})
 		}
 	})

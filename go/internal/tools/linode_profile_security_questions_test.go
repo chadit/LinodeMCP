@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -32,13 +30,13 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-		assert.Equal(t, toolProfileSecurityQuestionsAnswer, tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapAdmin, capability, "security question answers should be CapAdmin")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keySecurityQuestions, "schema should include security_questions")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
+		checkEqual(t, toolProfileSecurityQuestionsAnswer, tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		checkEqual(t, profiles.CapAdmin, capability, "security question answers should be CapAdmin")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySecurityQuestions, "schema should include security_questions")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
 	})
 
 	t.Run("security questions validation before client call", func(t *testing.T) {
@@ -72,11 +70,11 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 				req := createRequestWithArgs(t, tt.args)
 				result, err := handler(t.Context(), req)
 
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be a tool error")
+				expectNoError(t, err, "handler should not return transport error")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 				assertErrorContains(t, result, tt.message)
-				assert.Equal(t, int32(0), calls.Load(), "validation failure must happen before client call")
+				checkEqual(t, int32(0), calls.Load(), "validation failure must happen before client call")
 			})
 		}
 	})
@@ -118,11 +116,11 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
 
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be a tool error")
+				expectNoError(t, err, "handler should not return transport error")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 				assertErrorContains(t, result, errConfirmEqualsTrue)
-				assert.Equal(t, int32(0), calls.Load(), "confirm failure must happen before client call")
+				checkEqual(t, int32(0), calls.Load(), "confirm failure must happen before client call")
 			})
 		}
 	})
@@ -144,43 +142,59 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyDryRun: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return transport error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry-run should not be an error")
-		assert.Equal(t, int32(0), calls.Load(), "dry-run must not call the API")
+		expectNoError(t, err, "handler should not return transport error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "dry-run should not be an error")
+		checkEqual(t, int32(0), calls.Load(), "dry-run must not call the API")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
+		expectTrue(t, ok, "content should be TextContent")
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, toolProfileSecurityQuestionsAnswer, body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, toolProfileSecurityQuestionsAnswer, body["tool"])
 		would, isObject := body["would_execute"].(map[string]any)
-		require.True(t, isObject, "would_execute should be an object")
-		assert.Equal(t, http.MethodPost, would["method"])
-		assert.Equal(t, "/profile/security-questions", would["path"])
+		expectTrue(t, isObject, "would_execute should be an object")
+		checkEqual(t, http.MethodPost, would["method"])
+		checkEqual(t, "/profile/security-questions", would["path"])
 		bodyValue, hasBody := would["body"].(map[string]any)
-		require.True(t, hasBody, "would_execute body should be an object")
-		assert.Equal(t, "[redacted]", bodyValue[keySecurityQuestions])
-		assert.NotContains(t, textContent.Text, profileSecurityQuestionsPayload, "dry-run output must not expose answers")
-		assert.Contains(t, textContent.Text, "side_effects", "dry-run should surface a side effect")
-		assert.Contains(t, textContent.Text, "answers are saved", "side effect should describe the action")
+		expectTrue(t, hasBody, "would_execute body should be an object")
+		checkEqual(t, "[redacted]", bodyValue[keySecurityQuestions])
+
+		if contains(textContent.Text, profileSecurityQuestionsPayload) {
+			t.Errorf("expected %v not to contain %v%s", textContent.Text, profileSecurityQuestionsPayload, expectationMessage([]string{"dry-run output must not expose answers"}))
+		}
+
+		expectContainsWithMode(t, false, textContent.Text, "side_effects", "dry-run should surface a side effect")
+		expectContainsWithMode(t, false, textContent.Text, "answers are saved", "side effect should describe the action")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 
 			body, err := io.ReadAll(r.Body)
-			assert.NoError(t, err)
-			assert.JSONEq(t, `{"security_questions":"answer payload"}`, string(body))
+			checkNoError(t, err)
+			{
+				expectedJSON := `{"security_questions":"answer payload"}`
+				actualJSON := string(body)
+
+				var (
+					expectedBody any
+					actualBody   any
+				)
+
+				expectNoError(t, json.Unmarshal([]byte(expectedJSON), &expectedBody))
+				expectNoError(t, json.Unmarshal([]byte(actualJSON), &actualBody))
+				checkEqual(t, expectedBody, actualBody)
+			}
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		defer srv.Close()
 
@@ -190,24 +204,24 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Profile security questions answered successfully", "response should contain success message")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, "Profile security questions answered successfully", "response should contain success message")
 	})
 
 	t.Run("api error produces tool error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: "security questions rejected"}},
 			}))
 		}))
@@ -219,9 +233,9 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return transport error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return transport error")
+		expectNotNil(t, result, "result should not be nil")
+		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to answer profile security questions")
 		assertErrorContains(t, result, "security questions rejected")
 	})
