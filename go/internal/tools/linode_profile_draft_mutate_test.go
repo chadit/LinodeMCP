@@ -66,6 +66,22 @@ func callMutateHandler(
 	return out
 }
 
+func expectStringAnyElementsMatch(t *testing.T, expected []string, actual []any, msg string) {
+	t.Helper()
+
+	actualStrings := make([]string, len(actual))
+	for index, value := range actual {
+		text, ok := value.(string)
+		if !ok {
+			t.Fatalf("element %d must be a string, got %T", index, value)
+		}
+
+		actualStrings[index] = text
+	}
+
+	expectStringElementsMatch(t, expected, actualStrings, msg)
+}
+
 // TestDraftAddToolsRegistration locks in the CapMeta tag and tool
 // name. CapMeta is what keeps the builder available under read-only
 // profiles; a regression on the tag would silently break the
@@ -107,27 +123,11 @@ func TestDraftAddToolsAddsLiterals(t *testing.T) {
 	expectEqual(t, mutateDraftName, out[keyName])
 	added, ok := out["added"].([]any)
 	expectTrue(t, ok)
-	{
-		expectedElements := []any{toolHello, toolInstanceBoot}
-		actualElements := added
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringAnyElementsMatch(t, []string{toolHello, toolInstanceBoot}, added, "added tools must match literals")
 
 	draft, found := reg.Get(mutateDraftName)
 	expectTrue(t, found)
-	{
-		expectedElements := []string{toolHello, toolInstanceBoot}
-		actualElements := draft.AllowedTools
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringElementsMatch(t, []string{toolHello, toolInstanceBoot}, draft.AllowedTools, "draft tools must match added literals")
 }
 
 // TestDraftAddToolsExpandsWildcards verifies the wildcard path.
@@ -151,15 +151,7 @@ func TestDraftAddToolsExpandsWildcards(t *testing.T) {
 	})
 
 	added, _ := out["added"].([]any)
-	{
-		expectedElements := []any{toolInstanceBoot, toolInstanceReboot, "linode_instance_shutdown"}
-		actualElements := added
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringAnyElementsMatch(t, []string{toolInstanceBoot, toolInstanceReboot, "linode_instance_shutdown"}, added, "wildcard expansion must return exact instance tools")
 }
 
 // TestDraftAddToolsDedupesAgainstExisting confirms the no-duplicate
@@ -260,15 +252,7 @@ func TestDraftRemoveToolsRemovesLiterals(t *testing.T) {
 
 	updated, found := reg.Get(mutateDraftName)
 	expectTrue(t, found)
-	{
-		expectedElements := []string{toolInstanceBoot, toolInstanceReboot}
-		actualElements := updated.AllowedTools
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringElementsMatch(t, []string{toolInstanceBoot, toolInstanceReboot}, updated.AllowedTools, "remaining draft tools must match literals")
 }
 
 // TestDraftRemoveToolsExpandsWildcardsAgainstDraft confirms that
@@ -292,15 +276,7 @@ func TestDraftRemoveToolsExpandsWildcardsAgainstDraft(t *testing.T) {
 	})
 
 	removed, _ := out["removed"].([]any)
-	{
-		expectedElements := []any{toolInstanceBoot, toolInstanceReboot}
-		actualElements := removed
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringAnyElementsMatch(t, []string{toolInstanceBoot, toolInstanceReboot}, removed, "wildcard removal must return exact instance tools")
 
 	updated, found := reg.Get(mutateDraftName)
 	expectTrue(t, found)

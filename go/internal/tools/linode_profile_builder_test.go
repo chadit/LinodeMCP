@@ -314,11 +314,15 @@ func TestListCategoriesSortedByName(t *testing.T) {
 		names[i], _ = entry["name"].(string)
 	}
 
-	for i := 1; i < len(names); i++ {
-		if names[i-1] > names[i] {
-			t.Errorf("expected values to be increasing%s", expectationMessage([]string{"categories must come back in sorted order"}))
-
-			break
+	for nameIndex := 1; nameIndex < len(names); nameIndex++ {
+		if names[nameIndex-1] > names[nameIndex] {
+			t.Errorf(
+				"expected values to be increasing at index %d: %q > %q%s",
+				nameIndex,
+				names[nameIndex-1],
+				names[nameIndex],
+				expectationMessage([]string{"categories must come back in sorted order"}),
+			)
 		}
 	}
 }

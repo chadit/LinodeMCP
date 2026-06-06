@@ -102,15 +102,7 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 	expectEqual(t, saveDraftName, out[keyName])
 	checkEqual(t, true, out["is_new"])
 	added, _ := out["added_tools"].([]any)
-	{
-		expectedElements := []any{toolHello, toolInstanceBoot}
-		actualElements := added
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringAnyElementsMatch(t, []string{toolHello, toolInstanceBoot}, added, "save diff must report added tools")
 
 	checkEmpty(t, out["removed_tools"])
 
@@ -122,15 +114,7 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 	stored, ok := reloaded.Profiles[saveDraftName]
 	expectTrue(t, ok, "saved profile must appear in cfg.Profiles after reload")
 	checkEqual(t, "saved via test", stored.Description)
-	{
-		expectedElements := []string{toolHello, toolInstanceBoot}
-		actualElements := stored.AllowedTools
-		expectLen(t, actualElements, len(expectedElements))
-
-		for _, expectedElement := range expectedElements {
-			expectContains(t, actualElements, expectedElement)
-		}
-	}
+	expectStringElementsMatch(t, []string{toolHello, toolInstanceBoot}, stored.AllowedTools, "saved profile tools must round-trip")
 }
 
 // TestSaveUpdatesExistingProfile is the round-trip update case. The
