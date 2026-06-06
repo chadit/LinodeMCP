@@ -88,7 +88,7 @@ func TestLinodeLKEClusterUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEClusterUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -102,24 +102,24 @@ func TestLinodeLKEClusterUpdateToolDryRun(t *testing.T) {
 			keyLabel:     testRenamedLabel,
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_lke_cluster_update", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_lke_cluster_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, lkeClusterGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "PUT", would["method"])
+		checkEqual(t, lkeClusterGetPath, would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "update surfaces the label change")
+		expectLen(t, sideEffects, 1, "update surfaces the label change")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
+		expectTrue(t, gotString)
+		expectContainsWithMode(t, false, effect, testRenamedLabel, "side effect names the new label")
 	})
 }
 
