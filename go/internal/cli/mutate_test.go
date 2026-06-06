@@ -6,9 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/cli"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -38,7 +35,10 @@ environments:
       apiUrl: "https://api.linode.com/v4"
       token: "tok"
 `
-	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatalf("write config fixture: %v", err)
+	}
 
 	return path
 }
@@ -55,13 +55,20 @@ func TestRunProfileUseSwitchesActiveProfile(t *testing.T) {
 
 	exitCode := cli.RunProfileUse([]string{"readonly-full"}, path, &stdout, &stderr)
 
-	require.Equal(t, 0, exitCode, "switching to a known built-in must succeed")
-	assert.Contains(t, stdout.String(), "active profile switched to readonly-full")
+	if exitCode != 0 {
+		t.Fatalf("switching to a known built-in exit code = %d, want 0", exitCode)
+	}
+
+	wantContains(t, "stdout", stdout.String(), "active profile switched to readonly-full")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
-	assert.Equal(t, "readonly-full", reloaded.ActiveProfile,
-		"rewritten config must persist the new active profile")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if reloaded.ActiveProfile != "readonly-full" {
+		t.Fatalf("ActiveProfile = %q, want readonly-full", reloaded.ActiveProfile)
+	}
 }
 
 // TestRunProfileUseUnknownProfileExitsOne verifies the validation
@@ -81,13 +88,20 @@ func TestRunProfileUseUnknownProfileExitsOne(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), "not found")
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "not found")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
-	assert.Empty(t, reloaded.ActiveProfile,
-		"failed use must not write the bad name to disk")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if reloaded.ActiveProfile != "" {
+		t.Fatalf("failed use wrote ActiveProfile = %q", reloaded.ActiveProfile)
+	}
 }
 
 // TestRunProfileUseZeroArgsReturnsUsage covers the arity check; the
@@ -99,8 +113,11 @@ func TestRunProfileUseZeroArgsReturnsUsage(t *testing.T) {
 
 	exitCode := cli.RunProfileUse(nil, "", &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, exitCode)
-	assert.Contains(t, stderr.String(), "Usage:")
+	if exitCode != cli.ExitUsageError {
+		t.Fatalf("exit code = %d, want %d", exitCode, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
 
 // TestRunProfileDisableSetsOverride exercises the disable path: the
@@ -120,15 +137,24 @@ func TestRunProfileDisableSetsOverride(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 0, exitCode,
-		"disabling a non-active built-in must succeed: %s", stderr.String())
-	assert.Contains(t, stdout.String(), "profile compute-admin disabled")
+	if exitCode != 0 {
+		t.Fatalf("disabling a non-active built-in must succeed: %s", stderr.String())
+	}
+
+	wantContains(t, "stdout", stdout.String(), "profile compute-admin disabled")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
-	require.NotNil(t, reloaded.ProfilesBuiltinOverrides)
-	assert.True(t, reloaded.ProfilesBuiltinOverrides[profiles.BuiltinComputeAdmin].Disabled,
-		"override map must persist Disabled=true")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if reloaded.ProfilesBuiltinOverrides == nil {
+		t.Fatalf("ProfilesBuiltinOverrides is nil")
+	}
+
+	if !reloaded.ProfilesBuiltinOverrides[profiles.BuiltinComputeAdmin].Disabled {
+		t.Fatalf("override map must persist Disabled=true")
+	}
 }
 
 // TestRunProfileEnableClearsOverride is the inverse: enable resets
@@ -139,12 +165,15 @@ func TestRunProfileEnableClearsOverride(t *testing.T) {
 	path := writableConfig(t)
 
 	// First disable, then enable, then assert the override flipped back.
-	require.Equal(t, 0, cli.RunProfileDisable(
+
+	if exitCode := cli.RunProfileDisable(
 		[]string{profiles.BuiltinComputeAdmin},
 		path,
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-	))
+	); exitCode != 0 {
+		t.Fatalf("initial disable exit code = %d, want 0", exitCode)
+	}
 
 	var stdout, stderr bytes.Buffer
 
@@ -155,13 +184,20 @@ func TestRunProfileEnableClearsOverride(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 0, exitCode, "enable must succeed: %s", stderr.String())
-	assert.Contains(t, stdout.String(), "profile compute-admin enabled")
+	if exitCode != 0 {
+		t.Fatalf("enable must succeed: %s", stderr.String())
+	}
+
+	wantContains(t, "stdout", stdout.String(), "profile compute-admin enabled")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
-	assert.False(t, reloaded.ProfilesBuiltinOverrides[profiles.BuiltinComputeAdmin].Disabled,
-		"enable must clear the Disabled bit")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if reloaded.ProfilesBuiltinOverrides[profiles.BuiltinComputeAdmin].Disabled {
+		t.Fatalf("enable must clear the Disabled bit")
+	}
 }
 
 // TestRunProfileDisableRefusesActiveProfile verifies the safety
@@ -174,12 +210,15 @@ func TestRunProfileDisableRefusesActiveProfile(t *testing.T) {
 	path := writableConfig(t)
 
 	// Switch to compute-admin first.
-	require.Equal(t, 0, cli.RunProfileUse(
+
+	if exitCode := cli.RunProfileUse(
 		[]string{profiles.BuiltinComputeAdmin},
 		path,
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-	))
+	); exitCode != 0 {
+		t.Fatalf("profile use exit code = %d, want 0", exitCode)
+	}
 
 	var stderr bytes.Buffer
 
@@ -190,15 +229,22 @@ func TestRunProfileDisableRefusesActiveProfile(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode, "disabling the active profile must be refused")
-	assert.Contains(t, stderr.String(), "active profile")
+	if exitCode != 1 {
+		t.Fatalf("disabling active profile exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "active profile")
 
 	reloaded, err := config.Load(path)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
 
 	overrides := reloaded.ProfilesBuiltinOverrides
-	assert.False(t, overrides[profiles.BuiltinComputeAdmin].Disabled,
-		"refused disable must not flip the bit on disk")
+
+	if overrides[profiles.BuiltinComputeAdmin].Disabled {
+		t.Fatalf("refused disable must not flip the bit on disk")
+	}
 }
 
 // TestRunProfileEnableRefusesUserDefined verifies that enable/disable
@@ -219,8 +265,11 @@ func TestRunProfileEnableRefusesUserDefined(t *testing.T) {
 		&stderr,
 	)
 
-	require.Equal(t, 1, exitCode, "enable on a non-built-in must exit 1")
-	assert.Contains(t, stderr.String(), "not a built-in")
+	if exitCode != 1 {
+		t.Fatalf("enable on a non-built-in exit code = %d, want 1", exitCode)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "not a built-in")
 }
 
 // TestRunProfileEnableZeroArgsReturnsUsage covers the arity check on
@@ -233,8 +282,11 @@ func TestRunProfileEnableZeroArgsReturnsUsage(t *testing.T) {
 
 	exitCode := cli.RunProfileEnable(nil, "", &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, exitCode)
-	assert.Contains(t, stderr.String(), "Usage:")
+	if exitCode != cli.ExitUsageError {
+		t.Fatalf("exit code = %d, want %d", exitCode, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
 
 // TestRunProfileDisableZeroArgsReturnsUsage mirrors the enable case
@@ -246,6 +298,9 @@ func TestRunProfileDisableZeroArgsReturnsUsage(t *testing.T) {
 
 	exitCode := cli.RunProfileDisable(nil, "", &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, exitCode)
-	assert.Contains(t, stderr.String(), "Usage:")
+	if exitCode != cli.ExitUsageError {
+		t.Fatalf("exit code = %d, want %d", exitCode, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }

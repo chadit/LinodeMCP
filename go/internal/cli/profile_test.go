@@ -5,9 +5,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/cli"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -52,8 +49,9 @@ func TestAllProfilesContainsBuiltins(t *testing.T) {
 	}
 
 	for _, name := range want {
-		assert.Containsf(t, all, name,
-			"catalog must include built-in profile %q", name)
+		if _, ok := all[name]; !ok {
+			t.Fatalf("catalog must include built-in profile %q", name)
+		}
 	}
 }
 
@@ -74,9 +72,18 @@ func TestAllProfilesIncludesUserDefined(t *testing.T) {
 	all := cli.AllProfiles(cfg)
 
 	prof, ok := all[testUserProfile]
-	require.True(t, ok, "user-defined profile must appear in catalog")
-	assert.Equal(t, "User-defined for the CLI list test", prof.Description)
-	assert.Equal(t, []string{testVolumesListTool}, prof.AllowedTools)
+
+	if !ok {
+		t.Fatalf("user-defined profile must appear in catalog")
+	}
+
+	if prof.Description != "User-defined for the CLI list test" {
+		t.Fatalf("description = %q, want user-defined list description", prof.Description)
+	}
+
+	if !slices.Equal(prof.AllowedTools, []string{testVolumesListTool}) {
+		t.Fatalf("AllowedTools = %v, want [%s]", prof.AllowedTools, testVolumesListTool)
+	}
 }
 
 // TestAllProfilesAppliesBuiltinOverrides verifies that disabling a
@@ -93,8 +100,10 @@ func TestAllProfilesAppliesBuiltinOverrides(t *testing.T) {
 
 	all := cli.AllProfiles(cfg)
 	prof := all[testProfileComputeAdmin]
-	assert.True(t, prof.Disabled,
-		"override Disabled=true must propagate into the listed profile")
+
+	if !prof.Disabled {
+		t.Fatalf("override Disabled=true must propagate into the listed profile")
+	}
 }
 
 // TestResolveActiveNameDefaults locks in the default fallback. An
@@ -103,11 +112,16 @@ func TestAllProfilesAppliesBuiltinOverrides(t *testing.T) {
 func TestResolveActiveNameDefaults(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, profiles.BuiltinDefault, cli.ResolveActiveName(testCatalog()))
+	if got := cli.ResolveActiveName(testCatalog()); got != profiles.BuiltinDefault {
+		t.Fatalf("ResolveActiveName default = %q, want %q", got, profiles.BuiltinDefault)
+	}
 
 	cfg := testCatalog()
 	cfg.ActiveProfile = testProfileComputeAdmin
-	assert.Equal(t, testProfileComputeAdmin, cli.ResolveActiveName(cfg))
+
+	if got := cli.ResolveActiveName(cfg); got != testProfileComputeAdmin {
+		t.Fatalf("ResolveActiveName = %q, want %q", got, testProfileComputeAdmin)
+	}
 }
 
 // TestRunProfileCommandUnknownSubcommandReturnsUsageError verifies
@@ -120,10 +134,11 @@ func TestRunProfileCommandUnknownSubcommandReturnsUsageError(t *testing.T) {
 
 	rc := cli.RunProfileCommand([]string{"nonexistent"}, &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, rc,
-		"unknown subcommand must exit with the usage-error code")
-	assert.Contains(t, stderr.String(), "Usage:",
-		"unknown subcommand must surface the full usage block")
+	if rc != cli.ExitUsageError {
+		t.Fatalf("unknown subcommand exit code = %d, want %d", rc, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
 
 // TestRunProfileCommandEmptyArgsReturnsUsageError verifies that
@@ -136,8 +151,11 @@ func TestRunProfileCommandEmptyArgsReturnsUsageError(t *testing.T) {
 
 	rc := cli.RunProfileCommand(nil, &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, rc)
-	assert.Contains(t, stderr.String(), "Usage:")
+	if rc != cli.ExitUsageError {
+		t.Fatalf("exit code = %d, want %d", rc, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
 
 // TestRunProfileShowZeroArgsReturnsUsage exercises the arity check in
@@ -150,10 +168,11 @@ func TestRunProfileShowZeroArgsReturnsUsage(t *testing.T) {
 
 	rc := cli.RunProfileShow(nil, &bytes.Buffer{}, &stderr)
 
-	assert.Equal(t, cli.ExitUsageError, rc,
-		"show with zero args must exit with the usage-error code")
-	assert.Contains(t, stderr.String(), "Usage:",
-		"zero-arg invocation must print usage to stderr")
+	if rc != cli.ExitUsageError {
+		t.Fatalf("show with zero args exit code = %d, want %d", rc, cli.ExitUsageError)
+	}
+
+	wantContains(t, "stderr", stderr.String(), "Usage:")
 }
 
 // TestPrintProfileDetailMarksActive verifies the active marker on
@@ -171,8 +190,8 @@ func TestPrintProfileDetailMarksActive(t *testing.T) {
 	cli.PrintProfileDetail(&buf, &prof, testProfileComputeAdmin)
 
 	out := buf.String()
-	assert.Contains(t, out, "Profile: compute-admin (active)",
-		"active profile must be marked in the header")
+
+	wantContains(t, "output", out, "Profile: compute-admin (active)")
 }
 
 // TestPrintProfileDetailOmitsActiveMarkerForInactive locks the
@@ -189,8 +208,7 @@ func TestPrintProfileDetailOmitsActiveMarkerForInactive(t *testing.T) {
 	var buf bytes.Buffer
 	cli.PrintProfileDetail(&buf, &prof, profiles.BuiltinDefault)
 
-	assert.NotContains(t, buf.String(), "(active)",
-		"inactive profile must not be marked")
+	wantNotContains(t, "output", buf.String(), "(active)")
 }
 
 // TestPrintProfileDetailListsAllowedTools verifies that the
@@ -207,9 +225,12 @@ func TestPrintProfileDetailListsAllowedTools(t *testing.T) {
 	cli.PrintProfileDetail(&buf, &prof, "")
 
 	out := buf.String()
-	assert.Contains(t, out, "Allowed tools (2):")
-	assert.Contains(t, out, "linode_instance_list")
-	assert.Contains(t, out, "linode_instance_create")
+
+	wantContains(t, "output", out, "Allowed tools (2):")
+
+	wantContains(t, "output", out, "linode_instance_list")
+
+	wantContains(t, "output", out, "linode_instance_create")
 }
 
 // TestPrintProfileDetailShowsRequiredScopes locks in that the
@@ -227,9 +248,12 @@ func TestPrintProfileDetailShowsRequiredScopes(t *testing.T) {
 	cli.PrintProfileDetail(&buf, &prof, "")
 
 	out := buf.String()
-	assert.Contains(t, out, "Required token scopes (2):")
-	assert.Contains(t, out, "linodes:read_write")
-	assert.Contains(t, out, "volumes:read_write")
+
+	wantContains(t, "output", out, "Required token scopes (2):")
+
+	wantContains(t, "output", out, "linodes:read_write")
+
+	wantContains(t, "output", out, "volumes:read_write")
 }
 
 // TestAllProfilesUserDefinedShadowsBuiltin verifies that a user
@@ -250,8 +274,11 @@ func TestAllProfilesUserDefinedShadowsBuiltin(t *testing.T) {
 	all := cli.AllProfiles(cfg)
 	got := all[profiles.BuiltinDefault]
 
-	assert.Equal(t, "shadowed default", got.Description,
-		"user-defined profile with built-in name must replace the built-in")
-	assert.True(t, slices.Contains(got.AllowedTools, testVolumesListTool),
-		"shadowed entry must carry the user-defined allow list")
+	if got.Description != "shadowed default" {
+		t.Fatalf("shadowed description = %q, want shadowed default", got.Description)
+	}
+
+	if !slices.Contains(got.AllowedTools, testVolumesListTool) {
+		t.Fatalf("shadowed entry tools %v do not contain %s", got.AllowedTools, testVolumesListTool)
+	}
 }
