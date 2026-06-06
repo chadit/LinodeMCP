@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -36,20 +33,20 @@ func TestClientUpdateAccountUserSuccess(t *testing.T) {
 	updated := linode.AccountUser{Username: newUsername, Email: accountUserUpdateEmail, Restricted: restricted, SSHKeys: sshKeys, UserType: accountUserTypeDefault}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, accountUserUpdateEmail, body["email"])
-		assert.Equal(t, restricted, body["restricted"])
-		assert.Equal(t, newUsername, body["username"])
-		assert.Equal(t, []any{accountUserUpdateSSHKey}, body["ssh_keys"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "decode request body")
+		checkEqual(t, accountUserUpdateEmail, body["email"], "email should be serialized")
+		checkEqual(t, restricted, body["restricted"], "restricted should be serialized")
+		checkEqual(t, newUsername, body["username"], "username should be serialized")
+		checkEqual(t, []any{accountUserUpdateSSHKey}, body["ssh_keys"], "ssh keys should be serialized")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(updated))
+		checkNoError(t, json.NewEncoder(w).Encode(updated), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -57,11 +54,11 @@ func TestClientUpdateAccountUserSuccess(t *testing.T) {
 
 	got, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, request)
 
-	require.NoError(t, err, "UpdateAccountUser should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, updated.Username, got.Username)
-	assert.Equal(t, updated.Email, got.Email)
-	assert.True(t, got.Restricted)
+	requireNoError(t, err, "UpdateAccountUser should succeed on 200 response")
+	requireNotNil(t, got, "result should not be nil")
+	checkEqual(t, updated.Username, got.Username, "updated username should match")
+	checkEqual(t, updated.Email, got.Email, "updated email should match")
+	checkTrue(t, got.Restricted, "updated user should be restricted")
 }
 
 func TestClientUpdateAccountUserSerializesEmptySSHKeys(t *testing.T) {
@@ -69,12 +66,12 @@ func TestClientUpdateAccountUserSerializesEmptySSHKeys(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Contains(t, body, "ssh_keys")
-		assert.Empty(t, body["ssh_keys"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "decode request body")
+		accountCheckContains(t, body, "ssh_keys", "ssh_keys should be serialized")
+		checkEmpty(t, body["ssh_keys"], "ssh keys should be empty")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUpdateUsername, Email: accountUserUpdateEmail}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUpdateUsername, Email: accountUserUpdateEmail}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -83,19 +80,19 @@ func TestClientUpdateAccountUserSerializesEmptySSHKeys(t *testing.T) {
 
 	got, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, &linode.UpdateAccountUserRequest{SSHKeys: &sshKeys})
 
-	require.NoError(t, err, "UpdateAccountUser should allow clearing SSH keys")
-	require.NotNil(t, got)
+	requireNoError(t, err, "UpdateAccountUser should allow clearing SSH keys")
+	requireNotNil(t, got, "result should not be nil")
 }
 
 func TestClientUpdateAccountUserEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath())
-		assert.Empty(t, r.URL.RawQuery, "escaped username must not create a query string")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath(), "request path should URL-escape username")
+		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query", Email: accountUserUpdateEmail}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query", Email: accountUserUpdateEmail}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -104,20 +101,20 @@ func TestClientUpdateAccountUserEscapesUsername(t *testing.T) {
 
 	got, err := client.UpdateAccountUser(t.Context(), "user/name?query", &linode.UpdateAccountUserRequest{Email: &email})
 
-	require.NoError(t, err, "UpdateAccountUser should URL-escape username path params")
-	require.NotNil(t, got)
-	assert.Equal(t, "user/name?query", got.Username)
+	requireNoError(t, err, "UpdateAccountUser should URL-escape username path params")
+	requireNotNil(t, got, "result should not be nil")
+	checkEqual(t, "user/name?query", got.Username, "username should match")
 }
 
 func TestClientUpdateAccountUserAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -126,9 +123,9 @@ func TestClientUpdateAccountUserAPIError(t *testing.T) {
 
 	got, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, &linode.UpdateAccountUserRequest{Email: &email})
 
-	require.Error(t, err, "UpdateAccountUser should propagate API errors")
-	assert.Nil(t, got)
-	assert.ErrorContains(t, err, errForbidden)
+	requireError(t, err, "UpdateAccountUser should propagate API errors")
+	checkNil(t, got, "result should be nil")
+	accountCheckForbiddenError(t, err)
 }
 
 func TestClientUpdateAccountUserDoesNotRetryTransientError(t *testing.T) {
@@ -138,10 +135,10 @@ func TestClientUpdateAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserUpdateError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserUpdateError}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -150,6 +147,6 @@ func TestClientUpdateAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, &linode.UpdateAccountUserRequest{Email: &email})
 
-	require.Error(t, err, "UpdateAccountUser should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating account user update must not be retried")
+	requireError(t, err, "UpdateAccountUser should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating account user update must not be retried")
 }

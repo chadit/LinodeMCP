@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -22,23 +19,23 @@ func TestClientAddAccountPromoCreditSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
-		assert.Empty(t, r.URL.RawQuery, "promo credit request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
+		checkEmpty(t, r.URL.RawQuery, "promo credit request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
 
 		var body map[string]any
 
 		decodeErr := json.NewDecoder(r.Body).Decode(&body)
-		assert.NoError(t, decodeErr)
+		checkNoError(t, decodeErr, "decode request body")
 
 		if decodeErr != nil {
 			return
 		}
 
-		assert.Equal(t, promoCodeFixture, body["promo_code"])
+		checkEqual(t, promoCodeFixture, body["promo_code"], "promo code should be serialized")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -46,18 +43,18 @@ func TestClientAddAccountPromoCreditSuccess(t *testing.T) {
 
 	err := client.AddAccountPromoCredit(t.Context(), &linode.AddAccountPromoCreditRequest{PromoCode: promoCodeFixture})
 
-	require.NoError(t, err, "AddAccountPromoCredit should succeed on 200 response")
+	requireNoError(t, err, "AddAccountPromoCredit should succeed on 200 response")
 }
 
 func TestClientAddAccountPromoCreditAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -65,8 +62,8 @@ func TestClientAddAccountPromoCreditAPIError(t *testing.T) {
 
 	err := client.AddAccountPromoCredit(t.Context(), &linode.AddAccountPromoCreditRequest{PromoCode: promoCodeFixture})
 
-	require.Error(t, err, "AddAccountPromoCredit should propagate API errors")
-	assert.ErrorContains(t, err, errForbidden)
+	requireError(t, err, "AddAccountPromoCredit should propagate API errors")
+	accountCheckForbiddenError(t, err)
 }
 
 func TestClientAddAccountPromoCreditDoesNotRetryTransientError(t *testing.T) {
@@ -77,11 +74,11 @@ func TestClientAddAccountPromoCreditDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPromoCreditError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPromoCreditError}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -89,6 +86,6 @@ func TestClientAddAccountPromoCreditDoesNotRetryTransientError(t *testing.T) {
 
 	err := client.AddAccountPromoCredit(t.Context(), &linode.AddAccountPromoCreditRequest{PromoCode: promoCodeFixture})
 
-	require.Error(t, err, "AddAccountPromoCredit should return the transient error")
-	assert.Equal(t, int32(1), calls.Load(), "mutating promo credit request must not be retried")
+	requireError(t, err, "AddAccountPromoCredit should return the transient error")
+	checkEqual(t, int32(1), calls.Load(), "mutating promo credit request must not be retried")
 }
