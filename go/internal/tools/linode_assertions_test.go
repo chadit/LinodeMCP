@@ -157,6 +157,50 @@ func expectLen(t *testing.T, actual any, expected int, msg ...string) {
 	checkLenWithMode(t, true, actual, expected, msg...)
 }
 
+func expectNumericEqual(t *testing.T, expected float64, actual any, msg ...string) {
+	t.Helper()
+
+	actualFloat, ok := numericFloat64(actual)
+	if !ok {
+		failExpectationf(t, true, "expected numeric value %v, got %T%s", expected, actual, expectationMessage(msg))
+	}
+
+	if actualFloat != expected {
+		failExpectationf(t, true, "expected numeric value %v, got %v%s", expected, actual, expectationMessage(msg))
+	}
+}
+
+func numericFloat64(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int8:
+		return float64(typed), true
+	case int16:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case uint:
+		return float64(typed), true
+	case uint8:
+		return float64(typed), true
+	case uint16:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	default:
+		return 0, false
+	}
+}
+
 func checkLen(t *testing.T, actual any, expected int, msg ...string) bool {
 	t.Helper()
 

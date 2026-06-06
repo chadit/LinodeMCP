@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -34,10 +32,10 @@ func TestLinodeLKETierVersionGetTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_tier_version_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_lke_tier_version_get", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	for _, testCase := range []struct {
@@ -62,9 +60,9 @@ func TestLinodeLKETierVersionGetTool(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, testCase.args)
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, testCase.want)
 		})
 	}
@@ -75,11 +73,11 @@ func TestLinodeLKETierVersionGetTool(t *testing.T) {
 		tierVersion := linode.LKETierVersion{ID: lkeVersion129, Tier: classStandard}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/lke/tiers/standard/versions/1.29", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/lke/tiers/standard/versions/1.29", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(tierVersion), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(tierVersion), "encoding response should not fail")
 		}))
 		t.Cleanup(srv.Close)
 
@@ -93,14 +91,14 @@ func TestLinodeLKETierVersionGetTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{lkeTierParam: classStandard, databaseVersionParam: lkeVersion129})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, lkeVersion129, "response should contain version")
-		assert.Contains(t, textContent.Text, classStandard, "response should contain tier")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContainsWithMode(t, false, textContent.Text, lkeVersion129, "response should contain version")
+		expectContainsWithMode(t, false, textContent.Text, classStandard, "response should contain tier")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -108,7 +106,7 @@ func TestLinodeLKETierVersionGetTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errNotFound}},
 			}), "encoding response should not fail")
 		}))
@@ -124,9 +122,9 @@ func TestLinodeLKETierVersionGetTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{lkeTierParam: classStandard, databaseVersionParam: lkeVersion129})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to retrieve LKE tier version")
 	})
 }
