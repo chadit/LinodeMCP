@@ -8,9 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -36,12 +33,12 @@ func TestClientListMonitorServicesSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServicesPath, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServicesPath, r.URL.Path, "request path should match")
+		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
+		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyLabel:       monitorServiceLabel,
 				keyServiceType: monitorServiceTypeDatabase,
@@ -56,26 +53,26 @@ func TestClientListMonitorServicesSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServices(t.Context())
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, 1, got.Page)
-	assert.Equal(t, 1, got.Pages)
-	assert.Equal(t, 1, got.Results)
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorServiceLabel, got.Data[0].Label)
-	assert.Equal(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, 1, got.Page)
+	monitorCheckEqual(t, 1, got.Pages)
+	monitorCheckEqual(t, 1, got.Results)
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorServiceLabel, got.Data[0].Label)
+	monitorCheckEqual(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
 }
 
 func TestClientGetMonitorServiceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceTypePath, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceTypePath, r.URL.Path, "request path should match")
+		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
+		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyLabel:       monitorServiceLabel,
 			keyServiceType: monitorServiceTypeDatabase,
 		}))
@@ -85,18 +82,18 @@ func TestClientGetMonitorServiceSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetMonitorService(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	assert.Equal(t, monitorServiceLabel, got.Label)
-	assert.Equal(t, monitorServiceTypeDatabase, got.ServiceType)
+	monitorRequireNoError(t, err)
+	monitorCheckEqual(t, monitorServiceLabel, got.Label)
+	monitorCheckEqual(t, monitorServiceTypeDatabase, got.ServiceType)
 }
 
 func TestClientGetMonitorServiceEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, monitorServiceEscapedTypePath, r.URL.EscapedPath(), "request path should be escaped")
+		monitorCheckEqual(t, monitorServiceEscapedTypePath, r.URL.EscapedPath(), "request path should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyLabel:       monitorServiceLabel,
 			keyServiceType: monitorServiceTypeWithSlash,
 		}))
@@ -106,32 +103,31 @@ func TestClientGetMonitorServiceEscapesPathParams(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetMonitorService(t.Context(), monitorServiceTypeWithSlash)
 
-	require.NoError(t, err)
-	assert.Equal(t, monitorServiceTypeWithSlash, got.ServiceType)
+	monitorRequireNoError(t, err)
+	monitorCheckEqual(t, monitorServiceTypeWithSlash, got.ServiceType)
 }
 
 func TestClientGetMonitorServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceTypePath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceTypePath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetMonitorService(t.Context(), monitorServiceTypeDatabase)
 
-	require.Error(t, err)
-	assert.Empty(t, got)
+	monitorRequireError(t, err)
+	monitorCheckEmpty(t, got)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := monitorRequireAPIError(t, err)
+	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	monitorCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientGetMonitorServiceRetriesTransientError(t *testing.T) {
@@ -140,8 +136,8 @@ func TestClientGetMonitorServiceRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceTypePath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceTypePath, r.URL.Path, "request path should match")
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -150,7 +146,7 @@ func TestClientGetMonitorServiceRetriesTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyLabel:       monitorServiceLabel,
 			keyServiceType: monitorServiceTypeDatabase,
 		}))
@@ -160,21 +156,21 @@ func TestClientGetMonitorServiceRetriesTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetMonitorService(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	assert.Equal(t, monitorServiceTypeDatabase, got.ServiceType)
+	monitorRequireNoError(t, err)
+	monitorCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	monitorCheckEqual(t, monitorServiceTypeDatabase, got.ServiceType)
 }
 
 func TestClientListMonitorServiceMetricDefinitionsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceMetricDefinitionsPath, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceMetricDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
+		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyLabel:      monitorMetricDefinitionLabel,
 				keyMetric:     monitorMetricDefinitionMetric,
@@ -190,58 +186,57 @@ func TestClientListMonitorServiceMetricDefinitionsSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServiceMetricDefinitions(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, 1, got.Page)
-	assert.Equal(t, 1, got.Pages)
-	assert.Equal(t, 1, got.Results)
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorMetricDefinitionLabel, got.Data[0].Label)
-	assert.Equal(t, monitorMetricDefinitionMetric, got.Data[0].Metric)
-	assert.Equal(t, monitorMetricDefinitionType, got.Data[0].MetricType)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, 1, got.Page)
+	monitorCheckEqual(t, 1, got.Pages)
+	monitorCheckEqual(t, 1, got.Results)
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorMetricDefinitionLabel, got.Data[0].Label)
+	monitorCheckEqual(t, monitorMetricDefinitionMetric, got.Data[0].Metric)
+	monitorCheckEqual(t, monitorMetricDefinitionType, got.Data[0].MetricType)
 }
 
 func TestClientListMonitorServiceMetricDefinitionsEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, monitorServiceEscapedMetricDefinitionsPath, r.URL.EscapedPath(), "request path should be escaped")
+		monitorCheckEqual(t, monitorServiceEscapedMetricDefinitionsPath, r.URL.EscapedPath(), "request path should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyMetric: monitorMetricDefinitionMetric}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyMetric: monitorMetricDefinitionMetric}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServiceMetricDefinitions(t.Context(), monitorServiceTypeWithSlash)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorMetricDefinitionMetric, got.Data[0].Metric)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorMetricDefinitionMetric, got.Data[0].Metric)
 }
 
 func TestClientListMonitorServiceMetricDefinitionsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceMetricDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceMetricDefinitionsPath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServiceMetricDefinitions(t.Context(), monitorServiceTypeDatabase)
 
-	require.Error(t, err)
-	assert.Nil(t, got)
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := monitorRequireAPIError(t, err)
+	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	monitorCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientListMonitorServiceMetricDefinitionsRetriesTransientError(t *testing.T) {
@@ -250,8 +245,8 @@ func TestClientListMonitorServiceMetricDefinitionsRetriesTransientError(t *testi
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceMetricDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceMetricDefinitionsPath, r.URL.Path, "request path should match")
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -260,30 +255,30 @@ func TestClientListMonitorServiceMetricDefinitionsRetriesTransientError(t *testi
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyMetric: monitorMetricDefinitionMetric}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyMetric: monitorMetricDefinitionMetric}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListMonitorServiceMetricDefinitions(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorMetricDefinitionMetric, got.Data[0].Metric)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorMetricDefinitionMetric, got.Data[0].Metric)
 }
 
 func TestClientListMonitorServiceAlertDefinitionsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
+		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyID:          monitorAlertDefinitionID,
 				keyLabel:       monitorAlertDefinitionLabel,
@@ -299,58 +294,57 @@ func TestClientListMonitorServiceAlertDefinitionsSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServiceAlertDefinitions(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, 1, got.Page)
-	assert.Equal(t, 1, got.Pages)
-	assert.Equal(t, 1, got.Results)
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorAlertDefinitionID, got.Data[0].ID)
-	assert.Equal(t, monitorAlertDefinitionLabel, got.Data[0].Label)
-	assert.Equal(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, 1, got.Page)
+	monitorCheckEqual(t, 1, got.Pages)
+	monitorCheckEqual(t, 1, got.Results)
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorAlertDefinitionID, got.Data[0].ID)
+	monitorCheckEqual(t, monitorAlertDefinitionLabel, got.Data[0].Label)
+	monitorCheckEqual(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
 }
 
 func TestClientListMonitorServiceAlertDefinitionsEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, monitorServiceEscapedAlertDefinitionsPath, r.URL.EscapedPath(), "request path should be escaped")
+		monitorCheckEqual(t, monitorServiceEscapedAlertDefinitionsPath, r.URL.EscapedPath(), "request path should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyServiceType: monitorServiceTypeWithSlash}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyServiceType: monitorServiceTypeWithSlash}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServiceAlertDefinitions(t.Context(), monitorServiceTypeWithSlash)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorServiceTypeWithSlash, got.Data[0].ServiceType)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorServiceTypeWithSlash, got.Data[0].ServiceType)
 }
 
 func TestClientListMonitorServiceAlertDefinitionsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServiceAlertDefinitions(t.Context(), monitorServiceTypeDatabase)
 
-	require.Error(t, err)
-	assert.Nil(t, got)
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := monitorRequireAPIError(t, err)
+	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	monitorCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientListMonitorServiceAlertDefinitionsRetriesTransientError(t *testing.T) {
@@ -359,8 +353,8 @@ func TestClientListMonitorServiceAlertDefinitionsRetriesTransientError(t *testin
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServiceAlertDefinitionsPath, r.URL.Path, "request path should match")
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -369,42 +363,41 @@ func TestClientListMonitorServiceAlertDefinitionsRetriesTransientError(t *testin
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyID: monitorAlertDefinitionID}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyID: monitorAlertDefinitionID}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListMonitorServiceAlertDefinitions(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorAlertDefinitionID, got.Data[0].ID)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorAlertDefinitionID, got.Data[0].ID)
 }
 
 func TestClientListMonitorServicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServicesPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServicesPath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListMonitorServices(t.Context())
 
-	require.Error(t, err)
-	assert.Nil(t, got)
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := monitorRequireAPIError(t, err)
+	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	monitorCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientListMonitorServicesRetriesTransientError(t *testing.T) {
@@ -413,8 +406,8 @@ func TestClientListMonitorServicesRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorServicesPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		monitorCheckEqual(t, monitorServicesPath, r.URL.Path, "request path should match")
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -423,7 +416,7 @@ func TestClientListMonitorServicesRetriesTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyLabel:       monitorServiceLabel,
 				keyServiceType: monitorServiceTypeDatabase,
@@ -435,77 +428,76 @@ func TestClientListMonitorServicesRetriesTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.ListMonitorServices(t.Context())
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	monitorRequireLenOne(t, got.Data)
+	monitorCheckEqual(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
 }
 
 func TestClientGetMonitorServiceMetricsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, monitorServiceMetricsPath, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		monitorCheckEqual(t, monitorServiceMetricsPath, r.URL.Path, "request path should match")
+		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
+		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.JSONEq(t, `{}`, string(body), "request body should be empty JSON object")
+		monitorCheckNoError(t, err)
+		monitorCheckJSONEqual(t, `{}`, string(body), "request body should be empty JSON object")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"cpu": []float64{1.5}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{"cpu": []float64{1.5}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetMonitorServiceMetrics(t.Context(), monitorServiceTypeDatabase)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Contains(t, got, "cpu")
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckHasKey(t, got, "cpu")
 }
 
 func TestClientGetMonitorServiceMetricsEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, monitorServiceEscapedMetricsPath, r.URL.EscapedPath(), "request path should be escaped")
+		monitorCheckEqual(t, monitorServiceEscapedMetricsPath, r.URL.EscapedPath(), "request path should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"service_type": monitorServiceTypeWithSlash}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{"service_type": monitorServiceTypeWithSlash}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetMonitorServiceMetrics(t.Context(), monitorServiceTypeWithSlash)
 
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, monitorServiceTypeWithSlash, got["service_type"])
+	monitorRequireNoError(t, err)
+	monitorRequireNotNil(t, got)
+	monitorCheckEqual(t, monitorServiceTypeWithSlash, got["service_type"])
 }
 
 func TestClientGetMonitorServiceMetricsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, monitorServiceMetricsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		monitorCheckEqual(t, monitorServiceMetricsPath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.GetMonitorServiceMetrics(t.Context(), monitorServiceTypeDatabase)
 
-	require.Error(t, err)
-	assert.Nil(t, got)
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, errForbidden, apiErr.Message)
+	apiErr := monitorRequireAPIError(t, err)
+	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	monitorCheckEqual(t, errForbidden, apiErr.Message)
 }
 
 func TestClientGetMonitorServiceMetricsDoesNotReplayTransientError(t *testing.T) {
@@ -514,8 +506,8 @@ func TestClientGetMonitorServiceMetricsDoesNotReplayTransientError(t *testing.T)
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, monitorServiceMetricsPath, r.URL.Path, "request path should match")
+		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		monitorCheckEqual(t, monitorServiceMetricsPath, r.URL.Path, "request path should match")
 		calls.Add(1)
 		http.Error(w, "temporary", http.StatusServiceUnavailable)
 	}))
@@ -524,7 +516,7 @@ func TestClientGetMonitorServiceMetricsDoesNotReplayTransientError(t *testing.T)
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 	got, err := client.GetMonitorServiceMetrics(t.Context(), monitorServiceTypeDatabase)
 
-	require.Error(t, err)
-	assert.Nil(t, got)
-	assert.Equal(t, int32(1), calls.Load(), "POST metrics route should not replay after transient failure")
+	monitorRequireError(t, err)
+	monitorCheckNil(t, got)
+	monitorCheckEqual(t, int32(1), calls.Load(), "POST metrics route should not replay after transient failure")
 }
