@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -38,25 +36,25 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 		cfg := &config.Config{}
 
 		tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionDeleteTool(cfg)
-		assert.Equal(t, monitorServiceAlertDefinitionDeleteToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destructive")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
-		assert.Contains(t, tool.InputSchema.Required, monitorAlertIDParam, "alert ID should be required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
+		assertEqual(t, monitorServiceAlertDefinitionDeleteToolName, tool.Name, "tool name should match")
+		assertEqual(t, profiles.CapDestroy, capability, "tool should be destructive")
+		assertNotEmpty(t, tool.Description, "tool should have a description")
+		assertContains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
+		assertContains(t, tool.InputSchema.Required, monitorAlertIDParam, "alert ID should be required")
+		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
+		requireNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assertEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assertEqual(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
+			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
+			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -65,23 +63,23 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, monitorAlertDefinitionDeleteArgs())
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		requireNoError(t, err, "handler should not return an error")
+		requireNotNil(t, result, "result should not be nil")
+		assertFalse(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Deleted "+monitorServiceAlertDefinitionDeleteToolName, "response should confirm deletion")
+		requireTrue(t, ok, "content should be TextContent")
+		assertContains(t, textContent.Text, "Deleted "+monitorServiceAlertDefinitionDeleteToolName, "response should confirm deletion")
 	})
 
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
+			assertEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assertEqual(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -90,13 +88,13 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, monitorAlertDefinitionDeleteArgs())
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		requireNoError(t, err, "handler should return API failures as tool errors")
+		requireNotNil(t, result, "result should not be nil")
+		assertTrue(t, result.IsError, "API failure should be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to delete "+monitorServiceAlertDefinitionDeleteToolName, "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+		requireTrue(t, ok, "content should be TextContent")
+		assertContains(t, textContent.Text, "Failed to delete "+monitorServiceAlertDefinitionDeleteToolName, "response should identify failed tool")
+		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
 	})
 
 	t.Run("confirm required before client", func(t *testing.T) {
@@ -131,12 +129,12 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
-				require.NoError(t, err, "handler should return confirmation failures as tool errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				requireNoError(t, err, "handler should return confirmation failures as tool errors")
+				requireNotNil(t, result, "result should not be nil")
+				assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, "confirm=true", "response should require confirm=true")
+				requireTrue(t, ok, "content should be TextContent")
+				assertContains(t, textContent.Text, "confirm=true", "response should require confirm=true")
 			})
 		}
 	})
@@ -167,12 +165,12 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := handler(t.Context(), req)
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid argument should be an error result")
+				requireNoError(t, err, "handler should return validation as a tool error")
+				requireNotNil(t, result, "result should not be nil")
+				assertTrue(t, result.IsError, "invalid argument should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+				requireTrue(t, ok, "content should be TextContent")
+				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
 			})
 		}
 	})
@@ -184,8 +182,8 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			calls.Add(1)
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
+			assertEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assertEqual(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
 		}))
 		t.Cleanup(srv.Close)
@@ -195,9 +193,9 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, monitorAlertDefinitionDeleteArgs())
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should surface transient failure as a tool error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "transient failure should be an error result")
-		assert.Equal(t, int32(1), calls.Load(), "destructive route must not retry after transient failure")
+		requireNoError(t, err, "handler should surface transient failure as a tool error")
+		requireNotNil(t, result, "result should not be nil")
+		assertTrue(t, result.IsError, "transient failure should be an error result")
+		assertEqual(t, int32(1), calls.Load(), "destructive route must not retry after transient failure")
 	})
 }

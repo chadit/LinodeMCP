@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -65,12 +63,12 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolInvalidInput(t *testing.T)
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid input should be an error result")
+				requireNoError(t, err, "handler should return validation as a tool error")
+				requireNotNil(t, result, "result should not be nil")
+				assertTrue(t, result.IsError, "invalid input should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+				requireTrue(t, ok, "content should be TextContent")
+				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
 			})
 		}
 	})

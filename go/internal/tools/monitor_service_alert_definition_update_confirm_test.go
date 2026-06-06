@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -46,12 +44,12 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolConfirmRequired(t *testing
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
-				require.NoError(t, err, "handler should return confirmation failures as tool errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				requireNoError(t, err, "handler should return confirmation failures as tool errors")
+				requireNotNil(t, result, "result should not be nil")
+				assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, "confirm=true", "response should require confirm=true")
+				requireTrue(t, ok, "content should be TextContent")
+				assertContains(t, textContent.Text, "confirm=true", "response should require confirm=true")
 			})
 		}
 	})

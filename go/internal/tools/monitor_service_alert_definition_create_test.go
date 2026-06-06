@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -38,6 +36,10 @@ func monitorAlertDefinitionCreateArgs() map[string]any {
 	}
 }
 
+// The package-local assert* helpers report failures and continue; require*
+// helpers stop the current test. assertNoError reports and returns false so
+// HTTP handler checks can return without calling FailNow from another goroutine.
+
 func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -47,36 +49,36 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 		cfg := &config.Config{}
 
 		tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg)
-		assert.Equal(t, monitorServiceAlertDefinitionCreateToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write-capable")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
+		assertEqual(t, monitorServiceAlertDefinitionCreateToolName, tool.Name, "tool name should match")
+		assertEqual(t, profiles.CapWrite, capability, "tool should be write-capable")
+		assertNotEmpty(t, tool.Description, "tool should have a description")
+		assertContains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
+		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
+		requireNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assertEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			assertEqual(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
+			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
+			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			if !assertNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
 				return
 			}
 
-			assert.Equal(t, monitorAlertDefinitionToolLabel, body[keyLabel])
-			assert.InEpsilon(t, float64(2), body["severity"], 0)
-			assert.Equal(t, []any{float64(546), float64(392)}, body["channel_ids"])
-			assert.Equal(t, "Alert when CPU usage is high", body[keyDescription])
-			assert.Equal(t, []any{"13116"}, body[keyEntityIDs])
+			assertEqual(t, monitorAlertDefinitionToolLabel, body[keyLabel])
+			expectNumericEqual(t, float64(2), body["severity"])
+			assertEqual(t, []any{float64(546), float64(392)}, body["channel_ids"])
+			assertEqual(t, "Alert when CPU usage is high", body[keyDescription])
+			assertEqual(t, []any{"13116"}, body[keyEntityIDs])
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyID:          20000,
 				keyLabel:       monitorAlertDefinitionToolLabel,
 				keyServiceType: monitorServiceToolTypeDatabase,
@@ -89,24 +91,24 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, monitorAlertDefinitionCreateArgs())
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		requireNoError(t, err, "handler should not return an error")
+		requireNotNil(t, result, "result should not be nil")
+		assertFalse(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, monitorAlertDefinitionToolLabel, "response should contain alert label")
-		assert.Contains(t, textContent.Text, monitorServiceToolTypeDatabase, "response should contain service type")
+		requireTrue(t, ok, "content should be TextContent")
+		assertContains(t, textContent.Text, monitorAlertDefinitionToolLabel, "response should contain alert label")
+		assertContains(t, textContent.Text, monitorServiceToolTypeDatabase, "response should contain service type")
 	})
 
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
+			assertEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			assertEqual(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -115,13 +117,13 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, monitorAlertDefinitionCreateArgs())
 		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		requireNoError(t, err, "handler should return API failures as tool errors")
+		requireNotNil(t, result, "result should not be nil")
+		assertTrue(t, result.IsError, "API failure should be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to create "+monitorServiceAlertDefinitionCreateToolName, "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+		requireTrue(t, ok, "content should be TextContent")
+		assertContains(t, textContent.Text, "Failed to create "+monitorServiceAlertDefinitionCreateToolName, "response should identify failed tool")
+		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
 	})
 
 	t.Run("confirm required before client", func(t *testing.T) {
@@ -156,12 +158,12 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
-				require.NoError(t, err, "handler should return confirmation failures as tool errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				requireNoError(t, err, "handler should return confirmation failures as tool errors")
+				requireNotNil(t, result, "result should not be nil")
+				assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, "confirm=true", "response should require confirm=true")
+				requireTrue(t, ok, "content should be TextContent")
+				assertContains(t, textContent.Text, "confirm=true", "response should require confirm=true")
 			})
 		}
 	})
@@ -199,12 +201,12 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid input should be an error result")
+				requireNoError(t, err, "handler should return validation as a tool error")
+				requireNotNil(t, result, "result should not be nil")
+				assertTrue(t, result.IsError, "invalid input should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+				requireTrue(t, ok, "content should be TextContent")
+				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
 			})
 		}
 	})
