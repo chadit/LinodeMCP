@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -24,26 +21,26 @@ func TestLinodeProfileTFADisableTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeProfileTFADisableTool(cfg)
 
-		assert.Equal(t, "linode_profile_tfa_disable", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "tool should be an admin tool")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "security-state-changing tool must require confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "admin tool should expose dry_run")
+		checkEqual(t, "linode_profile_tfa_disable", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapAdmin, capability, "tool should be an admin tool")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "security-state-changing tool must require confirm")
+		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "admin tool should expose dry_run")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			assert.Equal(t, int64(0), r.ContentLength, "request body should be empty")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, int64(0), r.ContentLength, "request body should be empty")
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		defer srv.Close()
 
@@ -53,9 +50,9 @@ func TestLinodeProfileTFADisableTool(t *testing.T) {
 
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
 		assertErrorContains(t, result, "Profile two-factor authentication disabled successfully")
 	})
 
@@ -76,42 +73,42 @@ func TestLinodeProfileTFADisableTool(t *testing.T) {
 
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry run should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		checkFalseWithMode(t, false, result.IsError, "dry run should not be an error result")
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
 		dryRun, dryRunOK := body[keyDryRun].(bool)
-		require.True(t, dryRunOK, "dry_run should be a boolean")
-		assert.True(t, dryRun, "response should be a dry-run preview")
+		expectTrue(t, dryRunOK, "dry_run should be a boolean")
+		checkTrueWithMode(t, false, dryRun, "response should be a dry-run preview")
 
 		would, wouldOK := body["would_execute"].(map[string]any)
-		require.True(t, wouldOK, "dry run response should include would_execute")
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/profile/tfa-disable", would["path"])
-		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+		expectTrue(t, wouldOK, "dry run response should include would_execute")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, "/profile/tfa-disable", would["path"])
+		checkEqual(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "disabling 2FA surfaces a side effect")
+		expectLen(t, sideEffects, 1, "disabling 2FA surfaces a side effect")
 
 		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "disabling 2FA carries a security warning")
+		expectLen(t, warnings, 1, "disabling 2FA carries a security warning")
 
 		warning, gotString := warnings[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, warning, "security", "warning should flag the security downgrade")
+		expectTrue(t, gotString)
+		expectContainsWithMode(t, false, warning, "security", "warning should flag the security downgrade")
 	})
 
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/profile/tfa-disable", r.URL.Path, "request path should be /profile/tfa-disable")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		defer srv.Close()
 
@@ -121,9 +118,9 @@ func TestLinodeProfileTFADisableTool(t *testing.T) {
 
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		expectNoError(t, err, "handler should return API failures as tool errors")
+		expectNotNil(t, result, "result should not be nil")
+		checkTrueWithMode(t, false, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to disable linode_profile_tfa_disable")
 		assertErrorContains(t, result, errForbidden)
 	})
@@ -163,11 +160,11 @@ func TestLinodeProfileTFADisableTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				expectNoError(t, err, "handler should return validation as a tool error")
+				expectNotNil(t, result, "result should not be nil")
+				checkTrueWithMode(t, false, result.IsError, "missing or invalid confirm should be an error result")
 				assertErrorContains(t, result, "confirm=true")
-				assert.Equal(t, int32(0), calls.Load(), "confirm gate should run before client call")
+				checkEqual(t, int32(0), calls.Load(), "confirm gate should run before client call")
 			})
 		}
 	})
