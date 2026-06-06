@@ -141,6 +141,7 @@ func expectEmptyWithMode(t *testing.T, fatal bool, actual any, msg ...string) {
 	}
 }
 
+// expectContains is fatal so callers may rely on required response fragments being present.
 func expectContains(t *testing.T, container, item any, msg ...string) {
 	t.Helper()
 	expectContainsWithMode(t, true, container, item, msg...)

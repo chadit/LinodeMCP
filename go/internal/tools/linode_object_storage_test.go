@@ -5,13 +5,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -2695,13 +2694,13 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_ssl_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_ssl_get", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
+		expectContains(t, props, "region", "schema should include region property")
+		expectContains(t, props, "label", "schema should include label property")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -2712,10 +2711,10 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(resp), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(resp), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -2732,13 +2731,13 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "true", "response should contain SSL status")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "true", "response should contain SSL status")
 	})
 
 	t.Run("missing environment", func(t *testing.T) {
@@ -2755,9 +2754,9 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 		})
 		result, err := emptyHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing environment")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing environment")
 	})
 }
 
@@ -2771,14 +2770,14 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_ssl_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_ssl_delete", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+		expectContains(t, props, "region", "schema should include region property")
+		expectContains(t, props, "label", "schema should include label property")
+		expectContains(t, props, "confirm", "schema should include confirm property")
 	})
 
 	t.Run("confirm required", func(t *testing.T) {
@@ -2791,21 +2790,21 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error when confirm is false")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error when confirm is false")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, errConfirmEqualsTrue, "error should mention confirm=true")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, errConfirmEqualsTrue, "error should mention confirm=true")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer srv.Close()
@@ -2824,13 +2823,13 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "SSL certificate deleted", "response should confirm SSL deletion")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "SSL certificate deleted", "response should confirm SSL deletion")
 	})
 
 	t.Run("missing environment", func(t *testing.T) {
@@ -2848,9 +2847,9 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		})
 		result, err := emptyHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing environment")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing environment")
 	})
 }
 
@@ -2863,24 +2862,29 @@ func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+		expectContains(t, tool.InputSchema.Properties, "dry_run",
 			"schema must advertise the dry_run boolean to the model")
 	})
 
 	t.Run("preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		var methodsSeen []string
+		var requestCount atomic.Int32
+		var sawDelete atomic.Bool
 
 		bucketBody := `{"label":"my-bucket","region":"us-east-1","size":1024,"objects":3}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket", r.URL.Path)
+			requestCount.Add(1)
+			if r.Method == http.MethodDelete {
+				sawDelete.Store(true)
+			}
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket", r.URL.Path)
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(bucketBody))
+				_, writeErr := w.Write([]byte(bucketBody))
+				checkNoError(t, writeErr, "writing bucket response should not fail")
 
 				return
 			}
@@ -2902,38 +2906,40 @@ func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError, "dry_run with valid args should not be a tool error")
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		expectTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_object_storage_bucket_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, true, body[keyDryRun])
+		checkEqual(t, "linode_object_storage_bucket_delete", body["tool"])
 
 		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket", would["path"])
+		expectTrue(t, isWouldObject)
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket", would["path"])
 
 		state, stateIsObject := body["current_state"].(map[string]any)
-		require.True(t, stateIsObject)
-		assert.Equal(t, "my-bucket", state[keyLabel])
+		expectTrue(t, stateIsObject)
+		checkEqual(t, "my-bucket", state[keyLabel])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		checkEqual(t, int32(1), requestCount.Load(),
+			"dry_run must only issue a single GET")
+		expectFalse(t, sawDelete.Load(), "dry_run must never issue DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			checkEqual(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"label":"my-bucket","region":"us-east-1"}`))
+			_, writeErr := w.Write([]byte(`{"label":"my-bucket","region":"us-east-1"}`))
+			checkNoError(t, writeErr, "writing bucket response should not fail")
 		}))
 		defer srv.Close()
 
@@ -2949,9 +2955,9 @@ func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError,
 			"dry_run without confirm must succeed; confirm only gates real execution")
 	})
 
@@ -2965,9 +2971,9 @@ func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError,
 			"dry_run with missing region must error the same way the real call would")
 		assertErrorContains(t, result, "region is required")
 	})
@@ -2982,9 +2988,9 @@ func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError,
 			"dry_run with missing label must error the same way the real call would")
 		assertErrorContains(t, result, "label is required")
 	})
@@ -2999,24 +3005,29 @@ func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+		expectContains(t, tool.InputSchema.Properties, "dry_run",
 			"schema must advertise the dry_run boolean to the model")
 	})
 
 	t.Run("preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		var methodsSeen []string
+		var requestCount atomic.Int32
+		var sawDelete atomic.Bool
 
 		sslBody := `{"ssl":true}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
+			requestCount.Add(1)
+			if r.Method == http.MethodDelete {
+				sawDelete.Store(true)
+			}
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(sslBody))
+				_, writeErr := w.Write([]byte(sslBody))
+				checkNoError(t, writeErr, "writing SSL response should not fail")
 
 				return
 			}
@@ -3038,34 +3049,36 @@ func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError, "dry_run with valid args should not be a tool error")
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		expectTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_object_storage_ssl_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, true, body[keyDryRun])
+		checkEqual(t, "linode_object_storage_ssl_delete", body["tool"])
 
 		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", would["path"])
+		expectTrue(t, isWouldObject)
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		checkEqual(t, int32(1), requestCount.Load(),
+			"dry_run must only issue a single GET")
+		expectFalse(t, sawDelete.Load(), "dry_run must never issue DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			checkEqual(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"ssl":true}`))
+			_, writeErr := w.Write([]byte(`{"ssl":true}`))
+			checkNoError(t, writeErr, "writing SSL response should not fail")
 		}))
 		defer srv.Close()
 
@@ -3081,9 +3094,9 @@ func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError,
 			"dry_run without confirm must succeed; confirm only gates real execution")
 	})
 
@@ -3097,9 +3110,9 @@ func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError,
 			"dry_run with missing region must error the same way the real call would")
 		assertErrorContains(t, result, "region is required")
 	})
@@ -3114,9 +3127,9 @@ func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError,
 			"dry_run with missing label must error the same way the real call would")
 		assertErrorContains(t, result, "label is required")
 	})
@@ -3132,16 +3145,16 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_ssl_upload", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_ssl_upload", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "certificate", "schema should include certificate property")
-		assert.Contains(t, props, "private_key", "schema should include private_key property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+		expectContains(t, props, "region", "schema should include region property")
+		expectContains(t, props, "label", "schema should include label property")
+		expectContains(t, props, "certificate", "schema should include certificate property")
+		expectContains(t, props, "private_key", "schema should include private_key property")
+		expectContains(t, props, "confirm", "schema should include confirm property")
 	})
 
 	t.Run("confirm required", func(t *testing.T) {
@@ -3156,23 +3169,23 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error when confirm is false")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error when confirm is false")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, errConfirmEqualsTrue, "error should mention confirm=true")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, errConfirmEqualsTrue, "error should mention confirm=true")
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -3192,13 +3205,13 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "SSL certificate uploaded", "response should confirm SSL upload")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "SSL certificate uploaded", "response should confirm SSL upload")
 	})
 
 	t.Run("missing environment", func(t *testing.T) {
@@ -3218,9 +3231,9 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 		})
 		result, err := emptyHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing environment")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing environment")
 	})
 
 	t.Run("api error propagated", func(t *testing.T) {
@@ -3229,7 +3242,7 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"}))
 		}))
 		defer srv.Close()
 
@@ -3249,12 +3262,12 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for API failure")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for API failure")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to upload SSL certificate", "error should describe the failed operation")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "Failed to upload SSL certificate", "error should describe the failed operation")
 	})
 
 	for _, traversalCase := range []struct {
@@ -3267,10 +3280,14 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 		t.Run("path traversal: "+traversalCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/object-storage/buckets/us-east-1/" + url.PathEscape(traversalCase.label) + "/ssl"
+				checkEqual(t, expectedPath, r.URL.EscapedPath(), "request path should encode bucket label")
+				checkEqual(t, "", r.URL.RawQuery, "encoded bucket label must not create a query")
+
 				w.WriteHeader(http.StatusOK)
 				w.Header().Set("Content-Type", "application/json")
-				assert.NoError(t, json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}))
+				checkNoError(t, json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}))
 			}))
 			defer srv.Close()
 
@@ -3293,9 +3310,9 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 			// url.PathEscape at the client layer encodes separators, so the request
 			// reaches the server with encoded values. The test passes to confirm
 			// url.PathEscape handles these inputs safely.
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.False(t, result.IsError)
+			expectNoError(t, err)
+			expectNotNil(t, result)
+			expectFalse(t, result.IsError)
 		})
 	}
 }
