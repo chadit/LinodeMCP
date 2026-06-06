@@ -203,9 +203,12 @@ jobs:
             raw_file="qwen-review/review-${index}.raw"
             stderr_file="qwen-review/qwen-${index}.stderr"
             exit_file="qwen-review/qwen-${index}.exitcode"
+            # Qwen may perform one internal/tool-planning call even when the
+            # prompt says not to use tools. A zero budget aborts the review
+            # before it emits JSON, hiding the useful result behind artifacts.
             qwen --auth-type openai \
               --approval-mode plan \
-              --max-tool-calls 0 \
+              --max-tool-calls 1 \
               --max-session-turns 4 \
               --max-wall-time 180s \
               --output-format text \
@@ -340,6 +343,76 @@ jobs:
               print(f"qwen_exit_code={summary['qwen_exit_code']}", file=out)
           PY
 
+      - name: Display Qwen review result
+        if: steps.secrets.outputs.skip != 'true' && always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import pathlib
+
+          root = pathlib.Path('qwen-review')
+          summary_path = root / 'summary.json'
+          review_path = root / 'review.json'
+          summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+          review = json.loads(review_path.read_text()) if review_path.exists() else None
+
+          def clipped(text: str, limit: int = 12000) -> str:
+              if len(text) <= limit:
+                  return text
+              return text[:limit] + f"\n\n... truncated {len(text) - limit} bytes; download qwen-review artifact for full output ..."
+
+          lines = [
+              '# Qwen review result',
+              '',
+              f"- Qwen exit code: `{summary.get('qwen_exit_code', '')}`",
+              f"- Valid JSON: `{str(summary.get('valid_json', '')).lower()}`",
+              f"- Valid targets: `{str(summary.get('valid_targets', '')).lower()}`",
+              f"- Event: `{summary.get('event') or ''}`",
+              f"- Comment count: `{summary.get('comment_count', 0)}`",
+              f"- Chunk count: `{summary.get('chunk_count', 0)}`",
+          ]
+          if summary.get('error'):
+              lines.extend(['', '## Normalization error', '', '```text', str(summary['error']), '```'])
+          if summary.get('invalid_comments'):
+              lines.extend(['', '## Invalid comment targets', '', '```json', json.dumps(summary['invalid_comments'], indent=2), '```'])
+          stderr_files = sorted(root.glob('qwen-*.stderr'))
+          if stderr_files:
+              lines.extend(['', '## Qwen stderr', ''])
+              for path in stderr_files:
+                  text = path.read_text(errors='replace').strip()
+                  if not text:
+                      continue
+                  lines.extend([f'### {path.name}', '', '```text', clipped(text), '```'])
+          if review:
+              lines.extend(['', '## Review body', '', review.get('body', '').strip() or '(empty)'])
+              comments = review.get('comments') or []
+              if comments:
+                  lines.extend(['', '## Review comments'])
+                  for comment in comments:
+                      lines.extend([
+                          '',
+                          f"- `{comment.get('path')}:{comment.get('line')}`",
+                          '',
+                          comment.get('body', '').strip(),
+                      ])
+          else:
+              raw_files = sorted(root.glob('review-*.raw'))
+              if raw_files:
+                  lines.extend(['', '## Raw Qwen output'])
+                  for path in raw_files:
+                      text = path.read_text(errors='replace').strip()
+                      if not text:
+                          continue
+                      lines.extend([f'### {path.name}', '', '```text', clipped(text), '```'])
+          rendered = '\n'.join(lines) + '\n'
+          print(rendered)
+          summary_file = pathlib.Path(__import__('os').environ['GITHUB_STEP_SUMMARY'])
+          with summary_file.open('a') as out:
+              out.write(rendered)
+          PY
+
       - name: Upload review artifact
         if: steps.secrets.outputs.skip != 'true' && always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -360,19 +433,19 @@ jobs:
           event='${{ steps.normalize.outputs.event }}'
 
           if [[ "${qwen_exit}" != "0" ]]; then
-            echo "::error title=Qwen review failed::Qwen exited with ${qwen_exit}. See qwen-review artifact."
+            echo "::error title=Qwen review failed::Qwen exited with ${qwen_exit}. See the Display Qwen review result step above."
             exit 1
           fi
           if [[ "${valid_json}" != "true" ]]; then
-            echo "::error title=Qwen review invalid::Qwen did not return valid review JSON. See qwen-review artifact."
+            echo "::error title=Qwen review invalid::Qwen did not return valid review JSON. See the Display Qwen review result step above."
             exit 1
           fi
           if [[ "${valid_targets}" != "true" ]]; then
-            echo "::error title=Qwen review invalid targets::One or more comments do not target added PR lines. See qwen-review artifact."
+            echo "::error title=Qwen review invalid targets::One or more comments do not target added PR lines. See the Display Qwen review result step above."
             exit 1
           fi
           if [[ "${event}" == "REQUEST_CHANGES" ]]; then
-            echo "::error title=Qwen requested changes::Qwen returned REQUEST_CHANGES. Review the qwen-review artifact before merging."
+            echo "::error title=Qwen requested changes::Qwen returned REQUEST_CHANGES. See the Display Qwen review result step above."
             exit 1
           fi
           echo "Qwen returned ${event}; no blocking review requested."
