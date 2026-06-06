@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
@@ -19,6 +16,9 @@ const (
 )
 
 func TestLinodeAccountServiceTransferCreateToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
@@ -52,6 +52,9 @@ func TestLinodeAccountServiceTransferCreateToolDryRun(t *testing.T) {
 }
 
 func TestLinodeAccountServiceTransferAcceptToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
@@ -86,6 +89,9 @@ func TestLinodeAccountServiceTransferAcceptToolDryRun(t *testing.T) {
 }
 
 func TestLinodeAccountServiceTransferDeleteToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {

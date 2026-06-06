@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -22,6 +19,9 @@ const (
 )
 
 func TestLinodeAccountOAuthClientCreateToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
@@ -56,6 +56,9 @@ func TestLinodeAccountOAuthClientCreateToolDryRun(t *testing.T) {
 }
 
 func TestLinodeAccountOAuthClientUpdateToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
@@ -91,6 +94,9 @@ func TestLinodeAccountOAuthClientUpdateToolDryRun(t *testing.T) {
 }
 
 func TestLinodeAccountOAuthClientThumbnailUpdateToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
@@ -126,6 +132,9 @@ func TestLinodeAccountOAuthClientThumbnailUpdateToolDryRun(t *testing.T) {
 }
 
 func TestLinodeAccountOAuthClientDeleteToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
@@ -160,6 +169,9 @@ func TestLinodeAccountOAuthClientDeleteToolDryRun(t *testing.T) {
 }
 
 func TestLinodeAccountOAuthClientResetSecretToolDryRun(t *testing.T) {
+	assert := accountAssert{}
+	require := accountRequire{}
+
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
