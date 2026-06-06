@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -19,38 +16,38 @@ func TestClientGetRegionSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/regions/us-east", r.URL.EscapedPath(), "request path should match the documented route")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		stdCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		stdCheckEqual(t, "/regions/us-east", r.URL.EscapedPath(), "request path should match the documented route")
+		stdCheckEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Region{ID: regionUSEast, Label: linodeRegionLabelNewark, Country: "us", Status: managedServiceStatus}), "encoding region response should not fail")
+		stdCheckNoError(t, json.NewEncoder(w).Encode(linode.Region{ID: regionUSEast, Label: linodeRegionLabelNewark, Country: "us", Status: managedServiceStatus}), "encoding region response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	region, err := client.GetRegion(t.Context(), regionUSEast)
 
-	require.NoError(t, err, "GetRegion should succeed on 200 response")
-	require.NotNil(t, region, "region should not be nil")
-	assert.Equal(t, regionUSEast, region.ID)
-	assert.Equal(t, linodeRegionLabelNewark, region.Label)
+	stdMustNoError(t, err, "GetRegion should succeed on 200 response")
+	stdMustNotNil(t, region, "region should not be nil")
+	stdCheckEqual(t, regionUSEast, region.ID)
+	stdCheckEqual(t, linodeRegionLabelNewark, region.Label)
 }
 
 func TestClientGetRegionEscapesPathParameter(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/regions/us-east%2Fbad%3Fquery", r.URL.EscapedPath(), "region ID path segment should be escaped")
+		stdCheckEqual(t, "/regions/us-east%2Fbad%3Fquery", r.URL.EscapedPath(), "region ID path segment should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Region{ID: "us-east/bad?query"}), "encoding region response should not fail")
+		stdCheckNoError(t, json.NewEncoder(w).Encode(linode.Region{ID: "us-east/bad?query"}), "encoding region response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	region, err := client.GetRegion(t.Context(), "us-east/bad?query")
 
-	require.NoError(t, err, "GetRegion should escape path parameters")
-	require.NotNil(t, region, "region should not be nil")
+	stdMustNoError(t, err, "GetRegion should escape path parameters")
+	stdMustNotNil(t, region, "region should not be nil")
 }
 
 func TestClientGetRegionRetriesTransientError(t *testing.T) {
@@ -66,36 +63,36 @@ func TestClientGetRegionRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, "/regions/us-east", r.URL.Path, "request path should match the documented route")
+		stdCheckEqual(t, "/regions/us-east", r.URL.Path, "request path should match the documented route")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Region{ID: regionUSEast}), "encoding region response should not fail")
+		stdCheckNoError(t, json.NewEncoder(w).Encode(linode.Region{ID: regionUSEast}), "encoding region response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, fastRetryOpts()...)
 	region, err := client.GetRegion(t.Context(), regionUSEast)
 
-	require.NoError(t, err, "read-only region get should succeed after retry")
-	require.NotNil(t, region, "region should not be nil")
-	assert.Equal(t, int32(2), attempts, "should retry once after transient failure")
+	stdMustNoError(t, err, "read-only region get should succeed after retry")
+	stdMustNotNil(t, region, "region should not be nil")
+	stdCheckEqual(t, int32(2), attempts, "should retry once after transient failure")
 }
 
 func TestClientGetRegionAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/regions/us-east", r.URL.Path, "request path should match the documented route")
+		stdCheckEqual(t, "/regions/us-east", r.URL.Path, "request path should match the documented route")
 		w.WriteHeader(http.StatusNotFound)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errNotFound}}}), "encoding error response should not fail")
+		stdCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errNotFound}}}), "encoding error response should not fail")
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetRegion(t.Context(), regionUSEast)
 
-	require.Error(t, err, "GetRegion should fail on 404 response")
+	stdMustError(t, err, "GetRegion should fail on 404 response")
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be APIError")
-	assert.Equal(t, http.StatusNotFound, apiErr.StatusCode)
+	apiErr := stdAPIError(t, err, "error should be APIError")
+
+	stdCheckEqual(t, http.StatusNotFound, apiErr.StatusCode)
 }
