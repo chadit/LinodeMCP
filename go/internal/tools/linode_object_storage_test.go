@@ -2154,13 +2154,13 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_key_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_key_delete", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "key_id", "schema should include key_id property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+		expectContains(t, props, "key_id", "schema should include key_id property")
+		expectContains(t, props, "confirm", "schema should include confirm property")
 	})
 
 	t.Run("validation", func(t *testing.T) {
@@ -2190,9 +2190,9 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := handler(t.Context(), req)
 
-				require.NoError(t, err, "handler should not return an error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be an error for %s", testCase.name)
+				expectNoError(t, err, "handler should not return an error")
+				expectNotNil(t, result, "result should not be nil")
+				expectTrue(t, result.IsError, "result should be an error for %s", testCase.name)
 				assertErrorContains(t, result, testCase.contains)
 			})
 		}
@@ -2202,8 +2202,8 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/keys/42", r.URL.Path, "request path should match key endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			checkEqual(t, "/object-storage/keys/42", r.URL.Path, "request path should match key endpoint")
+			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer srv.Close()
@@ -2221,13 +2221,13 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "revoked successfully", "response should confirm revocation")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "revoked successfully", "response should confirm revocation")
 	})
 
 	t.Run("missing environment", func(t *testing.T) {
@@ -2244,31 +2244,36 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		})
 		result, err := emptyHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing environment")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing environment")
 	})
 
 	t.Run("dry_run schema property", func(t *testing.T) {
 		t.Parallel()
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+		expectContains(t, tool.InputSchema.Properties, "dry_run",
 			"schema must advertise the dry_run boolean to the model")
 	})
 
 	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		var methodsSeen []string
+		var requestCount atomic.Int32
+		var sawDelete atomic.Bool
 
 		keyBody := `{"id":77,"label":"backups-key","access_key":"AKIA-EXAMPLE","limited":false}`
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/object-storage/keys/77", r.URL.Path)
+			requestCount.Add(1)
+			if r.Method == http.MethodDelete {
+				sawDelete.Store(true)
+			}
+			checkEqual(t, "/object-storage/keys/77", r.URL.Path)
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(keyBody))
+				_, writeErr := w.Write([]byte(keyBody))
+				checkNoError(t, writeErr, "writing key response should not fail")
 
 				return
 			}
@@ -2289,25 +2294,26 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		})
 		result, err := dryRunHandler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectFalse(t, result.IsError, "dry_run with valid args should not be a tool error")
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		expectTrue(t, isText)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_object_storage_key_delete", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		checkEqual(t, true, body[keyDryRun])
+		checkEqual(t, "linode_object_storage_key_delete", body["tool"])
 
 		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/object-storage/keys/77", would["path"])
+		expectTrue(t, isWouldObject)
+		checkEqual(t, "DELETE", would["method"])
+		checkEqual(t, "/object-storage/keys/77", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET request, never DELETE")
+		checkEqual(t, int32(1), requestCount.Load(),
+			"dry_run must only issue a single GET request")
+		expectFalse(t, sawDelete.Load(), "dry_run must never issue DELETE")
 	})
 
 	t.Run("dry_run still rejects negative key_id", func(t *testing.T) {
@@ -2323,9 +2329,9 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectNotNil(t, result)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "key_id is required")
 	})
 }
@@ -2344,16 +2350,16 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_presigned_url", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_presigned_url", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "name", "schema should include name property")
-		assert.Contains(t, props, "method", "schema should include method property")
-		assert.Contains(t, props, "expires_in", "schema should include expires_in property")
+		expectContains(t, props, "region", "schema should include region property")
+		expectContains(t, props, "label", "schema should include label property")
+		expectContains(t, props, "name", "schema should include name property")
+		expectContains(t, props, "method", "schema should include method property")
+		expectContains(t, props, "expires_in", "schema should include expires_in property")
 	})
 
 	t.Run("missing name", func(t *testing.T) {
@@ -2366,13 +2372,13 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing name")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing name")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "name", "error should mention name field")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "name", "error should mention name field")
 	})
 
 	t.Run("invalid method", func(t *testing.T) {
@@ -2386,14 +2392,14 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for invalid method")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for invalid method")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, httpMethodGET, "error should mention GET")
-		assert.Contains(t, textContent.Text, "PUT", "error should mention PUT")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, httpMethodGET, "error should mention GET")
+		expectContains(t, textContent.Text, "PUT", "error should mention PUT")
 	})
 
 	t.Run("invalid expires in", func(t *testing.T) {
@@ -2408,13 +2414,13 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for invalid expires_in")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for invalid expires_in")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "604800", "error should mention max expiry value")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "604800", "error should mention max expiry value")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -2425,10 +2431,10 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-url", r.URL.Path, "request path should match object-url endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/object-url", r.URL.Path, "request path should match object-url endpoint")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(resp), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(resp), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -2447,13 +2453,13 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "signed=abc123", "response should contain signed URL")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "signed=abc123", "response should contain signed URL")
 	})
 
 	t.Run("missing environment", func(t *testing.T) {
@@ -2472,9 +2478,9 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		})
 		result, err := emptyHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing environment")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing environment")
 	})
 }
 
@@ -2492,14 +2498,14 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_object_acl_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_object_acl_get", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "name", "schema should include name property")
+		expectContains(t, props, "region", "schema should include region property")
+		expectContains(t, props, "label", "schema should include label property")
+		expectContains(t, props, "name", "schema should include name property")
 	})
 
 	t.Run("missing name", func(t *testing.T) {
@@ -2511,13 +2517,13 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 		})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "result should be an error for missing name")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectTrue(t, result.IsError, "result should be an error for missing name")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "name", "error should mention name field")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "name", "error should mention name field")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -2529,10 +2535,10 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path, "request path should match object-acl endpoint")
-			assert.Equal(t, objectPhotoJPG, r.URL.Query().Get("name"), "name query param should match")
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path, "request path should match object-acl endpoint")
+			checkEqual(t, objectPhotoJPG, r.URL.Query().Get("name"), "name query param should match")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -2550,13 +2556,13 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, aclPublicRead, "response should contain ACL value")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, aclPublicRead, "response should contain ACL value")
 	})
 }
 
@@ -2574,16 +2580,16 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_object_acl_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_object_storage_object_acl_update", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "name", "schema should include name property")
-		assert.Contains(t, props, "acl", "schema should include acl property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+		expectContains(t, props, "region", "schema should include region property")
+		expectContains(t, props, "label", "schema should include label property")
+		expectContains(t, props, "name", "schema should include name property")
+		expectContains(t, props, "acl", "schema should include acl property")
+		expectContains(t, props, "confirm", "schema should include confirm property")
 	})
 
 	t.Run("validation", func(t *testing.T) {
@@ -2626,13 +2632,13 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := testHandler(t.Context(), req)
 
-				require.NoError(t, err, "handler should not return an error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be an error for %s", testCase.name)
+				expectNoError(t, err, "handler should not return an error")
+				expectNotNil(t, result, "result should not be nil")
+				expectTrue(t, result.IsError, "result should be an error for %s", testCase.name)
 
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.contains, "error should contain expected text for %s", testCase.name)
+				expectTrue(t, ok, "content should be TextContent")
+				expectContains(t, textContent.Text, testCase.contains, "error should contain expected text for %s", testCase.name)
 			})
 		}
 	})
@@ -2646,10 +2652,10 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path, "request path should match object-acl endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path, "request path should match object-acl endpoint")
+			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(resp), "encoding response should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(resp), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
@@ -2669,13 +2675,13 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 		})
 		result, err := srvHandler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should not be an error")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "result should not be an error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, aclPublicRead, "response should contain ACL value")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, aclPublicRead, "response should contain ACL value")
 	})
 }
 

@@ -162,6 +162,7 @@ func expectNotContains(t *testing.T, container, item any, msg ...string) {
 	}
 }
 
+// expectLen is fatal so callers may safely index values after the length check returns.
 func expectLen(t *testing.T, actual any, expected int, msg ...string) {
 	t.Helper()
 
