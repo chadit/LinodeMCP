@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -26,13 +24,13 @@ func TestLinodeKernelGetTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeKernelGetTool(cfg)
 
-		assert.Equal(t, "linode_kernel_get", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyKernelID, "schema should include kernel_id")
-		assert.Contains(t, tool.InputSchema.Required, keyKernelID, "kernel_id must be marked required")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_kernel_get", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
+		checkNotEmpty(t, tool.Description, "tool should have a description")
+		checkContains(t, tool.InputSchema.Properties, keyKernelID, "schema should include kernel_id")
+		checkContains(t, tool.InputSchema.Required, keyKernelID, "kernel_id must be marked required")
+		checkNoConfirm(t, tool.InputSchema.Properties, "read-only get tool must not require confirm")
+		requireNotNil(t, handler, "handler should not be nil")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -41,13 +39,13 @@ func TestLinodeKernelGetTool(t *testing.T) {
 		kernel := linode.Kernel{ID: kernelLatestFixture, Label: kernelLabelFixture, Version: "6.8.9", Architecture: "x86_64"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/kernels/linode/latest-64bit", r.URL.Path, "request path should include kernel ID")
-			assert.Equal(t, "/linode/kernels/linode%2Flatest-64bit", r.URL.EscapedPath(), "request path should encode kernel ID slash")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/linode/kernels/linode/latest-64bit", r.URL.Path, "request path should include kernel ID")
+			checkEqual(t, "/linode/kernels/linode%2Flatest-64bit", r.URL.EscapedPath(), "request path should encode kernel ID slash")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(kernel))
+			checkNoError(t, json.NewEncoder(w).Encode(kernel))
 		}))
 		defer srv.Close()
 
@@ -57,24 +55,24 @@ func TestLinodeKernelGetTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		requireNoError(t, err, "handler should not return an error")
+		requireNotNil(t, result, "result should not be nil")
+		checkFalse(t, result.IsError, "should not be an error result")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, kernelLatestFixture, "response should contain kernel ID")
-		assert.Contains(t, textContent.Text, kernelLabelFixture, "response should contain kernel label")
+		requireTrue(t, ok, "content should be TextContent")
+		checkContains(t, textContent.Text, kernelLatestFixture, "response should contain kernel ID")
+		checkContains(t, textContent.Text, kernelLabelFixture, "response should contain kernel label")
 	})
 
 	t.Run("client failure returns tool error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/kernels/linode/latest-64bit", r.URL.Path, "request path should include kernel ID")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/linode/kernels/linode/latest-64bit", r.URL.Path, "request path should include kernel ID")
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
 			}))
 		}))
@@ -86,13 +84,13 @@ func TestLinodeKernelGetTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "client failure should return a tool error")
+		requireNoError(t, err)
+		requireNotNil(t, result)
+		checkTrue(t, result.IsError, "client failure should return a tool error")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve kernel")
-		assert.Contains(t, textContent.Text, errTemporaryFailure)
+		requireTrue(t, ok, "content should be TextContent")
+		checkContains(t, textContent.Text, "Failed to retrieve kernel")
+		checkContains(t, textContent.Text, errTemporaryFailure)
 	})
 
 	t.Run("rejects invalid kernel_id before client call", func(t *testing.T) {
@@ -133,10 +131,10 @@ func TestLinodeKernelGetTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.True(t, result.IsError, "invalid kernel_id should return a tool error")
-				assert.False(t, called.Load(), "invalid kernel_id should be rejected before client call")
+				requireNoError(t, err)
+				requireNotNil(t, result)
+				checkTrue(t, result.IsError, "invalid kernel_id should return a tool error")
+				checkFalse(t, called.Load(), "invalid kernel_id should be rejected before client call")
 			})
 		}
 	})

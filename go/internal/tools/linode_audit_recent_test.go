@@ -76,6 +76,30 @@ func checkFalse(t *testing.T, got bool, msgAndArgs ...any) {
 	}
 }
 
+func checkNoError(t *testing.T, err error, msgAndArgs ...any) {
+	t.Helper()
+
+	if err != nil {
+		t.Errorf("%s: unexpected error: %v", checkMessage(msgAndArgs), err)
+	}
+}
+
+func checkNotEmpty(t *testing.T, got any, msgAndArgs ...any) {
+	t.Helper()
+
+	if lengthOf(got) == 0 {
+		t.Errorf("%s: got empty value", checkMessage(msgAndArgs))
+	}
+}
+
+func checkEmpty(t *testing.T, got any, msgAndArgs ...any) {
+	t.Helper()
+
+	if lengthOf(got) != 0 {
+		t.Errorf("%s: got non-empty value %#v", checkMessage(msgAndArgs), got)
+	}
+}
+
 func requireNoError(t *testing.T, err error, msgAndArgs ...any) {
 	t.Helper()
 
