@@ -55,16 +55,50 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p qwen-review
+          mkdir -p qwen-review/chunks
           gh pr view "${PR_NUMBER}" --repo "${GH_REPO}" \
-            --json number,title,body,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions \
+            --json number,title,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions,files \
             > qwen-review/pr-context.json
           gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > qwen-review/pr.diff
 
-          {
-            cat <<'EOF'
+          python3 <<'PY'
+          import json
+          import pathlib
+
+          root = pathlib.Path('qwen-review')
+          diff_path = root / 'pr.diff'
+          context_path = root / 'pr-context.json'
+          chunks_dir = root / 'chunks'
+          chunks_dir.mkdir(parents=True, exist_ok=True)
+
+          context = json.loads(context_path.read_text())
+          compact_context = {
+              key: context.get(key)
+              for key in [
+                  'number',
+                  'title',
+                  'baseRefName',
+                  'headRefName',
+                  'headRefOid',
+                  'changedFiles',
+                  'additions',
+                  'deletions',
+              ]
+          }
+          compact_context['files'] = [
+              {
+                  'path': item.get('path'),
+                  'additions': item.get('additions'),
+                  'deletions': item.get('deletions'),
+                  'changeType': item.get('changeType'),
+              }
+              for item in context.get('files', [])
+          ]
+
+          header = '''
           You are a Senior Staff Backend Engineer conducting a strict PR review.
-          Review only the provided PR metadata and unified diff. Do not use tools. Do not invent findings.
+          Review only the provided PR metadata and unified diff chunk. Do not use tools. Do not invent findings.
+          The diff chunk contains only files changed by this PR. Do not comment on unchanged files or lines.
           Return ONLY raw JSON. No markdown fences. No prose before or after JSON.
 
           The JSON object must have exactly these keys:
@@ -75,17 +109,80 @@ jobs:
           Rules:
           - Use event "REQUEST_CHANGES" only for blocking correctness, security, data-loss, broken API contract, broken tests, or missing required tests for changed behavior.
           - Use event "COMMENT" for non-blocking findings, weak confidence, style, maintainability, or no findings.
-          - Every comment must target only an added/modified RIGHT-side line present in the unified diff.
-          - If there are no line-specific findings, return comments: [] and explain in body.
+          - Every comment must target only an added/modified RIGHT-side line present in this unified diff chunk.
+          - If there are no line-specific findings in this chunk, return comments: [] and explain in body.
           - Focus on correctness, concurrency, route/API contract, error handling, tests, and security.
           - Avoid style-only comments unless they indicate a real maintenance risk.
 
           PR metadata JSON follows:
-          EOF
-            cat qwen-review/pr-context.json
-            printf '\n\nUnified diff follows:\n'
-            cat qwen-review/pr.diff
-          } > qwen-review/prompt.txt
+          '''.strip() + '\n'
+
+          files = []
+          current = []
+          for line in diff_path.read_text(errors='replace').splitlines(keepends=True):
+              if line.startswith('diff --git ') and current:
+                  files.append(''.join(current))
+                  current = [line]
+              else:
+                  current.append(line)
+          if current:
+              files.append(''.join(current))
+
+          max_chars = 90000
+          chunks = []
+          current_chunk = []
+          current_size = 0
+          for file_diff in files:
+              if current_chunk and current_size + len(file_diff) > max_chars:
+                  chunks.append(''.join(current_chunk))
+                  current_chunk = []
+                  current_size = 0
+              if len(file_diff) > max_chars:
+                  # Keep review scoped to the changed file, but split very large file diffs
+                  # at hunk boundaries so the CLI prompt never becomes an oversized argv.
+                  prefix = []
+                  active = []
+                  parts = []
+                  for line in file_diff.splitlines(keepends=True):
+                      if line.startswith('diff --git ') or line.startswith('index ') or line.startswith('--- ') or line.startswith('+++ '):
+                          prefix.append(line)
+                      elif line.startswith('@@') and active:
+                          parts.append(''.join(prefix + active))
+                          active = [line]
+                      else:
+                          active.append(line)
+                  if active:
+                      parts.append(''.join(prefix + active))
+                  for part in parts:
+                      if current_chunk and current_size + len(part) > max_chars:
+                          chunks.append(''.join(current_chunk))
+                          current_chunk = []
+                          current_size = 0
+                      current_chunk.append(part)
+                      current_size += len(part)
+                  continue
+              current_chunk.append(file_diff)
+              current_size += len(file_diff)
+          if current_chunk:
+              chunks.append(''.join(current_chunk))
+          if not chunks:
+              chunks = ['']
+
+          for index, chunk in enumerate(chunks, 1):
+              prompt = (
+                  header
+                  + json.dumps(compact_context, indent=2)
+                  + f'\n\nUnified diff chunk {index}/{len(chunks)} follows:\n'
+                  + chunk
+              )
+              (chunks_dir / f'prompt-{index:03d}.txt').write_text(prompt)
+          (root / 'chunk-summary.json').write_text(json.dumps({
+              'chunk_count': len(chunks),
+              'max_chunk_chars': max_chars,
+              'prompt_files': [str(p) for p in sorted(chunks_dir.glob('prompt-*.txt'))],
+          }, indent=2) + '\n')
+          print(f"Prepared {len(chunks)} Qwen review prompt chunk(s)")
+          PY
 
       - name: Run Qwen review
         if: steps.secrets.outputs.skip != 'true'
@@ -99,19 +196,32 @@ jobs:
         shell: bash
         run: |
           set +e
-          qwen --auth-type openai \
-            --approval-mode plan \
-            --max-tool-calls 0 \
-            --max-session-turns 4 \
-            --max-wall-time 180s \
-            --output-format text \
-            < qwen-review/prompt.txt \
-            > qwen-review/review.raw 2> qwen-review/qwen.stderr
-          rc=$?
+          overall_rc=0
+          index=0
+          for prompt_file in qwen-review/chunks/prompt-*.txt; do
+            index=$((index + 1))
+            raw_file="qwen-review/review-${index}.raw"
+            stderr_file="qwen-review/qwen-${index}.stderr"
+            exit_file="qwen-review/qwen-${index}.exitcode"
+            qwen --auth-type openai \
+              --approval-mode plan \
+              --max-tool-calls 0 \
+              --max-session-turns 4 \
+              --max-wall-time 180s \
+              --output-format text \
+              < "${prompt_file}" \
+              > "${raw_file}" 2> "${stderr_file}"
+            rc=$?
+            echo "${rc}" > "${exit_file}"
+            if [[ "${rc}" != "0" ]]; then
+              overall_rc="${rc}"
+              break
+            fi
+          done
           set -e
-          echo "exit_code=${rc}" >> "${GITHUB_OUTPUT}"
-          echo "${rc}" > qwen-review/qwen.exitcode
-          exit "${rc}"
+          echo "exit_code=${overall_rc}" >> "${GITHUB_OUTPUT}"
+          echo "${overall_rc}" > qwen-review/qwen.exitcode
+          exit "${overall_rc}"
 
       - name: Normalize review artifact
         if: steps.secrets.outputs.skip != 'true'
@@ -123,15 +233,8 @@ jobs:
           import json
           import pathlib
           import re
-          import sys
 
           root = pathlib.Path('qwen-review')
-          raw_path = root / 'review.raw'
-          text = raw_path.read_text() if raw_path.exists() else ''
-          text = text.strip()
-          if text.startswith('```'):
-              text = re.sub(r'^```(?:json)?\s*', '', text)
-              text = re.sub(r'\s*```$', '', text).strip()
 
           summary = {
               'valid_json': False,
@@ -140,35 +243,56 @@ jobs:
               'comment_count': 0,
               'invalid_comments': [],
               'qwen_exit_code': int((root / 'qwen.exitcode').read_text().strip() or '1') if (root / 'qwen.exitcode').exists() else 1,
+              'chunk_count': 0,
           }
 
-          try:
+          def load_review(raw_path: pathlib.Path) -> dict:
+              text = raw_path.read_text() if raw_path.exists() else ''
+              text = text.strip()
+              if text.startswith('```'):
+                  text = re.sub(r'^```(?:json)?\s*', '', text)
+                  text = re.sub(r'\s*```$', '', text).strip()
               review = json.loads(text)
               if not isinstance(review, dict):
-                  raise ValueError('review must be a JSON object')
+                  raise ValueError(f'{raw_path.name}: review must be a JSON object')
               event = review.get('event')
               if event == 'REQUEST_CHANGE':
                   event = 'REQUEST_CHANGES'
                   review['event'] = event
               if event not in {'COMMENT', 'REQUEST_CHANGES'}:
-                  raise ValueError('event must be COMMENT or REQUEST_CHANGES')
+                  raise ValueError(f'{raw_path.name}: event must be COMMENT or REQUEST_CHANGES')
               if not isinstance(review.get('body'), str) or not review['body'].strip():
-                  raise ValueError('body must be a non-empty string')
+                  raise ValueError(f'{raw_path.name}: body must be a non-empty string')
               if not isinstance(review.get('comments'), list):
-                  raise ValueError('comments must be an array')
+                  raise ValueError(f'{raw_path.name}: comments must be an array')
               for i, comment in enumerate(review['comments']):
                   if not isinstance(comment, dict):
-                      raise ValueError(f'comments[{i}] must be an object')
+                      raise ValueError(f'{raw_path.name}: comments[{i}] must be an object')
                   if not isinstance(comment.get('path'), str) or not comment['path']:
-                      raise ValueError(f'comments[{i}].path must be a non-empty string')
+                      raise ValueError(f'{raw_path.name}: comments[{i}].path must be a non-empty string')
                   if not isinstance(comment.get('line'), int) or comment['line'] < 1:
-                      raise ValueError(f'comments[{i}].line must be a positive integer')
+                      raise ValueError(f'{raw_path.name}: comments[{i}].line must be a positive integer')
                   if not isinstance(comment.get('body'), str) or not comment['body'].strip():
-                      raise ValueError(f'comments[{i}].body must be a non-empty string')
+                      raise ValueError(f'{raw_path.name}: comments[{i}].body must be a non-empty string')
+              return review
+
+          try:
+              raw_paths = sorted(root.glob('review-*.raw'))
+              if not raw_paths and (root / 'review.raw').exists():
+                  raw_paths = [root / 'review.raw']
+              if not raw_paths:
+                  raise ValueError('no Qwen review output files found')
+              reviews = [load_review(raw_path) for raw_path in raw_paths]
+              review = {
+                  'event': 'REQUEST_CHANGES' if any(r.get('event') == 'REQUEST_CHANGES' for r in reviews) else 'COMMENT',
+                  'body': '\n\n'.join(f"Chunk {idx}: {r.get('body', '').strip()}" for idx, r in enumerate(reviews, 1)),
+                  'comments': [comment for r in reviews for comment in r.get('comments', [])],
+              }
 
               summary['valid_json'] = True
-              summary['event'] = event
+              summary['event'] = review['event']
               summary['comment_count'] = len(review['comments'])
+              summary['chunk_count'] = len(raw_paths)
 
               added = {}
               current = None
