@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -32,16 +30,16 @@ func TestLinodeTaggedObjectsTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodeTaggedObjectsTool(cfg)
 
-		assert.Equal(t, "linode_tagged_objects", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_tagged_objects", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
+		checkNotEmpty(t, tool.Description, "tool should have a description")
+		requireNotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, tagLabelParamTest, "schema should include tag_label")
-		assert.Contains(t, props, keyPage, "schema should include page")
-		assert.Contains(t, props, keyPageSize, "schema should include page_size")
-		assert.NotContains(t, props, keyConfirm, "read-only list tool must not require confirm")
+		checkContains(t, props, tagLabelParamTest, "schema should include tag_label")
+		checkContains(t, props, keyPage, "schema should include page")
+		checkContains(t, props, keyPageSize, "schema should include page_size")
+		checkNoConfirm(t, props, "read-only list tool must not require confirm")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -55,13 +53,13 @@ func TestLinodeTaggedObjectsTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/tags/prod%2Fweb", r.URL.EscapedPath(), "request path should URL-encode tag label")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/tags/prod%2Fweb", r.URL.EscapedPath(), "request path should URL-encode tag label")
+			checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(objects))
+			checkNoError(t, json.NewEncoder(w).Encode(objects))
 		}))
 		defer srv.Close()
 
@@ -71,25 +69,25 @@ func TestLinodeTaggedObjectsTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd + "/web", keyPage: 2, keyPageSize: 25})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		requireNoError(t, err, "handler should not return an error")
+		requireNotNil(t, result, "result should not be nil")
+		checkFalse(t, result.IsError, "should not be an error result")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, taggedObjectLabelFixture, "response should contain tagged object label")
-		assert.Contains(t, textContent.Text, monitorAlertDefinitionToolServiceType, "response should contain tagged object type")
+		requireTrue(t, ok, "content should be TextContent")
+		checkContains(t, textContent.Text, taggedObjectLabelFixture, "response should contain tagged object label")
+		checkContains(t, textContent.Text, monitorAlertDefinitionToolServiceType, "response should contain tagged object type")
 	})
 
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/tags/"+envProd, r.URL.Path, "request path should be /tags/prod")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/tags/"+envProd, r.URL.Path, "request path should be /tags/prod")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		defer srv.Close()
 
@@ -99,13 +97,13 @@ func TestLinodeTaggedObjectsTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
+		requireNoError(t, err, "handler should return API failures as tool errors")
+		requireNotNil(t, result, "result should not be nil")
+		checkTrue(t, result.IsError, "API failure should be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve linode_tagged_objects", "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+		requireTrue(t, ok, "content should be TextContent")
+		checkContains(t, textContent.Text, "Failed to retrieve linode_tagged_objects", "response should identify failed tool")
+		checkContains(t, textContent.Text, errForbidden, "response should include API error detail")
 	})
 
 	t.Run("invalid tag label rejects before client", func(t *testing.T) {
@@ -132,12 +130,12 @@ func TestLinodeTaggedObjectsTool(t *testing.T) {
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := handler(t.Context(), req)
 
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid tag label should be an error result")
+				requireNoError(t, err, "handler should return validation as a tool error")
+				requireNotNil(t, result, "result should not be nil")
+				checkTrue(t, result.IsError, "invalid tag label should be an error result")
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.want, "response should describe validation error")
+				requireTrue(t, ok, "content should be TextContent")
+				checkContains(t, textContent.Text, testCase.want, "response should describe validation error")
 			})
 		}
 	})
