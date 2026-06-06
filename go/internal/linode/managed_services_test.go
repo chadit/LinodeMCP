@@ -9,9 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -42,13 +39,13 @@ func TestClientGetManagedServiceSuccess(t *testing.T) {
 	region := managedServiceRegion
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, managedIssueAuthHeader, r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, managedIssueAuthHeader, r.Header.Get("Authorization"), "authorization header should use bearer token")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
 			ID:                managedServiceID,
 			Label:             managedServiceLabel,
 			ServiceType:       managedServiceType,
@@ -69,24 +66,24 @@ func TestClientGetManagedServiceSuccess(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.GetManagedService(t.Context(), managedServiceID)
 
-	require.NoError(t, err, "GetManagedService should succeed on 200 response")
-	require.NotNil(t, result)
-	assert.Equal(t, managedServiceID, result.ID)
-	assert.Equal(t, managedServiceLabel, result.Label)
-	assert.Equal(t, managedServiceType, result.ServiceType)
-	assert.Equal(t, managedServiceStatus, result.Status)
-	assert.Equal(t, managedServiceAddress, result.Address)
-	require.NotNil(t, result.Body)
-	assert.Equal(t, managedServiceBody, *result.Body)
-	assert.Equal(t, managedServiceGroup, result.ConsultationGroup)
-	assert.Equal(t, managedServiceCreated, result.Created)
-	assert.Equal(t, []int{9991}, result.Credentials)
-	require.NotNil(t, result.Notes)
-	assert.Equal(t, managedServiceNotes, *result.Notes)
-	require.NotNil(t, result.Region)
-	assert.Equal(t, managedServiceRegion, *result.Region)
-	assert.Equal(t, 30, result.Timeout)
-	assert.Equal(t, managedServiceUpdated, result.Updated)
+	requireNoError(t, err, "GetManagedService should succeed on 200 response")
+	requireNotNil(t, result)
+	checkEqual(t, managedServiceID, result.ID)
+	checkEqual(t, managedServiceLabel, result.Label)
+	checkEqual(t, managedServiceType, result.ServiceType)
+	checkEqual(t, managedServiceStatus, result.Status)
+	checkEqual(t, managedServiceAddress, result.Address)
+	requireNotNil(t, result.Body)
+	checkEqual(t, managedServiceBody, *result.Body)
+	checkEqual(t, managedServiceGroup, result.ConsultationGroup)
+	checkEqual(t, managedServiceCreated, result.Created)
+	checkEqual(t, []int{9991}, result.Credentials)
+	requireNotNil(t, result.Notes)
+	checkEqual(t, managedServiceNotes, *result.Notes)
+	requireNotNil(t, result.Region)
+	checkEqual(t, managedServiceRegion, *result.Region)
+	checkEqual(t, 30, result.Timeout)
+	checkEqual(t, managedServiceUpdated, result.Updated)
 }
 
 func TestClientGetManagedServiceRetriesTransientError(t *testing.T) {
@@ -95,87 +92,83 @@ func TestClientGetManagedServiceRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{ID: managedServiceID}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedService{ID: managedServiceID}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	result, err := client.GetManagedService(t.Context(), managedServiceID)
 
-	require.NoError(t, err, "read-only Managed service get should retry transient failures")
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+	requireNoError(t, err, "read-only Managed service get should retry transient failures")
+	requireNotNil(t, result)
+	checkEqual(t, int32(2), calls.Load(), "client should retry once")
 }
 
 func TestClientGetManagedServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.GetManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "GetManagedService should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "GetManagedService should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientDeleteManagedServiceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteManagedService(t.Context(), managedServiceID)
 
-	require.NoError(t, err, "DeleteManagedService should succeed on 200 response")
+	requireNoError(t, err, "DeleteManagedService should succeed on 200 response")
 }
 
 func TestClientDeleteManagedServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.DeleteManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "DeleteManagedService should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "DeleteManagedService should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientDeleteManagedServiceDoesNotRetryTransientError(t *testing.T) {
@@ -185,63 +178,61 @@ func TestClientDeleteManagedServiceDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	err := client.DeleteManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "DeleteManagedService should return the transient failure")
-	assert.Equal(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
+	requireError(t, err, "DeleteManagedService should return the transient failure")
+	checkEqual(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
 }
 
 func TestClientDisableManagedServiceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServiceDisablePath, r.URL.Path, "request path should include service ID and disable action")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServiceDisablePath, r.URL.Path, "request path should include service ID and disable action")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.Empty(t, body, "disable request should not include a body")
+		checkNoError(t, err)
+		checkEmpty(t, body, "disable request should not include a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.DisableManagedService(t.Context(), managedServiceID)
 
-	require.NoError(t, err, "DisableManagedService should succeed on 200 response")
+	requireNoError(t, err, "DisableManagedService should succeed on 200 response")
 }
 
 func TestClientDisableManagedServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServiceDisablePath, r.URL.Path, "request path should include service ID and disable action")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServiceDisablePath, r.URL.Path, "request path should include service ID and disable action")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.DisableManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "DisableManagedService should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "DisableManagedService should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientDisableManagedServiceDoesNotRetryTransientError(t *testing.T) {
@@ -251,63 +242,61 @@ func TestClientDisableManagedServiceDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServiceDisablePath, r.URL.Path, "request path should include service ID and disable action")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServiceDisablePath, r.URL.Path, "request path should include service ID and disable action")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	err := client.DisableManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "DisableManagedService should return the transient failure")
-	assert.Equal(t, int32(1), calls.Load(), "mutating POST should not be retried")
+	requireError(t, err, "DisableManagedService should return the transient failure")
+	checkEqual(t, int32(1), calls.Load(), "mutating POST should not be retried")
 }
 
 func TestClientEnableManagedServiceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.Empty(t, body, "enable request should not include a body")
+		checkNoError(t, err)
+		checkEmpty(t, body, "enable request should not include a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.EnableManagedService(t.Context(), managedServiceID)
 
-	require.NoError(t, err, "EnableManagedService should succeed on 200 response")
+	requireNoError(t, err, "EnableManagedService should succeed on 200 response")
 }
 
 func TestClientEnableManagedServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	err := client.EnableManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "EnableManagedService should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "EnableManagedService should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientEnableManagedServiceDoesNotRetryTransientError(t *testing.T) {
@@ -317,18 +306,18 @@ func TestClientEnableManagedServiceDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	err := client.EnableManagedService(t.Context(), managedServiceID)
 
-	require.Error(t, err, "EnableManagedService should return the transient failure")
-	assert.Equal(t, int32(1), calls.Load(), "mutating POST should not be retried")
+	requireError(t, err, "EnableManagedService should return the transient failure")
+	checkEqual(t, int32(1), calls.Load(), "mutating POST should not be retried")
 }
 
 func TestClientListManagedServicesSuccess(t *testing.T) {
@@ -360,38 +349,38 @@ func TestClientListManagedServicesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, managedIssueAuthHeader, r.Header.Get("Authorization"), "authorization header should use bearer token")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
+		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		checkEqual(t, managedIssueAuthHeader, r.Header.Get("Authorization"), "authorization header should use bearer token")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(services))
+		checkNoError(t, json.NewEncoder(w).Encode(services))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	result, err := client.ListManagedServices(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListManagedServices should succeed on 200 response")
-	require.NotNil(t, result)
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, managedServiceID, result.Data[0].ID)
-	assert.Equal(t, managedServiceLabel, result.Data[0].Label)
-	assert.Equal(t, managedServiceType, result.Data[0].ServiceType)
-	assert.Equal(t, managedServiceStatus, result.Data[0].Status)
-	assert.Equal(t, managedServiceAddress, result.Data[0].Address)
-	require.NotNil(t, result.Data[0].Body)
-	assert.Equal(t, managedServiceBody, *result.Data[0].Body)
-	assert.Equal(t, managedServiceGroup, result.Data[0].ConsultationGroup)
-	assert.Equal(t, managedServiceCreated, result.Data[0].Created)
-	assert.Equal(t, []int{9991}, result.Data[0].Credentials)
-	require.NotNil(t, result.Data[0].Notes)
-	assert.Equal(t, managedServiceNotes, *result.Data[0].Notes)
-	require.NotNil(t, result.Data[0].Region)
-	assert.Equal(t, managedServiceRegion, *result.Data[0].Region)
-	assert.Equal(t, 30, result.Data[0].Timeout)
-	assert.Equal(t, managedServiceUpdated, result.Data[0].Updated)
+	requireNoError(t, err, "ListManagedServices should succeed on 200 response")
+	requireNotNil(t, result)
+	requireLenOne(t, result.Data)
+	checkEqual(t, managedServiceID, result.Data[0].ID)
+	checkEqual(t, managedServiceLabel, result.Data[0].Label)
+	checkEqual(t, managedServiceType, result.Data[0].ServiceType)
+	checkEqual(t, managedServiceStatus, result.Data[0].Status)
+	checkEqual(t, managedServiceAddress, result.Data[0].Address)
+	requireNotNil(t, result.Data[0].Body)
+	checkEqual(t, managedServiceBody, *result.Data[0].Body)
+	checkEqual(t, managedServiceGroup, result.Data[0].ConsultationGroup)
+	checkEqual(t, managedServiceCreated, result.Data[0].Created)
+	checkEqual(t, []int{9991}, result.Data[0].Credentials)
+	requireNotNil(t, result.Data[0].Notes)
+	checkEqual(t, managedServiceNotes, *result.Data[0].Notes)
+	requireNotNil(t, result.Data[0].Region)
+	checkEqual(t, managedServiceRegion, *result.Data[0].Region)
+	checkEqual(t, 30, result.Data[0].Timeout)
+	checkEqual(t, managedServiceUpdated, result.Data[0].Updated)
 }
 
 func TestClientListManagedServicesRetriesTransientError(t *testing.T) {
@@ -400,17 +389,17 @@ func TestClientListManagedServicesRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
+		checkEqual(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedService]{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedService]{
 			Data:    []linode.ManagedService{{ID: 9944}},
 			Page:    1,
 			Pages:   1,
@@ -422,47 +411,45 @@ func TestClientListManagedServicesRetriesTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
 	result, err := client.ListManagedServices(t.Context(), 0, 0)
 
-	require.NoError(t, err, "read-only Managed services list should retry transient failures")
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+	requireNoError(t, err, "read-only Managed services list should retry transient failures")
+	requireNotNil(t, result)
+	checkEqual(t, int32(2), calls.Load(), "client should retry once")
 }
 
 func TestClientListManagedServicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
+		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+		checkEqual(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 	_, err := client.ListManagedServices(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListManagedServices should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	requireError(t, err, "ListManagedServices should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 func TestClientCreateManagedServiceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var got linode.CreateManagedServiceRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, managedServiceLabel, got.Label)
-		assert.Equal(t, managedServiceType, got.ServiceType)
-		assert.Equal(t, managedServiceAddress, got.Address)
-		assert.Equal(t, 30, got.Timeout)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
+		checkEqual(t, managedServiceLabel, got.Label)
+		checkEqual(t, managedServiceType, got.ServiceType)
+		checkEqual(t, managedServiceAddress, got.Address)
+		checkEqual(t, 30, got.Timeout)
 
 		if got.Body == nil || got.ConsultationGroup == nil || got.Notes == nil {
 			t.Errorf("request body missing optional managed service fields: %#v", got)
@@ -470,13 +457,13 @@ func TestClientCreateManagedServiceSuccess(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, managedServiceBody, *got.Body)
-		assert.Equal(t, managedServiceGroup, *got.ConsultationGroup)
-		assert.Equal(t, managedServiceNotes, *got.Notes)
-		assert.Equal(t, []int{9991}, got.Credentials)
+		checkEqual(t, managedServiceBody, *got.Body)
+		checkEqual(t, managedServiceGroup, *got.ConsultationGroup)
+		checkEqual(t, managedServiceNotes, *got.Notes)
+		checkEqual(t, []int{9991}, got.Credentials)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
 			ID:                9944,
 			Label:             got.Label,
 			ServiceType:       got.ServiceType,
@@ -508,22 +495,22 @@ func TestClientCreateManagedServiceSuccess(t *testing.T) {
 
 	service, err := client.CreateManagedService(t.Context(), req)
 
-	require.NoError(t, err, "CreateManagedService should succeed on 200 response")
-	require.NotNil(t, service)
-	assert.Equal(t, 9944, service.ID)
-	assert.Equal(t, managedServiceLabel, service.Label)
-	assert.Equal(t, managedServiceStatus, service.Status)
+	requireNoError(t, err, "CreateManagedService should succeed on 200 response")
+	requireNotNil(t, service)
+	checkEqual(t, 9944, service.ID)
+	checkEqual(t, managedServiceLabel, service.Label)
+	checkEqual(t, managedServiceStatus, service.Status)
 }
 
 func TestClientCreateManagedServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"managed service could not be created"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -531,11 +518,9 @@ func TestClientCreateManagedServiceAPIError(t *testing.T) {
 
 	_, err := client.CreateManagedService(t.Context(), &linode.CreateManagedServiceRequest{Label: managedServiceLabel})
 
-	require.Error(t, err, "CreateManagedService should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	requireError(t, err, "CreateManagedService should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 func TestClientCreateManagedServiceDoesNotRetry(t *testing.T) {
@@ -546,11 +531,11 @@ func TestClientCreateManagedServiceDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, managedServicesPath, r.URL.Path, "request path should be /managed/services")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -558,21 +543,21 @@ func TestClientCreateManagedServiceDoesNotRetry(t *testing.T) {
 
 	_, err := client.CreateManagedService(t.Context(), &linode.CreateManagedServiceRequest{Label: managedServiceLabel})
 
-	require.Error(t, err, "CreateManagedService should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "CreateManagedService must not retry and replay a mutating request")
+	requireError(t, err, "CreateManagedService should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "CreateManagedService must not retry and replay a mutating request")
 }
 
 func TestClientUpdateManagedServiceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
 
 		var got linode.UpdateManagedServiceRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
 
 		if got.Label == nil || got.ServiceType == nil || got.Address == nil || got.Timeout == nil || got.Credentials == nil {
 			t.Errorf("request body missing managed service update fields: %#v", got)
@@ -580,14 +565,14 @@ func TestClientUpdateManagedServiceSuccess(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, managedServiceLabel, *got.Label)
-		assert.Equal(t, managedServiceType, *got.ServiceType)
-		assert.Equal(t, managedServiceAddress, *got.Address)
-		assert.Equal(t, 30, *got.Timeout)
-		assert.Equal(t, []int{9991}, *got.Credentials)
+		checkEqual(t, managedServiceLabel, *got.Label)
+		checkEqual(t, managedServiceType, *got.ServiceType)
+		checkEqual(t, managedServiceAddress, *got.Address)
+		checkEqual(t, 30, *got.Timeout)
+		checkEqual(t, []int{9991}, *got.Credentials)
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
 			ID:          managedServiceID,
 			Label:       *got.Label,
 			ServiceType: *got.ServiceType,
@@ -614,22 +599,22 @@ func TestClientUpdateManagedServiceSuccess(t *testing.T) {
 
 	service, err := client.UpdateManagedService(t.Context(), managedServiceID, &req)
 
-	require.NoError(t, err, "UpdateManagedService should succeed on 200 response")
-	require.NotNil(t, service)
-	assert.Equal(t, managedServiceID, service.ID)
-	assert.Equal(t, managedServiceLabel, service.Label)
-	assert.Equal(t, managedServiceStatus, service.Status)
+	requireNoError(t, err, "UpdateManagedService should succeed on 200 response")
+	requireNotNil(t, service)
+	checkEqual(t, managedServiceID, service.ID)
+	checkEqual(t, managedServiceLabel, service.Label)
+	checkEqual(t, managedServiceStatus, service.Status)
 }
 
 func TestClientUpdateManagedServiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"managed service could not be updated"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -638,11 +623,9 @@ func TestClientUpdateManagedServiceAPIError(t *testing.T) {
 
 	_, err := client.UpdateManagedService(t.Context(), managedServiceID, &linode.UpdateManagedServiceRequest{Label: &label})
 
-	require.Error(t, err, "UpdateManagedService should fail on API errors")
-
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	requireError(t, err, "UpdateManagedService should fail on API errors")
+	apiErr := requireAPIError(t, err, "error should be an APIError")
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
 }
 
 func TestClientUpdateManagedServiceDoesNotRetry(t *testing.T) {
@@ -653,11 +636,11 @@ func TestClientUpdateManagedServiceDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, managedServicePath, r.URL.Path, "request path should include service ID")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		checkNoError(t, err)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -666,6 +649,6 @@ func TestClientUpdateManagedServiceDoesNotRetry(t *testing.T) {
 
 	_, err := client.UpdateManagedService(t.Context(), managedServiceID, &linode.UpdateManagedServiceRequest{Label: &label})
 
-	require.Error(t, err, "UpdateManagedService should fail on 500 response")
-	assert.Equal(t, int32(1), calls.Load(), "UpdateManagedService must not retry and replay a mutating request")
+	requireError(t, err, "UpdateManagedService should fail on 500 response")
+	checkEqual(t, int32(1), calls.Load(), "UpdateManagedService must not retry and replay a mutating request")
 }
