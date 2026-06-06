@@ -76,6 +76,7 @@ func checkFalseWithMode(t *testing.T, fatal, actual bool, msg ...string) {
 	}
 }
 
+// expectNoError is fatal so callers may safely rely on err being nil after it returns.
 func expectNoError(t *testing.T, err error, msg ...string) {
 	t.Helper()
 
