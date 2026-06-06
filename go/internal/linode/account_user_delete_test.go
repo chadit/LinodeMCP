@@ -8,9 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -20,17 +17,17 @@ func TestClientDeleteAccountUserSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.Empty(t, body, "delete request should not send a body")
+		checkNoError(t, err, "read request body")
+		checkEmpty(t, body, "delete request should not send a body")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -38,18 +35,18 @@ func TestClientDeleteAccountUserSuccess(t *testing.T) {
 
 	err := client.DeleteAccountUser(t.Context(), accountUserUpdateUsername)
 
-	require.NoError(t, err, "DeleteAccountUser should succeed on 200 response")
+	requireNoError(t, err, "DeleteAccountUser should succeed on 200 response")
 }
 
 func TestClientDeleteAccountUserEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath())
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath(), "request path should URL-escape username")
+		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -57,18 +54,18 @@ func TestClientDeleteAccountUserEscapesUsername(t *testing.T) {
 
 	err := client.DeleteAccountUser(t.Context(), "user/name?query")
 
-	require.NoError(t, err, "DeleteAccountUser should URL-escape username path params")
+	requireNoError(t, err, "DeleteAccountUser should URL-escape username path params")
 }
 
 func TestClientDeleteAccountUserAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -76,8 +73,8 @@ func TestClientDeleteAccountUserAPIError(t *testing.T) {
 
 	err := client.DeleteAccountUser(t.Context(), accountUserUpdateUsername)
 
-	require.Error(t, err, "DeleteAccountUser should propagate API errors")
-	assert.ErrorContains(t, err, errForbidden)
+	requireError(t, err, "DeleteAccountUser should propagate API errors")
+	accountCheckForbiddenError(t, err)
 }
 
 func TestClientDeleteAccountUserDoesNotRetryTransientError(t *testing.T) {
@@ -87,11 +84,11 @@ func TestClientDeleteAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserDeleteError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserDeleteError}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -99,6 +96,6 @@ func TestClientDeleteAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	err := client.DeleteAccountUser(t.Context(), accountUserUpdateUsername)
 
-	require.Error(t, err, "DeleteAccountUser should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "destructive account user delete must not be retried")
+	requireError(t, err, "DeleteAccountUser should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "destructive account user delete must not be retried")
 }

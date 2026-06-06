@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -26,17 +23,17 @@ func TestClientCreateAccountUserSuccess(t *testing.T) {
 	created := linode.AccountUser{Username: request.Username, Email: request.Email, UserType: accountUserTypeDefault}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
 
 		var got linode.CreateAccountUserRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		assert.Equal(t, request, &got)
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "decode request body")
+		checkEqual(t, request, &got, "request body should match")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(created))
+		checkNoError(t, json.NewEncoder(w).Encode(created), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -44,21 +41,21 @@ func TestClientCreateAccountUserSuccess(t *testing.T) {
 
 	got, err := client.CreateAccountUser(t.Context(), request)
 
-	require.NoError(t, err, "CreateAccountUser should succeed on 200 response")
-	require.NotNil(t, got, "result should not be nil")
-	assert.Equal(t, created.Username, got.Username)
-	assert.Equal(t, created.Email, got.Email)
+	requireNoError(t, err, "CreateAccountUser should succeed on 200 response")
+	requireNotNil(t, got, "result should not be nil")
+	checkEqual(t, created.Username, got.Username, "created username should match")
+	checkEqual(t, created.Email, got.Email, "created email should match")
 }
 
 func TestClientCreateAccountUserAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -66,9 +63,9 @@ func TestClientCreateAccountUserAPIError(t *testing.T) {
 
 	got, err := client.CreateAccountUser(t.Context(), &linode.CreateAccountUserRequest{Username: accountUserCreateUsername, Email: accountUserCreateEmail})
 
-	require.Error(t, err, "CreateAccountUser should propagate API errors")
-	assert.Nil(t, got)
-	assert.ErrorContains(t, err, errForbidden)
+	requireError(t, err, "CreateAccountUser should propagate API errors")
+	checkNil(t, got, "result should be nil")
+	accountCheckForbiddenError(t, err)
 }
 
 func TestClientCreateAccountUserNetworkError(t *testing.T) {
@@ -78,11 +75,10 @@ func TestClientCreateAccountUserNetworkError(t *testing.T) {
 
 	_, err := client.CreateAccountUser(t.Context(), &linode.CreateAccountUserRequest{Username: accountUserCreateUsername, Email: accountUserCreateEmail})
 
-	require.Error(t, err, "CreateAccountUser should fail when the server is unreachable")
+	requireError(t, err, "CreateAccountUser should fail when the server is unreachable")
 
-	var netErr *linode.NetworkError
-
-	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	networkErr := requireNetworkError(t, err, "error should be a NetworkError")
+	checkEqual(t, "CreateAccountUser", networkErr.Operation)
 }
 
 func TestClientCreateAccountUserDoesNotRetryTransientError(t *testing.T) {
@@ -92,10 +88,10 @@ func TestClientCreateAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserCreateError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserCreateError}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -103,6 +99,6 @@ func TestClientCreateAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.CreateAccountUser(t.Context(), &linode.CreateAccountUserRequest{Username: accountUserCreateUsername, Email: accountUserCreateEmail})
 
-	require.Error(t, err, "CreateAccountUser should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating account user creation must not be retried")
+	requireError(t, err, "CreateAccountUser should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating account user creation must not be retried")
 }

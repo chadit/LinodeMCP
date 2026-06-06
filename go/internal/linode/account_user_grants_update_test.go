@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -32,28 +29,28 @@ func TestClientUpdateAccountUserGrantsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "decode request body")
 
 		global, globalOK := body["global"].(map[string]any)
-		if assert.True(t, globalOK, "global grants should be an object") {
-			assert.Equal(t, map[string]any{"account_access": accountUserGrantReadOnlyError}, global)
+		if checkTrue(t, globalOK, "global grants should be an object") {
+			checkEqual(t, map[string]any{"account_access": accountUserGrantReadOnlyError}, global, "global grants should match")
 		}
 
-		assert.Equal(t, []any{map[string]any{"id": float64(123), "permissions": accountUserGrantReadWriteError}}, body["linode"])
-		assert.Equal(t, []any{map[string]any{"id": float64(456), "permissions": accountUserGrantReadOnlyError}}, body["lkecluster"])
-		assert.NotContains(t, body, "domain")
+		checkEqual(t, []any{map[string]any{"id": float64(123), "permissions": accountUserGrantReadWriteError}}, body["linode"], "linode grants should match")
+		checkEqual(t, []any{map[string]any{"id": float64(456), "permissions": accountUserGrantReadOnlyError}}, body["lkecluster"], "lkecluster grants should match")
+		accountCheckNotContains(t, body, "domain", "domain grants should be omitted")
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{
 			Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission(accountUserGrantReadOnlyError)},
 			Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission(accountUserGrantReadWriteError)}},
-		}))
+		}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -61,22 +58,22 @@ func TestClientUpdateAccountUserGrantsSuccess(t *testing.T) {
 
 	result, err := client.UpdateAccountUserGrants(t.Context(), accountLoginUsername, request)
 
-	require.NoError(t, err, "UpdateAccountUserGrants should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, linode.GrantPermission(accountUserGrantReadOnlyError), result.Global.AccountAccess)
-	require.Len(t, result.Linode, 1)
-	assert.Equal(t, 123, result.Linode[0].ID)
+	requireNoError(t, err, "UpdateAccountUserGrants should succeed on 200 response")
+	requireNotNil(t, result, "result should not be nil")
+	checkEqual(t, linode.GrantPermission(accountUserGrantReadOnlyError), result.Global.AccountAccess, "account access grant should match")
+	requireLenOne(t, result.Linode)
+	checkEqual(t, 123, result.Linode[0].ID, "linode grant ID should match")
 }
 
 func TestClientUpdateAccountUserGrantsEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath())
-		assert.Empty(t, r.URL.RawQuery, "escaped username must not create a query string")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath(), "request path should URL-escape username grants")
+		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{}), "encode response body")
 	}))
 	defer srv.Close()
 
@@ -85,18 +82,18 @@ func TestClientUpdateAccountUserGrantsEscapesUsername(t *testing.T) {
 
 	_, err := client.UpdateAccountUserGrants(t.Context(), "user/name?query", request)
 
-	require.NoError(t, err, "UpdateAccountUserGrants should URL-escape path parameters")
+	requireNoError(t, err, "UpdateAccountUserGrants should URL-escape path parameters")
 }
 
 func TestClientUpdateAccountUserGrantsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -105,8 +102,8 @@ func TestClientUpdateAccountUserGrantsAPIError(t *testing.T) {
 
 	_, err := client.UpdateAccountUserGrants(t.Context(), accountLoginUsername, request)
 
-	require.Error(t, err, "UpdateAccountUserGrants should fail on 403 response")
-	assert.ErrorContains(t, err, errForbidden)
+	requireError(t, err, "UpdateAccountUserGrants should fail on 403 response")
+	accountCheckForbiddenError(t, err)
 }
 
 func TestClientUpdateAccountUserGrantsDoesNotRetryTransientError(t *testing.T) {
@@ -116,10 +113,10 @@ func TestClientUpdateAccountUserGrantsDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserGrantsUpdateError}}}))
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserGrantsUpdateError}}}), "encode error response body")
 	}))
 	defer srv.Close()
 
@@ -128,6 +125,6 @@ func TestClientUpdateAccountUserGrantsDoesNotRetryTransientError(t *testing.T) {
 
 	_, err := client.UpdateAccountUserGrants(t.Context(), accountLoginUsername, request)
 
-	require.Error(t, err, "UpdateAccountUserGrants should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating grants update must not be retried")
+	requireError(t, err, "UpdateAccountUserGrants should return the transient error")
+	checkEqual(t, int32(1), requestCount.Load(), "mutating grants update must not be retried")
 }
