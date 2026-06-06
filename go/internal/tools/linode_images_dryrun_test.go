@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -22,7 +19,7 @@ func TestLinodeImageUploadToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageUploadTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -35,17 +32,17 @@ func TestLinodeImageUploadToolDryRun(t *testing.T) {
 			keyRegion: regionUSEast,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_upload", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_upload", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/images/upload", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, "/images/upload", would["path"])
+		assertNil(t, body["current_state"], "create has no existing resource to preview")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -56,8 +53,8 @@ func TestLinodeImageUploadToolDryRun(t *testing.T) {
 			keyRegion: regionUSEast,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
@@ -69,7 +66,7 @@ func TestLinodeImageCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -81,24 +78,24 @@ func TestLinodeImageCreateToolDryRun(t *testing.T) {
 			keyDiskID: float64(456),
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_create", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/images", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, "/images", would["path"])
+		assertNil(t, body["current_state"], "create has no existing resource to preview")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the image-capture side effect")
+		requireLen(t, sideEffects, 1, "create surfaces the image-capture side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "456", "side effect should name the source disk")
+		requireTrue(t, gotString)
+		assertContains(t, effect, "456", "side effect should name the source disk")
 	})
 
 	t.Run("still validates disk_id", func(t *testing.T) {
@@ -106,8 +103,8 @@ func TestLinodeImageCreateToolDryRun(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeImageCreateTool(&config.Config{})
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 	})
 }
 
@@ -118,7 +115,7 @@ func TestLinodeImageReplicateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageReplicateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without replicating", func(t *testing.T) {
@@ -133,17 +130,17 @@ func TestLinodeImageReplicateToolDryRun(t *testing.T) {
 			keyRegions: `["us-east"]`,
 			keyDryRun:  true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_replicate", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_replicate", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/images/"+privateImage12345Fixture+"/regions", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, "/images/"+privateImage12345Fixture+"/regions", would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates regions", func(t *testing.T) {
@@ -154,8 +151,8 @@ func TestLinodeImageReplicateToolDryRun(t *testing.T) {
 			keyImageID: privateImage12345Fixture,
 			keyDryRun:  true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "regions is required")
 	})
 }
@@ -167,7 +164,7 @@ func TestLinodeImageUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -182,17 +179,17 @@ func TestLinodeImageUpdateToolDryRun(t *testing.T) {
 			keyLabel:   testRenamedLabel,
 			keyDryRun:  true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_update", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/images/"+privateImage12345Fixture, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "PUT", would["method"])
+		assertEqual(t, "/images/"+privateImage12345Fixture, would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates editable field", func(t *testing.T) {
@@ -203,8 +200,8 @@ func TestLinodeImageUpdateToolDryRun(t *testing.T) {
 			keyImageID: privateImage12345Fixture,
 			keyDryRun:  true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "at least one of label, description, or tags is required")
 	})
 }
@@ -216,7 +213,7 @@ func TestLinodeImageShareGroupCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -228,17 +225,17 @@ func TestLinodeImageShareGroupCreateToolDryRun(t *testing.T) {
 			keyLabel:  "my-sharegroup",
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_create", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/images/sharegroups", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, "/images/sharegroups", would["path"])
+		assertNil(t, body["current_state"], "create has no existing resource to preview")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -246,8 +243,8 @@ func TestLinodeImageShareGroupCreateToolDryRun(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeImageShareGroupCreateTool(&config.Config{})
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
@@ -259,7 +256,7 @@ func TestLinodeImageShareGroupImagesAddToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupImagesAddTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without adding", func(t *testing.T) {
@@ -273,17 +270,17 @@ func TestLinodeImageShareGroupImagesAddToolDryRun(t *testing.T) {
 			keyImages:       `[{"id":"private/12345"}]`,
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_images_add", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_images_add", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, imageSGGetPath+"/images", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, imageSGGetPath+"/images", would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates sharegroup_id", func(t *testing.T) {
@@ -294,8 +291,8 @@ func TestLinodeImageShareGroupImagesAddToolDryRun(t *testing.T) {
 			keyImages: `[{"id":"private/12345"}]`,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 	})
 }
 
@@ -306,7 +303,7 @@ func TestLinodeImageShareGroupImageUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupImageUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -321,17 +318,17 @@ func TestLinodeImageShareGroupImageUpdateToolDryRun(t *testing.T) {
 			keyLabel:        testRenamedLabel,
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_image_update", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_image_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, imageSGGetPath+"/images/"+imageShareGroupImageIDFixture, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "PUT", would["method"])
+		assertEqual(t, imageSGGetPath+"/images/"+imageShareGroupImageIDFixture, would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates shared image_id", func(t *testing.T) {
@@ -344,8 +341,8 @@ func TestLinodeImageShareGroupImageUpdateToolDryRun(t *testing.T) {
 			keyLabel:        testRenamedLabel,
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "image_id must match shared/")
 	})
 }
@@ -357,7 +354,7 @@ func TestLinodeImageShareGroupMembersAddToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupMembersAddTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without adding, fetches parent not token", func(t *testing.T) {
@@ -372,20 +369,20 @@ func TestLinodeImageShareGroupMembersAddToolDryRun(t *testing.T) {
 			keyToken:        "member-token",
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		text := dryRunResultText(t, result)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(text), &body))
-		assert.Equal(t, "linode_image_sharegroup_members_add", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(text), &body))
+		assertEqual(t, "linode_image_sharegroup_members_add", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, imageSGGetPath+"/members", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
-		assert.NotContains(t, text, "member-token", "dry_run preview must not echo the membership token")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, imageSGGetPath+"/members", would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertNotContains(t, text, "member-token", "dry_run preview must not echo the membership token")
 	})
 
 	t.Run("still validates token", func(t *testing.T) {
@@ -397,8 +394,8 @@ func TestLinodeImageShareGroupMembersAddToolDryRun(t *testing.T) {
 			keyLabel:        "member-1",
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "token is required")
 	})
 }
@@ -410,7 +407,7 @@ func TestLinodeImageShareGroupUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -424,17 +421,17 @@ func TestLinodeImageShareGroupUpdateToolDryRun(t *testing.T) {
 			keyLabel:        testRenamedLabel,
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_update", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, imageSGGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "PUT", would["method"])
+		assertEqual(t, imageSGGetPath, would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates editable field", func(t *testing.T) {
@@ -445,8 +442,8 @@ func TestLinodeImageShareGroupUpdateToolDryRun(t *testing.T) {
 			keyShareGroupID: float64(123),
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "at least one of label or description is required")
 	})
 }
@@ -458,7 +455,7 @@ func TestLinodeImageShareGroupMemberUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupMemberUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating, fetches parent not token", func(t *testing.T) {
@@ -473,17 +470,17 @@ func TestLinodeImageShareGroupMemberUpdateToolDryRun(t *testing.T) {
 			keyLabel:        testRenamedLabel,
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_member_update", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_member_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, imageSGGetPath+"/members/"+shareGroupTokenGetUUID, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "PUT", would["method"])
+		assertEqual(t, imageSGGetPath+"/members/"+shareGroupTokenGetUUID, would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates token_uuid", func(t *testing.T) {
@@ -495,8 +492,8 @@ func TestLinodeImageShareGroupMemberUpdateToolDryRun(t *testing.T) {
 			keyLabel:        testRenamedLabel,
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 	})
 }
 
@@ -507,7 +504,7 @@ func TestLinodeImageShareGroupTokenCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupTokenCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -519,17 +516,17 @@ func TestLinodeImageShareGroupTokenCreateToolDryRun(t *testing.T) {
 			keyValidForShareGroupUUID: "sg-uuid-1",
 			keyDryRun:                 true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_token_create", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_token_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/images/sharegroups/tokens", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		assertEqual(t, "POST", would["method"])
+		assertEqual(t, "/images/sharegroups/tokens", would["path"])
+		assertNil(t, body["current_state"], "create has no existing resource to preview")
 	})
 
 	t.Run("still validates valid_for_sharegroup_uuid", func(t *testing.T) {
@@ -537,8 +534,8 @@ func TestLinodeImageShareGroupTokenCreateToolDryRun(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeImageShareGroupTokenCreateTool(&config.Config{})
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "valid_for_sharegroup_uuid is required")
 	})
 }
@@ -550,7 +547,7 @@ func TestLinodeImageShareGroupTokenUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeImageShareGroupTokenUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		assertContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating, fetches parent not token", func(t *testing.T) {
@@ -565,17 +562,17 @@ func TestLinodeImageShareGroupTokenUpdateToolDryRun(t *testing.T) {
 			keyLabel:     testRenamedLabel,
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		requireNoError(t, err)
+		requireFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_image_sharegroup_token_update", body["tool"])
+		requireNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assertEqual(t, "linode_image_sharegroup_token_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/images/sharegroups/tokens/"+shareGroupTokenGetUUID, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		assertEqual(t, "PUT", would["method"])
+		assertEqual(t, "/images/sharegroups/tokens/"+shareGroupTokenGetUUID, would["path"])
+		assertEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -586,8 +583,8 @@ func TestLinodeImageShareGroupTokenUpdateToolDryRun(t *testing.T) {
 			keyTokenUUID: shareGroupTokenGetUUID,
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		requireNoError(t, err)
+		assertTrue(t, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
