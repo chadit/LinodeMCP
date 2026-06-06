@@ -15,11 +15,15 @@ func expectationMessage(msg []string) string {
 	return ": " + msg[0]
 }
 
+// failExpectationf is the shared assertion backend.
+// fatal=true preserves require-style guard semantics by stopping the test with t.Fatalf;
+// fatal=false preserves assert-style semantics by recording a non-fatal t.Errorf.
 func failExpectationf(t *testing.T, fatal bool, format string, args ...any) {
 	t.Helper()
 
 	if fatal {
 		t.Fatalf(format, args...)
+		return
 	}
 
 	t.Errorf(format, args...)

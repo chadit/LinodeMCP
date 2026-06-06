@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -34,14 +32,14 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, capability, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
 
-		assert.Equal(t, "linode_placement_group_assign", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write-capable")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyPlacementGroupID, "schema should include group_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyPlacementGroupLinodes, "schema should include linodes")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should require confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		require.NotNil(t, handler, "handler should not be nil")
+		checkEqual(t, "linode_placement_group_assign", tool.Name, "tool name should match")
+		checkEqual(t, profiles.CapWrite, capability, "tool should be write-capable")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectContains(t, tool.InputSchema.Properties, keyPlacementGroupID, "schema should include group_id")
+		expectContains(t, tool.InputSchema.Properties, keyPlacementGroupLinodes, "schema should include linodes")
+		expectContains(t, tool.InputSchema.Properties, keyConfirm, "schema should require confirm")
+		expectContains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
+		expectNotNil(t, handler, "handler should not be nil")
 	})
 
 	validationTests := []struct {
@@ -76,9 +74,9 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 			req := createRequestWithArgs(t, tt.args)
 			result, err := handler(t.Context(), req)
 
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
+			expectNoError(t, err, "handler should not return Go error")
+			expectNotNil(t, result, "handler should return a result")
+			expectTrue(t, result.IsError, "result should be a tool error")
 			assertErrorContains(t, result, tt.wantContains)
 		})
 	}
@@ -87,19 +85,19 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should match")
-			assert.Equal(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"), "authorization header should match")
+			checkEqual(t, http.MethodPost, r.Method, "request method should match")
+			checkEqual(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
+			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"), "authorization header should match")
 
 			var body map[string][]int
 
 			decodeErr := json.NewDecoder(r.Body).Decode(&body)
-			assert.NoError(t, decodeErr, "request body should decode")
-			assert.Equal(t, []int{123, 456}, body[keyPlacementGroupLinodes], "linodes body should match")
+			checkNoError(t, decodeErr, "request body should decode")
+			checkEqual(t, []int{123, 456}, body[keyPlacementGroupLinodes], "linodes body should match")
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
 				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
 				keyPlacementGroupCompliant: true,
@@ -118,25 +116,25 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{float64(123), float64(456)}, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "result should not be a tool error")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Assigned 2 Linode", "response should include success message")
-		assert.Contains(t, textContent.Text, placementGroupLabel, "response should include placement group")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "Assigned 2 Linode", "response should include success message")
+		expectContains(t, textContent.Text, placementGroupLabel, "response should include placement group")
 	})
 
 	t.Run("api error includes group id and reason", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should match")
-			assert.Equal(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodPost, r.Method, "request method should match")
+			checkEqual(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error should not fail")
 		}))
 		defer srv.Close()
 
@@ -150,9 +148,9 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "placement group 528")
 		assertErrorContains(t, result, errForbidden)
 	})
@@ -161,11 +159,11 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run should fetch current state")
-			assert.Equal(t, "/placement/groups/528", r.URL.Path, "dry_run should fetch target group")
+			checkEqual(t, http.MethodGet, r.Method, "dry_run should fetch current state")
+			checkEqual(t, "/placement/groups/528", r.URL.Path, "dry_run should fetch target group")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error should not fail")
 		}))
 		defer srv.Close()
 
@@ -179,9 +177,9 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyDryRun: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "dry run state fetch failure should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "dry run state fetch failure should be a tool error")
 		assertErrorContains(t, result, errForbidden)
 	})
 
@@ -189,10 +187,10 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run should fetch current state")
-			assert.Equal(t, "/placement/groups/528", r.URL.Path, "dry_run should fetch target group")
+			checkEqual(t, http.MethodGet, r.Method, "dry_run should fetch current state")
+			checkEqual(t, "/placement/groups/528", r.URL.Path, "dry_run should fetch target group")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: 528, keyLabel: placementGroupLabel}), "encoding state should not fail")
+			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: 528, keyLabel: placementGroupLabel}), "encoding state should not fail")
 		}))
 		defer srv.Close()
 
@@ -206,16 +204,16 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyDryRun: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "dry run should not require confirm")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectFalse(t, result.IsError, "dry run should not require confirm")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "/placement/groups/528/assign", "dry run should show target route")
-		assert.Contains(t, textContent.Text, "123", "dry run should show Linode IDs")
-		assert.Contains(t, textContent.Text, placementGroupLabel, "dry run should show current state")
-		assert.Contains(t, textContent.Text, "side_effects", "dry run should surface side effects")
-		assert.Contains(t, textContent.Text, "assigned to placement group 528", "side effect should describe the assignment")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "/placement/groups/528/assign", "dry run should show target route")
+		expectContains(t, textContent.Text, "123", "dry run should show Linode IDs")
+		expectContains(t, textContent.Text, placementGroupLabel, "dry run should show current state")
+		expectContains(t, textContent.Text, "side_effects", "dry run should surface side effects")
+		expectContains(t, textContent.Text, "assigned to placement group 528", "side effect should describe the assignment")
 	})
 }
