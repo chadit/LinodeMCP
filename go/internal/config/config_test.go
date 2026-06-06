@@ -5,9 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
@@ -53,7 +50,7 @@ func writeConfigFile(t *testing.T, dir, filename, content string) string {
 	t.Helper()
 
 	path := filepath.Join(dir, filename)
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	checkNoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	return path
 }
@@ -69,11 +66,11 @@ func TestLoadFromFile(t *testing.T) {
 
 		cfg, err := config.Load(path)
 
-		require.NoError(t, err)
-		assert.Equal(t, "TestServer", cfg.Server.Name)
-		assert.Equal(t, "debug", cfg.Server.LogLevel)
-		assert.Equal(t, 9000, cfg.Server.Port)
-		assert.Equal(t, "test-token-123", cfg.Environments["default"].Linode.Token)
+		checkNoError(t, err)
+		checkEqual(t, "TestServer", cfg.Server.Name)
+		checkEqual(t, "debug", cfg.Server.LogLevel)
+		checkEqual(t, 9000, cfg.Server.Port)
+		checkEqual(t, "test-token-123", cfg.Environments["default"].Linode.Token)
 	})
 
 	t.Run("valid JSON", func(t *testing.T) {
@@ -84,9 +81,9 @@ func TestLoadFromFile(t *testing.T) {
 
 		cfg, err := config.Load(path)
 
-		require.NoError(t, err)
-		assert.Equal(t, "JSONServer", cfg.Server.Name)
-		assert.Equal(t, "warn", cfg.Server.LogLevel)
+		checkNoError(t, err)
+		checkEqual(t, "JSONServer", cfg.Server.Name)
+		checkEqual(t, "warn", cfg.Server.LogLevel)
 	})
 
 	t.Run("defaults", func(t *testing.T) {
@@ -105,22 +102,22 @@ environments:
 
 		cfg, err := config.Load(path)
 
-		require.NoError(t, err)
-		assert.Equal(t, config.DefaultServerName, cfg.Server.Name)
-		assert.Equal(t, config.DefaultLogLevel, cfg.Server.LogLevel)
-		assert.Equal(t, config.DefaultTransport, cfg.Server.Transport)
-		assert.Equal(t, config.DefaultHost, cfg.Server.Host)
-		assert.Equal(t, config.DefaultServerPort, cfg.Server.Port)
-		assert.Equal(t, config.DefaultMaxRetries, cfg.Resilience.MaxRetries)
-		assert.Equal(t, config.DefaultBaseRetryDelay, cfg.Resilience.BaseRetryDelay)
-		assert.Equal(t, config.DefaultMaxRetryDelay, cfg.Resilience.MaxRetryDelay)
+		checkNoError(t, err)
+		checkEqual(t, config.DefaultServerName, cfg.Server.Name)
+		checkEqual(t, config.DefaultLogLevel, cfg.Server.LogLevel)
+		checkEqual(t, config.DefaultTransport, cfg.Server.Transport)
+		checkEqual(t, config.DefaultHost, cfg.Server.Host)
+		checkEqual(t, config.DefaultServerPort, cfg.Server.Port)
+		checkEqual(t, config.DefaultMaxRetries, cfg.Resilience.MaxRetries)
+		checkEqual(t, config.DefaultBaseRetryDelay, cfg.Resilience.BaseRetryDelay)
+		checkEqual(t, config.DefaultMaxRetryDelay, cfg.Resilience.MaxRetryDelay)
 	})
 
 	t.Run("file not found", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := config.Load("/tmp/nonexistent-linodemcp-config-test.yml")
-		require.Error(t, err)
+		checkError(t, err)
 	})
 
 	t.Run("malformed YAML", func(t *testing.T) {
@@ -130,8 +127,8 @@ environments:
 		path := writeConfigFile(t, dir, "config.yml", `{{{invalid yaml`)
 
 		_, err := config.Load(path)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, config.ErrConfigMalformed)
+		checkError(t, err)
+		checkErrorIs(t, err, config.ErrConfigMalformed)
 	})
 
 	t.Run("no environments", func(t *testing.T) {
@@ -145,8 +142,8 @@ server:
 `)
 
 		_, err := config.Load(path)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, config.ErrConfigInvalid)
+		checkError(t, err)
+		checkErrorIs(t, err, config.ErrConfigInvalid)
 	})
 
 	t.Run("incomplete linode config", func(t *testing.T) {
@@ -165,8 +162,8 @@ environments:
 `)
 
 		_, err := config.Load(path)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, config.ErrConfigInvalid)
+		checkError(t, err)
+		checkErrorIs(t, err, config.ErrConfigInvalid)
 	})
 
 	t.Run("unknown fields ignored", func(t *testing.T) {
@@ -188,8 +185,8 @@ environments:
 
 		cfg, err := config.Load(path)
 
-		require.NoError(t, err)
-		assert.Equal(t, "TestServer", cfg.Server.Name)
+		checkNoError(t, err)
+		checkEqual(t, "TestServer", cfg.Server.Name)
 	})
 }
 
@@ -260,14 +257,14 @@ func TestSelectEnvironment(t *testing.T) {
 			env, err := tt.cfg.SelectEnvironment(tt.input)
 
 			if tt.wantErr != nil {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, tt.wantErr)
+				checkError(t, err)
+				checkErrorIs(t, err, tt.wantErr)
 
 				return
 			}
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantLabel, env.Label)
+			checkNoError(t, err)
+			checkEqual(t, tt.wantLabel, env.Label)
 		})
 	}
 }
@@ -275,11 +272,11 @@ func TestSelectEnvironment(t *testing.T) {
 func TestGetConfigPathWithEnvOverride(t *testing.T) {
 	dir := t.TempDir()
 	customPath := filepath.Join(dir, "custom-config.yml")
-	require.NoError(t, os.WriteFile(customPath, []byte(""), 0o600))
+	checkNoError(t, os.WriteFile(customPath, []byte(""), 0o600))
 
 	t.Setenv("LINODEMCP_CONFIG_PATH", customPath)
 
-	assert.Equal(t, customPath, config.GetConfigPath())
+	checkEqual(t, customPath, config.GetConfigPath())
 }
 
 func TestApplyEnvironmentOverrides(t *testing.T) {
@@ -299,10 +296,10 @@ environments:
 `)
 
 	cfg, err := config.Load(path)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
-	assert.Equal(t, "EnvServer", cfg.Server.Name)
-	assert.Equal(t, "error", cfg.Server.LogLevel)
-	assert.Equal(t, "https://override.api.com", cfg.Environments["default"].Linode.APIURL)
-	assert.Equal(t, "env-token", cfg.Environments["default"].Linode.Token)
+	checkEqual(t, "EnvServer", cfg.Server.Name)
+	checkEqual(t, "error", cfg.Server.LogLevel)
+	checkEqual(t, "https://override.api.com", cfg.Environments["default"].Linode.APIURL)
+	checkEqual(t, "env-token", cfg.Environments["default"].Linode.Token)
 }

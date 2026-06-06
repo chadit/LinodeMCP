@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
@@ -26,13 +23,13 @@ func TestWatcherInitialLoad(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	defer watcher.Close()
 
 	cfg := watcher.Get()
-	require.NotNil(t, cfg)
-	assert.Equal(t, "TestServer", cfg.Server.Name)
+	checkNotNil(t, cfg)
+	checkEqual(t, "TestServer", cfg.Server.Name)
 }
 
 // TestWatcherPicksUpReload verifies that mutating the file with a newer
@@ -44,7 +41,7 @@ func TestWatcherPicksUpReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	defer watcher.Close()
 
@@ -67,11 +64,11 @@ environments:
       apiUrl: "https://api.linode.com/v4"
       token: "tok"
 `
-	require.NoError(t, os.WriteFile(path, []byte(updated), 0o600))
+	checkNoError(t, os.WriteFile(path, []byte(updated), 0o600))
 
 	bumpMtime(t, path)
 
-	require.Eventually(
+	checkEventually(
 		t,
 		func() bool {
 			cfg := watcher.Get()
@@ -94,12 +91,12 @@ func TestWatcherKeepsLastConfigOnBadReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	defer watcher.Close()
 
 	original := watcher.Get()
-	require.NotNil(t, original)
+	checkNotNil(t, original)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -107,21 +104,21 @@ func TestWatcherKeepsLastConfigOnBadReload(t *testing.T) {
 	watcher.Start(ctx)
 
 	// Write garbage that fails parse + validation.
-	require.NoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
+	checkNoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
 	bumpMtime(t, path)
 
 	// Give the watcher time to attempt the reload.
 	select {
 	case reloadErr := <-watcher.Errors():
-		require.Error(t, reloadErr)
+		checkError(t, reloadErr)
 	case <-time.After(reloadAssertWait):
 		t.Fatal("expected a reload error on the errors channel")
 	}
 
 	// Get should still return the original (validated) config.
 	current := watcher.Get()
-	require.NotNil(t, current)
-	assert.Equal(t, original.Server.Name, current.Server.Name, "bad reload must not blank the cached config")
+	checkNotNil(t, current)
+	checkEqual(t, original.Server.Name, current.Server.Name, "bad reload must not blank the cached config")
 }
 
 // TestWatcherOnChangeFiresAfterReload verifies that a SetOnChange callback
@@ -134,7 +131,7 @@ func TestWatcherOnChangeFiresAfterReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	defer watcher.Close()
 
@@ -163,14 +160,13 @@ environments:
       apiUrl: "https://api.linode.com/v4"
       token: "tok"
 `
-	require.NoError(t, os.WriteFile(path, []byte(updated), 0o600))
+	checkNoError(t, os.WriteFile(path, []byte(updated), 0o600))
 	bumpMtime(t, path)
 
 	select {
 	case cfg := <-received:
-		require.NotNil(t, cfg)
-		assert.Equal(t, "CallbackTriggered", cfg.Server.Name,
-			"OnChange callback must receive the post-reload Config")
+		checkNotNil(t, cfg)
+		checkEqual(t, "CallbackTriggered", cfg.Server.Name, "OnChange callback must receive the post-reload Config")
 	case <-time.After(reloadAssertWait):
 		t.Fatal("OnChange callback did not fire within the deadline")
 	}
@@ -186,7 +182,7 @@ func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	defer watcher.Close()
 
@@ -205,7 +201,7 @@ func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
 	watcher.Start(ctx)
 
 	// Garbage config: parse will fail, lastMod stays put, callback must NOT fire.
-	require.NoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
+	checkNoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
 	bumpMtime(t, path)
 
 	select {
@@ -232,12 +228,12 @@ func TestWatcherCloseStopsPolling(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	watcher.Start(t.Context())
 	watcher.Close()
 	// Second close must not panic.
-	require.NotPanics(t, watcher.Close)
+	checkNotPanics(t, watcher.Close)
 }
 
 // bumpMtime writes the file's mtime forward by 2 seconds so that polls on
@@ -246,5 +242,5 @@ func bumpMtime(t *testing.T, path string) {
 	t.Helper()
 
 	future := time.Now().Add(2 * time.Second)
-	require.NoError(t, os.Chtimes(path, future, future))
+	checkNoError(t, os.Chtimes(path, future, future))
 }

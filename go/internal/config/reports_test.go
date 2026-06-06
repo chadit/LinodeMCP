@@ -3,9 +3,6 @@ package config_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
@@ -42,15 +39,15 @@ func TestLoadReportsParse(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", yaml)
 
 	cfg, err := config.Load(path)
-	require.NoError(t, err)
+	checkNoError(t, err)
 
 	report, ok := cfg.Audit.Reports["daily-destroys"]
-	require.True(t, ok, "report must be parsed")
-	assert.Equal(t, "Destructive ops in the last 24h", report.Description)
-	assert.Equal(t, "destroy", report.Filter.Capability)
-	assert.Equal(t, "24h", report.Filter.SinceOffset)
-	assert.Equal(t, []string{"tool", "environment"}, report.GroupBy)
-	assert.Equal(t, config.ReportOutputSummary, report.Output)
+	checkTrue(t, ok, "report must be parsed")
+	checkEqual(t, "Destructive ops in the last 24h", report.Description)
+	checkEqual(t, "destroy", report.Filter.Capability)
+	checkEqual(t, "24h", report.Filter.SinceOffset)
+	checkDeepEqual(t, []string{"tool", "environment"}, report.GroupBy)
+	checkEqual(t, config.ReportOutputSummary, report.Output)
 }
 
 // TestLoadReportsDefaultOutput confirms an omitted output defaults to
@@ -67,8 +64,8 @@ func TestLoadReportsDefaultOutput(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", yaml)
 
 	cfg, err := config.Load(path)
-	require.NoError(t, err)
-	assert.Equal(t, config.ReportOutputSummary, cfg.Audit.Reports["no-output"].Output)
+	checkNoError(t, err)
+	checkEqual(t, config.ReportOutputSummary, cfg.Audit.Reports["no-output"].Output)
 }
 
 // TestLoadReportsValidation rejects malformed report grammar with the
@@ -121,9 +118,9 @@ func TestLoadReportsValidation(t *testing.T) {
 			path := writeConfigFile(t, dir, "config.yml", reportBaseYAML(tcase.reportsBlock))
 
 			_, err := config.Load(path)
-			require.Error(t, err)
-			require.ErrorIs(t, err, config.ErrConfigInvalid)
-			require.ErrorIs(t, err, tcase.wantErr)
+			checkError(t, err)
+			checkErrorIs(t, err, config.ErrConfigInvalid)
+			checkErrorIs(t, err, tcase.wantErr)
 		})
 	}
 }
