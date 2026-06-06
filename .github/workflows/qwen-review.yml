@@ -399,7 +399,7 @@ jobs:
                   text = path.read_text(errors='replace').strip()
                   if not text:
                       continue
-                  lines.extend([f'### {path.name}', '', '```text', redacted(clipped(text)), '```'])
+                  lines.extend([f'### {path.name}', '', '```text', clipped(redacted(text)), '```'])
           if review:
               lines.extend(['', '## Review body', '', redacted((review.get('body') or '').strip() or '(empty)')])
               comments = review.get('comments') or []
@@ -420,7 +420,7 @@ jobs:
                       text = path.read_text(errors='replace').strip()
                       if not text:
                           continue
-                      lines.extend([f'### {path.name}', '', '```text', redacted(clipped(text)), '```'])
+                      lines.extend([f'### {path.name}', '', '```text', clipped(redacted(text)), '```'])
           rendered = '\n'.join(lines) + '\n'
           print(rendered)
           summary_file = pathlib.Path(os.environ['GITHUB_STEP_SUMMARY'])
