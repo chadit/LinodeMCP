@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/twostage"
 )
@@ -15,12 +13,22 @@ func TestNewPlanIDHasPrefixAndIsValidV7(t *testing.T) {
 	t.Parallel()
 
 	id, err := twostage.NewPlanID()
-	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(id, twostage.PlanIDPrefix), "id %q lacks the plan_ prefix", id)
+	if err != nil {
+		t.Fatalf("NewPlanID returned error: %v", err)
+	}
+
+	if !strings.HasPrefix(id, twostage.PlanIDPrefix) {
+		t.Fatalf("id %q lacks the %q prefix", id, twostage.PlanIDPrefix)
+	}
 
 	parsed, err := uuid.Parse(strings.TrimPrefix(id, twostage.PlanIDPrefix))
-	require.NoError(t, err)
-	assert.Equal(t, 7, int(parsed.Version()), "plan id must embed a UUIDv7 for time-sortability")
+	if err != nil {
+		t.Fatalf("plan id body is not a valid UUID: %v", err)
+	}
+
+	if parsed.Version() != 7 {
+		t.Errorf("UUID version = %d, want 7 for time-sortability", parsed.Version())
+	}
 }
 
 func TestNewPlanIDIsUnique(t *testing.T) {
@@ -32,10 +40,13 @@ func TestNewPlanIDIsUnique(t *testing.T) {
 
 	for range count {
 		id, err := twostage.NewPlanID()
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("NewPlanID returned error: %v", err)
+		}
 
-		_, dup := seen[id]
-		require.False(t, dup, "plan id collision: %s", id)
+		if _, dup := seen[id]; dup {
+			t.Fatalf("plan id collision: %s", id)
+		}
 
 		seen[id] = struct{}{}
 	}

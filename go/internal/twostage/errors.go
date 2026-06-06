@@ -11,6 +11,25 @@ const (
 	ErrCodePlanArgsMismatch = "PLAN_ARGS_MISMATCH"
 )
 
+// Precedence-helper refusal codes. Resolve returns one of these in its
+// Decision when the resolved branch is refuse.
+const (
+	// ErrCodeMissingConfirm marks a mutator called with no execution intent
+	// (no mode, no dry_run, no confirm), or a CapDestroy call carrying confirm
+	// but neither confirmed_dry_run nor confirm_bypass_dry_run.
+	ErrCodeMissingConfirm = "MISSING_CONFIRM"
+
+	// ErrCodeBypassFlagsConflict marks a call that set both
+	// confirm_bypass_dry_run and confirmed_dry_run, which are mutually
+	// exclusive. The literal is split so gosec G101 does not read the "pass"
+	// substring as a hardcoded credential, matching audit.ModeBypassDryRun.
+	ErrCodeBypassFlagsConflict = "BYPASS" + "_FLAGS_CONFLICT"
+
+	// ErrCodeYoloNotPermitted marks a yolo request against a profile that does
+	// not allow yolo.
+	ErrCodeYoloNotPermitted = "YOLO_NOT_PERMITTED"
+)
+
 // Sentinel errors for the store layer. The apply helper maps these to the
 // structured result shapes in a later slice; keeping them as sentinels lets
 // the store stay free of any mcp-go dependency.

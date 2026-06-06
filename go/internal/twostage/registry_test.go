@@ -3,8 +3,6 @@ package twostage_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/twostage"
 )
@@ -29,8 +27,9 @@ func TestOptedInCapabilityDefaults(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := twostage.OptedIn("linode_some_tool", testCase.capability)
-			assert.Equal(t, testCase.want, got)
+			if got := twostage.OptedIn("linode_some_tool", testCase.capability); got != testCase.want {
+				t.Errorf("OptedIn(%v) = %v, want %v", testCase.capability, got, testCase.want)
+			}
 		})
 	}
 }
@@ -38,5 +37,7 @@ func TestOptedInCapabilityDefaults(t *testing.T) {
 func TestPlanTTLFallsBackToDefault(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, twostage.DefaultPlanTTL, twostage.PlanTTL("linode_unknown_tool"))
+	if got := twostage.PlanTTL("linode_unknown_tool"); got != twostage.DefaultPlanTTL {
+		t.Errorf("PlanTTL = %v, want %v", got, twostage.DefaultPlanTTL)
+	}
 }

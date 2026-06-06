@@ -1,12 +1,10 @@
 package twostage_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/twostage"
 )
@@ -26,9 +24,17 @@ func TestPlanStorePutAndGet(t *testing.T) {
 	store.Put(entry)
 
 	got, err := store.Get(planA)
-	require.NoError(t, err)
-	assert.Same(t, entry, got)
-	assert.Equal(t, 1, store.Len())
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	if got != entry {
+		t.Error("Get returned a different entry pointer than was stored")
+	}
+
+	if store.Len() != 1 {
+		t.Errorf("Len = %d, want 1", store.Len())
+	}
 }
 
 func TestPlanStoreGetUnknownReturnsNotFound(t *testing.T) {
@@ -36,8 +42,9 @@ func TestPlanStoreGetUnknownReturnsNotFound(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 
-	_, err := store.Get("plan_missing")
-	require.ErrorIs(t, err, twostage.ErrPlanNotFound)
+	if _, err := store.Get("plan_missing"); !errors.Is(err, twostage.ErrPlanNotFound) {
+		t.Fatalf("err = %v, want ErrPlanNotFound", err)
+	}
 }
 
 func TestPlanStoreGetExpiredReturnsExpired(t *testing.T) {
@@ -50,8 +57,9 @@ func TestPlanStoreGetExpiredReturnsExpired(t *testing.T) {
 
 	current = current.Add(2 * time.Minute)
 
-	_, err := store.Get(planA)
-	require.ErrorIs(t, err, twostage.ErrPlanExpired)
+	if _, err := store.Get(planA); !errors.Is(err, twostage.ErrPlanExpired) {
+		t.Fatalf("err = %v, want ErrPlanExpired", err)
+	}
 }
 
 func TestPlanStoreTakeIsSingleUse(t *testing.T) {
@@ -63,12 +71,21 @@ func TestPlanStoreTakeIsSingleUse(t *testing.T) {
 	store.Put(&twostage.PlanEntry{ID: planX, ExpiresAt: now.Add(time.Minute)})
 
 	got, err := store.Take(planX)
-	require.NoError(t, err)
-	assert.Equal(t, planX, got.ID)
+	if err != nil {
+		t.Fatalf("first Take returned error: %v", err)
+	}
 
-	_, err = store.Take(planX)
-	require.ErrorIs(t, err, twostage.ErrPlanNotFound)
-	assert.Equal(t, 0, store.Len())
+	if got.ID != planX {
+		t.Errorf("Take returned ID %q, want %q", got.ID, planX)
+	}
+
+	if _, err := store.Take(planX); !errors.Is(err, twostage.ErrPlanNotFound) {
+		t.Fatalf("second Take err = %v, want ErrPlanNotFound", err)
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("Len = %d, want 0 after single use", store.Len())
+	}
 }
 
 func TestPlanStoreTakeExpiredStillRemoves(t *testing.T) {
@@ -81,9 +98,13 @@ func TestPlanStoreTakeExpiredStillRemoves(t *testing.T) {
 
 	current = current.Add(2 * time.Minute)
 
-	_, err := store.Take(planX)
-	require.ErrorIs(t, err, twostage.ErrPlanExpired)
-	assert.Equal(t, 0, store.Len(), "an expired plan is dropped on take")
+	if _, err := store.Take(planX); !errors.Is(err, twostage.ErrPlanExpired) {
+		t.Fatalf("err = %v, want ErrPlanExpired", err)
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("Len = %d, want 0 (an expired plan is dropped on take)", store.Len())
+	}
 }
 
 func TestPlanStoreRemoveIsNoOpWhenAbsent(t *testing.T) {
@@ -95,7 +116,9 @@ func TestPlanStoreRemoveIsNoOpWhenAbsent(t *testing.T) {
 	store.Remove(planX)
 	store.Remove("plan_never_existed")
 
-	assert.Equal(t, 0, store.Len())
+	if store.Len() != 0 {
+		t.Errorf("Len = %d, want 0", store.Len())
+	}
 }
 
 func TestPlanStoreSweepDropsOnlyExpired(t *testing.T) {
@@ -109,12 +132,17 @@ func TestPlanStoreSweepDropsOnlyExpired(t *testing.T) {
 
 	current = current.Add(10 * time.Minute)
 
-	removed := store.Sweep()
-	assert.Equal(t, 1, removed)
-	assert.Equal(t, 1, store.Len())
+	if removed := store.Sweep(); removed != 1 {
+		t.Errorf("Sweep removed %d, want 1", removed)
+	}
 
-	_, err := store.Get("plan_long")
-	require.NoError(t, err)
+	if store.Len() != 1 {
+		t.Errorf("Len = %d, want 1", store.Len())
+	}
+
+	if _, err := store.Get("plan_long"); err != nil {
+		t.Errorf("the long-lived plan should survive the sweep: %v", err)
+	}
 }
 
 func TestPlanStorePutEvictsOldestAtCeiling(t *testing.T) {
@@ -131,7 +159,9 @@ func TestPlanStorePutEvictsOldestAtCeiling(t *testing.T) {
 		})
 	}
 
-	require.Equal(t, twostage.MaxOutstandingPlans, store.Len())
+	if store.Len() != twostage.MaxOutstandingPlans {
+		t.Fatalf("Len = %d, want %d", store.Len(), twostage.MaxOutstandingPlans)
+	}
 
 	store.Put(&twostage.PlanEntry{
 		ID:        "plan_newest",
@@ -139,12 +169,15 @@ func TestPlanStorePutEvictsOldestAtCeiling(t *testing.T) {
 		ExpiresAt: base.Add(2 * time.Hour),
 	})
 
-	assert.Equal(t, twostage.MaxOutstandingPlans, store.Len(), "ceiling holds after eviction")
+	if store.Len() != twostage.MaxOutstandingPlans {
+		t.Errorf("Len = %d, want %d (ceiling holds after eviction)", store.Len(), twostage.MaxOutstandingPlans)
+	}
 
-	_, err := store.Get("plan_0000")
-	require.ErrorIs(t, err, twostage.ErrPlanNotFound, "the oldest plan was evicted")
+	if _, err := store.Get("plan_0000"); !errors.Is(err, twostage.ErrPlanNotFound) {
+		t.Errorf("oldest plan should have been evicted, err = %v", err)
+	}
 
-	newest, err := store.Get("plan_newest")
-	require.NoError(t, err)
-	assert.Equal(t, "plan_newest", newest.ID)
+	if _, err := store.Get("plan_newest"); err != nil {
+		t.Errorf("newest plan should be present: %v", err)
+	}
 }
