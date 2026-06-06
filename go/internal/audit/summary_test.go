@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -17,8 +14,8 @@ func TestValidateGroupByDefaultsToToolStatus(t *testing.T) {
 	t.Parallel()
 
 	got, err := audit.ValidateGroupBy(nil)
-	require.NoError(t, err)
-	assert.Equal(t, []string{colTool, colStatus}, got)
+	mustNoError(t, err)
+	checkEqual(t, []string{colTool, colStatus}, got)
 }
 
 // TestValidateGroupByAcceptsAllowed verifies allowlisted columns pass
@@ -27,8 +24,8 @@ func TestValidateGroupByAcceptsAllowed(t *testing.T) {
 	t.Parallel()
 
 	got, err := audit.ValidateGroupBy([]string{"capability", "profile", "environment"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"capability", "profile", "environment"}, got)
+	mustNoError(t, err)
+	checkEqual(t, []string{"capability", "profile", "environment"}, got)
 }
 
 // TestValidateGroupByRejectsUnknown verifies an unknown column is a
@@ -37,8 +34,8 @@ func TestValidateGroupByRejectsUnknown(t *testing.T) {
 	t.Parallel()
 
 	_, err := audit.ValidateGroupBy([]string{colTool, "bogus"})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, audit.ErrUnknownGroupByColumn)
+	mustError(t, err)
+	checkErrorIs(t, err, audit.ErrUnknownGroupByColumn)
 }
 
 // TestSummarizeCountsByGroup verifies bucketing and count-descending
@@ -54,12 +51,12 @@ func TestSummarizeCountsByGroup(t *testing.T) {
 
 	rows := audit.Summarize(events, []string{colTool, colStatus})
 
-	require.Len(t, rows, 2, "two distinct tool+status buckets")
-	assert.Equal(t, "linode_instance_list", rows[0].Groups[colTool], "highest count sorts first")
-	assert.Equal(t, "success", rows[0].Groups[colStatus])
-	assert.Equal(t, 2, rows[0].Count)
-	assert.Equal(t, "linode_instance_delete", rows[1].Groups[colTool])
-	assert.Equal(t, 1, rows[1].Count)
+	mustLen(t, rows, 2, "two distinct tool+status buckets")
+	checkEqual(t, "linode_instance_list", rows[0].Groups[colTool], "highest count sorts first")
+	checkEqual(t, "success", rows[0].Groups[colStatus])
+	checkEqual(t, 2, rows[0].Count)
+	checkEqual(t, "linode_instance_delete", rows[1].Groups[colTool])
+	checkEqual(t, 1, rows[1].Count)
 }
 
 // TestLoadWindowJSONLAndSQLiteAgree verifies both sources return the
@@ -79,28 +76,28 @@ func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 	writeJSONLFile(t, filepath.Join(jsonlDir, "audit.log"), false, events)
 
 	jsonlEvents, err := audit.LoadWindow(t.Context(), "", jsonlDir, time.Time{}, true)
-	require.NoError(t, err)
-	assert.Len(t, jsonlEvents, 3, "JSONL returns all three events with include_meta")
+	mustNoError(t, err)
+	checkLen(t, jsonlEvents, 3, "JSONL returns all three events with include_meta")
 
 	// SQLite source.
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)
-	require.NoError(t, err)
+	mustNoError(t, err)
 
 	for idx := range events {
 		sink.Write(t.Context(), &events[idx])
 	}
 
-	require.NoError(t, sink.Close())
+	mustNoError(t, sink.Close())
 
 	sqliteEvents, err := audit.LoadWindow(t.Context(), dbPath, "", time.Time{}, true)
-	require.NoError(t, err)
-	assert.Len(t, sqliteEvents, 3, "SQLite returns all three events with include_meta")
+	mustNoError(t, err)
+	checkLen(t, sqliteEvents, 3, "SQLite returns all three events with include_meta")
 
 	// Both produce the same summary.
 	jsonlRows := audit.Summarize(jsonlEvents, []string{colTool})
 	sqliteRows := audit.Summarize(sqliteEvents, []string{colTool})
-	assert.Equal(t, jsonlRows, sqliteRows, "both sources summarize identically")
+	checkEqual(t, jsonlRows, sqliteRows, "both sources summarize identically")
 }
 
 // TestLoadWindowExcludesMetaByDefault verifies include_meta=false
@@ -117,9 +114,9 @@ func TestLoadWindowExcludesMetaByDefault(t *testing.T) {
 	writeJSONLFile(t, filepath.Join(jsonlDir, "audit.log"), false, events)
 
 	got, err := audit.LoadWindow(t.Context(), "", jsonlDir, time.Time{}, false)
-	require.NoError(t, err)
-	require.Len(t, got, 1, "meta event excluded when include_meta is false")
-	assert.Equal(t, "linode_instance_list", got[0].Tool)
+	mustNoError(t, err)
+	mustLen(t, got, 1, "meta event excluded when include_meta is false")
+	checkEqual(t, "linode_instance_list", got[0].Tool)
 }
 
 // TestLoadWindowMissingDirReturnsEmpty verifies querying before any
@@ -130,6 +127,6 @@ func TestLoadWindowMissingDirReturnsEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-audit-yet")
 
 	got, err := audit.LoadWindow(t.Context(), "", missing, time.Time{}, true)
-	require.NoError(t, err)
-	assert.Empty(t, got)
+	mustNoError(t, err)
+	checkEmpty(t, got)
 }

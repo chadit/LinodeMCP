@@ -8,9 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -45,7 +42,7 @@ func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Even
 	t.Helper()
 
 	file, err := os.Create(path) //nolint:gosec // path from test tmp dir
-	require.NoError(t, err, "create %s", path)
+	mustNoError(t, err, "create %s", path)
 
 	defer func() { _ = file.Close() }()
 
@@ -54,13 +51,13 @@ func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Even
 	if gzipped {
 		gzWriter := gzip.NewWriter(file)
 
-		defer func() { require.NoError(t, gzWriter.Close(), "close gzip") }()
+		defer func() { mustNoError(t, gzWriter.Close(), "close gzip") }()
 
 		encoder = json.NewEncoder(gzWriter)
 	}
 
 	for i := range events {
-		require.NoError(t, encoder.Encode(&events[i]), "encode event %d", i)
+		mustNoError(t, encoder.Encode(&events[i]), "encode event %d", i)
 	}
 }
 
@@ -85,14 +82,14 @@ func TestReadRecentNewestFirstAcrossFiles(t *testing.T) {
 	})
 
 	events, err := audit.ReadRecent(dir, &audit.RecentQuery{})
-	require.NoError(t, err, "read must succeed")
+	mustNoError(t, err, "read must succeed")
 
 	got := make([]string, 0, len(events))
 	for i := range events {
 		got = append(got, events[i].Tool)
 	}
 
-	assert.Equal(
+	checkEqual(
 		t,
 		[]string{"tool_d", "tool_c", "tool_b", "tool_a"}, got,
 		"events must be newest-first: active log (today) then rotated (older), reversed within each file",
@@ -116,14 +113,14 @@ func TestReadRecentLimitClamp(t *testing.T) {
 	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, events)
 
 	got, err := audit.ReadRecent(dir, &audit.RecentQuery{Limit: 10})
-	require.NoError(t, err, "read must succeed")
-	assert.Len(t, got, 10, "explicit limit caps the result")
-	assert.Equal(t, day(19, 0).Add(49*time.Minute).Unix(), got[0].TS.Unix(),
+	mustNoError(t, err, "read must succeed")
+	checkLen(t, got, 10, "explicit limit caps the result")
+	checkEqual(t, day(19, 0).Add(49*time.Minute).Unix(), got[0].TS.Unix(),
 		"newest event must come first under a limit")
 
 	defaulted, err := audit.ReadRecent(dir, &audit.RecentQuery{Limit: 0})
-	require.NoError(t, err, "read must succeed")
-	assert.Len(t, defaulted, audit.DefaultRecentLimit, "limit 0 falls back to the default")
+	mustNoError(t, err, "read must succeed")
+	checkLen(t, defaulted, audit.DefaultRecentLimit, "limit 0 falls back to the default")
 }
 
 // TestReadRecentFilters exercises every filter dimension.
@@ -143,48 +140,48 @@ func TestReadRecentFilters(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{})
-		require.NoError(t, err)
+		mustNoError(t, err)
 
 		for i := range got {
-			assert.NotEqual(t, audit.CapabilityMeta, got[i].ToolCapability,
+			checkNotEqual(t, audit.CapabilityMeta, got[i].ToolCapability,
 				"meta events must be excluded unless include_meta is set")
 		}
 
-		assert.Len(t, got, 3, "three non-meta events")
+		checkLen(t, got, 3, "three non-meta events")
 	})
 
 	t.Run("meta included when requested", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{IncludeMeta: true})
-		require.NoError(t, err)
-		assert.Len(t, got, 4, "all four events when meta is included")
+		mustNoError(t, err)
+		checkLen(t, got, 4, "all four events when meta is included")
 	})
 
 	t.Run("tool glob", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{Tool: "linode_instance_*"})
-		require.NoError(t, err)
-		assert.Len(t, got, 2, "glob matches the two instance tools")
+		mustNoError(t, err)
+		checkLen(t, got, 2, "glob matches the two instance tools")
 	})
 
 	t.Run("capability exact", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{Capability: audit.CapabilityDestroy})
-		require.NoError(t, err)
-		require.Len(t, got, 1)
-		assert.Equal(t, "linode_instance_delete", got[0].Tool)
+		mustNoError(t, err)
+		mustLen(t, got, 1)
+		checkEqual(t, "linode_instance_delete", got[0].Tool)
 	})
 
 	t.Run("status exact", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{Status: audit.StatusError})
-		require.NoError(t, err)
-		require.Len(t, got, 1)
-		assert.Equal(t, audit.StatusError, got[0].Status)
+		mustNoError(t, err)
+		mustLen(t, got, 1)
+		checkEqual(t, audit.StatusError, got[0].Status)
 	})
 
 	t.Run("since/until window", func(t *testing.T) {
@@ -195,8 +192,8 @@ func TestReadRecentFilters(t *testing.T) {
 			Until:       day(19, 10),
 			IncludeMeta: true,
 		})
-		require.NoError(t, err)
-		assert.Len(t, got, 2, "inclusive bounds keep the 09:00 and 10:00 events")
+		mustNoError(t, err)
+		checkLen(t, got, 2, "inclusive bounds keep the 09:00 and 10:00 events")
 	})
 }
 
@@ -208,8 +205,8 @@ func TestReadRecentMissingDirReturnsEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-audit-yet")
 
 	got, err := audit.ReadRecent(missing, &audit.RecentQuery{})
-	require.NoError(t, err, "missing dir is not an error")
-	assert.Empty(t, got, "missing dir yields no events")
+	mustNoError(t, err, "missing dir is not an error")
+	checkEmpty(t, got, "missing dir yields no events")
 }
 
 // TestReadRecentSkipsCorruptLines verifies a malformed JSON line is
@@ -223,15 +220,15 @@ func TestReadRecentSkipsCorruptLines(t *testing.T) {
 	good := makeTestEvent("tool_ok", audit.CapabilityRead, audit.StatusSuccess, day(19, 8))
 
 	line, err := json.Marshal(&good)
-	require.NoError(t, err)
+	mustNoError(t, err)
 
 	content := "{ this is not json\n" + string(line) + "\n"
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600), "write mixed file")
+	mustNoError(t, os.WriteFile(path, []byte(content), 0o600), "write mixed file")
 
 	got, err := audit.ReadRecent(dir, &audit.RecentQuery{})
-	require.NoError(t, err, "corrupt line must not abort the scan")
-	require.Len(t, got, 1, "the one valid event is returned")
-	assert.Equal(t, "tool_ok", got[0].Tool)
+	mustNoError(t, err, "corrupt line must not abort the scan")
+	mustLen(t, got, 1, "the one valid event is returned")
+	checkEqual(t, "tool_ok", got[0].Tool)
 }
 
 // day builds a UTC timestamp in testYear, May, at the given day-of-

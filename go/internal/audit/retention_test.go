@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -19,7 +16,7 @@ func writeRotatedFile(t *testing.T, dir, name string) string {
 	t.Helper()
 
 	path := filepath.Join(dir, name)
-	require.NoError(t, os.WriteFile(path, []byte("x\n"), 0o600), "write %s", name)
+	mustNoError(t, os.WriteFile(path, []byte("x\n"), 0o600), "write %s", name)
 
 	return path
 }
@@ -52,14 +49,14 @@ func TestRetentionSweepRemovesExpiredKeepsRecent(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	require.NoError(t, err, "sweep must succeed on a readable dir")
-	assert.Equal(t, 2, removed, "exactly the two pre-cutoff files should be removed")
+	mustNoError(t, err, "sweep must succeed on a readable dir")
+	checkEqual(t, 2, removed, "exactly the two pre-cutoff files should be removed")
 
-	assert.NoFileExists(t, expiredGz, "file before cutoff must be deleted")
-	assert.NoFileExists(t, expiredPlain, "uncompressed file before cutoff must be deleted")
-	assert.FileExists(t, cutoffDay, "file dated on the cutoff day must be kept")
-	assert.FileExists(t, recent, "recent file must be kept")
-	assert.FileExists(t, active, "active audit.log must never be swept")
+	checkNoFileExists(t, expiredGz, "file before cutoff must be deleted")
+	checkNoFileExists(t, expiredPlain, "uncompressed file before cutoff must be deleted")
+	checkFileExists(t, cutoffDay, "file dated on the cutoff day must be kept")
+	checkFileExists(t, recent, "recent file must be kept")
+	checkFileExists(t, active, "active audit.log must never be swept")
 }
 
 // TestRetentionSweepDisabledWhenZero verifies retentionDays<=0 is a
@@ -78,9 +75,9 @@ func TestRetentionSweepDisabledWhenZero(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	require.NoError(t, err, "disabled sweep must not error")
-	assert.Equal(t, 0, removed, "retention=0 disables deletion")
-	assert.FileExists(t, old, "retention=0 must keep even very old files")
+	mustNoError(t, err, "disabled sweep must not error")
+	checkEqual(t, 0, removed, "retention=0 disables deletion")
+	checkFileExists(t, old, "retention=0 must keep even very old files")
 }
 
 // TestRetentionSweepIgnoresUnrelatedFiles verifies the sweeper only
@@ -111,11 +108,11 @@ func TestRetentionSweepIgnoresUnrelatedFiles(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	require.NoError(t, err, "sweep must succeed")
-	assert.Equal(t, 0, removed, "no recognized rotated files means nothing removed")
+	mustNoError(t, err, "sweep must succeed")
+	checkEqual(t, 0, removed, "no recognized rotated files means nothing removed")
 
 	for _, path := range paths {
-		assert.FileExists(t, path, "non-rotated file must be left alone: %s", path)
+		checkFileExists(t, path, "non-rotated file must be left alone: %s", path)
 	}
 }
 
@@ -134,6 +131,6 @@ func TestRetentionSweepMissingDirErrors(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	require.Error(t, err, "missing dir must surface an error")
-	assert.Equal(t, 0, removed, "no files removed when dir is missing")
+	mustError(t, err, "missing dir must surface an error")
+	checkEqual(t, 0, removed, "no files removed when dir is missing")
 }

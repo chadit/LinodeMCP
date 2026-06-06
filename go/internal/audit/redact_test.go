@@ -3,9 +3,6 @@ package audit_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -25,7 +22,7 @@ func TestRedactionListNoDuplicates(t *testing.T) {
 
 	for _, name := range fields {
 		_, dup := seen[name]
-		assert.False(t, dup, "redaction list must not contain duplicate %q", name)
+		checkFalse(t, dup, "redaction list must not contain duplicate %q", name)
 
 		seen[name] = struct{}{}
 	}
@@ -47,11 +44,11 @@ func TestRedactReplacesSensitiveTopLevelKeys(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	assert.Equal(t, 12345, redacted["linode_id"], "non-sensitive value must pass through")
-	assert.Equal(t, "my-instance", redacted[argKeyLabel])
-	assert.True(t, audit.IsRedacted(redacted[argRootPass]), "root_pass must be redacted")
-	assert.True(t, audit.IsRedacted(redacted[argKeyToken]), "token must be redacted")
-	assert.ElementsMatch(t, []string{argRootPass, argKeyToken}, keys,
+	checkEqual(t, 12345, redacted["linode_id"], "non-sensitive value must pass through")
+	checkEqual(t, "my-instance", redacted[argKeyLabel])
+	checkTrue(t, audit.IsRedacted(redacted[argRootPass]), "root_pass must be redacted")
+	checkTrue(t, audit.IsRedacted(redacted[argKeyToken]), "token must be redacted")
+	checkElementsMatch(t, []string{argRootPass, argKeyToken}, keys,
 		"redacted-key list must report each scrubbed name")
 }
 
@@ -65,9 +62,9 @@ func TestRedactAccountUserUpdateSensitiveFields(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	assert.True(t, audit.IsRedacted(redacted["password_created"]), "password_created must be redacted")
-	assert.True(t, audit.IsRedacted(redacted["ssh_keys"]), "ssh_keys must be redacted")
-	assert.ElementsMatch(t, []string{"password_created", "ssh_keys"}, keys)
+	checkTrue(t, audit.IsRedacted(redacted["password_created"]), "password_created must be redacted")
+	checkTrue(t, audit.IsRedacted(redacted["ssh_keys"]), "ssh_keys must be redacted")
+	checkElementsMatch(t, []string{"password_created", "ssh_keys"}, keys)
 }
 
 // TestRedactRecursesIntoNestedMaps verifies the spec's "match by
@@ -87,12 +84,12 @@ func TestRedactRecursesIntoNestedMaps(t *testing.T) {
 	redacted, keys := audit.Redact(args)
 
 	nested, ok := redacted["meta"].(map[string]any)
-	require.True(t, ok, "nested object must remain a map")
-	assert.True(t, audit.IsRedacted(nested["api_key"]),
+	mustTrue(t, ok, "nested object must remain a map")
+	checkTrue(t, audit.IsRedacted(nested["api_key"]),
 		"nested api_key must be redacted")
-	assert.Equal(t, valUSEast, nested[keyRegion],
+	checkEqual(t, valUSEast, nested[keyRegion],
 		"nested non-sensitive value passes through")
-	assert.Contains(t, keys, "api_key", "nested key reported in keys list")
+	checkContains(t, keys, "api_key", "nested key reported in keys list")
 }
 
 // TestRedactExactNameMatch locks the spec's exact-match rule:
@@ -110,12 +107,12 @@ func TestRedactExactNameMatch(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	assert.Equal(t, "should-pass-through-because-variant", redacted["cluster_root_pass"],
+	checkEqual(t, "should-pass-through-because-variant", redacted["cluster_root_pass"],
 		"variant cluster_root_pass must not match exact rule for root_pass")
-	assert.Equal(t, "also-variant", redacted["new_root_pass"])
-	assert.Equal(t, "different-case", redacted["Root_Pass"],
+	checkEqual(t, "also-variant", redacted["new_root_pass"])
+	checkEqual(t, "different-case", redacted["Root_Pass"],
 		"case-folded variant must not match exact rule")
-	assert.Empty(t, keys, "no sensitive keys hit the exact-match rule")
+	checkEmpty(t, keys, "no sensitive keys hit the exact-match rule")
 }
 
 // TestRedactNilArgsProducesEmptyResult covers the empty-input path.
@@ -126,8 +123,8 @@ func TestRedactNilArgsProducesEmptyResult(t *testing.T) {
 
 	redacted, keys := audit.Redact(nil)
 
-	assert.Nil(t, redacted, "nil args produce nil result")
-	assert.Empty(t, keys)
+	checkNil(t, redacted, "nil args produce nil result")
+	checkEmpty(t, keys)
 }
 
 // TestRedactReturnsCopyNotMutation guards the no-mutation contract.
@@ -141,7 +138,7 @@ func TestRedactReturnsCopyNotMutation(t *testing.T) {
 
 	_, _ = audit.Redact(args)
 
-	assert.Equal(t, "secret", args[argRootPass],
+	checkEqual(t, "secret", args[argRootPass],
 		"original args map must not be mutated")
 }
 
@@ -154,11 +151,11 @@ func TestRedactionFieldSetMatchesList(t *testing.T) {
 	fields := audit.RedactionFields()
 	set := audit.RedactionFieldSet()
 
-	assert.Len(t, set, len(fields), "set must have one entry per list field")
+	checkLen(t, set, len(fields), "set must have one entry per list field")
 
 	for _, name := range fields {
 		_, present := set[name]
-		assert.True(t, present, "field %q must appear in the set", name)
+		checkTrue(t, present, "field %q must appear in the set", name)
 	}
 }
 
@@ -184,7 +181,7 @@ func TestRedactionFieldsPIIList(t *testing.T) {
 		"zip",
 	}
 
-	assert.ElementsMatch(t, expected, audit.RedactionFieldsPII(),
+	checkElementsMatch(t, expected, audit.RedactionFieldsPII(),
 		"PII list must exactly match the source-verified conservative scope")
 }
 
@@ -199,7 +196,7 @@ func TestRedactionFieldsPIINoDuplicates(t *testing.T) {
 
 	for _, name := range fields {
 		_, dup := seen[name]
-		assert.False(t, dup, "PII list must not contain duplicate %q", name)
+		checkFalse(t, dup, "PII list must not contain duplicate %q", name)
 
 		seen[name] = struct{}{}
 	}
@@ -216,7 +213,7 @@ func TestRedactionListsDisjoint(t *testing.T) {
 
 	for _, pii := range audit.RedactionFieldsPII() {
 		_, overlap := credSet[pii]
-		assert.False(t, overlap,
+		checkFalse(t, overlap,
 			"PII name %q must not also appear in the credential list", pii)
 	}
 }
@@ -242,18 +239,18 @@ func TestRedactWithPIIScrubsPIIFields(t *testing.T) {
 
 	redacted, keys := audit.RedactWithPII(args)
 
-	assert.Equal(t, 42, redacted[argLinodeID], "non-sensitive value must pass through")
-	assert.Equal(t, "primary", redacted[argKeyLabel])
-	assert.Equal(t, "us", redacted["country"],
+	checkEqual(t, 42, redacted[argLinodeID], "non-sensitive value must pass through")
+	checkEqual(t, "primary", redacted[argKeyLabel])
+	checkEqual(t, "us", redacted["country"],
 		"country is a region filter, NOT redacted")
-	assert.True(t, audit.IsRedacted(redacted[argKeyToken]), "credential still redacted")
-	assert.True(t, audit.IsRedacted(redacted[argTaxID]))
-	assert.True(t, audit.IsRedacted(redacted[argPhone]))
-	assert.True(t, audit.IsRedacted(redacted[argAddress1]))
-	assert.True(t, audit.IsRedacted(redacted[argCity]))
-	assert.True(t, audit.IsRedacted(redacted[argContactName]))
-	assert.True(t, audit.IsRedacted(redacted[argContactEmail]))
-	assert.ElementsMatch(t,
+	checkTrue(t, audit.IsRedacted(redacted[argKeyToken]), "credential still redacted")
+	checkTrue(t, audit.IsRedacted(redacted[argTaxID]))
+	checkTrue(t, audit.IsRedacted(redacted[argPhone]))
+	checkTrue(t, audit.IsRedacted(redacted[argAddress1]))
+	checkTrue(t, audit.IsRedacted(redacted[argCity]))
+	checkTrue(t, audit.IsRedacted(redacted[argContactName]))
+	checkTrue(t, audit.IsRedacted(redacted[argContactEmail]))
+	checkElementsMatch(t,
 		[]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail},
 		keys,
 		"redacted-key list must report each scrubbed name once")
@@ -275,13 +272,13 @@ func TestRedactLeavesPIIWhenFlagOff(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	assert.True(t, audit.IsRedacted(redacted[argKeyToken]),
+	checkTrue(t, audit.IsRedacted(redacted[argKeyToken]),
 		"credential must always be redacted")
-	assert.Equal(t, "TX-99", redacted[argTaxID],
+	checkEqual(t, "TX-99", redacted[argTaxID],
 		"PII passes through when caller uses Redact (flag off path)")
-	assert.Equal(t, "+1-555-0100", redacted[argPhone])
-	assert.Equal(t, "123 Main St", redacted[argAddress1])
-	assert.Equal(t, []string{argKeyToken}, keys,
+	checkEqual(t, "+1-555-0100", redacted[argPhone])
+	checkEqual(t, "123 Main St", redacted[argAddress1])
+	checkEqual(t, []string{argKeyToken}, keys,
 		"only the credential should appear in the redacted-key list")
 }
 
@@ -293,10 +290,10 @@ func TestRedactionFieldSetPIIMatchesList(t *testing.T) {
 	fields := audit.RedactionFieldsPII()
 	set := audit.RedactionFieldSetPII()
 
-	assert.Len(t, set, len(fields), "PII set must have one entry per list field")
+	checkLen(t, set, len(fields), "PII set must have one entry per list field")
 
 	for _, name := range fields {
 		_, present := set[name]
-		assert.True(t, present, "PII field %q must appear in the set", name)
+		checkTrue(t, present, "PII field %q must appear in the set", name)
 	}
 }

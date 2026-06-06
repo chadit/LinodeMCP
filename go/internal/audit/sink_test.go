@@ -3,9 +3,6 @@ package audit_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -25,7 +22,7 @@ func TestNoopSinkSatisfiesInterface(t *testing.T) {
 
 	// The contract is "no observable effect"; the only check we can
 	// make is that the event we passed in is unchanged.
-	assert.Equal(t, "test_tool", evt.Tool, "noop sink must not mutate the event")
+	checkEqual(t, "test_tool", evt.Tool, "noop sink must not mutate the event")
 }
 
 // TestMultiSinkFansOutToEveryChild verifies the fan-out delivers
@@ -40,10 +37,10 @@ func TestMultiSinkFansOutToEveryChild(t *testing.T) {
 	evt := audit.Event{Tool: "fanned_out"}
 	multi.Write(t.Context(), &evt)
 
-	require.Equal(t, 1, first.Len(), "first child must receive the event")
-	require.Equal(t, 1, second.Len(), "second child must receive the event")
-	assert.Equal(t, "fanned_out", first.Events()[0].Tool)
-	assert.Equal(t, "fanned_out", second.Events()[0].Tool)
+	mustEqual(t, 1, first.Len(), "first child must receive the event")
+	mustEqual(t, 1, second.Len(), "second child must receive the event")
+	checkEqual(t, "fanned_out", first.Events()[0].Tool)
+	checkEqual(t, "fanned_out", second.Events()[0].Tool)
 }
 
 // TestMultiSinkEmptyIsNoop verifies a fan-out with no children does
@@ -54,7 +51,7 @@ func TestMultiSinkEmptyIsNoop(t *testing.T) {
 	multi := audit.NewMultiSink()
 	evt := audit.Event{Tool: "nowhere"}
 
-	require.NotPanics(t, func() { multi.Write(t.Context(), &evt) },
+	mustNotPanics(t, func() { multi.Write(t.Context(), &evt) },
 		"empty MultiSink must be a safe no-op")
 }
 
@@ -75,10 +72,10 @@ func TestCapturingSinkRetainsWriteOrder(t *testing.T) {
 	sink.Write(t.Context(), &third)
 
 	events := sink.Events()
-	assert.Len(t, events, 3)
-	assert.Equal(t, "first", events[0].Tool)
-	assert.Equal(t, "second", events[1].Tool)
-	assert.Equal(t, "third", events[2].Tool)
+	checkLen(t, events, 3)
+	checkEqual(t, "first", events[0].Tool)
+	checkEqual(t, "second", events[1].Tool)
+	checkEqual(t, "third", events[2].Tool)
 }
 
 // TestCapturingSinkCopiesEvent locks the copy-not-share contract.
@@ -98,8 +95,8 @@ func TestCapturingSinkCopiesEvent(t *testing.T) {
 	evt.Tool = "mutated"
 
 	events := sink.Events()
-	require.Len(t, events, 1)
-	assert.Equal(t, "original", events[0].Tool,
+	mustLen(t, events, 1)
+	checkEqual(t, "original", events[0].Tool,
 		"sink must copy event, not retain caller's pointer")
 }
 
@@ -108,11 +105,11 @@ func TestCapturingSinkLenReportsCount(t *testing.T) {
 	t.Parallel()
 
 	sink := audit.NewCapturingSink()
-	assert.Equal(t, 0, sink.Len(), "empty sink starts at zero")
+	checkEqual(t, 0, sink.Len(), "empty sink starts at zero")
 
 	evt := audit.Event{Tool: "one"}
 	sink.Write(t.Context(), &evt)
-	assert.Equal(t, 1, sink.Len())
+	checkEqual(t, 1, sink.Len())
 }
 
 // TestNewCapturingSinkStartsEmpty locks the non-nil-but-empty
@@ -123,6 +120,6 @@ func TestNewCapturingSinkStartsEmpty(t *testing.T) {
 
 	sink := audit.NewCapturingSink()
 
-	assert.NotNil(t, sink.Events(), "Events() must return non-nil even when empty")
-	assert.Empty(t, sink.Events())
+	checkNotNil(t, sink.Events(), "Events() must return non-nil even when empty")
+	checkEmpty(t, sink.Events())
 }

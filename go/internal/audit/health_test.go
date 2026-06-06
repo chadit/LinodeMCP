@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -27,15 +24,15 @@ func TestCollectHealthJSONL(t *testing.T) {
 	})
 
 	report, err := audit.CollectHealth(t.Context(), "", dir)
-	require.NoError(t, err)
+	mustNoError(t, err)
 
-	assert.Equal(t, filepath.Join(dir, "audit.log"), report.JSONLPath)
-	assert.True(t, report.ActiveLogExists, "active audit.log must be detected")
-	assert.Equal(t, 1, report.RotatedFileCount, "one rotated file present")
-	assert.Equal(t, "2026-05-18", report.OldestRotatedDate)
-	assert.Positive(t, report.DiskBytes, "disk usage must account for the written files")
-	assert.Zero(t, report.DroppedEvents, "synchronous sinks never drop")
-	assert.Nil(t, report.SQLite, "SQLite section absent when no path given")
+	checkEqual(t, filepath.Join(dir, "audit.log"), report.JSONLPath)
+	checkTrue(t, report.ActiveLogExists, "active audit.log must be detected")
+	checkEqual(t, 1, report.RotatedFileCount, "one rotated file present")
+	checkEqual(t, "2026-05-18", report.OldestRotatedDate)
+	checkPositive(t, report.DiskBytes, "disk usage must account for the written files")
+	checkZero(t, report.DroppedEvents, "synchronous sinks never drop")
+	checkNil(t, report.SQLite, "SQLite section absent when no path given")
 }
 
 // TestCollectHealthSQLite verifies the SQLite portion: row count,
@@ -46,7 +43,7 @@ func TestCollectHealthSQLite(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
 
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)
-	require.NoError(t, err)
+	mustNoError(t, err)
 
 	oldest := time.Date(2026, time.May, 18, 8, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, time.May, 20, 8, 0, 0, 0, time.UTC)
@@ -58,16 +55,16 @@ func TestCollectHealthSQLite(t *testing.T) {
 		sink.Write(t.Context(), &evt)
 	}
 
-	require.NoError(t, sink.Close())
+	mustNoError(t, sink.Close())
 
 	report, err := audit.CollectHealth(t.Context(), dbPath, t.TempDir())
-	require.NoError(t, err)
+	mustNoError(t, err)
 
-	require.NotNil(t, report.SQLite, "SQLite section present when path given")
-	assert.Equal(t, int64(2), report.SQLite.EventCount)
-	assert.Equal(t, oldest.UnixNano(), report.SQLite.OldestEventUnixNS, "oldest event timestamp")
-	assert.Positive(t, report.SQLite.DBBytes, "database file has non-zero size")
-	assert.Equal(t, dbPath, report.SQLite.Path)
+	mustNotNil(t, report.SQLite, "SQLite section present when path given")
+	checkEqual(t, int64(2), report.SQLite.EventCount)
+	checkEqual(t, oldest.UnixNano(), report.SQLite.OldestEventUnixNS, "oldest event timestamp")
+	checkPositive(t, report.SQLite.DBBytes, "database file has non-zero size")
+	checkEqual(t, dbPath, report.SQLite.Path)
 }
 
 // TestCollectHealthMissingDirIsEmpty verifies an absent JSONL directory
@@ -78,10 +75,10 @@ func TestCollectHealthMissingDirIsEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-audit-yet")
 
 	report, err := audit.CollectHealth(t.Context(), "", missing)
-	require.NoError(t, err, "missing dir is not an error")
+	mustNoError(t, err, "missing dir is not an error")
 
-	assert.False(t, report.ActiveLogExists)
-	assert.Zero(t, report.RotatedFileCount)
-	assert.Empty(t, report.OldestRotatedDate)
-	assert.Zero(t, report.DiskBytes)
+	checkFalse(t, report.ActiveLogExists)
+	checkZero(t, report.RotatedFileCount)
+	checkEmpty(t, report.OldestRotatedDate)
+	checkZero(t, report.DiskBytes)
 }

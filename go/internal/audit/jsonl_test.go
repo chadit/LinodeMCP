@@ -12,9 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -32,10 +29,10 @@ func TestJSONLSinkAppendsOneLinePerEvent(t *testing.T) {
 	dir := t.TempDir()
 
 	sink, err := audit.NewJSONLSink(dir)
-	require.NoError(t, err, "NewJSONLSink must succeed in a fresh tmp dir")
+	mustNoError(t, err, "NewJSONLSink must succeed in a fresh tmp dir")
 
 	defer func() {
-		require.NoError(t, sink.Close(), "Close must succeed when sink is healthy")
+		mustNoError(t, sink.Close(), "Close must succeed when sink is healthy")
 	}()
 
 	event1 := makeEvent("linode_instance_list", audit.CapabilityRead)
@@ -47,21 +44,21 @@ func TestJSONLSinkAppendsOneLinePerEvent(t *testing.T) {
 	sink.Write(t.Context(), &event2)
 
 	lines := readLines(t, sink.Path())
-	require.Len(t, lines, 2, "expected two JSON lines, one per Write")
+	mustLen(t, lines, 2, "expected two JSON lines, one per Write")
 
 	var got1, got2 audit.Event
 
-	require.NoError(t, json.Unmarshal([]byte(lines[0]), &got1), "line 1 must be valid JSON")
-	require.NoError(t, json.Unmarshal([]byte(lines[1]), &got2), "line 2 must be valid JSON")
+	mustNoError(t, json.Unmarshal([]byte(lines[0]), &got1), "line 1 must be valid JSON")
+	mustNoError(t, json.Unmarshal([]byte(lines[1]), &got2), "line 2 must be valid JSON")
 
-	assert.Equal(t, "linode_instance_list", got1.Tool, "event 1 tool round-trips through JSONL")
-	assert.Equal(t, audit.StatusSuccess, got1.Status, "event 1 status round-trips through JSONL")
-	assert.Equal(t, int64(12), got1.LatencyMS, "event 1 latency_ms round-trips")
+	checkEqual(t, "linode_instance_list", got1.Tool, "event 1 tool round-trips through JSONL")
+	checkEqual(t, audit.StatusSuccess, got1.Status, "event 1 status round-trips through JSONL")
+	checkEqual(t, int64(12), got1.LatencyMS, "event 1 latency_ms round-trips")
 
-	assert.Equal(t, "linode_instance_create", got2.Tool, "event 2 tool round-trips through JSONL")
-	assert.Equal(t, audit.StatusError, got2.Status, "event 2 status round-trips through JSONL")
-	require.NotNil(t, got2.Error, "event 2 must carry the error message")
-	assert.Equal(t, "boom", *got2.Error, "event 2 error message round-trips")
+	checkEqual(t, "linode_instance_create", got2.Tool, "event 2 tool round-trips through JSONL")
+	checkEqual(t, audit.StatusError, got2.Status, "event 2 status round-trips through JSONL")
+	mustNotNil(t, got2.Error, "event 2 must carry the error message")
+	checkEqual(t, "boom", *got2.Error, "event 2 error message round-trips")
 }
 
 // TestJSONLSinkRotatesOnDayBoundary verifies that when the clock
@@ -80,10 +77,10 @@ func TestJSONLSinkRotatesOnDayBoundary(t *testing.T) {
 	clock := makeFixedClock(&clockCalls)
 
 	sink, err := audit.NewJSONLSink(dir, audit.WithClock(clock))
-	require.NoError(t, err, "NewJSONLSink must accept the injected clock")
+	mustNoError(t, err, "NewJSONLSink must accept the injected clock")
 
 	defer func() {
-		require.NoError(t, sink.Close(), "Close must succeed after rotation")
+		mustNoError(t, sink.Close(), "Close must succeed after rotation")
 	}()
 
 	day1Event := makeEvent("linode_instance_list", audit.CapabilityRead)
@@ -97,26 +94,26 @@ func TestJSONLSinkRotatesOnDayBoundary(t *testing.T) {
 	rotatedPath := filepath.Join(dir, "audit-2026-05-18.log.gz")
 
 	rotated, err := os.Open(rotatedPath) //nolint:gosec // path is constructed from test tmp dir
-	require.NoError(t, err, "rotated gzip must exist at %s", rotatedPath)
+	mustNoError(t, err, "rotated gzip must exist at %s", rotatedPath)
 
 	defer func() { _ = rotated.Close() }()
 
 	gzReader, err := gzip.NewReader(rotated)
-	require.NoError(t, err, "rotated file must be a valid gzip stream")
+	mustNoError(t, err, "rotated file must be a valid gzip stream")
 
 	defer func() { _ = gzReader.Close() }()
 
 	body, err := io.ReadAll(gzReader)
-	require.NoError(t, err, "rotated gzip body must be readable")
-	assert.Contains(t, string(body), "day-1-event", "rotated file must contain day-1 event")
-	assert.NotContains(t, string(body), "day-2-event", "rotated file must not contain day-2 event")
+	mustNoError(t, err, "rotated gzip body must be readable")
+	checkContains(t, string(body), "day-1-event", "rotated file must contain day-1 event")
+	checkNotContains(t, string(body), "day-2-event", "rotated file must not contain day-2 event")
 
 	_, err = os.Stat(filepath.Join(dir, "audit-2026-05-18.log"))
-	require.ErrorIs(t, err, os.ErrNotExist, "uncompressed rotated file must be removed after gzip")
+	mustErrorIs(t, err, os.ErrNotExist, "uncompressed rotated file must be removed after gzip")
 
 	lines := readLines(t, sink.Path())
-	require.Len(t, lines, 1, "post-rotation audit.log holds one event")
-	assert.Contains(t, lines[0], "day-2-event", "post-rotation audit.log must contain day-2 event")
+	mustLen(t, lines, 1, "post-rotation audit.log holds one event")
+	checkContains(t, lines[0], "day-2-event", "post-rotation audit.log must contain day-2 event")
 }
 
 // TestJSONLSinkWriteAfterCloseDropsEvent verifies the closed-state
@@ -139,10 +136,10 @@ func TestJSONLSinkWriteAfterCloseDropsEvent(t *testing.T) {
 	}
 
 	sink, err := audit.NewJSONLSink(dir, audit.WithWriteErrorHandler(handler))
-	require.NoError(t, err, "NewJSONLSink must succeed in a fresh tmp dir")
+	mustNoError(t, err, "NewJSONLSink must succeed in a fresh tmp dir")
 
-	require.NoError(t, sink.Close(), "first Close must succeed")
-	require.NoError(t, sink.Close(), "second Close must be idempotent")
+	mustNoError(t, sink.Close(), "first Close must succeed")
+	mustNoError(t, sink.Close(), "second Close must be idempotent")
 
 	event := makeEvent("linode_instance_list", audit.CapabilityRead)
 	event.Finalize(audit.StatusSuccess, time.Millisecond, "", "")
@@ -152,8 +149,8 @@ func TestJSONLSinkWriteAfterCloseDropsEvent(t *testing.T) {
 	gotErr := handlerErr
 	handlerMu.Unlock()
 
-	require.Error(t, gotErr, "Write after Close must invoke the error handler")
-	assert.ErrorIs(t, gotErr, audit.ErrJSONLSinkClosed, "handler must receive the sentinel")
+	mustError(t, gotErr, "Write after Close must invoke the error handler")
+	checkErrorIs(t, gotErr, audit.ErrJSONLSinkClosed, "handler must receive the sentinel")
 }
 
 // TestJSONLSinkPathReturnsActiveLogPath verifies the Path accessor.
@@ -164,12 +161,12 @@ func TestJSONLSinkPathReturnsActiveLogPath(t *testing.T) {
 	dir := t.TempDir()
 
 	sink, err := audit.NewJSONLSink(dir)
-	require.NoError(t, err, "NewJSONLSink must succeed")
+	mustNoError(t, err, "NewJSONLSink must succeed")
 
 	defer func() { _ = sink.Close() }()
 
 	expected := filepath.Join(dir, "audit.log")
-	assert.Equal(t, expected, sink.Path(), "Path must point at the active audit.log")
+	checkEqual(t, expected, sink.Path(), "Path must point at the active audit.log")
 }
 
 // TestJSONLSinkCloseReturnsNilWhenHealthy verifies the close
@@ -181,10 +178,10 @@ func TestJSONLSinkCloseReturnsNilWhenHealthy(t *testing.T) {
 	dir := t.TempDir()
 
 	sink, err := audit.NewJSONLSink(dir)
-	require.NoError(t, err, "NewJSONLSink must succeed")
+	mustNoError(t, err, "NewJSONLSink must succeed")
 
-	require.NoError(t, sink.Close(), "healthy close returns nil")
-	require.NoError(t, sink.Close(), "second close is idempotent and returns nil")
+	mustNoError(t, sink.Close(), "healthy close returns nil")
+	mustNoError(t, sink.Close(), "second close is idempotent and returns nil")
 }
 
 // makeEvent builds an Event with the fields tests don't care about
@@ -210,7 +207,7 @@ func readLines(t *testing.T, path string) []string {
 	t.Helper()
 
 	file, err := os.Open(path) //nolint:gosec // path comes from test tmp dirs
-	require.NoError(t, err, "open %s", path)
+	mustNoError(t, err, "open %s", path)
 
 	defer func() { _ = file.Close() }()
 
@@ -224,7 +221,7 @@ func readLines(t *testing.T, path string) []string {
 		}
 	}
 
-	require.NoError(t, scanner.Err(), "scan %s", path)
+	mustNoError(t, scanner.Err(), "scan %s", path)
 
 	return lines
 }
