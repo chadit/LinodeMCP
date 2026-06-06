@@ -4,9 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -28,7 +25,7 @@ func countRows(t *testing.T, sink *audit.SQLiteSink) int {
 	var count int
 
 	row := sink.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM events`)
-	require.NoError(t, row.Scan(&count))
+	mustNoError(t, row.Scan(&count))
 
 	return count
 }
@@ -49,9 +46,9 @@ func TestSQLiteSweepRetentionRemovesExpiredKeepsRecent(t *testing.T) {
 	writeEventAt(t, sink, "evt_recent", now.AddDate(0, 0, -1))
 
 	removed, err := sink.SweepRetention(t.Context(), now, 14)
-	require.NoError(t, err, "sweep must succeed")
-	assert.Equal(t, int64(2), removed, "the two pre-cutoff rows must be removed")
-	assert.Equal(t, 1, countRows(t, sink), "only the recent row remains")
+	mustNoError(t, err, "sweep must succeed")
+	checkEqual(t, int64(2), removed, "the two pre-cutoff rows must be removed")
+	checkEqual(t, 1, countRows(t, sink), "only the recent row remains")
 }
 
 // TestSQLiteSweepRetentionDisabledWhenZero verifies retentionDays<=0
@@ -65,7 +62,7 @@ func TestSQLiteSweepRetentionDisabledWhenZero(t *testing.T) {
 	writeEventAt(t, sink, "evt_ancient", now.AddDate(-5, 0, 0))
 
 	removed, err := sink.SweepRetention(t.Context(), now, 0)
-	require.NoError(t, err, "disabled sweep must not error")
-	assert.Equal(t, int64(0), removed, "retention=0 disables deletion")
-	assert.Equal(t, 1, countRows(t, sink), "retention=0 keeps even ancient rows")
+	mustNoError(t, err, "disabled sweep must not error")
+	checkEqual(t, int64(0), removed, "retention=0 disables deletion")
+	checkEqual(t, 1, countRows(t, sink), "retention=0 keeps even ancient rows")
 }

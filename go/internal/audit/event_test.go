@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -49,25 +46,25 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		false,
 	)
 
-	assert.False(t, evt.TS.IsZero(), "TS must be populated")
-	assert.NotZero(t, evt.TSUnixNS, "TSUnixNS must be populated")
-	assert.True(t, strings.HasPrefix(evt.EventID, audit.EventIDPrefix),
+	checkFalse(t, evt.TS.IsZero(), "TS must be populated")
+	checkNotZero(t, evt.TSUnixNS, "TSUnixNS must be populated")
+	checkTrue(t, strings.HasPrefix(evt.EventID, audit.EventIDPrefix),
 		"EventID must carry the evt_ prefix")
-	assert.Equal(t, fixtureTool, evt.Tool)
-	assert.Equal(t, audit.CapabilityDestroy, evt.ToolCapability)
-	assert.Equal(t, fixtureEnvironment, evt.Environment)
-	assert.Equal(t, fixtureProfile, evt.Profile)
-	assert.Equal(t, audit.ModeNormal, evt.Mode, "default mode must be normal")
-	assert.Nil(t, evt.PlanID, "plan_id is nil unless set via SetMode")
-	assert.Equal(t, args[argLinodeID], evt.Args[argLinodeID])
-	assert.Empty(t, evt.ArgsRedacted, "no sensitive keys in fixture")
-	assert.Equal(t, audit.StatusSuccess, evt.Status, "default status is success")
-	assert.Zero(t, evt.LatencyMS, "latency populates via Finalize")
-	assert.Empty(t, evt.ResultSummary)
-	assert.Nil(t, evt.Error)
-	assert.Equal(t, fixtureVersion, evt.LinodemcpVersion)
-	assert.Equal(t, fixtureSession, evt.SessionID)
-	assert.Equal(t, uint64(3), evt.CredentialGeneration)
+	checkEqual(t, fixtureTool, evt.Tool)
+	checkEqual(t, audit.CapabilityDestroy, evt.ToolCapability)
+	checkEqual(t, fixtureEnvironment, evt.Environment)
+	checkEqual(t, fixtureProfile, evt.Profile)
+	checkEqual(t, audit.ModeNormal, evt.Mode, "default mode must be normal")
+	checkNil(t, evt.PlanID, "plan_id is nil unless set via SetMode")
+	checkEqual(t, args[argLinodeID], evt.Args[argLinodeID])
+	checkEmpty(t, evt.ArgsRedacted, "no sensitive keys in fixture")
+	checkEqual(t, audit.StatusSuccess, evt.Status, "default status is success")
+	checkZero(t, evt.LatencyMS, "latency populates via Finalize")
+	checkEmpty(t, evt.ResultSummary)
+	checkNil(t, evt.Error)
+	checkEqual(t, fixtureVersion, evt.LinodemcpVersion)
+	checkEqual(t, fixtureSession, evt.SessionID)
+	checkEqual(t, uint64(3), evt.CredentialGeneration)
 }
 
 // TestFinalizeWritesOutcomeFields locks the contract that Finalize
@@ -81,11 +78,11 @@ func TestFinalizeWritesOutcomeFields(t *testing.T) {
 
 	evt.Finalize(audit.StatusError, 250*time.Millisecond, "API returned 500", "instance update failed")
 
-	assert.Equal(t, audit.StatusError, evt.Status)
-	assert.Equal(t, int64(250), evt.LatencyMS)
-	assert.Equal(t, "instance update failed", evt.ResultSummary)
-	require.NotNil(t, evt.Error)
-	assert.Equal(t, "API returned 500", *evt.Error)
+	checkEqual(t, audit.StatusError, evt.Status)
+	checkEqual(t, int64(250), evt.LatencyMS)
+	checkEqual(t, "instance update failed", evt.ResultSummary)
+	mustNotNil(t, evt.Error)
+	checkEqual(t, "API returned 500", *evt.Error)
 }
 
 // TestFinalizeWithEmptyErrorMessageLeavesErrorNil covers the happy
@@ -98,8 +95,8 @@ func TestFinalizeWithEmptyErrorMessageLeavesErrorNil(t *testing.T) {
 
 	evt.Finalize(audit.StatusSuccess, 100*time.Millisecond, "", "ok")
 
-	assert.Equal(t, audit.StatusSuccess, evt.Status)
-	assert.Nil(t, evt.Error, "empty errMsg must produce nil Error pointer")
+	checkEqual(t, audit.StatusSuccess, evt.Status)
+	checkNil(t, evt.Error, "empty errMsg must produce nil Error pointer")
 }
 
 // TestSetModePopulatesPlanID locks the plan-mode contract: passing a
@@ -111,11 +108,11 @@ func TestSetModePopulatesPlanID(t *testing.T) {
 	evt := newFixtureEvent(t)
 
 	evt.SetMode(audit.ModeApply, "plan_01H...")
-	require.NotNil(t, evt.PlanID)
-	assert.Equal(t, "plan_01H...", *evt.PlanID)
+	mustNotNil(t, evt.PlanID)
+	checkEqual(t, "plan_01H...", *evt.PlanID)
 
 	evt.SetMode(audit.ModeNormal, "")
-	assert.Nil(t, evt.PlanID, "empty planID must clear the pointer")
+	checkNil(t, evt.PlanID, "empty planID must clear the pointer")
 }
 
 // TestMarshalJSONSerializesEmptyCollectionsAsArrays guards against
@@ -132,13 +129,13 @@ func TestMarshalJSONSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	}
 
 	body, err := evt.MarshalJSON()
-	require.NoError(t, err)
+	mustNoError(t, err)
 
 	var parsed map[string]any
-	require.NoError(t, json.Unmarshal(body, &parsed))
+	mustNoError(t, json.Unmarshal(body, &parsed))
 
-	assert.IsType(t, map[string]any{}, parsed["args"], "args must serialize as object")
-	assert.IsType(t, []any{}, parsed["args_redacted"], "args_redacted must serialize as array")
+	checkIsType(t, map[string]any{}, parsed["args"], "args must serialize as object")
+	checkIsType(t, []any{}, parsed["args_redacted"], "args_redacted must serialize as array")
 }
 
 // TestEventIDIsCorrectLength checks the format constants. ULID body
@@ -150,8 +147,8 @@ func TestEventIDIsCorrectLength(t *testing.T) {
 
 	id := audit.NewEventID(time.Now())
 
-	assert.Len(t, id, 30, "event id is evt_ (4) + 26-char ULID body")
-	assert.True(t, strings.HasPrefix(id, audit.EventIDPrefix))
+	checkLen(t, id, 30, "event id is evt_ (4) + 26-char ULID body")
+	checkTrue(t, strings.HasPrefix(id, audit.EventIDPrefix))
 }
 
 // TestEventIDUsesCrockfordAlphabet confirms the encoder produces
@@ -165,7 +162,7 @@ func TestEventIDUsesCrockfordAlphabet(t *testing.T) {
 	body := strings.TrimPrefix(id, audit.EventIDPrefix)
 
 	for _, char := range body {
-		assert.NotContains(t, "ILOU", string(char),
+		checkNotContains(t, "ILOU", string(char),
 			"ULID body must not contain ambiguous Crockford characters")
 	}
 }
@@ -179,7 +176,7 @@ func TestEventIDsAreUnique(t *testing.T) {
 	id1 := audit.NewEventID(time.Now())
 	id2 := audit.NewEventID(time.Now())
 
-	assert.NotEqual(t, id1, id2, "two consecutive event ids must not collide")
+	checkNotEqual(t, id1, id2, "two consecutive event ids must not collide")
 }
 
 // newFixtureEvent is the shared helper that emits an event the

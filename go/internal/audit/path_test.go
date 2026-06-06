@@ -4,9 +4,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -22,7 +19,7 @@ func TestResolveDefaultAuditDirHonorsXDGStateHome(t *testing.T) {
 	got := audit.ResolveDefaultAuditDir()
 
 	expected := filepath.Join(customState, audit.UserAuditDirRelative)
-	assert.Equal(t, expected, got, "audit dir must be $XDG_STATE_HOME/linodemcp when set")
+	checkEqual(t, expected, got, "audit dir must be $XDG_STATE_HOME/linodemcp when set")
 }
 
 // TestResolveDefaultAuditDirFallsBackToHomeDir verifies the
@@ -44,7 +41,7 @@ func TestResolveDefaultAuditDirFallsBackToHomeDir(t *testing.T) {
 	systemPath := audit.SystemAuditDir
 	homePath := filepath.Join(fakeHome, ".local", "state", audit.UserAuditDirRelative)
 
-	require.True(
+	mustTrue(
 		t,
 		got == systemPath || got == homePath,
 		"audit dir must be system path or home-based path; got %q", got,
@@ -57,7 +54,7 @@ func TestResolveDefaultAuditDirFallsBackToHomeDir(t *testing.T) {
 func TestUserAuditDirRelativeConstantValue(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(
+	checkEqual(
 		t, "linodemcp", audit.UserAuditDirRelative,
 		"UserAuditDirRelative is part of the on-disk layout contract; "+
 			"a rename here breaks existing deployments",
@@ -69,7 +66,7 @@ func TestUserAuditDirRelativeConstantValue(t *testing.T) {
 func TestSystemAuditDirConstantValue(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(
+	checkEqual(
 		t, "/var/log/linodemcp", audit.SystemAuditDir,
 		"SystemAuditDir is part of the on-disk layout contract; "+
 			"a change here breaks existing system-service deployments",

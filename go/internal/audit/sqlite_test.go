@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
@@ -20,7 +17,7 @@ func openTestSQLiteSink(t *testing.T) *audit.SQLiteSink {
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
 
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)
-	require.NoError(t, err, "NewSQLiteSink must succeed at a fresh tmp path")
+	mustNoError(t, err, "NewSQLiteSink must succeed at a fresh tmp path")
 
 	t.Cleanup(func() { _ = sink.Close() })
 
@@ -69,15 +66,15 @@ func TestSQLiteSinkInsertsAndReadsBack(t *testing.T) {
 		 FROM events WHERE event_id = ?`,
 		evt.EventID,
 	)
-	require.NoError(t, row.Scan(&tool, &capability, &status, &latencyMS, &argsJSON, &redacted),
+	mustNoError(t, row.Scan(&tool, &capability, &status, &latencyMS, &argsJSON, &redacted),
 		"the written row must be readable")
 
-	assert.Equal(t, "linode_instance_create", tool)
-	assert.Equal(t, "write", capability, "capability stored as its string form")
-	assert.Equal(t, "success", status)
-	assert.Equal(t, int64(42), latencyMS)
-	assert.JSONEq(t, `{"label":"web-1","region":"us-east"}`, argsJSON, "args stored as JSON")
-	assert.JSONEq(t, `["token"]`, redacted, "redacted-key list stored as JSON")
+	checkEqual(t, "linode_instance_create", tool)
+	checkEqual(t, "write", capability, "capability stored as its string form")
+	checkEqual(t, "success", status)
+	checkEqual(t, int64(42), latencyMS)
+	checkJSONEq(t, `{"label":"web-1","region":"us-east"}`, argsJSON, "args stored as JSON")
+	checkJSONEq(t, `["token"]`, redacted, "redacted-key list stored as JSON")
 }
 
 // TestSQLiteSinkIgnoresDuplicateEventID verifies INSERT OR IGNORE
@@ -98,8 +95,8 @@ func TestSQLiteSinkIgnoresDuplicateEventID(t *testing.T) {
 
 	row := sink.DB().QueryRowContext(t.Context(),
 		`SELECT COUNT(*) FROM events WHERE event_id = ?`, evt.EventID)
-	require.NoError(t, row.Scan(&count))
-	assert.Equal(t, 1, count, "duplicate event_id must not create a second row")
+	mustNoError(t, row.Scan(&count))
+	checkEqual(t, 1, count, "duplicate event_id must not create a second row")
 }
 
 // TestSQLiteSinkStoresNullsForAbsentOptionals verifies plan_id and
@@ -120,8 +117,8 @@ func TestSQLiteSinkStoresNullsForAbsentOptionals(t *testing.T) {
 
 	row := sink.DB().QueryRowContext(t.Context(),
 		`SELECT plan_id, error FROM events WHERE event_id = ?`, evt.EventID)
-	require.NoError(t, row.Scan(&planID, &errCol))
+	mustNoError(t, row.Scan(&planID, &errCol))
 
-	assert.False(t, planID.Valid, "nil PlanID must store as NULL")
-	assert.False(t, errCol.Valid, "nil Error must store as NULL")
+	checkFalse(t, planID.Valid, "nil PlanID must store as NULL")
+	checkFalse(t, errCol.Valid, "nil Error must store as NULL")
 }
