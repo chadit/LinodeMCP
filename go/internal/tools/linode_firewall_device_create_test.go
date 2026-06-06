@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -25,18 +23,18 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 
 		tool, capability, handler := tools.NewLinodeFirewallDeviceCreateTool(&config.Config{})
 
-		assert.Equal(t, "linode_firewall_device_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		assert.Contains(t, tool.InputSchema.Properties, keyBetaID, "schema should include id property")
-		assert.Contains(t, tool.InputSchema.Properties, keyType, "schema should include type property")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm property")
-		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-		assert.Contains(t, tool.InputSchema.Required, keyBetaID, "schema should require id")
-		assert.Contains(t, tool.InputSchema.Required, keyType, "schema should require type")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
+		expectEqual(t, "linode_firewall_device_create", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectEqual(t, profiles.CapWrite, capability, "tool should be write capability")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
+		expectContains(t, tool.InputSchema.Properties, keyBetaID, "schema should include id property")
+		expectContains(t, tool.InputSchema.Properties, keyType, "schema should include type property")
+		expectContains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm property")
+		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
+		expectContains(t, tool.InputSchema.Required, keyBetaID, "schema should require id")
+		expectContains(t, tool.InputSchema.Required, keyType, "schema should require type")
+		expectContains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
 	})
 
 	t.Run("create success", func(t *testing.T) {
@@ -53,16 +51,16 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/firewalls/123/devices", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/networking/firewalls/123/devices", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request should not include query params")
 
 			var got linode.CreateFirewallDeviceRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be JSON")
-			assert.Equal(t, linode.CreateFirewallDeviceRequest{ID: 456, Type: monitorAlertDefinitionToolServiceType}, got)
+			checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be JSON")
+			checkEqual(t, linode.CreateFirewallDeviceRequest{ID: 456, Type: monitorAlertDefinitionToolServiceType}, got)
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(device))
+			checkNoError(t, json.NewEncoder(w).Encode(device))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -74,14 +72,14 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "should not be an error result")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Firewall device assigned successfully", "response should include message")
-		assert.Contains(t, textContent.Text, firewallDeviceLabelFixture, "response should include device entity label")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "Firewall device assigned successfully", "response should include message")
+		expectContains(t, textContent.Text, firewallDeviceLabelFixture, "response should include device entity label")
 	})
 
 	t.Run("create rejects invalid confirm before client call", func(t *testing.T) {
@@ -118,11 +116,11 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should not return Go error")
-				require.NotNil(t, result, "handler should return a result")
-				assert.True(t, result.IsError, "invalid confirm should be rejected")
+				expectNoError(t, err, "handler should not return Go error")
+				expectNotNil(t, result, "handler should return a result")
+				expectTrue(t, result.IsError, "invalid confirm should be rejected")
 				assertErrorContains(t, result, "confirm=true")
-				assert.False(t, called.Load(), "client should not be called without confirm")
+				expectFalse(t, called.Load(), "client should not be called without confirm")
 			})
 		}
 	})
@@ -162,10 +160,10 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should not return Go error")
-				require.NotNil(t, result, "handler should return a result")
-				assert.True(t, result.IsError, "invalid input should be rejected")
-				assert.False(t, called.Load(), "client should not be called for invalid input")
+				expectNoError(t, err, "handler should not return Go error")
+				expectNotNil(t, result, "handler should return a result")
+				expectTrue(t, result.IsError, "invalid input should be rejected")
+				expectFalse(t, called.Load(), "client should not be called for invalid input")
 			})
 		}
 	})
@@ -174,12 +172,12 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/firewalls/123/devices", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+			checkEqual(t, "/networking/firewalls/123/devices", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 		}))
 		t.Cleanup(srv.Close)
 
@@ -190,9 +188,9 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to create linode_firewall_device_create")
 	})
 }

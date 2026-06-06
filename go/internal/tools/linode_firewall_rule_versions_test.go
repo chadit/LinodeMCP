@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -25,12 +23,12 @@ func TestLinodeFirewallRuleVersionsListTool(t *testing.T) {
 
 		tool, capability, handler := tools.NewLinodeFirewallRuleVersionsListTool(&config.Config{})
 
-		assert.Equal(t, "linode_firewall_rule_versions_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
+		expectEqual(t, "linode_firewall_rule_versions_list", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
+		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -47,11 +45,11 @@ func TestLinodeFirewallRuleVersionsListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/firewalls/123/history", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/networking/firewalls/123/history", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(firewall))
+			checkNoError(t, json.NewEncoder(w).Encode(firewall))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -62,14 +60,14 @@ func TestLinodeFirewallRuleVersionsListTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "should not be an error result")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "web-firewall", "response should include firewall label")
-		assert.Contains(t, textContent.Text, "997dd135", "response should include rule fingerprint")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "web-firewall", "response should include firewall label")
+		expectContains(t, textContent.Text, "997dd135", "response should include rule fingerprint")
 	})
 
 	t.Run("rejects invalid firewall id before client call", func(t *testing.T) {
@@ -107,11 +105,11 @@ func TestLinodeFirewallRuleVersionsListTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should not return Go error")
-				require.NotNil(t, result, "handler should return a result")
-				assert.True(t, result.IsError, "invalid firewall_id should be rejected")
+				expectNoError(t, err, "handler should not return Go error")
+				expectNotNil(t, result, "handler should return a result")
+				expectTrue(t, result.IsError, "invalid firewall_id should be rejected")
 				assertErrorContains(t, result, errFirewallIDPositive)
-				assert.False(t, called.Load(), "client should not be called for invalid firewall_id")
+				expectFalse(t, called.Load(), "client should not be called for invalid firewall_id")
 			})
 		}
 	})
@@ -120,12 +118,12 @@ func TestLinodeFirewallRuleVersionsListTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/firewalls/123/history", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/networking/firewalls/123/history", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 		}))
 		t.Cleanup(srv.Close)
 
@@ -136,9 +134,9 @@ func TestLinodeFirewallRuleVersionsListTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to retrieve linode_firewall_rule_versions_list")
 	})
 }
@@ -151,14 +149,14 @@ func TestLinodeFirewallRuleVersionGetTool(t *testing.T) {
 
 		tool, capability, handler := tools.NewLinodeFirewallRuleVersionGetTool(&config.Config{})
 
-		assert.Equal(t, "linode_firewall_rule_version_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		assert.Contains(t, tool.InputSchema.Properties, keyVersion, "schema should include version property")
-		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-		assert.Contains(t, tool.InputSchema.Required, keyVersion, "schema should require version")
+		expectEqual(t, "linode_firewall_rule_version_get", tool.Name, "tool name should match")
+		expectNotEmpty(t, tool.Description, "tool should have a description")
+		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
+		expectNotNil(t, handler, "handler should not be nil")
+		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
+		expectContains(t, tool.InputSchema.Properties, keyVersion, "schema should include version property")
+		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
+		expectContains(t, tool.InputSchema.Required, keyVersion, "schema should require version")
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -167,11 +165,11 @@ func TestLinodeFirewallRuleVersionGetTool(t *testing.T) {
 		firewall := linode.Firewall{ID: 123, Label: "web-firewall", Rules: linode.FirewallRules{Version: 2, Fingerprint: "997dd135", Inbound: []linode.FirewallRule{{Action: policyAccept, Protocol: "TCP", Ports: "443", Label: "allow-https"}}}}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
+			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(firewall))
+			checkNoError(t, json.NewEncoder(w).Encode(firewall))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -182,15 +180,15 @@ func TestLinodeFirewallRuleVersionGetTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyVersion: float64(2)}))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		expectNoError(t, err, "handler should not return an error")
+		expectNotNil(t, result, "result should not be nil")
+		expectFalse(t, result.IsError, "should not be an error result")
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "web-firewall", "response should include firewall label")
-		assert.Contains(t, textContent.Text, "997dd135", "response should include rule fingerprint")
-		assert.Contains(t, textContent.Text, "allow-https", "response should include rule label")
+		expectTrue(t, ok, "content should be TextContent")
+		expectContains(t, textContent.Text, "web-firewall", "response should include firewall label")
+		expectContains(t, textContent.Text, "997dd135", "response should include rule fingerprint")
+		expectContains(t, textContent.Text, "allow-https", "response should include rule label")
 	})
 
 	t.Run("rejects invalid path params before client call", func(t *testing.T) {
@@ -232,10 +230,10 @@ func TestLinodeFirewallRuleVersionGetTool(t *testing.T) {
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-				require.NoError(t, err, "handler should not return Go error")
-				require.NotNil(t, result, "handler should return a result")
-				assert.True(t, result.IsError, "invalid path params should be rejected")
-				assert.False(t, called.Load(), "client should not be called for invalid path params")
+				expectNoError(t, err, "handler should not return Go error")
+				expectNotNil(t, result, "handler should return a result")
+				expectTrue(t, result.IsError, "invalid path params should be rejected")
+				expectFalse(t, called.Load(), "client should not be called for invalid path params")
 			})
 		}
 	})
@@ -244,12 +242,12 @@ func TestLinodeFirewallRuleVersionGetTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
+			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
+			checkEqual(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
+			checkNoError(t, writeErr)
 		}))
 		t.Cleanup(srv.Close)
 
@@ -260,9 +258,9 @@ func TestLinodeFirewallRuleVersionGetTool(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyVersion: float64(2)}))
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+		expectNoError(t, err, "handler should not return Go error")
+		expectNotNil(t, result, "handler should return a result")
+		expectTrue(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to retrieve linode_firewall_rule_version_get")
 	})
 }
