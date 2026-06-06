@@ -3,9 +3,6 @@ package profiles_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
@@ -22,7 +19,7 @@ func TestRequiredScopesForTagCreate(t *testing.T) {
 			profiles.ScopeNodeBalancersReadOnly,
 			profiles.ScopeVolumesReadOnly,
 		}
-		assert.Equal(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapRead))
+		assertEqual(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapRead))
 	})
 
 	t.Run("write", func(t *testing.T) {
@@ -35,7 +32,7 @@ func TestRequiredScopesForTagCreate(t *testing.T) {
 			profiles.ScopeNodeBalancersReadWrite,
 			profiles.ScopeVolumesReadWrite,
 		}
-		assert.Equal(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapWrite))
+		assertEqual(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapWrite))
 	})
 }
 
@@ -45,8 +42,8 @@ func TestRequiredScopesForTagCreate(t *testing.T) {
 func TestRequiredScopesMetaReturnsNil(t *testing.T) {
 	t.Parallel()
 
-	assert.Nil(t, profiles.RequiredScopes("hello", profiles.CapMeta))
-	assert.Nil(t, profiles.RequiredScopes("version", profiles.CapMeta))
+	assertNil(t, profiles.RequiredScopes("hello", profiles.CapMeta))
+	assertNil(t, profiles.RequiredScopes("version", profiles.CapMeta))
 }
 
 // TestRequiredScopesReadVsWrite covers the read-only/read-write split per
@@ -255,7 +252,7 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			t.Parallel()
 
 			got := profiles.RequiredScopes(tc.toolName, tc.capability)
-			assert.Equal(t, tc.want, got)
+			assertEqual(t, tc.want, got)
 		})
 	}
 }
@@ -271,7 +268,7 @@ func TestRequiredScopesMultiCategory(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_instance_create", profiles.CapWrite)
-		assert.ElementsMatch(
+		assertElementsMatch(
 			t,
 			[]profiles.Scope{
 				profiles.ScopeLinodesReadWrite,
@@ -285,7 +282,7 @@ func TestRequiredScopesMultiCategory(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_instance_clone", profiles.CapWrite)
-		assert.ElementsMatch(
+		assertElementsMatch(
 			t,
 			[]profiles.Scope{
 				profiles.ScopeLinodesReadWrite,
@@ -299,7 +296,7 @@ func TestRequiredScopesMultiCategory(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_lke_cluster_create", profiles.CapWrite)
-		assert.ElementsMatch(
+		assertElementsMatch(
 			t,
 			[]profiles.Scope{
 				profiles.ScopeLKEReadWrite,
@@ -319,7 +316,7 @@ func TestRequiredScopesUnknownToolReturnsNil(t *testing.T) {
 	t.Parallel()
 
 	got := profiles.RequiredScopes("not_a_real_tool", profiles.CapWrite)
-	assert.Nil(t, got)
+	assertNil(t, got)
 }
 
 // TestRequiredScopesPrefixOrdering confirms that longer prefixes win
@@ -349,8 +346,8 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 
 	for _, tool := range cases {
 		got := profiles.RequiredScopes(tool, profiles.CapWrite)
-		require.NotEmpty(t, got, "tool %s should resolve to a non-empty scope list", tool)
-		assert.Contains(
+		requireNotEmptyf(t, got, "tool %s should resolve to a non-empty scope list", tool)
+		assertContainsf(
 			t, got, profiles.ScopeLinodesReadWrite,
 			"tool %s should require linodes:read_write", tool,
 		)
@@ -396,7 +393,7 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 			t.Parallel()
 
 			got := profiles.RequiredScopes(tc.tool, tc.cap)
-			assert.Equal(t, []profiles.Scope{tc.want}, got)
+			assertEqual(t, []profiles.Scope{tc.want}, got)
 		})
 	}
 }
@@ -411,13 +408,13 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 func TestScopeCatalogTokensNotFlaggedAsCredentials(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, profiles.ScopeTokensReadOnly, profiles.Scope("tokens:read_only"))
-	assert.Equal(t, profiles.ScopeTokensReadWrite, profiles.Scope("tokens:read_write"))
+	assertEqual(t, profiles.ScopeTokensReadOnly, profiles.Scope("tokens:read_only"))
+	assertEqual(t, profiles.ScopeTokensReadWrite, profiles.Scope("tokens:read_write"))
 }
 
 func TestRequiredScopesForTagDelete(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, []profiles.Scope{profiles.ScopeAccountReadWrite}, profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy))
-	assert.Contains(t, profiles.Categories("linode_tag_delete"), "core")
+	assertEqual(t, []profiles.Scope{profiles.ScopeAccountReadWrite}, profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy))
+	assertContains(t, profiles.Categories("linode_tag_delete"), "core")
 }

@@ -3,9 +3,6 @@ package builder_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/profiles/builder"
 )
@@ -35,8 +32,8 @@ func TestNewRegistryStartsEmpty(t *testing.T) {
 
 	reg := builder.NewRegistry()
 
-	require.NotNil(t, reg, "NewRegistry must return a usable registry")
-	assert.Empty(t, reg.List(), "new registry must hold zero drafts")
+	requireNotNil(t, reg, "NewRegistry must return a usable registry")
+	assertEmpty(t, reg.List(), "new registry must hold zero drafts")
 }
 
 // TestCreateMinimalDraftFromScratch covers the no-clone-from path: a
@@ -49,14 +46,14 @@ func TestCreateMinimalDraftFromScratch(t *testing.T) {
 
 	draft, err := reg.Create("dns-readall", nil)
 
-	require.NoError(t, err)
-	require.NotNil(t, draft)
-	assert.Equal(t, "dns-readall", draft.Name)
-	assert.Empty(t, draft.Description)
-	assert.Empty(t, draft.AllowedTools)
-	assert.Empty(t, draft.AllowedEnvironments)
-	assert.Empty(t, draft.RequiredTokenScopes)
-	assert.False(t, draft.AllowYolo)
+	requireNoError(t, err)
+	requireNotNil(t, draft)
+	assertEqual(t, "dns-readall", draft.Name)
+	assertEmpty(t, draft.Description)
+	assertEmpty(t, draft.AllowedTools)
+	assertEmpty(t, draft.AllowedEnvironments)
+	assertEmpty(t, draft.RequiredTokenScopes)
+	assertFalse(t, draft.AllowYolo)
 }
 
 // TestCreateClonesAllFieldsFromProfile verifies copy fidelity. Every
@@ -71,14 +68,14 @@ func TestCreateClonesAllFieldsFromProfile(t *testing.T) {
 
 	draft, err := reg.Create("my-dns", src)
 
-	require.NoError(t, err)
-	require.NotNil(t, draft)
-	assert.Equal(t, "my-dns", draft.Name)
-	assert.Equal(t, src.Description, draft.Description)
-	assert.Equal(t, src.AllowedTools, draft.AllowedTools)
-	assert.Equal(t, src.AllowedEnvironments, draft.AllowedEnvironments)
-	assert.Equal(t, src.RequiredTokenScopes, draft.RequiredTokenScopes)
-	assert.Equal(t, src.AllowYolo, draft.AllowYolo)
+	requireNoError(t, err)
+	requireNotNil(t, draft)
+	assertEqual(t, "my-dns", draft.Name)
+	assertEqual(t, src.Description, draft.Description)
+	assertEqual(t, src.AllowedTools, draft.AllowedTools)
+	assertEqual(t, src.AllowedEnvironments, draft.AllowedEnvironments)
+	assertEqual(t, src.RequiredTokenScopes, draft.RequiredTokenScopes)
+	assertEqual(t, src.AllowYolo, draft.AllowYolo)
 }
 
 // TestCreateClonedDraftIsolatesFromSource verifies that mutating the
@@ -94,13 +91,13 @@ func TestCreateClonedDraftIsolatesFromSource(t *testing.T) {
 	originalTools := append([]string(nil), src.AllowedTools...)
 
 	draft, err := reg.Create("my-dns", src)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	draft.AllowedTools = append(draft.AllowedTools, "linode_domain_list")
 
-	assert.Equal(t, originalTools, src.AllowedTools,
+	assertEqual(t, originalTools, src.AllowedTools,
 		"draft mutation must not propagate to source profile")
-	assert.Len(t, draft.AllowedTools, len(originalTools)+1,
+	assertLen(t, draft.AllowedTools, len(originalTools)+1,
 		"draft must hold the additional tool")
 }
 
@@ -114,8 +111,8 @@ func TestCreateRefusesEmptyName(t *testing.T) {
 
 	draft, err := reg.Create("", nil)
 
-	require.ErrorIs(t, err, builder.ErrDraftNameEmpty)
-	assert.Nil(t, draft)
+	requireErrorIs(t, err, builder.ErrDraftNameEmpty)
+	assertNil(t, draft)
 }
 
 // TestCreateRefusesDuplicateName locks in the no-silent-overwrite rule:
@@ -126,12 +123,12 @@ func TestCreateRefusesDuplicateName(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create("dns-readall", nil)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	dup, err := reg.Create("dns-readall", nil)
 
-	require.ErrorIs(t, err, builder.ErrDraftExists)
-	assert.Nil(t, dup)
+	requireErrorIs(t, err, builder.ErrDraftExists)
+	assertNil(t, dup)
 }
 
 // TestGetReturnsLiveDraft verifies that Get returns the same pointer
@@ -141,12 +138,12 @@ func TestGetReturnsLiveDraft(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	original, err := reg.Create("dns-readall", nil)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	got, ok := reg.Get("dns-readall")
 
-	require.True(t, ok)
-	assert.Same(t, original, got, "Get must return the registry's own draft pointer")
+	requireTrue(t, ok)
+	assertSame(t, original, got, "Get must return the registry's own draft pointer")
 }
 
 // TestGetMissingReturnsFalse covers the not-found path. Tool handlers
@@ -158,8 +155,8 @@ func TestGetMissingReturnsFalse(t *testing.T) {
 
 	got, ok := reg.Get("nonexistent")
 
-	assert.False(t, ok)
-	assert.Nil(t, got)
+	assertFalse(t, ok)
+	assertNil(t, got)
 }
 
 // TestDiscardRemovesDraft covers the happy path. After discard the
@@ -169,14 +166,14 @@ func TestDiscardRemovesDraft(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create("dns-readall", nil)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	removed := reg.Discard("dns-readall")
 
-	assert.True(t, removed, "Discard must report removal of an existing draft")
-	assert.Empty(t, reg.List(), "discarded draft must not appear in List")
+	assertTrue(t, removed, "Discard must report removal of an existing draft")
+	assertEmpty(t, reg.List(), "discarded draft must not appear in List")
 	_, ok := reg.Get("dns-readall")
-	assert.False(t, ok, "discarded draft must not be retrievable via Get")
+	assertFalse(t, ok, "discarded draft must not be retrievable via Get")
 }
 
 // TestDiscardMissingIsIdempotent locks in the idempotent contract: a
@@ -190,7 +187,7 @@ func TestDiscardMissingIsIdempotent(t *testing.T) {
 
 	removed := reg.Discard("nonexistent")
 
-	assert.False(t, removed)
+	assertFalse(t, removed)
 }
 
 // TestListReturnsSortedNames locks in the sort contract. Stable output
@@ -201,15 +198,15 @@ func TestListReturnsSortedNames(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	_, err := reg.Create("zebra", nil)
-	require.NoError(t, err)
+	requireNoError(t, err)
 	_, err = reg.Create("alpha", nil)
-	require.NoError(t, err)
+	requireNoError(t, err)
 	_, err = reg.Create("middle", nil)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	names := reg.List()
 
-	assert.Equal(t, []string{"alpha", "middle", "zebra"}, names)
+	assertEqual(t, []string{"alpha", "middle", "zebra"}, names)
 }
 
 // TestListEmptyRegistryReturnsEmptySlice locks the non-nil contract:
@@ -223,6 +220,6 @@ func TestListEmptyRegistryReturnsEmptySlice(t *testing.T) {
 
 	names := reg.List()
 
-	require.NotNil(t, names, "List must return a non-nil slice")
-	assert.Empty(t, names)
+	requireNotNil(t, names, "List must return a non-nil slice")
+	assertEmpty(t, names)
 }

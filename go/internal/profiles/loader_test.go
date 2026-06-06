@@ -3,9 +3,6 @@ package profiles_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
@@ -38,10 +35,10 @@ func TestResolveActiveProfileDefaultsWhenUnset(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err)
-	assert.Equal(t, profiles.BuiltinDefault, got.Name, "empty ActiveProfile must fall back to default")
-	assert.False(t, got.Disabled, "resolved default must not be disabled")
-	assert.NotEmpty(t, got.AllowedTools, "default profile should resolve to at least one read tool")
+	requireNoError(t, err)
+	assertEqual(t, profiles.BuiltinDefault, got.Name, "empty ActiveProfile must fall back to default")
+	assertFalse(t, got.Disabled, "resolved default must not be disabled")
+	assertNotEmpty(t, got.AllowedTools, "default profile should resolve to at least one read tool")
 }
 
 func TestResolveActiveProfileSelectsBuiltin(t *testing.T) {
@@ -51,9 +48,9 @@ func TestResolveActiveProfileSelectsBuiltin(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err)
-	assert.Equal(t, profiles.BuiltinComputeAdmin, got.Name)
-	assert.Contains(t, got.AllowedTools, "linode_instance_create",
+	requireNoError(t, err)
+	assertEqual(t, profiles.BuiltinComputeAdmin, got.Name)
+	assertContains(t, got.AllowedTools, "linode_instance_create",
 		"compute-admin must include instance writes from the catalog")
 }
 
@@ -69,8 +66,8 @@ func TestResolveActiveProfileRefusesDisabledBuiltin(t *testing.T) {
 
 	_, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.Error(t, err)
-	assert.ErrorIs(t, err, profiles.ErrActiveProfileDisabled)
+	requireError(t, err)
+	assertErrorIs(t, err, profiles.ErrActiveProfileDisabled)
 }
 
 func TestResolveActiveProfileUserDefinedLiteral(t *testing.T) {
@@ -88,10 +85,10 @@ func TestResolveActiveProfileUserDefinedLiteral(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err)
-	assert.Equal(t, "my-prof", got.Name)
-	assert.Equal(t, "single tool", got.Description)
-	assert.Equal(t, []string{toolVolumesList}, got.AllowedTools)
+	requireNoError(t, err)
+	assertEqual(t, "my-prof", got.Name)
+	assertEqual(t, "single tool", got.Description)
+	assertEqual(t, []string{toolVolumesList}, got.AllowedTools)
 }
 
 func TestResolveActiveProfileWildcardExpansion(t *testing.T) {
@@ -108,8 +105,8 @@ func TestResolveActiveProfileWildcardExpansion(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err)
-	assert.ElementsMatch(
+	requireNoError(t, err)
+	assertElementsMatch(
 		t,
 		[]string{toolVolumesList, toolVolumeCreate, toolVolumeClone, toolVolumeDelete, toolVolumeResize},
 		got.AllowedTools,
@@ -132,11 +129,11 @@ func TestResolveActiveProfileDeniedWinsOverAllowed(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err)
-	assert.NotContains(t, got.AllowedTools, toolVolumeDelete,
+	requireNoError(t, err)
+	assertNotContains(t, got.AllowedTools, toolVolumeDelete,
 		"explicit deny must remove a tool the allowed wildcard would have included")
-	assert.Contains(t, got.AllowedTools, toolVolumeCreate)
-	assert.Contains(t, got.AllowedTools, toolVolumeResize)
+	assertContains(t, got.AllowedTools, toolVolumeCreate)
+	assertContains(t, got.AllowedTools, toolVolumeResize)
 }
 
 func TestResolveActiveProfileUnknownName(t *testing.T) {
@@ -146,8 +143,8 @@ func TestResolveActiveProfileUnknownName(t *testing.T) {
 
 	_, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.Error(t, err)
-	assert.ErrorIs(t, err, profiles.ErrActiveProfileUnknown)
+	requireError(t, err)
+	assertErrorIs(t, err, profiles.ErrActiveProfileUnknown)
 }
 
 func TestResolveActiveProfileStarWildcardMatchesEverything(t *testing.T) {
@@ -165,14 +162,14 @@ func TestResolveActiveProfileStarWildcardMatchesEverything(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, catalog)
 
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	wantNames := make([]string, 0, len(catalog))
 	for _, descriptor := range catalog {
 		wantNames = append(wantNames, descriptor.Name)
 	}
 
-	assert.ElementsMatch(t, wantNames, got.AllowedTools, "* alone must match every registered tool")
+	assertElementsMatch(t, wantNames, got.AllowedTools, "* alone must match every registered tool")
 }
 
 func TestResolveActiveProfileWildcardMatchingNothing(t *testing.T) {
@@ -189,8 +186,8 @@ func TestResolveActiveProfileWildcardMatchingNothing(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err, "unmatched wildcards must warn, not error")
-	assert.Empty(t, got.AllowedTools, "unmatched wildcard must produce an empty resolved list")
+	requireNoError(t, err, "unmatched wildcards must warn, not error")
+	assertEmpty(t, got.AllowedTools, "unmatched wildcard must produce an empty resolved list")
 }
 
 func TestResolveActiveProfileOverrideIgnoredForUserDefined(t *testing.T) {
@@ -210,10 +207,10 @@ func TestResolveActiveProfileOverrideIgnoredForUserDefined(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err, "builtin override must not disable a user-defined profile")
-	assert.Equal(t, profileNameCustom, got.Name)
-	assert.False(t, got.Disabled)
-	assert.Equal(t, []string{toolVolumesList}, got.AllowedTools)
+	requireNoError(t, err, "builtin override must not disable a user-defined profile")
+	assertEqual(t, profileNameCustom, got.Name)
+	assertFalse(t, got.Disabled)
+	assertEqual(t, []string{toolVolumesList}, got.AllowedTools)
 }
 
 func TestResolveActiveProfileUserDefinedPropagatesSettings(t *testing.T) {
@@ -234,8 +231,8 @@ func TestResolveActiveProfileUserDefinedPropagatesSettings(t *testing.T) {
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"dev"}, got.AllowedEnvironments)
-	assert.Equal(t, []string{"volumes:read_only"}, got.RequiredTokenScopes)
-	assert.True(t, got.AllowYolo, "user-defined AllowYolo must propagate to the resolved profile")
+	requireNoError(t, err)
+	assertEqual(t, []string{"dev"}, got.AllowedEnvironments)
+	assertEqual(t, []string{"volumes:read_only"}, got.RequiredTokenScopes)
+	assertTrue(t, got.AllowYolo, "user-defined AllowYolo must propagate to the resolved profile")
 }

@@ -3,10 +3,8 @@ package profiles_test
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -268,8 +266,8 @@ func TestBuiltinProfilesAreNonEmpty(t *testing.T) {
 
 	for _, name := range expected {
 		profile, found := builtins[name]
-		require.Truef(t, found, "built-in profile %q should be present", name)
-		assert.NotEmptyf(
+		requireTruef(t, found, "built-in profile %q should be present", name)
+		assertNotEmptyf(
 			t,
 			profile.AllowedTools,
 			"profile %q should resolve at least one tool from the catalog",
@@ -287,10 +285,10 @@ func TestDefaultProfileContainsOnlyReadAndMeta(t *testing.T) {
 	want := readAndMetaNames(catalog)
 	got := builtins[profiles.BuiltinDefault].AllowedTools
 
-	assert.Equal(t, want, got, "default profile must contain exactly the read/meta tools from the catalog")
+	assertEqual(t, want, got, "default profile must contain exactly the read/meta tools from the catalog")
 
 	gotReadonly := builtins[profiles.BuiltinReadonlyFull].AllowedTools
-	assert.Equal(t, want, gotReadonly, "readonly-full profile must mirror default's tool set")
+	assertEqual(t, want, gotReadonly, "readonly-full profile must mirror default's tool set")
 }
 
 func TestEmergencyAllowsYolo(t *testing.T) {
@@ -298,9 +296,9 @@ func TestEmergencyAllowsYolo(t *testing.T) {
 
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 
-	assert.True(t, builtins[profiles.BuiltinEmergency].AllowYolo, "emergency must opt into yolo")
-	assert.False(t, builtins[profiles.BuiltinDefault].AllowYolo, "default must never allow yolo")
-	assert.False(t, builtins[profiles.BuiltinFullAccess].AllowYolo, "full-access must not allow yolo by default")
+	assertTrue(t, builtins[profiles.BuiltinEmergency].AllowYolo, "emergency must opt into yolo")
+	assertFalse(t, builtins[profiles.BuiltinDefault].AllowYolo, "default must never allow yolo")
+	assertFalse(t, builtins[profiles.BuiltinFullAccess].AllowYolo, "full-access must not allow yolo by default")
 }
 
 func TestFullAccessAndEmergencyDisabled(t *testing.T) {
@@ -308,10 +306,10 @@ func TestFullAccessAndEmergencyDisabled(t *testing.T) {
 
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 
-	assert.True(t, builtins[profiles.BuiltinFullAccess].Disabled, "full-access must be disabled by default")
-	assert.True(t, builtins[profiles.BuiltinEmergency].Disabled, "emergency must be disabled by default")
-	assert.False(t, builtins[profiles.BuiltinDefault].Disabled, "default must remain enabled")
-	assert.False(t, builtins[profiles.BuiltinComputeAdmin].Disabled, "compute-admin must remain enabled")
+	assertTrue(t, builtins[profiles.BuiltinFullAccess].Disabled, "full-access must be disabled by default")
+	assertTrue(t, builtins[profiles.BuiltinEmergency].Disabled, "emergency must be disabled by default")
+	assertFalse(t, builtins[profiles.BuiltinDefault].Disabled, "default must remain enabled")
+	assertFalse(t, builtins[profiles.BuiltinComputeAdmin].Disabled, "compute-admin must remain enabled")
 }
 
 func TestComputeAdminIncludesInstanceWrites(t *testing.T) {
@@ -320,11 +318,11 @@ func TestComputeAdminIncludesInstanceWrites(t *testing.T) {
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 	allowed := builtins[profiles.BuiltinComputeAdmin].AllowedTools
 
-	assert.Contains(t, allowed, "linode_instance_create", "compute-admin must include instance writes")
-	assert.Contains(t, allowed, "linode_instance_delete", "compute-admin must include instance destroys")
-	assert.Contains(t, allowed, toolVolumeCreate, "compute-admin must include volume writes")
-	assert.Contains(t, allowed, "linode_sshkey_create", "compute-admin must include ssh key writes")
-	assert.Contains(t, allowed, "linode_instance_backup_create", "compute-admin must include backup writes")
+	assertContains(t, allowed, "linode_instance_create", "compute-admin must include instance writes")
+	assertContains(t, allowed, "linode_instance_delete", "compute-admin must include instance destroys")
+	assertContains(t, allowed, toolVolumeCreate, "compute-admin must include volume writes")
+	assertContains(t, allowed, "linode_sshkey_create", "compute-admin must include ssh key writes")
+	assertContains(t, allowed, "linode_instance_backup_create", "compute-admin must include backup writes")
 }
 
 func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
@@ -333,17 +331,17 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 	allowed := builtins[profiles.BuiltinNetworkAdmin].AllowedTools
 
-	assert.NotContains(t, allowed, "linode_instance_create", "network-admin must not include compute writes")
-	assert.NotContains(t, allowed, toolVolumeCreate, "network-admin must not include block-storage writes")
-	assert.Contains(t, allowed, "linode_firewall_create", "network-admin must include firewall writes")
-	assert.Contains(t, allowed, "linode_networking_ip_get", "network-admin must include networking IP reads")
-	assert.Contains(t, allowed, "linode_networking_ip_update_rdns", "network-admin must include networking IP RDNS writes")
-	assert.Contains(t, allowed, "linode_networking_ip_allocate", "network-admin must include networking IP writes")
-	assert.Contains(t, allowed, "linode_networking_ips_assign", "network-admin must include networking IP assignment writes")
-	assert.Contains(t, allowed, "linode_networking_ipv4_assign", "network-admin must include networking IPv4 assignment writes")
-	assert.Contains(t, allowed, "linode_networking_ips_share", "network-admin must include networking IP share writes")
-	assert.Contains(t, allowed, "linode_domain_create", "network-admin must include DNS writes")
-	assert.Contains(t, allowed, "linode_vpc_create", "network-admin must include VPC writes")
+	assertNotContains(t, allowed, "linode_instance_create", "network-admin must not include compute writes")
+	assertNotContains(t, allowed, toolVolumeCreate, "network-admin must not include block-storage writes")
+	assertContains(t, allowed, "linode_firewall_create", "network-admin must include firewall writes")
+	assertContains(t, allowed, "linode_networking_ip_get", "network-admin must include networking IP reads")
+	assertContains(t, allowed, "linode_networking_ip_update_rdns", "network-admin must include networking IP RDNS writes")
+	assertContains(t, allowed, "linode_networking_ip_allocate", "network-admin must include networking IP writes")
+	assertContains(t, allowed, "linode_networking_ips_assign", "network-admin must include networking IP assignment writes")
+	assertContains(t, allowed, "linode_networking_ipv4_assign", "network-admin must include networking IPv4 assignment writes")
+	assertContains(t, allowed, "linode_networking_ips_share", "network-admin must include networking IP share writes")
+	assertContains(t, allowed, "linode_domain_create", "network-admin must include DNS writes")
+	assertContains(t, allowed, "linode_vpc_create", "network-admin must include VPC writes")
 }
 
 func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
@@ -352,49 +350,49 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 
 	for name, profile := range builtins {
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_account_update",
 			"profile %q must never include CapAdmin tools",
 			name,
 		)
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_account_settings_update",
 			"profile %q must never include account settings admin tool",
 			name,
 		)
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_account_settings_managed_enable",
 			"profile %q must never include managed enable admin tool",
 			name,
 		)
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_profile_security_questions_answer",
 			"profile %q must never include profile security questions admin tool",
 			name,
 		)
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_account_beta_enroll",
 			"profile %q must never include beta enrollment admin tool",
 			name,
 		)
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_account_cancel",
 			"profile %q must never include account cancellation admin tool",
 			name,
 		)
-		assert.NotContainsf(
+		assertNotContainsf(
 			t,
 			profile.AllowedTools,
 			"linode_account_event_seen",
@@ -435,7 +433,7 @@ func TestRequiredTokenScopesDerivedFromTools(t *testing.T) {
 			}
 		}
 
-		assert.Lenf(
+		assertLenf(
 			t,
 			prof.RequiredTokenScopes,
 			len(expected),
@@ -445,7 +443,7 @@ func TestRequiredTokenScopesDerivedFromTools(t *testing.T) {
 
 		for _, scope := range prof.RequiredTokenScopes {
 			_, found := expected[scope]
-			assert.Truef(
+			assertTruef(
 				t, found,
 				"profile %s has scope %q that no allowed tool requires",
 				name, scope,
@@ -469,14 +467,12 @@ func TestRequiredTokenScopesReadOnlyProfilesHaveNoWriteScopes(t *testing.T) {
 		profiles.BuiltinReadonlyFull,
 	} {
 		prof, ok := built[name]
-		require.Truef(t, ok, "built-in %s must exist", name)
+		requireTruef(t, ok, "built-in %s must exist", name)
 
 		for _, scope := range prof.RequiredTokenScopes {
-			assert.NotContainsf(
-				t, scope, ":read_write",
-				"profile %s is read-only but lists a write scope %q",
-				name, scope,
-			)
+			if strings.Contains(scope, ":read_write") {
+				t.Errorf("profile %s is read-only but lists a write scope %q", name, scope)
+			}
 		}
 	}
 }
@@ -492,7 +488,7 @@ func TestRequiredTokenScopesFullAccessIncludesLinodesWrite(t *testing.T) {
 	built := profiles.BuiltinProfiles(catalog)
 
 	full, ok := built[profiles.BuiltinFullAccess]
-	require.True(t, ok)
+	requireTrue(t, ok)
 
 	// Each entry below is a scope the synthetic catalog must produce for
 	// full-access. images:read_only is present because instance_create
@@ -511,7 +507,7 @@ func TestRequiredTokenScopesFullAccessIncludesLinodesWrite(t *testing.T) {
 	}
 
 	for _, scope := range want {
-		assert.Containsf(
+		assertContainsf(
 			t, full.RequiredTokenScopes, scope,
 			"full-access profile should include %s in its required scopes", scope,
 		)
@@ -526,7 +522,7 @@ func TestRequiredTokenScopesSorted(t *testing.T) {
 	built := profiles.BuiltinProfiles(syntheticCatalog())
 
 	for name, prof := range built {
-		assert.Truef(
+		assertTruef(
 			t,
 			slices.IsSorted(prof.RequiredTokenScopes),
 			"profile %s must have RequiredTokenScopes sorted ascending for parity",
@@ -541,104 +537,104 @@ func TestJSONRoundtrip(t *testing.T) {
 	catalog := syntheticCatalog()
 
 	data, err := profiles.BuiltinCatalogJSON(catalog)
-	require.NoError(t, err, "BuiltinCatalogJSON should succeed on a healthy catalog")
-	require.NotEmpty(t, data, "JSON output must not be empty")
+	requireNoError(t, err, "BuiltinCatalogJSON should succeed on a healthy catalog")
+	requireNotEmpty(t, data, "JSON output must not be empty")
 
 	var decoded []map[string]any
 
-	require.NoError(t, json.Unmarshal(data, &decoded), "JSON should round-trip cleanly")
-	require.Len(t, decoded, 8, "catalog must contain all eight built-in profiles")
+	requireNoError(t, json.Unmarshal(data, &decoded), "JSON should round-trip cleanly")
+	requireLen(t, decoded, 8, "catalog must contain all eight built-in profiles")
 
 	names := make([]string, 0, len(decoded))
 	for _, entry := range decoded {
 		name, ok := entry["name"].(string)
-		require.True(t, ok, "every entry must carry a string name")
+		requireTrue(t, ok, "every entry must carry a string name")
 
 		names = append(names, name)
 	}
 
-	assert.True(t, slices.IsSorted(names), "profile entries must be sorted by name for stable parity comparison")
+	assertTrue(t, slices.IsSorted(names), "profile entries must be sorted by name for stable parity comparison")
 
 	// Re-marshal and require byte-identical output to confirm determinism.
 	second, err := profiles.BuiltinCatalogJSON(catalog)
-	require.NoError(t, err)
-	assert.Equal(t, data, second, "BuiltinCatalogJSON must be deterministic across calls")
+	requireNoError(t, err)
+	assertEqual(t, data, second, "BuiltinCatalogJSON must be deterministic across calls")
 }
 
 func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_account_invoices"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_payments"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_payment_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_promo_credit"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_invoice_items"), "core")
+	assertContains(t, profiles.Categories("linode_account_invoices"), "core")
+	assertContains(t, profiles.Categories("linode_account_payments"), "core")
+	assertContains(t, profiles.Categories("linode_account_payment_create"), "core")
+	assertContains(t, profiles.Categories("linode_account_promo_credit"), "core")
+	assertContains(t, profiles.Categories("linode_account_invoice_items"), "core")
 }
 
 func TestCategoriesIncludesAccountPaymentMethodsInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_account_payment_methods"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_payment_method_get"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_payment_method_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_payment_method_delete"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_payment_method_make_default"), "core")
+	assertContains(t, profiles.Categories("linode_account_payment_methods"), "core")
+	assertContains(t, profiles.Categories("linode_account_payment_method_get"), "core")
+	assertContains(t, profiles.Categories("linode_account_payment_method_create"), "core")
+	assertContains(t, profiles.Categories("linode_account_payment_method_delete"), "core")
+	assertContains(t, profiles.Categories("linode_account_payment_method_make_default"), "core")
 }
 
 func TestCategoriesIncludesProfilePreferencesInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_profile_preferences"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_security_questions_answer"), "core")
+	assertContains(t, profiles.Categories("linode_profile_preferences"), "core")
+	assertContains(t, profiles.Categories("linode_profile_security_questions_answer"), "core")
 }
 
 func TestCategoriesIncludesProfileTokenCreateInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_profile_token_create"), "core")
+	assertContains(t, profiles.Categories("linode_profile_token_create"), "core")
 }
 
 func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_account_oauth_clients"), "core")
+	assertContains(t, profiles.Categories("linode_account_oauth_clients"), "core")
 }
 
 func TestCategoriesIncludesProfileDeviceGetInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_profile_device_get"), "core")
+	assertContains(t, profiles.Categories("linode_profile_device_get"), "core")
 }
 
 func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_profile_login_get"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_tfa_enable"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_phone_number_send"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_phone_number_delete"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_phone_number_verify"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_tfa_disable"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_tfa_enable_confirm"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_app_get"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_app_delete"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_device_revoke"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_apps"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_security_questions"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_devices"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_preferences_update"), "core")
+	assertContains(t, profiles.Categories("linode_profile_login_get"), "core")
+	assertContains(t, profiles.Categories("linode_profile_tfa_enable"), "core")
+	assertContains(t, profiles.Categories("linode_profile_phone_number_send"), "core")
+	assertContains(t, profiles.Categories("linode_profile_phone_number_delete"), "core")
+	assertContains(t, profiles.Categories("linode_profile_phone_number_verify"), "core")
+	assertContains(t, profiles.Categories("linode_profile_tfa_disable"), "core")
+	assertContains(t, profiles.Categories("linode_profile_tfa_enable_confirm"), "core")
+	assertContains(t, profiles.Categories("linode_profile_app_get"), "core")
+	assertContains(t, profiles.Categories("linode_profile_app_delete"), "core")
+	assertContains(t, profiles.Categories("linode_profile_device_revoke"), "core")
+	assertContains(t, profiles.Categories("linode_profile_apps"), "core")
+	assertContains(t, profiles.Categories("linode_profile_security_questions"), "core")
+	assertContains(t, profiles.Categories("linode_profile_devices"), "core")
+	assertContains(t, profiles.Categories("linode_profile_preferences_update"), "core")
 }
 
 func TestCategoriesIncludesMaintenancePoliciesInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_maintenance_policies"), "core")
+	assertContains(t, profiles.Categories("linode_maintenance_policies"), "core")
 }
 
 func TestCategoriesIncludesTagCreateInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_tag_create"), "core")
+	assertContains(t, profiles.Categories("linode_tag_create"), "core")
 }
 
 func TestTagCreateExcludedFromNarrowBuiltinProfiles(t *testing.T) {
@@ -647,106 +643,106 @@ func TestTagCreateExcludedFromNarrowBuiltinProfiles(t *testing.T) {
 	registry := []profiles.ToolDescriptor{{Name: "linode_tag_create", Capability: profiles.CapWrite}}
 	for _, profileName := range []string{profiles.BuiltinDefault, profiles.BuiltinReadonlyFull, profiles.BuiltinComputeAdmin, profiles.BuiltinNetworkAdmin, profiles.BuiltinKubernetesAdmin, profiles.BuiltinStorageAdmin} {
 		profile, err := profiles.ResolveActiveProfile(&config.Config{ActiveProfile: profileName}, registry)
-		require.NoError(t, err)
-		assert.NotContains(t, profile.AllowedTools, "linode_tag_create", "%s should not expose cross-resource tag creation", profileName)
+		requireNoError(t, err)
+		assertNotContainsf(t, profile.AllowedTools, "linode_tag_create", "%s should not expose cross-resource tag creation", profileName)
 	}
 }
 
 func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_account_users"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_user_get"), "core")
-	assert.Contains(t, profiles.Categories("linode_profile_token_get"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_user_grants"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_user_grants_update"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_user_update"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_user_delete"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_user_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_support_ticket_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_support_ticket_attachment_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_account_support_ticket_reply_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_support_ticket_close"), "core")
-	assert.Contains(t, profiles.Categories("linode_managed_contact_create"), "core")
-	assert.Contains(t, profiles.Categories("linode_managed_service_create"), "core")
+	assertContains(t, profiles.Categories("linode_account_users"), "core")
+	assertContains(t, profiles.Categories("linode_account_user_get"), "core")
+	assertContains(t, profiles.Categories("linode_profile_token_get"), "core")
+	assertContains(t, profiles.Categories("linode_account_user_grants"), "core")
+	assertContains(t, profiles.Categories("linode_account_user_grants_update"), "core")
+	assertContains(t, profiles.Categories("linode_account_user_update"), "core")
+	assertContains(t, profiles.Categories("linode_account_user_delete"), "core")
+	assertContains(t, profiles.Categories("linode_account_user_create"), "core")
+	assertContains(t, profiles.Categories("linode_account_support_ticket_create"), "core")
+	assertContains(t, profiles.Categories("linode_account_support_ticket_attachment_create"), "core")
+	assertContains(t, profiles.Categories("linode_account_support_ticket_reply_create"), "core")
+	assertContains(t, profiles.Categories("linode_support_ticket_close"), "core")
+	assertContains(t, profiles.Categories("linode_managed_contact_create"), "core")
+	assertContains(t, profiles.Categories("linode_managed_service_create"), "core")
 }
 
 func TestCategoriesIncludesLongviewClientsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_longview_clients"), "monitor")
+	assertContains(t, profiles.Categories("linode_longview_clients"), "monitor")
 }
 
 func TestCategoriesIncludesLongviewSubscriptionsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_longview_subscriptions"), "monitor")
+	assertContains(t, profiles.Categories("linode_longview_subscriptions"), "monitor")
 }
 
 func TestCategoriesIncludesMonitorServicesInMonitor(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_monitor_services"), "monitor")
-	assert.Contains(t, profiles.Categories("linode_monitor_service_get"), "monitor")
-	assert.Contains(t, profiles.Categories("linode_monitor_service_dashboards"), "monitor")
-	assert.Contains(t, profiles.Categories("linode_monitor_service_metrics"), "monitor")
-	assert.Contains(t, profiles.Categories("linode_monitor_service_metric_definitions"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_services"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_service_get"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_service_dashboards"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_service_metrics"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_service_metric_definitions"), "monitor")
 }
 
 func TestCategoriesIncludesMonitorAlertDefinitionsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_monitor_alert_definitions"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_alert_definitions"), "monitor")
 }
 
 func TestCategoriesIncludesMonitorAlertChannelsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_monitor_alert_channels"), "monitor")
+	assertContains(t, profiles.Categories("linode_monitor_alert_channels"), "monitor")
 }
 
 func TestCategoriesDatabasesTools(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_database_engine_list"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_type_list"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_type_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_engine_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_mysql_config_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_config_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_list"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_list"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_ssl_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_ssl_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_credentials_get"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_credentials_reset"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_credentials_reset"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_update"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_delete"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_delete"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_patch"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_patch"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_suspend"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_suspend"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_instance_resume"), "databases")
-	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_resume"), "databases")
+	assertContains(t, profiles.Categories("linode_database_engine_list"), "databases")
+	assertContains(t, profiles.Categories("linode_database_type_list"), "databases")
+	assertContains(t, profiles.Categories("linode_database_type_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_engine_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_mysql_config_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_config_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_list"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_list"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_ssl_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_ssl_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_credentials_get"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_credentials_reset"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_credentials_reset"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_update"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_delete"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_delete"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_patch"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_patch"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_suspend"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_suspend"), "databases")
+	assertContains(t, profiles.Categories("linode_database_instance_resume"), "databases")
+	assertContains(t, profiles.Categories("linode_database_postgresql_instance_resume"), "databases")
 }
 
 func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_placement_group_assign"), "compute")
-	assert.Contains(t, profiles.Categories("linode_placement_group_get"), "compute")
-	assert.Contains(t, profiles.Categories("linode_placement_group_delete"), "compute")
-	assert.Contains(t, profiles.Categories("linode_placement_groups_list"), "compute")
-	assert.Contains(t, profiles.Categories("linode_placement_group_update"), "compute")
-	assert.Contains(t, profiles.Categories("linode_placement_group_unassign"), "compute")
+	assertContains(t, profiles.Categories("linode_placement_group_assign"), "compute")
+	assertContains(t, profiles.Categories("linode_placement_group_get"), "compute")
+	assertContains(t, profiles.Categories("linode_placement_group_delete"), "compute")
+	assertContains(t, profiles.Categories("linode_placement_groups_list"), "compute")
+	assertContains(t, profiles.Categories("linode_placement_group_update"), "compute")
+	assertContains(t, profiles.Categories("linode_placement_group_unassign"), "compute")
 }
 
 func TestCategoriesIncludesTagsInCore(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, profiles.Categories("linode_tags"), "core")
+	assertContains(t, profiles.Categories("linode_tags"), "core")
 }
