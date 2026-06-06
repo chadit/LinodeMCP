@@ -7,9 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -22,26 +19,26 @@ func TestClientCloneVolumeSuccess(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/volumes/333/clone", r.URL.Path)
+		checkEqual(t, http.MethodPost, r.Method)
+		checkEqual(t, "/volumes/333/clone", r.URL.Path)
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, cloneVolumeLabel, body["label"])
+		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
+		checkEqual(t, cloneVolumeLabel, body["label"])
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 444, Label: cloneVolumeLabel, Region: managedServiceRegion, Status: statusPending}))
+		checkNoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 444, Label: cloneVolumeLabel, Region: managedServiceRegion, Status: statusPending}))
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "test-token", nil, linode.WithMaxRetries(0))
 	volume, err := client.CloneVolume(t.Context(), 333, linode.CloneVolumeRequest{Label: cloneVolumeLabel})
 
-	require.NoError(t, err)
-	require.NotNil(t, volume)
-	assert.Equal(t, 444, volume.ID)
-	assert.Equal(t, cloneVolumeLabel, volume.Label)
-	assert.Equal(t, int32(1), requestCount.Load(), "clone must issue exactly one request")
+	requireNoError(t, err)
+	requireNotNil(t, volume)
+	checkEqual(t, 444, volume.ID)
+	checkEqual(t, cloneVolumeLabel, volume.Label)
+	checkEqual(t, int32(1), requestCount.Load(), "clone must issue exactly one request")
 }
 
 func TestClientCloneVolumeDoesNotRetryPost(t *testing.T) {
@@ -51,8 +48,8 @@ func TestClientCloneVolumeDoesNotRetryPost(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/volumes/333/clone", r.URL.Path)
+		checkEqual(t, http.MethodPost, r.Method)
+		checkEqual(t, "/volumes/333/clone", r.URL.Path)
 		http.Error(w, errTemporaryFailure, http.StatusBadGateway)
 	}))
 	defer server.Close()
@@ -60,19 +57,19 @@ func TestClientCloneVolumeDoesNotRetryPost(t *testing.T) {
 	client := linode.NewClient(server.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.CloneVolume(t.Context(), 333, linode.CloneVolumeRequest{Label: cloneVolumeLabel})
 
-	require.Error(t, err)
-	assert.Equal(t, int32(1), requestCount.Load(), "clone POST must not be replayed after a transient failure")
+	requireError(t, err)
+	checkEqual(t, int32(1), requestCount.Load(), "clone POST must not be replayed after a transient failure")
 }
 
 func TestClientCloneVolumeAPIError(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/volumes/333/clone", r.URL.Path)
+		checkEqual(t, http.MethodPost, r.Method)
+		checkEqual(t, "/volumes/333/clone", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "label is already taken"}},
 		}))
 	}))
@@ -81,10 +78,9 @@ func TestClientCloneVolumeAPIError(t *testing.T) {
 	client := linode.NewClient(server.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.CloneVolume(t.Context(), 333, linode.CloneVolumeRequest{Label: cloneVolumeLabel})
 
-	require.Error(t, err)
+	requireError(t, err)
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
-	assert.Equal(t, "label is already taken", apiErr.Message)
+	apiErr := requireAPIError(t, err)
+	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
+	checkEqual(t, "label is already taken", apiErr.Message)
 }
