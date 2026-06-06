@@ -100,6 +100,7 @@ func checkNoErrorWithMode(t *testing.T, fatal bool, err error, msg ...string) bo
 	return true
 }
 
+// expectNotNil is fatal so callers may safely dereference actual after it returns.
 func expectNotNil(t *testing.T, actual any, msg ...string) {
 	t.Helper()
 

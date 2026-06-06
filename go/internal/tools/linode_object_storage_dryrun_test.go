@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -22,7 +19,7 @@ func TestLinodeObjectStorageBucketCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageBucketCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -35,27 +32,27 @@ func TestLinodeObjectStorageBucketCreateToolDryRun(t *testing.T) {
 			keyRegion: regionUSEast1,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_bucket_create", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_object_storage_bucket_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/object-storage/buckets", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, "/object-storage/buckets", would["path"])
+		expectNil(t, body["current_state"], "create has no existing resource to preview")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-bucket side effect")
+		expectLen(t, sideEffects, 1, "create surfaces the new-bucket side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, bucketTest, "side effect should name the new bucket")
+		expectTrue(t, gotString)
+		expectContains(t, effect, bucketTest, "side effect should name the new bucket")
 
 		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns that billing starts immediately")
+		expectLen(t, warnings, 1, "create warns that billing starts immediately")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -66,8 +63,8 @@ func TestLinodeObjectStorageBucketCreateToolDryRun(t *testing.T) {
 			keyRegion: regionUSEast1,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
@@ -79,7 +76,7 @@ func TestLinodeObjectStorageBucketAccessAllowToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageBucketAccessAllowTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without applying", func(t *testing.T) {
@@ -94,17 +91,17 @@ func TestLinodeObjectStorageBucketAccessAllowToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_bucket_access_allow", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_object_storage_bucket_access_allow", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, objStorageAccessPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, objStorageAccessPath, would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -115,8 +112,8 @@ func TestLinodeObjectStorageBucketAccessAllowToolDryRun(t *testing.T) {
 			keyRegion: regionUSEast1,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
@@ -128,7 +125,7 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageBucketAccessUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -143,24 +140,24 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_bucket_access_update", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_object_storage_bucket_access_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, objStorageAccessPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "PUT", would["method"])
+		checkEqual(t, objStorageAccessPath, would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "ACL change surfaces one side effect")
+		expectLen(t, sideEffects, 1, "ACL change surfaces one side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, aclPrivate, "side effect should name the target ACL")
+		expectTrue(t, gotString)
+		expectContains(t, effect, aclPrivate, "side effect should name the target ACL")
 	})
 
 	t.Run("still validates region", func(t *testing.T) {
@@ -171,8 +168,8 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDryRun(t *testing.T) {
 			keyLabel:  bucketTest,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "region is required")
 	})
 }
@@ -184,7 +181,7 @@ func TestLinodeObjectStorageKeyCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageKeyCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -196,27 +193,27 @@ func TestLinodeObjectStorageKeyCreateToolDryRun(t *testing.T) {
 			keyLabel:  "my-key",
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_key_create", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_object_storage_key_create", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/object-storage/keys", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, "/object-storage/keys", would["path"])
+		expectNil(t, body["current_state"], "create has no existing resource to preview")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-key side effect")
+		expectLen(t, sideEffects, 1, "create surfaces the new-key side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "my-key", "side effect should name the new key")
+		expectTrue(t, gotString)
+		expectContains(t, effect, "my-key", "side effect should name the new key")
 
 		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns the secret is shown only once")
+		expectLen(t, warnings, 1, "create warns the secret is shown only once")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -224,8 +221,8 @@ func TestLinodeObjectStorageKeyCreateToolDryRun(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(&config.Config{})
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "label is required")
 	})
 }
@@ -237,7 +234,7 @@ func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageKeyUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating, fetches key not secret", func(t *testing.T) {
@@ -252,24 +249,24 @@ func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_key_update", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_object_storage_key_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/object-storage/keys/77", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "PUT", would["method"])
+		checkEqual(t, "/object-storage/keys/77", would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "renaming the key surfaces the label-change side effect")
+		expectLen(t, sideEffects, 1, "renaming the key surfaces the label-change side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, testRenamedLabel, "side effect should name the new label")
+		expectTrue(t, gotString)
+		expectContains(t, effect, testRenamedLabel, "side effect should name the new label")
 	})
 
 	t.Run("still validates key_id", func(t *testing.T) {
@@ -280,8 +277,8 @@ func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "key_id is required")
 	})
 }
@@ -293,7 +290,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageObjectACLUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -310,24 +307,24 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_object_acl_update", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		checkEqual(t, "linode_object_storage_object_acl_update", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		checkEqual(t, "PUT", would["method"])
+		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", would["path"])
+		checkEqual(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "ACL change surfaces one side effect")
+		expectLen(t, sideEffects, 1, "ACL change surfaces one side effect")
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, aclPrivate, "side effect should name the target ACL")
+		expectTrue(t, gotString)
+		expectContains(t, effect, aclPrivate, "side effect should name the target ACL")
 	})
 
 	t.Run("still validates name", func(t *testing.T) {
@@ -340,8 +337,8 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "name (object key) is required")
 	})
 }
@@ -353,7 +350,7 @@ func TestLinodeObjectStorageSSLUploadToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageSSLUploadTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		expectContains(t, tool.InputSchema.Properties, keyDryRun)
 	})
 
 	t.Run("preview without uploading, no key echoed", func(t *testing.T) {
@@ -368,20 +365,20 @@ func TestLinodeObjectStorageSSLUploadToolDryRun(t *testing.T) {
 			keyPrivateKey:  "key-pem",
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		expectNoError(t, err)
+		expectFalse(t, result.IsError)
 
 		text := dryRunResultText(t, result)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(text), &body))
-		assert.Equal(t, "linode_object_storage_ssl_upload", body["tool"])
+		expectNoError(t, json.Unmarshal([]byte(text), &body))
+		checkEqual(t, "linode_object_storage_ssl_upload", body["tool"])
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", would["path"])
-		assert.Nil(t, body["current_state"], "upload has no existing resource to preview")
-		assert.NotContains(t, text, "key-pem", "dry_run preview must not echo the private key")
+		checkEqual(t, "POST", would["method"])
+		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", would["path"])
+		expectNil(t, body["current_state"], "upload has no existing resource to preview")
+		expectNotContains(t, text, "key-pem", "dry_run preview must not echo the private key")
 	})
 
 	t.Run("still validates private_key", func(t *testing.T) {
@@ -394,8 +391,8 @@ func TestLinodeObjectStorageSSLUploadToolDryRun(t *testing.T) {
 			keyCertificate: "cert-pem",
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		expectNoError(t, err)
+		expectTrue(t, result.IsError)
 		assertErrorContains(t, result, "private_key is required")
 	})
 }
