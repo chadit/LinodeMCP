@@ -201,7 +201,7 @@ async def handle_linode_ipv4_share(
             "linode_ipv4_share",
             arguments.get("environment", ""),
             "POST",
-            "/networking/ipv4/share",
+            "/networking/ips/share",
             None,
             request_body={"ips": parsed[0], "linode_id": parsed[1]},
         )
