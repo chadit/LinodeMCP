@@ -9202,7 +9202,7 @@ async def test_retryable_client_delete_vlan() -> None:
 
 
 async def test_client_share_ipv4s(linode_client: Client) -> None:
-    """Test Client.share_ipv4s sends POST /networking/ipv4/share."""
+    """Test Client.share_ipv4s sends POST /networking/ips/share."""
     mock_response = MagicMock()
     mock_response.json.return_value = {"success": True, "shared": ["192.168.1.1"]}
     with patch.object(
@@ -9214,7 +9214,7 @@ async def test_client_share_ipv4s(linode_client: Client) -> None:
         result = await linode_client.share_ipv4s(["192.168.1.1"], 12345)
         mock_req.assert_awaited_once_with(
             "POST",
-            "/networking/ipv4/share",
+            "/networking/ips/share",
             {"ips": ["192.168.1.1"], "linode_id": 12345},
         )
         assert result == {"success": True, "shared": ["192.168.1.1"]}
