@@ -9273,7 +9273,7 @@ async def test_retryable_client_share_ipv4s_does_not_replay_errors() -> None:
 
 
 async def test_client_assign_ipv4s(linode_client: Client) -> None:
-    """Client.assign_ipv4s sends POST /networking/ipv4/assign."""
+    """Client.assign_ipv4s sends POST /networking/ips/assign."""
     assignments = [{"address": "192.0.2.1", "linode_id": 123}]
     mock_response = MagicMock()
     mock_response.json.return_value = {}
@@ -9288,7 +9288,7 @@ async def test_client_assign_ipv4s(linode_client: Client) -> None:
 
     mock_req.assert_awaited_once_with(
         "POST",
-        "/networking/ipv4/assign",
+        "/networking/ips/assign",
         {"region": "us-east", "assignments": assignments},
     )
     assert result == {}
