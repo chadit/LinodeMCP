@@ -69,7 +69,7 @@ func TestLinodeManagedLinodeSettingsUpdateToolSuccess(t *testing.T) {
 		ID:    123,
 		Label: managedLinodeSettingsLabel,
 		Group: managedLinodeSettingsGroup,
-		SSH:   linode.ManagedLinodeSettingsSSH{Access: true, IP: ip203_0_113_1, Port: &port, User: &user},
+		SSH:   linode.ManagedLinodeSettingsSSH{Access: true, IP: testNetIPv4AddressOne, Port: &port, User: &user},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +99,7 @@ func TestLinodeManagedLinodeSettingsUpdateToolSuccess(t *testing.T) {
 
 		for key, want := range map[string]any{
 			"access": true,
-			"ip":     ip203_0_113_1,
+			"ip":     testNetIPv4AddressOne,
 			"port":   float64(port),
 			"user":   user,
 		} {
@@ -134,7 +134,7 @@ func TestLinodeManagedLinodeSettingsUpdateToolSuccess(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		managedLinodeSettingsUpdateIDKey:     123,
 		managedLinodeSettingsUpdateAccessKey: true,
-		managedLinodeSettingsUpdateIPKey:     ip203_0_113_1,
+		managedLinodeSettingsUpdateIPKey:     testNetIPv4AddressOne,
 		managedLinodeSettingsUpdatePortKey:   port,
 		managedLinodeSettingsUpdateUserKey:   user,
 		keyConfirm:                           true,
