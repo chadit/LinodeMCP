@@ -3490,12 +3490,12 @@ func TestLinodeDomainRecordCreateToolValidation(t *testing.T) {
 	}{
 		{
 			name:         caseMissingDomainID,
-			args:         map[string]any{keyType: "A", keyTarget: ip192168_1_1, keyConfirm: true},
+			args:         map[string]any{keyType: "A", keyTarget: privateIPv4AddressOne, keyConfirm: true},
 			wantContains: errDomainIDRequired,
 		},
 		{
 			name:         caseMissingType,
-			args:         map[string]any{keyDomainID: float64(111), keyTarget: ip192168_1_1, keyConfirm: true},
+			args:         map[string]any{keyDomainID: float64(111), keyTarget: privateIPv4AddressOne, keyConfirm: true},
 			wantContains: errTypeRequired,
 		},
 		{
@@ -3642,12 +3642,12 @@ func TestLinodeDomainRecordUpdateToolValidation(t *testing.T) {
 	}{
 		{
 			name:         caseMissingDomainID,
-			args:         map[string]any{keyRecordID: float64(222), keyTarget: ip192168_1_2, keyConfirm: true},
+			args:         map[string]any{keyRecordID: float64(222), keyTarget: privateIPv4AddressTwo, keyConfirm: true},
 			wantContains: errDomainIDRequired,
 		},
 		{
 			name:         "missing record id",
-			args:         map[string]any{keyDomainID: float64(111), keyTarget: ip192168_1_2, keyConfirm: true},
+			args:         map[string]any{keyDomainID: float64(111), keyTarget: privateIPv4AddressTwo, keyConfirm: true},
 			wantContains: "record_id is required",
 		},
 	}
@@ -3683,7 +3683,7 @@ func TestLinodeDomainRecordUpdateToolSuccessfulUpdate(t *testing.T) {
 		ID:     222,
 		Type:   "A",
 		Name:   hostWWW,
-		Target: ip192168_1_2,
+		Target: privateIPv4AddressTwo,
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3711,7 +3711,7 @@ func TestLinodeDomainRecordUpdateToolSuccessfulUpdate(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyDomainID: float64(111),
 		keyRecordID: float64(222),
-		keyTarget:   ip192168_1_2,
+		keyTarget:   privateIPv4AddressTwo,
 		keyConfirm:  true,
 	})
 

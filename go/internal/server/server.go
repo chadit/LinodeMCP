@@ -143,7 +143,7 @@ func builderToolEntries(srv *Server) []toolEntry {
 	addToolsTool, addToolsCap, addToolsHandler := tools.NewLinodeProfileDraftAddToolsTool(srv.draftRegistry, srv.ToolCatalog)
 	removeToolsTool, removeToolsCap, removeToolsHandler := tools.NewLinodeProfileDraftRemoveToolsTool(srv.draftRegistry)
 	setTool, setCap, setHandler := tools.NewLinodeProfileDraftSetTool(srv.draftRegistry)
-	saveTool, saveCap, saveHandler := tools.NewLinodeProfileDraftSaveTool(srv.draftRegistry, config.GetConfigPath)
+	saveTool, saveCap, saveHandler := tools.NewLinodeProfileDraftSaveTool(srv.draftRegistry, config.Path)
 	canRunTool, canRunCap, canRunHandler := tools.NewLinodeProfileCanRunTool(srv.ToolCatalog, srv.ActiveProfile)
 
 	return []toolEntry{

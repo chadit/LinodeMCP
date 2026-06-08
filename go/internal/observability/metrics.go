@@ -61,7 +61,7 @@ func (o *Observability) initMetrics(cfg *config.MetricsConfig) error {
 		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("linodemcp"),
-			semconv.ServiceVersion(getVersion()),
+			semconv.ServiceVersion(version()),
 		),
 		resource.WithHost(),
 		resource.WithOS(),

@@ -5633,7 +5633,7 @@ func TestLinodeAccountLoginsToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	logins := linode.PaginatedResponse[linode.AccountLogin]{
-		Data:    []linode.AccountLogin{{ID: 123, Username: accountLoginUsername, IP: ip203_0_113_10, Status: statusSuccessful}},
+		Data:    []linode.AccountLogin{{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -5691,8 +5691,8 @@ func TestLinodeAccountLoginsToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", accountLoginUsername)
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_10) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_10)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressTen) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressTen)
 	}
 }
 
@@ -5835,7 +5835,7 @@ func TestLinodeProfileLoginGetToolDefinition(t *testing.T) {
 func TestLinodeProfileLoginGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: ip203_0_113_10, Status: statusSuccessful}
+	login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -5889,8 +5889,8 @@ func TestLinodeProfileLoginGetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", accountLoginUsername)
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_10) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_10)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressTen) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressTen)
 	}
 }
 
@@ -6036,7 +6036,7 @@ func TestLinodeAccountLoginGetToolDefinition(t *testing.T) {
 func TestLinodeAccountLoginGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: ip203_0_113_10, Status: statusSuccessful}
+	login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -6090,8 +6090,8 @@ func TestLinodeAccountLoginGetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", accountLoginUsername)
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_10) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_10)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressTen) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressTen)
 	}
 }
 
@@ -6768,7 +6768,7 @@ func TestLinodeProfileDeviceGetToolSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyID: profileDeviceID, keyUserAgent: profileDeviceUserAgent, "last_authenticated": profileDeviceLastAuthenticated, keyLastRemoteAddr: ip203_0_113_1,
+			keyID: profileDeviceID, keyUserAgent: profileDeviceUserAgent, "last_authenticated": profileDeviceLastAuthenticated, keyLastRemoteAddr: testNetIPv4AddressOne,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -6801,8 +6801,8 @@ func TestLinodeProfileDeviceGetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", profileDeviceUserAgent)
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_1) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_1)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressOne) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressOne)
 	}
 }
 
@@ -16528,7 +16528,7 @@ func TestLinodeDomainRecordGetToolSuccess(t *testing.T) {
 			keySupportTicketID: 456,
 			keyType:            "A",
 			keyName:            hostWWW,
-			keyTarget:          ip203_0_113_1,
+			keyTarget:          testNetIPv4AddressOne,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -16573,8 +16573,8 @@ func TestLinodeDomainRecordGetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", hostWWW)
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_1) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_1)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressOne) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressOne)
 	}
 }
 

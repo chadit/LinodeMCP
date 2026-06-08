@@ -1598,7 +1598,10 @@ func TestLinodeInstanceBackupsCancelToolDryRunPreviewWithoutMutating(t *testing.
 
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(instanceBody))
+
+			if _, writeErr := w.Write([]byte(instanceBody)); writeErr != nil {
+				t.Errorf("w.Write() error = %v", writeErr)
+			}
 
 			return
 		}
@@ -2741,10 +2744,10 @@ func TestLinodeInstanceIPsListToolSuccess(t *testing.T) {
 	ips := linode.InstanceIPAddresses{
 		IPv4: &linode.InstanceIPv4{
 			Public: []linode.IPAddress{
-				{Address: ip203_0_113_1, Public: true, Type: keyIPv4, Region: regionUSEast},
+				{Address: testNetIPv4AddressOne, Public: true, Type: keyIPv4, Region: regionUSEast},
 			},
 			Private: []linode.IPAddress{
-				{Address: ip192168_1_1, Public: false, Type: keyIPv4, Region: regionUSEast},
+				{Address: privateIPv4AddressOne, Public: false, Type: keyIPv4, Region: regionUSEast},
 			},
 		},
 	}
@@ -2789,12 +2792,12 @@ func TestLinodeInstanceIPsListToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_1) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_1)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressOne) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressOne)
 	}
 
-	if !strings.Contains(textContent.Text, ip192168_1_1) {
-		t.Errorf("textContent.Text does not contain %v", ip192168_1_1)
+	if !strings.Contains(textContent.Text, privateIPv4AddressOne) {
+		t.Errorf("textContent.Text does not contain %v", privateIPv4AddressOne)
 	}
 }
 
@@ -2838,7 +2841,7 @@ func TestLinodeInstanceIPGetToolValidation(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingLinodeID, args: map[string]any{keyAddress: ip203_0_113_1}, wantContains: errLinodeIDRequired},
+		{name: caseMissingLinodeID, args: map[string]any{keyAddress: testNetIPv4AddressOne}, wantContains: errLinodeIDRequired},
 		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123)}, wantContains: errAddressRequired},
 	}
 	for _, tt := range validationTests {
@@ -2870,7 +2873,7 @@ func TestLinodeInstanceIPGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	ipAddr := linode.IPAddress{
-		Address: ip203_0_113_1, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
+		Address: testNetIPv4AddressOne, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
 		Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123,
 	}
 
@@ -2894,7 +2897,7 @@ func TestLinodeInstanceIPGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeInstanceIPGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1})
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -2914,8 +2917,8 @@ func TestLinodeInstanceIPGetToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_1) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_1)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressOne) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressOne)
 	}
 
 	if !strings.Contains(textContent.Text, regionUSEast) {
@@ -3122,16 +3125,16 @@ func TestLinodeInstanceIPUpdateRDNSToolValidation(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg}, wantContains: errConfirmEqualsTrue},
-		{name: caseFalseConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: caseStringConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: caseNumericConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingLinodeID, args: map[string]any{keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressRequired},
 		{name: "address with slash", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1/24", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
 		{name: "address with query separator", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1?bad=1", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
 		{name: "address with dot traversal", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1..", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
-		{name: "missing rdns", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true}, wantContains: "rdns is required"},
+		{name: "missing rdns", args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyConfirm: true}, wantContains: "rdns is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3188,7 +3191,7 @@ func TestLinodeInstanceIPUpdateRDNSToolClientErrorMapsToToolError(t *testing.T) 
 	_, _, srvHandler := tools.NewLinodeInstanceIPUpdateRDNSTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true,
+		keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg, keyConfirm: true,
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -3217,7 +3220,7 @@ func TestLinodeInstanceIPUpdateRDNSToolSuccessfulRdnsUpdate(t *testing.T) {
 	t.Parallel()
 
 	ipAddr := linode.IPAddress{
-		Address: ip203_0_113_1, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
+		Address: testNetIPv4AddressOne, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
 		Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123, RDNS: rdnsTestExampleOrg,
 	}
 
@@ -3260,7 +3263,7 @@ func TestLinodeInstanceIPUpdateRDNSToolSuccessfulRdnsUpdate(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeInstanceIPUpdateRDNSTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true,
+		keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyRDNS: rdnsTestExampleOrg, keyConfirm: true,
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -3334,7 +3337,7 @@ func TestLinodeInstanceIPDeleteToolValidation(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errAddressRequired},
 	}
 	for _, tt := range validationTests {
@@ -3386,7 +3389,7 @@ func TestLinodeInstanceIPDeleteToolSuccessfulDeletion(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeInstanceIPDeleteTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true, keyConfirmedDryRun: true,
+		keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne, keyConfirm: true, keyConfirmedDryRun: true,
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -3411,8 +3414,8 @@ func TestLinodeInstanceIPDeleteToolSuccessfulDeletion(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", "removed")
 	}
 
-	if !strings.Contains(textContent.Text, ip203_0_113_1) {
-		t.Errorf("textContent.Text does not contain %v", ip203_0_113_1)
+	if !strings.Contains(textContent.Text, testNetIPv4AddressOne) {
+		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressOne)
 	}
 }
 
@@ -3442,7 +3445,10 @@ func TestLinodeInstanceIPDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
 
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(ipBody))
+
+			if _, writeErr := w.Write([]byte(ipBody)); writeErr != nil {
+				t.Errorf("w.Write() error = %v", writeErr)
+			}
 
 			return
 		}
@@ -3459,7 +3465,7 @@ func TestLinodeInstanceIPDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyLinodeID: float64(123),
-		keyAddress:  ip203_0_113_1,
+		keyAddress:  testNetIPv4AddressOne,
 		keyDryRun:   true,
 	})
 
@@ -4317,7 +4323,10 @@ func TestLinodeInstancePasswordResetToolDryRunPreviewWithoutMutating(t *testing.
 
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(instanceBody))
+
+			if _, writeErr := w.Write([]byte(instanceBody)); writeErr != nil {
+				t.Errorf("w.Write() error = %v", writeErr)
+			}
 
 			return
 		}
