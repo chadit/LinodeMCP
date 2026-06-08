@@ -36,7 +36,7 @@ func (o *Observability) initTracing(cfg config.TracingConfig) error {
 		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("linodemcp"),
-			semconv.ServiceVersion(getVersion()),
+			semconv.ServiceVersion(version()),
 		),
 		resource.WithHost(),
 		resource.WithOS(),
@@ -128,8 +128,8 @@ func buildTraceExporter(ctx context.Context, cfg config.TracingConfig) (sdktrace
 	}
 }
 
-// getVersion returns the application version from build info or env.
-func getVersion() string {
+// version returns the application version from build info or env.
+func version() string {
 	if v := os.Getenv("LINODEMCP_VERSION"); v != "" {
 		return v
 	}

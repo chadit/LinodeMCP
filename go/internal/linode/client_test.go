@@ -11477,7 +11477,7 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 	expiry := "2025-09-04T10:09:09"
 	tokens := []linode.ImageShareGroupToken{
 		{
-			TokenUUID:              "13428362-5458-4dad-b14b-8d0d4d648f8c",
+			TokenUUID:              "test-token-uuid",
 			Status:                 oauthClientStatus,
 			Label:                  "Backend Services - Engineering",
 			Created:                imageShareGroupTokenCreated,
@@ -11538,8 +11538,8 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, imageShareGroupTokenUpdateLabel)
 	}
 
-	if result.Data[0].TokenUUID != "13428362-5458-4dad-b14b-8d0d4d648f8c" {
-		t.Errorf("result.Data[0].TokenUUID = %v, want %v", result.Data[0].TokenUUID, "13428362-5458-4dad-b14b-8d0d4d648f8c")
+	if result.Data[0].TokenUUID != "test-token-uuid" {
+		t.Errorf("result.Data[0].TokenUUID = %v, want %v", result.Data[0].TokenUUID, "test-token-uuid")
 	}
 
 	if result.Page != 2 {

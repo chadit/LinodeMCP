@@ -328,7 +328,7 @@ func TestSelectEnvironment(t *testing.T) {
 	}
 }
 
-func TestGetConfigPathWithEnvOverride(t *testing.T) {
+func TestPathWithEnvOverride(t *testing.T) {
 	dir := t.TempDir()
 
 	customPath := filepath.Join(dir, "custom-config.yml")
@@ -338,8 +338,8 @@ func TestGetConfigPathWithEnvOverride(t *testing.T) {
 
 	t.Setenv("LINODEMCP_CONFIG_PATH", customPath)
 
-	if config.GetConfigPath() != customPath {
-		t.Errorf("config.GetConfigPath() = %v, want %v", config.GetConfigPath(), customPath)
+	if config.Path() != customPath {
+		t.Errorf("config.Path() = %v, want %v", config.Path(), customPath)
 	}
 }
 

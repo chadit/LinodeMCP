@@ -231,7 +231,7 @@ func runScopeValidation(
 }
 
 func run() int {
-	configPath := config.GetConfigPath()
+	configPath := config.Path()
 
 	watcher, err := config.NewWatcher(configPath, config.DefaultWatchInterval)
 	if err != nil {

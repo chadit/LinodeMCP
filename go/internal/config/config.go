@@ -295,13 +295,13 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// GetConfigPath returns the full path to the config file.
-func GetConfigPath() string {
+// Path returns the full path to the config file.
+func Path() string {
 	if customPath := os.Getenv("LINODEMCP_CONFIG_PATH"); customPath != "" {
 		return customPath
 	}
 
-	return getDefaultConfigPath()
+	return defaultConfigPath()
 }
 
 // SelectEnvironment picks a Linode environment from the config.
@@ -704,8 +704,8 @@ func validateReportFilter(name string, filter *ReportFilter) error {
 	return nil
 }
 
-func getDefaultConfigPath() string {
-	configDir := getDefaultConfigDir()
+func defaultConfigPath() string {
+	configDir := defaultConfigDir()
 
 	jsonPath := filepath.Join(configDir, configFileJSON)
 	if _, err := os.Stat(jsonPath); err == nil {
@@ -715,7 +715,7 @@ func getDefaultConfigPath() string {
 	return filepath.Join(configDir, configFileYAML)
 }
 
-func getDefaultConfigDir() string {
+func defaultConfigDir() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join(os.TempDir(), appDirName)

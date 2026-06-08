@@ -58,7 +58,7 @@ func writableSaveConfig(t *testing.T) string {
 }
 
 // staticConfigPath wraps a string as a ConfigPathProvider. Tests use
-// this rather than the production config.GetConfigPath so the home
+// this rather than the production config.Path so the home
 // dir + env-var lookup stays out of the picture.
 func staticConfigPath(path string) tools.ConfigPathProvider {
 	return func() string { return path }

@@ -214,7 +214,7 @@ func PrintProfileDetail(stdout io.Writer, prof *profiles.Profile, active string)
 // emitting a friendly error to stderr on failure. Returns nil cfg on
 // error so callers can early-return.
 func loadConfigOrError(stderr io.Writer) (*config.Config, error) {
-	path := config.GetConfigPath()
+	path := config.Path()
 
 	cfg, err := config.Load(path)
 	if err != nil {
@@ -232,7 +232,7 @@ func loadConfigOrError(stderr io.Writer) (*config.Config, error) {
 // replaces the existing file.
 //
 // configPath identifies the config file to load and rewrite; passing
-// an empty string falls back to “config.GetConfigPath()“ so the
+// an empty string falls back to “config.Path()“ so the
 // production dispatcher (cmd/linodemcp) doesn't have to repeat the
 // lookup. Tests pass a tempdir-rooted path.
 //
@@ -333,7 +333,7 @@ func runProfileToggle(
 }
 
 // resolveConfigPath returns the explicit configPath when non-empty,
-// otherwise falls back to “config.GetConfigPath()“. The fallback
+// otherwise falls back to “config.Path()“. The fallback
 // branch covers the production runtime; the explicit-path branch
 // supports tempdir-rooted config files in unit tests.
 func resolveConfigPath(configPath string) string {
@@ -341,12 +341,12 @@ func resolveConfigPath(configPath string) string {
 		return configPath
 	}
 
-	return config.GetConfigPath()
+	return config.Path()
 }
 
 // loadConfigFromPath reads the config from path, mirroring the error-
 // reporting shape of the original loadConfigOrError but without
-// reaching for “GetConfigPath“ itself.
+// reaching for “Path“ itself.
 func loadConfigFromPath(path string, stderr io.Writer) (*config.Config, error) {
 	cfg, err := config.Load(path)
 	if err != nil {
