@@ -712,7 +712,26 @@ func (c *Client) httpAllocateNetworkingIP(ctx context.Context, req AllocateNetwo
 
 // AssignNetworkingIPs assigns IP addresses to Linodes in a region.
 func (c *Client) httpAssignNetworkingIPs(ctx context.Context, req AssignNetworkingIPsRequest) (map[string]any, error) {
-	return c.httpAssignNetworkingIPsAtEndpoint(ctx, endpointNetworkingIPsAssign, "AssignNetworkingIPs", req)
+	if err := validateAssignNetworkingIPsRequest(req); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPsAssign, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AssignNetworkingIPs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	response := map[string]any{}
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // AssignNetworkingIPv4s assigns IPv4 addresses to Linodes in a region.
@@ -721,7 +740,26 @@ func (c *Client) httpAssignNetworkingIPv4s(ctx context.Context, req AssignNetwor
 		return nil, err
 	}
 
-	return c.httpAssignNetworkingIPsAtEndpoint(ctx, endpointNetworkingIPv4Assign, "AssignNetworkingIPv4s", req)
+	if err := validateAssignNetworkingIPsRequest(req); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPv4Assign, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AssignNetworkingIPv4s", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	response := map[string]any{}
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 func validateIPv4Assignments(assignments []IPAssignment) error {
@@ -739,46 +777,26 @@ func validateIPv4Assignments(assignments []IPAssignment) error {
 	return nil
 }
 
-func (c *Client) httpAssignNetworkingIPsAtEndpoint(
-	ctx context.Context,
-	endpoint string,
-	operation string,
-	req AssignNetworkingIPsRequest,
-) (map[string]any, error) {
+func validateAssignNetworkingIPsRequest(req AssignNetworkingIPsRequest) error {
 	if req.Region == "" {
-		return nil, ErrRegionRequired
+		return ErrRegionRequired
 	}
 
 	if len(req.Assignments) == 0 {
-		return nil, ErrIPAssignmentsRequired
+		return ErrIPAssignmentsRequired
 	}
 
 	for _, assignment := range req.Assignments {
 		if assignment.Address == "" {
-			return nil, ErrIPAddressRequired
+			return ErrIPAddressRequired
 		}
 
 		if assignment.LinodeID <= 0 {
-			return nil, ErrLinodeIDPositive
+			return ErrLinodeIDPositive
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: operation, Err: err}
-	}
-
-	defer drainClose(resp)
-
-	response := map[string]any{}
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response, nil
+	return nil
 }
 
 // ShareNetworkingIPs shares IP addresses with a primary Linode.
