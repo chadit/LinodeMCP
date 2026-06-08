@@ -2,13 +2,11 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -47,68 +45,123 @@ func TestClientListNetworkingIPsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPs, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(ips))
+		if r.URL.Path != endpointNetworkingIPs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPs)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(ips); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListNetworkingIPs(t.Context(), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ListNetworkingIPs should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, networkingIPAddressFixture, result.Data[0].Address)
-	assert.Equal(t, regionUSEast, result.Data[0].Region)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Address != networkingIPAddressFixture {
+		t.Errorf("result.Data[0].Address = %v, want %v", result.Data[0].Address, networkingIPAddressFixture)
+	}
+
+	if result.Data[0].Region != regionUSEast {
+		t.Errorf("result.Data[0].Region = %v, want %v", result.Data[0].Region, regionUSEast)
+	}
 }
 
 func TestClientListNetworkingIPsWithSkipIPv6RDNSQuery(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPs, r.URL.Path, "request path should match")
-		assert.Equal(t, "true", r.URL.Query().Get("skip_ipv6_rdns"), "skip_ipv6_rdns query should match")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.IPAddress]{}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointNetworkingIPs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPs)
+		}
+
+		if r.URL.Query().Get("skip_ipv6_rdns") != "true" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("skip_ipv6_rdns"), "true")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.IPAddress]{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListNetworkingIPs(t.Context(), true)
-
-	require.NoError(t, err, "ListNetworkingIPs should succeed with skip_ipv6_rdns")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientListNetworkingIPsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPs, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointNetworkingIPs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPs)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListNetworkingIPs(t.Context(), false)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "ListNetworkingIPs should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListNetworkingIPsRetriesTransientError(t *testing.T) {
@@ -119,114 +172,197 @@ func TestClientListNetworkingIPsRetriesTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			hj, ok := w.(http.Hijacker)
-			if !assert.True(t, ok, "response writer should support hijacking") {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer should support hijacking")
+
 				return
 			}
 
-			conn, _, err := hj.Hijack()
-			if !assert.NoError(t, err) {
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
-			assert.NoError(t, conn.Close())
+			if err := conn.Close(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPs, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.IPAddress]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointNetworkingIPs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPs)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.IPAddress]{
 			Data: []linode.IPAddress{{Address: networkingIPAddressFixture}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListNetworkingIPs(t.Context(), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ListNetworkingIPs should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	require.Len(t, result.Data, 1)
-	assert.Equal(t, networkingIPAddressFixture, result.Data[0].Address)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Address != networkingIPAddressFixture {
+		t.Errorf("result.Data[0].Address = %v, want %v", result.Data[0].Address, networkingIPAddressFixture)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientGetNetworkingIPSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+		if r.URL.Path != endpointNetworkingIPAddress {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPAddress)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{
 			Address:  networkingIPAddressFixture,
 			Gateway:  "198.51.100.1",
 			Type:     networkingIPv4Type,
 			Public:   true,
 			Region:   regionUSEast,
 			LinodeID: 123,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetNetworkingIP(t.Context(), networkingIPAddressFixture)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "GetNetworkingIP should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, networkingIPAddressFixture, result.Address)
-	assert.Equal(t, regionUSEast, result.Region)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Address != networkingIPAddressFixture {
+		t.Errorf("result.Address = %v, want %v", result.Address, networkingIPAddressFixture)
+	}
+
+	if result.Region != regionUSEast {
+		t.Errorf("result.Region = %v, want %v", result.Region, regionUSEast)
+	}
 }
 
 func TestClientGetNetworkingIPEncodesIPv6Address(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPv6Escaped, r.URL.EscapedPath(), "request path should preserve valid IPv6 segment")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != endpointNetworkingIPv6Escaped {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), endpointNetworkingIPv6Escaped)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetNetworkingIP(t.Context(), networkingIPv6AddressFixture)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "GetNetworkingIP should succeed for IPv6 address")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, networkingIPv6AddressFixture, result.Address)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Address != networkingIPv6AddressFixture {
+		t.Errorf("result.Address = %v, want %v", result.Address, networkingIPv6AddressFixture)
+	}
 }
 
 func TestClientGetNetworkingIPAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointNetworkingIPAddress {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPAddress)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusNotFound)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetNetworkingIP(t.Context(), networkingIPAddressFixture)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "GetNetworkingIP should fail on 404 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusNotFound, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusNotFound)
+	}
 }
 
 func TestClientGetNetworkingIPRejectsInvalidAddress(t *testing.T) {
@@ -236,7 +372,9 @@ func TestClientGetNetworkingIPRejectsInvalidAddress(t *testing.T) {
 
 	for _, address := range []string{"", "198.51.100.5/24", "198.51.100.5?bad=1", "..", networkingScopedIPv6Fixture, networkingZoneTraversalValue} {
 		_, err := client.GetNetworkingIP(t.Context(), address)
-		require.Error(t, err, "invalid address should be rejected")
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
 	}
 }
 
@@ -248,116 +386,197 @@ func TestClientGetNetworkingIPRetriesTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			hj, ok := w.(http.Hijacker)
-			if !assert.True(t, ok, "response writer should support hijacking") {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer should support hijacking")
+
 				return
 			}
 
-			conn, _, err := hj.Hijack()
-			if !assert.NoError(t, err) {
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
-			assert.NoError(t, conn.Close())
+			if err := conn.Close(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPAddressFixture}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointNetworkingIPAddress {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPAddress)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPAddressFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetNetworkingIP(t.Context(), networkingIPAddressFixture)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "GetNetworkingIP should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, networkingIPAddressFixture, result.Address)
-	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Address != networkingIPAddressFixture {
+		t.Errorf("result.Address = %v, want %v", result.Address, networkingIPAddressFixture)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientUpdateNetworkingIPSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != endpointNetworkingIPAddress {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPAddress)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body linode.UpdateNetworkingIPRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.Equal(t, networkingRDNSFixture, body.RDNS)
+		if body.RDNS != networkingRDNSFixture {
+			t.Errorf("body.RDNS = %v, want %v", body.RDNS, networkingRDNSFixture)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{
 			Address: networkingIPAddressFixture,
 			RDNS:    networkingRDNSFixture,
 			Type:    networkingIPv4Type,
 			Public:  true,
 			Region:  regionUSEast,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "UpdateNetworkingIP should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, networkingIPAddressFixture, result.Address)
-	assert.Equal(t, networkingRDNSFixture, result.RDNS)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Address != networkingIPAddressFixture {
+		t.Errorf("result.Address = %v, want %v", result.Address, networkingIPAddressFixture)
+	}
+
+	if result.RDNS != networkingRDNSFixture {
+		t.Errorf("result.RDNS = %v, want %v", result.RDNS, networkingRDNSFixture)
+	}
 }
 
 func TestClientUpdateNetworkingIPAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != endpointNetworkingIPAddress {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPAddress)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"invalid rdns"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "UpdateNetworkingIP should fail on 400 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusBadRequest)
+	}
 }
 
 func TestClientUpdateNetworkingIPEncodesIPv6Address(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, endpointNetworkingIPv6Escaped, r.URL.EscapedPath(), "request path should preserve valid IPv6 segment")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.EscapedPath() != endpointNetworkingIPv6Escaped {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), endpointNetworkingIPv6Escaped)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.UpdateNetworkingIP(t.Context(), networkingIPv6AddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "UpdateNetworkingIP should succeed for IPv6 address")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, networkingIPv6AddressFixture, result.Address)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Address != networkingIPv6AddressFixture {
+		t.Errorf("result.Address = %v, want %v", result.Address, networkingIPv6AddressFixture)
+	}
 }
 
 func TestClientUpdateNetworkingIPDoesNotRetryTransientError(t *testing.T) {
@@ -368,26 +587,36 @@ func TestClientUpdateNetworkingIPDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 
-		hj, ok := w.(http.Hijacker)
-		if !assert.True(t, ok, "response writer should support hijacking") {
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer should support hijacking")
+
 			return
 		}
 
-		conn, _, err := hj.Hijack()
-		if !assert.NoError(t, err) {
+		conn, _, err := hijacker.Hijack()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.NoError(t, conn.Close())
+		if err := conn.Close(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "UpdateNetworkingIP should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "mutating PUT must not be replayed")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientUpdateNetworkingIPRejectsInvalidRequest(t *testing.T) {
@@ -396,51 +625,86 @@ func TestClientUpdateNetworkingIPRejectsInvalidRequest(t *testing.T) {
 	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.UpdateNetworkingIP(t.Context(), "", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
-	require.Error(t, err, "blank address should be rejected")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
 	_, err = client.UpdateNetworkingIP(t.Context(), "198.51.100.5/24", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
-	require.Error(t, err, "slash address should be rejected")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
 	_, err = client.UpdateNetworkingIP(t.Context(), "198.51.100.5?bad=1", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
-	require.Error(t, err, "query separator address should be rejected")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
 	_, err = client.UpdateNetworkingIP(t.Context(), "..", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
-	require.Error(t, err, "dot traversal address should be rejected")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
 	_, err = client.UpdateNetworkingIP(t.Context(), networkingScopedIPv6Fixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
-	require.Error(t, err, "scoped IPv6 address should be rejected")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
 	_, err = client.UpdateNetworkingIP(t.Context(), networkingZoneTraversalValue, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
-	require.Error(t, err, "zone traversal address should be rejected")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
 	_, err = client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{})
-	require.ErrorIs(t, err, linode.ErrRDNSRequired)
+	if !errors.Is(err, linode.ErrRDNSRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrRDNSRequired)
+	}
 }
 
 func TestClientAllocateNetworkingIPSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPs, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPs)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body linode.AllocateNetworkingIPRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.Equal(t, 123, body.LinodeID)
-		assert.True(t, body.Public)
-		assert.Equal(t, networkingIPv4Type, body.Type)
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+		if !body.Public {
+			t.Error("body.Public = false, want true")
+		}
+
+		if body.Type != networkingIPv4Type {
+			t.Errorf("body.Type = %v, want %v", body.Type, networkingIPv4Type)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{
 			Address:  networkingIPAddressFixture,
 			LinodeID: 123,
 			Public:   true,
 			Type:     networkingIPv4Type,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -451,23 +715,42 @@ func TestClientAllocateNetworkingIPSuccess(t *testing.T) {
 		Public:   true,
 		Type:     networkingIPv4Type,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "AllocateNetworkingIP should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, networkingIPAddressFixture, result.Address)
-	assert.Equal(t, 123, result.LinodeID)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Address != networkingIPAddressFixture {
+		t.Errorf("result.Address = %v, want %v", result.Address, networkingIPAddressFixture)
+	}
+
+	if result.LinodeID != 123 {
+		t.Errorf("result.LinodeID = %v, want %v", result.LinodeID, 123)
+	}
 }
 
 func TestClientAllocateNetworkingIPAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPs, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPs)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -478,12 +761,18 @@ func TestClientAllocateNetworkingIPAPIError(t *testing.T) {
 		Public:   true,
 		Type:     networkingIPv4Type,
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "AllocateNetworkingIP should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientAllocateNetworkingIPDoesNotRetryTransientError(t *testing.T) {
@@ -494,17 +783,23 @@ func TestClientAllocateNetworkingIPDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 
-		hj, ok := w.(http.Hijacker)
-		if !assert.True(t, ok, "response writer should support hijacking") {
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer should support hijacking")
+
 			return
 		}
 
-		conn, _, err := hj.Hijack()
-		if !assert.NoError(t, err) {
+		conn, _, err := hijacker.Hijack()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.NoError(t, conn.Close())
+		if err := conn.Close(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -515,32 +810,60 @@ func TestClientAllocateNetworkingIPDoesNotRetryTransientError(t *testing.T) {
 		Public:   true,
 		Type:     networkingIPv4Type,
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "AllocateNetworkingIP should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be replayed")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientAssignNetworkingIPsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPsAssign, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPsAssign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsAssign)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body linode.AssignNetworkingIPsRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.Equal(t, regionUSEast, body.Region)
-		assert.Len(t, body.Assignments, 1)
-		assert.Equal(t, networkingIPAddressFixture, body.Assignments[0].Address)
-		assert.Equal(t, 123, body.Assignments[0].LinodeID)
+		if body.Region != regionUSEast {
+			t.Errorf("body.Region = %v, want %v", body.Region, regionUSEast)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if len(body.Assignments) != 1 {
+			t.Errorf("len(body.Assignments) = %d, want %d", len(body.Assignments), 1)
+		}
+
+		if body.Assignments[0].Address != networkingIPAddressFixture {
+			t.Errorf("body.Assignments[0].Address = %v, want %v", body.Assignments[0].Address, networkingIPAddressFixture)
+		}
+
+		if body.Assignments[0].LinodeID != 123 {
+			t.Errorf("body.Assignments[0].LinodeID = %v, want %v", body.Assignments[0].LinodeID, 123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -553,21 +876,34 @@ func TestClientAssignNetworkingIPsSuccess(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "AssignNetworkingIPs should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 }
 
 func TestClientAssignNetworkingIPsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPsAssign, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPsAssign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsAssign)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -580,12 +916,18 @@ func TestClientAssignNetworkingIPsAPIError(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "AssignNetworkingIPs should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientAssignNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
@@ -596,17 +938,23 @@ func TestClientAssignNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 
-		hj, ok := w.(http.Hijacker)
-		if !assert.True(t, ok, "response writer should support hijacking") {
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer should support hijacking")
+
 			return
 		}
 
-		conn, _, err := hj.Hijack()
-		if !assert.NoError(t, err) {
+		conn, _, err := hijacker.Hijack()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.NoError(t, conn.Close())
+		if err := conn.Close(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -619,32 +967,60 @@ func TestClientAssignNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "AssignNetworkingIPs should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be replayed")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientAssignNetworkingIPv4sSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPv4Assign, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPv4Assign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv4Assign)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body linode.AssignNetworkingIPsRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.Equal(t, regionUSEast, body.Region)
-		assert.Len(t, body.Assignments, 1)
-		assert.Equal(t, networkingIPAddressFixture, body.Assignments[0].Address)
-		assert.Equal(t, 123, body.Assignments[0].LinodeID)
+		if body.Region != regionUSEast {
+			t.Errorf("body.Region = %v, want %v", body.Region, regionUSEast)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if len(body.Assignments) != 1 {
+			t.Errorf("len(body.Assignments) = %d, want %d", len(body.Assignments), 1)
+		}
+
+		if body.Assignments[0].Address != networkingIPAddressFixture {
+			t.Errorf("body.Assignments[0].Address = %v, want %v", body.Assignments[0].Address, networkingIPAddressFixture)
+		}
+
+		if body.Assignments[0].LinodeID != 123 {
+			t.Errorf("body.Assignments[0].LinodeID = %v, want %v", body.Assignments[0].LinodeID, 123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -657,21 +1033,34 @@ func TestClientAssignNetworkingIPv4sSuccess(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "AssignNetworkingIPv4s should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 }
 
 func TestClientAssignNetworkingIPv4sAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPv4Assign, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPv4Assign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv4Assign)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -684,12 +1073,18 @@ func TestClientAssignNetworkingIPv4sAPIError(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "AssignNetworkingIPv4s should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientAssignNetworkingIPv4sDoesNotRetryTransientError(t *testing.T) {
@@ -700,17 +1095,23 @@ func TestClientAssignNetworkingIPv4sDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 
-		hj, ok := w.(http.Hijacker)
-		if !assert.True(t, ok, "response writer should support hijacking") {
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer should support hijacking")
+
 			return
 		}
 
-		conn, _, err := hj.Hijack()
-		if !assert.NoError(t, err) {
+		conn, _, err := hijacker.Hijack()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.NoError(t, conn.Close())
+		if err := conn.Close(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -723,9 +1124,13 @@ func TestClientAssignNetworkingIPv4sDoesNotRetryTransientError(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "AssignNetworkingIPv4s should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be replayed")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientAssignNetworkingIPv4sRejectsInvalidRequest(t *testing.T) {
@@ -734,22 +1139,30 @@ func TestClientAssignNetworkingIPv4sRejectsInvalidRequest(t *testing.T) {
 	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.AssignNetworkingIPv4s(t.Context(), linode.AssignNetworkingIPsRequest{})
-	require.ErrorIs(t, err, linode.ErrRegionRequired)
+	if !errors.Is(err, linode.ErrRegionRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrRegionRequired)
+	}
 
 	_, err = client.AssignNetworkingIPv4s(t.Context(), linode.AssignNetworkingIPsRequest{Region: regionUSEast})
-	require.ErrorIs(t, err, linode.ErrIPAssignmentsRequired)
+	if !errors.Is(err, linode.ErrIPAssignmentsRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPAssignmentsRequired)
+	}
 
 	_, err = client.AssignNetworkingIPv4s(t.Context(), linode.AssignNetworkingIPsRequest{
 		Region:      regionUSEast,
 		Assignments: []linode.IPAssignment{{LinodeID: 123}},
 	})
-	require.ErrorIs(t, err, linode.ErrIPAddressRequired)
+	if !errors.Is(err, linode.ErrIPAddressRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPAddressRequired)
+	}
 
 	_, err = client.AssignNetworkingIPv4s(t.Context(), linode.AssignNetworkingIPsRequest{
 		Region:      regionUSEast,
 		Assignments: []linode.IPAssignment{{Address: networkingIPAddressFixture}},
 	})
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive)
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 
 	_, err = client.AssignNetworkingIPv4s(t.Context(), linode.AssignNetworkingIPsRequest{
 		Region: regionUSEast,
@@ -758,7 +1171,9 @@ func TestClientAssignNetworkingIPv4sRejectsInvalidRequest(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
-	require.ErrorIs(t, err, linode.ErrIPv4AddressInvalid)
+	if !errors.Is(err, linode.ErrIPv4AddressInvalid) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPv4AddressInvalid)
+	}
 
 	_, err = client.AssignNetworkingIPv4s(t.Context(), linode.AssignNetworkingIPsRequest{
 		Region: regionUSEast,
@@ -767,33 +1182,54 @@ func TestClientAssignNetworkingIPv4sRejectsInvalidRequest(t *testing.T) {
 			LinodeID: 123,
 		}},
 	})
-	require.ErrorIs(t, err, linode.ErrIPv4AddressInvalid)
+	if !errors.Is(err, linode.ErrIPv4AddressInvalid) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPv4AddressInvalid)
+	}
 }
 
 func TestClientShareNetworkingIPsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPsShare, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPsShare {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsShare)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body linode.ShareNetworkingIPsRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.Equal(t, 123, body.LinodeID)
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
 
-		if !assert.Len(t, body.IPs, 1) {
+		if len(body.IPs) != 1 {
+			t.Errorf("len(body.IPs) = %d, want %d", len(body.IPs), 1)
+
 			return
 		}
 
-		assert.Equal(t, networkingIPAddressFixture, body.IPs[0])
+		if body.IPs[0] != networkingIPAddressFixture {
+			t.Errorf("body.IPs[0] = %v, want %v", body.IPs[0], networkingIPAddressFixture)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -803,29 +1239,48 @@ func TestClientShareNetworkingIPsSuccess(t *testing.T) {
 		LinodeID: 123,
 		IPs:      []string{networkingIPAddressFixture},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ShareNetworkingIPs should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 }
 
 func TestClientShareNetworkingIPsAcceptsEmptyList(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPsShare, r.URL.Path, "request path should match")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPsShare {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsShare)
+		}
 
 		var body linode.ShareNetworkingIPsRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.Equal(t, 123, body.LinodeID)
-		assert.Empty(t, body.IPs, "empty ips array removes all shared addresses and should pass through")
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if len(body.IPs) != 0 {
+			t.Errorf("body.IPs = %v, want empty", body.IPs)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -835,21 +1290,34 @@ func TestClientShareNetworkingIPsAcceptsEmptyList(t *testing.T) {
 		LinodeID: 123,
 		IPs:      []string{},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ShareNetworkingIPs should accept an empty ips array")
-	require.NotNil(t, result, "result should not be nil")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 }
 
 func TestClientShareNetworkingIPsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPsShare, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPsShare {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsShare)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -859,12 +1327,18 @@ func TestClientShareNetworkingIPsAPIError(t *testing.T) {
 		LinodeID: 123,
 		IPs:      []string{networkingIPAddressFixture},
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "ShareNetworkingIPs should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientShareNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
@@ -875,17 +1349,23 @@ func TestClientShareNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 
-		hj, ok := w.(http.Hijacker)
-		if !assert.True(t, ok, "response writer should support hijacking") {
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer should support hijacking")
+
 			return
 		}
 
-		conn, _, err := hj.Hijack()
-		if !assert.NoError(t, err) {
+		conn, _, err := hijacker.Hijack()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assert.NoError(t, conn.Close())
+		if err := conn.Close(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -895,9 +1375,13 @@ func TestClientShareNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
 		LinodeID: 123,
 		IPs:      []string{networkingIPAddressFixture},
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "ShareNetworkingIPs should return the transient error")
-	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be replayed")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientShareNetworkingIPsRejectsInvalidRequest(t *testing.T) {
@@ -906,16 +1390,22 @@ func TestClientShareNetworkingIPsRejectsInvalidRequest(t *testing.T) {
 	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{})
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive)
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 
 	_, err = client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{LinodeID: 123})
-	require.ErrorIs(t, err, linode.ErrIPAddressRequired)
+	if !errors.Is(err, linode.ErrIPAddressRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPAddressRequired)
+	}
 
 	_, err = client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
 		LinodeID: 123,
 		IPs:      []string{""},
 	})
-	require.ErrorIs(t, err, linode.ErrIPAddressRequired)
+	if !errors.Is(err, linode.ErrIPAddressRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPAddressRequired)
+	}
 }
 
 func TestClientAssignNetworkingIPsRejectsInvalidRequest(t *testing.T) {
@@ -924,22 +1414,30 @@ func TestClientAssignNetworkingIPsRejectsInvalidRequest(t *testing.T) {
 	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.AssignNetworkingIPs(t.Context(), linode.AssignNetworkingIPsRequest{})
-	require.ErrorIs(t, err, linode.ErrRegionRequired)
+	if !errors.Is(err, linode.ErrRegionRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrRegionRequired)
+	}
 
 	_, err = client.AssignNetworkingIPs(t.Context(), linode.AssignNetworkingIPsRequest{Region: regionUSEast})
-	require.ErrorIs(t, err, linode.ErrIPAssignmentsRequired)
+	if !errors.Is(err, linode.ErrIPAssignmentsRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPAssignmentsRequired)
+	}
 
 	_, err = client.AssignNetworkingIPs(t.Context(), linode.AssignNetworkingIPsRequest{
 		Region:      regionUSEast,
 		Assignments: []linode.IPAssignment{{LinodeID: 123}},
 	})
-	require.ErrorIs(t, err, linode.ErrIPAddressRequired)
+	if !errors.Is(err, linode.ErrIPAddressRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPAddressRequired)
+	}
 
 	_, err = client.AssignNetworkingIPs(t.Context(), linode.AssignNetworkingIPsRequest{
 		Region:      regionUSEast,
 		Assignments: []linode.IPAssignment{{Address: networkingIPAddressFixture}},
 	})
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive)
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 }
 
 func TestClientAllocateNetworkingIPRejectsInvalidLinodeID(t *testing.T) {
@@ -951,5 +1449,7 @@ func TestClientAllocateNetworkingIPRejectsInvalidLinodeID(t *testing.T) {
 		Type: networkingIPv4Type,
 	})
 
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive)
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 }

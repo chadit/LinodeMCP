@@ -1,6 +1,8 @@
 package profiles_test
 
 import (
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -19,7 +21,9 @@ func TestRequiredScopesForTagCreate(t *testing.T) {
 			profiles.ScopeNodeBalancersReadOnly,
 			profiles.ScopeVolumesReadOnly,
 		}
-		assertEqual(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapRead))
+		if !reflect.DeepEqual(profiles.RequiredScopes("linode_tag_create", profiles.CapRead), want) {
+			t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_create", profiles.CapRead), want)
+		}
 	})
 
 	t.Run("write", func(t *testing.T) {
@@ -32,7 +36,9 @@ func TestRequiredScopesForTagCreate(t *testing.T) {
 			profiles.ScopeNodeBalancersReadWrite,
 			profiles.ScopeVolumesReadWrite,
 		}
-		assertEqual(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapWrite))
+		if !reflect.DeepEqual(profiles.RequiredScopes("linode_tag_create", profiles.CapWrite), want) {
+			t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_create", profiles.CapWrite), want)
+		}
 	})
 }
 
@@ -42,8 +48,13 @@ func TestRequiredScopesForTagCreate(t *testing.T) {
 func TestRequiredScopesMetaReturnsNil(t *testing.T) {
 	t.Parallel()
 
-	assertNil(t, profiles.RequiredScopes("hello", profiles.CapMeta))
-	assertNil(t, profiles.RequiredScopes("version", profiles.CapMeta))
+	if profiles.RequiredScopes("hello", profiles.CapMeta) != nil {
+		t.Errorf("value = %v, want nil", profiles.RequiredScopes("hello", profiles.CapMeta))
+	}
+
+	if profiles.RequiredScopes("version", profiles.CapMeta) != nil {
+		t.Errorf("value = %v, want nil", profiles.RequiredScopes("version", profiles.CapMeta))
+	}
 }
 
 // TestRequiredScopesReadVsWrite covers the read-only/read-write split per
@@ -247,12 +258,14 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := profiles.RequiredScopes(tc.toolName, tc.capability)
-			assertEqual(t, tc.want, got)
+			got := profiles.RequiredScopes(tt.toolName, tt.capability)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
@@ -268,42 +281,69 @@ func TestRequiredScopesMultiCategory(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_instance_create", profiles.CapWrite)
-		assertElementsMatch(
-			t,
-			[]profiles.Scope{
+		{
+			gotEls := slices.Clone(got)
+			wantEls := slices.Clone([]profiles.Scope{
 				profiles.ScopeLinodesReadWrite,
 				profiles.ScopeImagesReadOnly,
-			},
-			got,
-		)
+			})
+
+			slices.Sort(gotEls)
+			slices.Sort(wantEls)
+
+			if !slices.Equal(gotEls, wantEls) {
+				t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
+					profiles.ScopeLinodesReadWrite,
+					profiles.ScopeImagesReadOnly,
+				})
+			}
+		}
 	})
 
 	t.Run("instance_clone needs linodes write plus images read", func(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_instance_clone", profiles.CapWrite)
-		assertElementsMatch(
-			t,
-			[]profiles.Scope{
+		{
+			gotEls := slices.Clone(got)
+			wantEls := slices.Clone([]profiles.Scope{
 				profiles.ScopeLinodesReadWrite,
 				profiles.ScopeImagesReadOnly,
-			},
-			got,
-		)
+			})
+
+			slices.Sort(gotEls)
+			slices.Sort(wantEls)
+
+			if !slices.Equal(gotEls, wantEls) {
+				t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
+					profiles.ScopeLinodesReadWrite,
+					profiles.ScopeImagesReadOnly,
+				})
+			}
+		}
 	})
 
 	t.Run("lke_cluster_create needs lke write plus linodes write", func(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_lke_cluster_create", profiles.CapWrite)
-		assertElementsMatch(
-			t,
-			[]profiles.Scope{
+		{
+			gotEls := slices.Clone(got)
+			wantEls := slices.Clone([]profiles.Scope{
 				profiles.ScopeLKEReadWrite,
 				profiles.ScopeLinodesReadWrite,
-			},
-			got,
-		)
+			})
+
+			slices.Sort(gotEls)
+			slices.Sort(wantEls)
+
+			if !slices.Equal(gotEls, wantEls) {
+				t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
+					profiles.ScopeLKEReadWrite,
+					profiles.ScopeLinodesReadWrite,
+				})
+			}
+		}
 	})
 }
 
@@ -316,7 +356,9 @@ func TestRequiredScopesUnknownToolReturnsNil(t *testing.T) {
 	t.Parallel()
 
 	got := profiles.RequiredScopes("not_a_real_tool", profiles.CapWrite)
-	assertNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 }
 
 // TestRequiredScopesPrefixOrdering confirms that longer prefixes win
@@ -346,11 +388,13 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 
 	for _, tool := range cases {
 		got := profiles.RequiredScopes(tool, profiles.CapWrite)
-		requireNotEmptyf(t, got, "tool %s should resolve to a non-empty scope list", tool)
-		assertContainsf(
-			t, got, profiles.ScopeLinodesReadWrite,
-			"tool %s should require linodes:read_write", tool,
-		)
+		if len(got) == 0 {
+			t.Fatal("got is empty")
+		}
+
+		if !slices.Contains(got, profiles.ScopeLinodesReadWrite) {
+			t.Errorf("got does not contain %v", profiles.ScopeLinodesReadWrite)
+		}
 	}
 }
 
@@ -388,12 +432,14 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := profiles.RequiredScopes(tc.tool, tc.cap)
-			assertEqual(t, []profiles.Scope{tc.want}, got)
+			got := profiles.RequiredScopes(tt.tool, tt.cap)
+			if !reflect.DeepEqual(got, []profiles.Scope{tt.want}) {
+				t.Errorf("got = %v, want %v", got, []profiles.Scope{tt.want})
+			}
 		})
 	}
 }
@@ -408,13 +454,23 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 func TestScopeCatalogTokensNotFlaggedAsCredentials(t *testing.T) {
 	t.Parallel()
 
-	assertEqual(t, profiles.ScopeTokensReadOnly, profiles.Scope("tokens:read_only"))
-	assertEqual(t, profiles.ScopeTokensReadWrite, profiles.Scope("tokens:read_write"))
+	if profiles.Scope("tokens:read_only") != profiles.ScopeTokensReadOnly {
+		t.Errorf("got %v, want %v", profiles.Scope("tokens:read_only"), profiles.ScopeTokensReadOnly)
+	}
+
+	if profiles.Scope("tokens:read_write") != profiles.ScopeTokensReadWrite {
+		t.Errorf("got %v, want %v", profiles.Scope("tokens:read_write"), profiles.ScopeTokensReadWrite)
+	}
 }
 
 func TestRequiredScopesForTagDelete(t *testing.T) {
 	t.Parallel()
 
-	assertEqual(t, []profiles.Scope{profiles.ScopeAccountReadWrite}, profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy))
-	assertContains(t, profiles.Categories("linode_tag_delete"), "core")
+	if !reflect.DeepEqual(profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy), []profiles.Scope{profiles.ScopeAccountReadWrite}) {
+		t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy), []profiles.Scope{profiles.ScopeAccountReadWrite})
+	}
+
+	if !slices.Contains(profiles.Categories("linode_tag_delete"), "core") {
+		t.Errorf("collection does not contain %v", "core")
+	}
 }

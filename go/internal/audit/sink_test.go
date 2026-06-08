@@ -22,7 +22,9 @@ func TestNoopSinkSatisfiesInterface(t *testing.T) {
 
 	// The contract is "no observable effect"; the only check we can
 	// make is that the event we passed in is unchanged.
-	checkEqual(t, "test_tool", evt.Tool, "noop sink must not mutate the event")
+	if evt.Tool != "test_tool" {
+		t.Errorf("evt.Tool = %v, want %v", evt.Tool, "test_tool")
+	}
 }
 
 // TestMultiSinkFansOutToEveryChild verifies the fan-out delivers
@@ -37,10 +39,21 @@ func TestMultiSinkFansOutToEveryChild(t *testing.T) {
 	evt := audit.Event{Tool: "fanned_out"}
 	multi.Write(t.Context(), &evt)
 
-	mustEqual(t, 1, first.Len(), "first child must receive the event")
-	mustEqual(t, 1, second.Len(), "second child must receive the event")
-	checkEqual(t, "fanned_out", first.Events()[0].Tool)
-	checkEqual(t, "fanned_out", second.Events()[0].Tool)
+	if first.Len() != 1 {
+		t.Fatalf("first.Len() = %v, want %v", first.Len(), 1)
+	}
+
+	if second.Len() != 1 {
+		t.Fatalf("second.Len() = %v, want %v", second.Len(), 1)
+	}
+
+	if first.Events()[0].Tool != tcFannedOut {
+		t.Errorf("first.Events()[0].Tool = %v, want %v", first.Events()[0].Tool, tcFannedOut)
+	}
+
+	if second.Events()[0].Tool != tcFannedOut {
+		t.Errorf("second.Events()[0].Tool = %v, want %v", second.Events()[0].Tool, tcFannedOut)
+	}
 }
 
 // TestMultiSinkEmptyIsNoop verifies a fan-out with no children does
@@ -51,8 +64,7 @@ func TestMultiSinkEmptyIsNoop(t *testing.T) {
 	multi := audit.NewMultiSink()
 	evt := audit.Event{Tool: "nowhere"}
 
-	mustNotPanics(t, func() { multi.Write(t.Context(), &evt) },
-		"empty MultiSink must be a safe no-op")
+	func() { multi.Write(t.Context(), &evt) }()
 }
 
 // TestCapturingSinkRetainsWriteOrder confirms the test-only sink
@@ -72,10 +84,21 @@ func TestCapturingSinkRetainsWriteOrder(t *testing.T) {
 	sink.Write(t.Context(), &third)
 
 	events := sink.Events()
-	checkLen(t, events, 3)
-	checkEqual(t, "first", events[0].Tool)
-	checkEqual(t, "second", events[1].Tool)
-	checkEqual(t, "third", events[2].Tool)
+	if len(events) != 3 {
+		t.Errorf("len(events) = %d, want %d", len(events), 3)
+	}
+
+	if events[0].Tool != "first" {
+		t.Errorf("events[0].Tool = %v, want %v", events[0].Tool, "first")
+	}
+
+	if events[1].Tool != "second" {
+		t.Errorf("events[1].Tool = %v, want %v", events[1].Tool, "second")
+	}
+
+	if events[2].Tool != "third" {
+		t.Errorf("events[2].Tool = %v, want %v", events[2].Tool, "third")
+	}
 }
 
 // TestCapturingSinkCopiesEvent locks the copy-not-share contract.
@@ -95,9 +118,13 @@ func TestCapturingSinkCopiesEvent(t *testing.T) {
 	evt.Tool = "mutated"
 
 	events := sink.Events()
-	mustLen(t, events, 1)
-	checkEqual(t, "original", events[0].Tool,
-		"sink must copy event, not retain caller's pointer")
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want %d", len(events), 1)
+	}
+
+	if events[0].Tool != "original" {
+		t.Errorf("events[0].Tool = %v, want %v", events[0].Tool, "original")
+	}
 }
 
 // TestCapturingSinkLenReportsCount covers the size accessor.
@@ -105,11 +132,16 @@ func TestCapturingSinkLenReportsCount(t *testing.T) {
 	t.Parallel()
 
 	sink := audit.NewCapturingSink()
-	checkEqual(t, 0, sink.Len(), "empty sink starts at zero")
+	if sink.Len() != 0 {
+		t.Errorf("sink.Len() = %v, want %v", sink.Len(), 0)
+	}
 
 	evt := audit.Event{Tool: "one"}
 	sink.Write(t.Context(), &evt)
-	checkEqual(t, 1, sink.Len())
+
+	if sink.Len() != 1 {
+		t.Errorf("sink.Len() = %v, want %v", sink.Len(), 1)
+	}
 }
 
 // TestNewCapturingSinkStartsEmpty locks the non-nil-but-empty
@@ -120,6 +152,11 @@ func TestNewCapturingSinkStartsEmpty(t *testing.T) {
 
 	sink := audit.NewCapturingSink()
 
-	checkNotNil(t, sink.Events(), "Events() must return non-nil even when empty")
-	checkEmpty(t, sink.Events())
+	if sink.Events() == nil {
+		t.Error("sink.Events() is nil")
+	}
+
+	if len(sink.Events()) != 0 {
+		t.Errorf("sink.Events() = %v, want empty", sink.Events())
+	}
 }

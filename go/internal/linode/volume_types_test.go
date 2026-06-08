@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -25,27 +26,53 @@ func TestClientListVolumeTypesSuccess(t *testing.T) {
 	}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, volumeTypesPath, r.URL.Path, "request path should be /volumes/types")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != volumeTypesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, volumeTypesPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    volumeTypes,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListVolumeTypes(t.Context())
 
-	requireNoError(t, err, "ListVolumeTypes should succeed on 200 response")
-	requireLenOne(t, got)
-	checkEqual(t, volumeTypeIDBlockStorage, got[0][keyID])
-	checkEqual(t, volumeTypeLabelBlock, got[0][keyLabel])
+	got, err := client.ListVolumeTypes(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+
+	if !reflect.DeepEqual(got[0][keyID], volumeTypeIDBlockStorage) {
+		t.Errorf("got[0][keyID] = %v, want %v", got[0][keyID], volumeTypeIDBlockStorage)
+	}
+
+	if !reflect.DeepEqual(got[0][keyLabel], volumeTypeLabelBlock) {
+		t.Errorf("got[0][keyLabel] = %v, want %v", got[0][keyLabel], volumeTypeLabelBlock)
+	}
 }
 
 func TestClientListVolumeTypesRetriesTransientRead(t *testing.T) {
@@ -57,33 +84,56 @@ func TestClientListVolumeTypesRetriesTransientRead(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, volumeTypesPath, r.URL.Path, "request path should be /volumes/types")
+
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != volumeTypesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, volumeTypesPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    volumeTypes,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListVolumeTypes(t.Context())
 
-	requireNoError(t, err, "read-only ListVolumeTypes should retry transient failures")
-	requireLenOne(t, got)
-	checkEqual(t, volumeTypeIDBlockStorage, got[0][keyID])
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.ListVolumeTypes(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+
+	if !reflect.DeepEqual(got[0][keyID], volumeTypeIDBlockStorage) {
+		t.Errorf("got[0][keyID] = %v, want %v", got[0][keyID], volumeTypeIDBlockStorage)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }

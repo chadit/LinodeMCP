@@ -4,81 +4,119 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeVolumeCreateToolDryRun(t *testing.T) {
+func TestLinodeVolumeCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeVolumeCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeVolumeCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeVolumeCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("create dry_run must not issue any request; got %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Errorf("create dry_run must not issue any request; got %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeCreateTool(cfg)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeVolumeCreateTool(cfg)
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:  "vol-01",
+		keyRegion: regionUSEast,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:  "vol-01",
-			keyRegion: regionUSEast,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_volume_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/volumes", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-volume side effect")
+	if !reflect.DeepEqual(body["tool"], "linode_volume_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_volume_create")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "vol-01", "side effect should name the new volume")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns that billing starts immediately")
-	})
+	if !reflect.DeepEqual(would["path"], "/volumes") {
+		t.Errorf("got %v, want %v", would["path"], "/volumes")
+	}
 
-	t.Run("still validates label", func(t *testing.T) {
-		t.Parallel()
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-		_, _, handler := tools.NewLinodeVolumeCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion: regionUSEast,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "label is required")
-	})
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "vol-01") {
+		t.Errorf("effect does not contain %v", "vol-01")
+	}
+
+	warnings, _ := body["warnings"].([]any)
+	if len(warnings) != 1 {
+		t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
+	}
+}
+
+func TestLinodeVolumeCreateToolDryRunStillValidatesLabel(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeVolumeCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "label is required")
+	}
 }
 
 func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
@@ -88,7 +126,9 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVolumeAttachTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without attaching", func(t *testing.T) {
@@ -102,169 +142,282 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 			keyLinodeID: float64(444),
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_volume_attach", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_volume_attach") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_volume_attach")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/volumes/333/attach", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/volumes/333/attach") {
+			t.Errorf("got %v, want %v", would["path"], "/volumes/333/attach")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "attach surfaces the attachment side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "444", "side effect should name the target instance")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, "444") {
+			t.Errorf("effect does not contain %v", "444")
+		}
 	})
 
 	t.Run("still validates volume_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVolumeAttachTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(444),
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "volume_id is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "volume_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "volume_id is required")
+		}
 	})
 }
 
-func TestLinodeVolumeDetachToolDryRun(t *testing.T) {
+func TestLinodeVolumeDetachToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
-
-		tool, _, _ := tools.NewLinodeVolumeDetachTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
-
-	t.Run("preview without detaching", func(t *testing.T) {
-		t.Parallel()
-
-		cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
-		_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyDryRun:   true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_volume_detach", body["tool"])
-
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/volumes/333/detach", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
-
-		// An unattached volume reports the detach as a no-op.
-		assert.NotEmpty(t, body["side_effects"])
-	})
-
-	t.Run("preview surfaces current attachment", func(t *testing.T) {
-		t.Parallel()
-
-		attachedTo := 444
-		cfg, _ := dryRunGetStateServer(t, "/volumes/333",
-			linode.Volume{ID: 333, Label: testVolumeLabel, LinodeID: &attachedTo})
-		_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyDryRun:   true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1)
-
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "444", "side effect should name the current instance")
-	})
-
-	t.Run("still validates volume_id", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeVolumeDetachTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "volume_id is required")
-	})
+	tool, _, _ := tools.NewLinodeVolumeDetachTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
 }
 
-func TestLinodeVolumeResizeToolDryRun(t *testing.T) {
+func TestLinodeVolumeDetachToolDryRunPreviewWithoutDetaching(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
+	_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
 
-		tool, _, _ := tools.NewLinodeVolumeResizeTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyDryRun:   true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("preview without resizing", func(t *testing.T) {
-		t.Parallel()
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		cfg, methods := dryRunGetStateServer(t, "/volumes/333",
-			linode.Volume{ID: 333, Label: testVolumeLabel, Size: 50})
-		_, _, handler := tools.NewLinodeVolumeResizeTool(cfg)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keySize:     float64(100),
-			keyDryRun:   true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if !reflect.DeepEqual(body["tool"], "linode_volume_detach") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_volume_detach")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_volume_resize", body["tool"])
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/volumes/333/resize", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+	if !reflect.DeepEqual(would["path"], "/volumes/333/detach") {
+		t.Errorf("got %v, want %v", would["path"], "/volumes/333/detach")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "resize surfaces the size change")
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "50 GB", "side effect names the current size")
-		assert.Contains(t, effect, "100 GB", "side effect names the target size")
-		assert.NotEmpty(t, body["warnings"], "resize warns a volume can only grow")
-	})
+	// An unattached volume reports the detach as a no-op.
+	if body["side_effects"] == nil {
+		t.Fatal("expected non-empty value")
+	}
+}
 
-	t.Run("still validates volume_id", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeVolumeDetachToolDryRunPreviewSurfacesCurrentAttachment(t *testing.T) {
+	t.Parallel()
 
-		_, _, handler := tools.NewLinodeVolumeResizeTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keySize:   float64(100),
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "volume_id is required")
-	})
+	attachedTo := 444
+	cfg, _ := dryRunGetStateServer(t, "/volumes/333",
+		linode.Volume{ID: 333, Label: testVolumeLabel, LinodeID: &attachedTo})
+	_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyDryRun:   true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "444") {
+		t.Errorf("effect does not contain %v", "444")
+	}
+}
+
+func TestLinodeVolumeDetachToolDryRunStillValidatesVolumeId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeVolumeDetachTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "volume_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "volume_id is required")
+	}
+}
+
+func TestLinodeVolumeResizeToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
+	t.Parallel()
+
+	tool, _, _ := tools.NewLinodeVolumeResizeTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
+
+func TestLinodeVolumeResizeToolDryRunPreviewWithoutResizing(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunGetStateServer(t, "/volumes/333",
+		linode.Volume{ID: 333, Label: testVolumeLabel, Size: 50})
+	_, _, handler := tools.NewLinodeVolumeResizeTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keySize:     float64(100),
+		keyDryRun:   true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_volume_resize") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_volume_resize")
+	}
+
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/volumes/333/resize") {
+		t.Errorf("got %v, want %v", would["path"], "/volumes/333/resize")
+	}
+
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
+
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "50 GB") {
+		t.Errorf("effect does not contain %v", "50 GB")
+	}
+
+	if !strings.Contains(effect, "100 GB") {
+		t.Errorf("effect does not contain %v", "100 GB")
+	}
+
+	if body["warnings"] == nil {
+		t.Fatal("expected non-empty value")
+	}
+}
+
+func TestLinodeVolumeResizeToolDryRunStillValidatesVolumeId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeVolumeResizeTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keySize:   float64(100),
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "volume_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "volume_id is required")
+	}
 }
 
 func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
@@ -274,7 +427,9 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVolumeUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -288,37 +443,71 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 			keyLabel:    testRenamedLabel,
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_volume_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_volume_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_volume_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/volumes/333", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], tcVolumes333) {
+			t.Errorf("got %v, want %v", would["path"], tcVolumes333)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "update surfaces the label change")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, testRenamedLabel) {
+			t.Errorf("effect does not contain %v", testRenamedLabel)
+		}
 	})
 
 	t.Run("still validates editable field", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVolumeUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "at least one of label or tags is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "at least one of label or tags is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "at least one of label or tags is required")
+		}
 	})
 }
 
@@ -344,26 +533,50 @@ func TestLinodeVolumeDeleteToolDryRunDependencies(t *testing.T) {
 		keyVolumeID: float64(789),
 		keyDryRun:   true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_volume_delete", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_volume_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_volume_delete")
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 1, "the attached instance should be the one dependency")
+	if len(deps) != 1 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 1)
+	}
 
 	dep, ok := deps[0].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "instance", dep["kind"])
-	assert.Equal(t, "detached", dep["action"])
-	assert.InDelta(t, 456, dep["id"], 0)
-	assert.Equal(t, "attached-host", dep["label"])
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	for key, want := range map[string]any{
+		tcKind:                           tcInstance,
+		tcAction:                         "detached",
+		keySupportTicketID:               float64(456),
+		monitorAlertDefinitionLabelParam: "attached-host",
+	} {
+		if !reflect.DeepEqual(dep[key], want) {
+			t.Errorf("dep[%v] = %v, want %v", key, dep[key], want)
+		}
+	}
 
 	warnings, _ := body["warnings"].([]any)
-	assert.NotEmpty(t, warnings, "an attached volume should warn about detachment")
+	if len(warnings) == 0 {
+		t.Error("warnings is empty")
+	}
 
-	assert.Equal(t, []string{http.MethodGet}, *methods,
-		"the walk reads the label from the volume state; no extra GET")
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
 }

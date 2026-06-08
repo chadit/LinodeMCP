@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -17,76 +19,126 @@ import (
 
 const imageShareGroupImagesAddToolName = "linode_image_sharegroup_images_add"
 
-func TestLinodeImageShareGroupImagesAddTool(t *testing.T) {
+func TestLinodeImageShareGroupImagesAddToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeImageShareGroupImagesAddTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeImageShareGroupImagesAddTool(&config.Config{})
+	if tool.Name != imageShareGroupImagesAddToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, imageShareGroupImagesAddToolName)
+	}
 
-		shareGroupAssertEqual(t, imageShareGroupImagesAddToolName, tool.Name, "tool name should match")
-		shareGroupAssertEqual(t, profiles.CapWrite, capability, "tool should be write capability")
-		shareGroupAssertNotEmpty(t, tool.Description, "tool should have a description")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyImages, "schema should include images")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyConfirm, "mutating add tool must require confirm")
-		shareGroupRequireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			shareGroupAssertEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			shareGroupAssertEqual(t, "/images/sharegroups/54321/images", r.URL.Path, "request path should include share group ID")
-			shareGroupAssertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			shareGroupAssertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	for _, key := range []string{keyShareGroupID, keyImages, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-			var body map[string]any
-			if !shareGroupAssertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
-
-			if !shareGroupAssertLen(t, body[keyImages], 1) {
-				return
-			}
-
-			image, ok := body[keyImages].([]any)[0].(map[string]any)
-			if !shareGroupAssertTrue(t, ok, "image payload should be an object") {
-				return
-			}
-
-			shareGroupAssertEqual(t, imagePrivate15Fixture, image[keyBetaID])
-
-			w.Header().Set("Content-Type", "application/json")
-			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyBetaID:      "shared/1",
-				keyLabel:       "Linux Debian",
-				keyDescription: "Official Debian Linux image for server deployment",
-				keyStatus:      statusAvailable,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		_, _, handler := tools.NewLinodeImageShareGroupImagesAddTool(imageShareGroupImagesAddConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyShareGroupID: 54321,
-			keyImages:       `[{"id":" private/15 ","label":"Linux Debian"}]`,
-			keyConfirm:      true,
-		}))
-
-		shareGroupRequireNoError(t, err, "handler should not return an error")
-		shareGroupRequireNotNil(t, result, "result should not be nil")
-		shareGroupAssertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		shareGroupRequireTrue(t, ok, "content should be TextContent")
-		shareGroupAssertContains(t, textContent.Text, "Added image", "response should include success message")
-		shareGroupAssertContains(t, textContent.Text, "shared/1", "response should include image ID")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
+func TestLinodeImageShareGroupImagesAddToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/images/sharegroups/54321/images" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/54321/images")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		images, imagesOK := body[keyImages].([]any)
+		if !imagesOK || len(images) != 1 {
+			t.Errorf("len(body[keyImages]) = %d, want %d", len(images), 1)
+
+			return
+		}
+
+		image, ok := images[0].(map[string]any)
+		if !ok {
+			t.Error("image payload should be an object")
+
+			return
+		}
+
+		if !reflect.DeepEqual(image[keyBetaID], imagePrivate15Fixture) {
+			t.Errorf("image[keyBetaID] = %v, want %v", image[keyBetaID], imagePrivate15Fixture)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyBetaID:      "shared/1",
+			keyLabel:       "Linux Debian",
+			keyDescription: "Official Debian Linux image for server deployment",
+			keyStatus:      statusAvailable,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeImageShareGroupImagesAddTool(imageShareGroupImagesAddConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyShareGroupID: 54321,
+		keyImages:       `[{"id":" private/15 ","label":"Linux Debian"}]`,
+		keyConfirm:      true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Added image") {
+		t.Errorf("textContent.Text does not contain %v", "Added image")
+	}
+
+	if !strings.Contains(textContent.Text, "shared/1") {
+		t.Errorf("textContent.Text does not contain %v", "shared/1")
+	}
+}
+
+func TestLinodeImageShareGroupImagesAddToolValidationConfirm(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
@@ -109,29 +161,54 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			shareGroupRequireNoError(t, err)
-			shareGroupRequireNotNil(t, result)
-			shareGroupAssertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
-			shareGroupAssertEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
 
-	t.Run("invalid sharegroup id", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeImageShareGroupImagesAddToolValidationInvalidSharegroupId(t *testing.T) {
+	t.Parallel()
 
-		_, _, handler := tools.NewLinodeImageShareGroupImagesAddTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyShareGroupID: 0,
-			keyImages:       imagePrivate15JSON,
-			keyConfirm:      true,
-		}))
+	_, _, handler := tools.NewLinodeImageShareGroupImagesAddTool(&config.Config{})
 
-		shareGroupRequireNoError(t, err)
-		shareGroupRequireNotNil(t, result)
-		shareGroupAssertTrue(t, result.IsError)
-		assertErrorContains(t, result, "sharegroup_id must be a positive integer")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyShareGroupID: 0,
+		keyImages:       imagePrivate15JSON,
+		keyConfirm:      true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "sharegroup_id must be a positive integer") {
+		t.Errorf("error text %q does not contain %q", text.Text, "sharegroup_id must be a positive integer")
+	}
+}
+
+func TestLinodeImageShareGroupImagesAddToolValidationImages(t *testing.T) {
+	t.Parallel()
 
 	for name, images := range map[string]any{
 		"missing images":        nil,
@@ -155,37 +232,61 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			shareGroupRequireNoError(t, err)
-			shareGroupRequireNotNil(t, result)
-			shareGroupAssertTrue(t, result.IsError, "invalid images should be an error result")
-			shareGroupAssertEqual(t, int32(0), calls.Load(), "images validation must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeImageShareGroupImagesAddToolValidationClientError(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
 
-		_, _, handler := tools.NewLinodeImageShareGroupImagesAddTool(imageShareGroupImagesAddConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyShareGroupID: 54321,
-			keyImages:       imagePrivate15JSON,
-			keyConfirm:      true,
-		}))
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		shareGroupRequireNoError(t, err)
-		shareGroupRequireNotNil(t, result)
-		shareGroupAssertTrue(t, result.IsError, "upstream API error should be an error result")
-		assertErrorContains(t, result, "Failed to add image to share group")
-	})
+	_, _, handler := tools.NewLinodeImageShareGroupImagesAddTool(imageShareGroupImagesAddConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyShareGroupID: 54321,
+		keyImages:       imagePrivate15JSON,
+		keyConfirm:      true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to add image to share group") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to add image to share group")
+	}
 }
 
 func imageShareGroupImagesAddConfig(apiURL string) *config.Config {

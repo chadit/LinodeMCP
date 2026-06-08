@@ -1,6 +1,7 @@
 package profiles_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -9,16 +10,11 @@ import (
 func TestRequiredScopesRegionAvailabilityList(t *testing.T) {
 	t.Parallel()
 
-	assertEqual(
-		t,
-		[]profiles.Scope{profiles.ScopeLinodesReadOnly},
-		profiles.RequiredScopes("linode_region_availability_list", profiles.CapRead),
-		"region availability list should use read-only linodes scope",
-	)
-	assertEqual(
-		t,
-		[]profiles.Scope{profiles.ScopeLinodesReadOnly},
-		profiles.RequiredScopes("linode_region_availability_get", profiles.CapRead),
-		"region availability get should use read-only linodes scope",
-	)
+	if !reflect.DeepEqual(profiles.RequiredScopes("linode_region_availability_list", profiles.CapRead), []profiles.Scope{profiles.ScopeLinodesReadOnly}) {
+		t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_region_availability_list", profiles.CapRead), []profiles.Scope{profiles.ScopeLinodesReadOnly})
+	}
+
+	if !reflect.DeepEqual(profiles.RequiredScopes("linode_region_availability_get", profiles.CapRead), []profiles.Scope{profiles.ScopeLinodesReadOnly}) {
+		t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_region_availability_get", profiles.CapRead), []profiles.Scope{profiles.ScopeLinodesReadOnly})
+	}
 }

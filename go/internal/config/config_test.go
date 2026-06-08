@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -50,46 +51,65 @@ func writeConfigFile(t *testing.T, dir, filename, content string) string {
 	t.Helper()
 
 	path := filepath.Join(dir, filename)
-	checkNoError(t, os.WriteFile(path, []byte(content), 0o600))
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	return path
 }
 
-func TestLoadFromFile(t *testing.T) {
+func TestLoadFromFileValidYAML(t *testing.T) {
 	t.Parallel()
 
-	t.Run("valid YAML", func(t *testing.T) {
-		t.Parallel()
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		cfg, err := config.Load(path)
+	if cfg.Server.Name != tcTestServer {
+		t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, tcTestServer)
+	}
 
-		checkNoError(t, err)
-		checkEqual(t, "TestServer", cfg.Server.Name)
-		checkEqual(t, "debug", cfg.Server.LogLevel)
-		checkEqual(t, 9000, cfg.Server.Port)
-		checkEqual(t, "test-token-123", cfg.Environments["default"].Linode.Token)
-	})
+	if cfg.Server.LogLevel != "debug" {
+		t.Errorf("cfg.Server.LogLevel = %v, want %v", cfg.Server.LogLevel, "debug")
+	}
 
-	t.Run("valid JSON", func(t *testing.T) {
-		t.Parallel()
+	if cfg.Server.Port != 9000 {
+		t.Errorf("cfg.Server.Port = %v, want %v", cfg.Server.Port, 9000)
+	}
 
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.json", validJSONConfig())
+	if cfg.Environments["default"].Linode.Token != "test-token-123" {
+		t.Errorf("got %v, want %v", cfg.Environments["default"].Linode.Token, "test-token-123")
+	}
+}
 
-		cfg, err := config.Load(path)
+func TestLoadFromFileValidJSON(t *testing.T) {
+	t.Parallel()
 
-		checkNoError(t, err)
-		checkEqual(t, "JSONServer", cfg.Server.Name)
-		checkEqual(t, "warn", cfg.Server.LogLevel)
-	})
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.json", validJSONConfig())
 
-	t.Run("defaults", func(t *testing.T) {
-		t.Parallel()
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		minimalYAML := `
+	if cfg.Server.Name != "JSONServer" {
+		t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, "JSONServer")
+	}
+
+	if cfg.Server.LogLevel != "warn" {
+		t.Errorf("cfg.Server.LogLevel = %v, want %v", cfg.Server.LogLevel, "warn")
+	}
+}
+
+func TestLoadFromFileDefaults(t *testing.T) {
+	t.Parallel()
+
+	minimalYAML := `
 environments:
   default:
     label: "Default"
@@ -97,60 +117,89 @@ environments:
       apiUrl: "https://api.linode.com/v4"
       token: "tok"
 `
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.yml", minimalYAML)
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", minimalYAML)
 
-		cfg, err := config.Load(path)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		checkNoError(t, err)
-		checkEqual(t, config.DefaultServerName, cfg.Server.Name)
-		checkEqual(t, config.DefaultLogLevel, cfg.Server.LogLevel)
-		checkEqual(t, config.DefaultTransport, cfg.Server.Transport)
-		checkEqual(t, config.DefaultHost, cfg.Server.Host)
-		checkEqual(t, config.DefaultServerPort, cfg.Server.Port)
-		checkEqual(t, config.DefaultMaxRetries, cfg.Resilience.MaxRetries)
-		checkEqual(t, config.DefaultBaseRetryDelay, cfg.Resilience.BaseRetryDelay)
-		checkEqual(t, config.DefaultMaxRetryDelay, cfg.Resilience.MaxRetryDelay)
-	})
+	if cfg.Server.Name != config.DefaultServerName {
+		t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, config.DefaultServerName)
+	}
 
-	t.Run("file not found", func(t *testing.T) {
-		t.Parallel()
+	if cfg.Server.LogLevel != config.DefaultLogLevel {
+		t.Errorf("cfg.Server.LogLevel = %v, want %v", cfg.Server.LogLevel, config.DefaultLogLevel)
+	}
 
-		_, err := config.Load("/tmp/nonexistent-linodemcp-config-test.yml")
-		checkError(t, err)
-	})
+	if cfg.Server.Transport != config.DefaultTransport {
+		t.Errorf("cfg.Server.Transport = %v, want %v", cfg.Server.Transport, config.DefaultTransport)
+	}
 
-	t.Run("malformed YAML", func(t *testing.T) {
-		t.Parallel()
+	if cfg.Server.Host != config.DefaultHost {
+		t.Errorf("cfg.Server.Host = %v, want %v", cfg.Server.Host, config.DefaultHost)
+	}
 
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.yml", `{{{invalid yaml`)
+	if cfg.Server.Port != config.DefaultServerPort {
+		t.Errorf("cfg.Server.Port = %v, want %v", cfg.Server.Port, config.DefaultServerPort)
+	}
 
-		_, err := config.Load(path)
-		checkError(t, err)
-		checkErrorIs(t, err, config.ErrConfigMalformed)
-	})
+	if cfg.Resilience.MaxRetries != config.DefaultMaxRetries {
+		t.Errorf("cfg.Resilience.MaxRetries = %v, want %v", cfg.Resilience.MaxRetries, config.DefaultMaxRetries)
+	}
 
-	t.Run("no environments", func(t *testing.T) {
-		t.Parallel()
+	if cfg.Resilience.BaseRetryDelay != config.DefaultBaseRetryDelay {
+		t.Errorf("cfg.Resilience.BaseRetryDelay = %v, want %v", cfg.Resilience.BaseRetryDelay, config.DefaultBaseRetryDelay)
+	}
 
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.yml", `
+	if cfg.Resilience.MaxRetryDelay != config.DefaultMaxRetryDelay {
+		t.Errorf("cfg.Resilience.MaxRetryDelay = %v, want %v", cfg.Resilience.MaxRetryDelay, config.DefaultMaxRetryDelay)
+	}
+}
+
+func TestLoadFromFileFileNotFound(t *testing.T) {
+	t.Parallel()
+
+	_, err := config.Load("/tmp/nonexistent-linodemcp-config-test.yml")
+	if err == nil {
+		t.Error("expected an error, got nil")
+	}
+}
+
+func TestLoadFromFileMalformedYAML(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", `{{{invalid yaml`)
+
+	_, err := config.Load(path)
+	if !errors.Is(err, config.ErrConfigMalformed) {
+		t.Errorf("error = %v, want %v", err, config.ErrConfigMalformed)
+	}
+}
+
+func TestLoadFromFileNoEnvironments(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", `
 server:
   name: "Test"
   logLevel: "info"
 `)
 
-		_, err := config.Load(path)
-		checkError(t, err)
-		checkErrorIs(t, err, config.ErrConfigInvalid)
-	})
+	_, err := config.Load(path)
+	if !errors.Is(err, config.ErrConfigInvalid) {
+		t.Errorf("error = %v, want %v", err, config.ErrConfigInvalid)
+	}
+}
 
-	t.Run("incomplete linode config", func(t *testing.T) {
-		t.Parallel()
+func TestLoadFromFileIncompleteLinodeConfig(t *testing.T) {
+	t.Parallel()
 
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.yml", `
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", `
 server:
   name: "Test"
   logLevel: "info"
@@ -161,16 +210,17 @@ environments:
       apiUrl: "https://api.linode.com/v4"
 `)
 
-		_, err := config.Load(path)
-		checkError(t, err)
-		checkErrorIs(t, err, config.ErrConfigInvalid)
-	})
+	_, err := config.Load(path)
+	if !errors.Is(err, config.ErrConfigInvalid) {
+		t.Errorf("error = %v, want %v", err, config.ErrConfigInvalid)
+	}
+}
 
-	t.Run("unknown fields ignored", func(t *testing.T) {
-		t.Parallel()
+func TestLoadFromFileUnknownFieldsIgnored(t *testing.T) {
+	t.Parallel()
 
-		dir := t.TempDir()
-		path := writeConfigFile(t, dir, "config.yml", `
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", `
 unknownField: "foo"
 server:
   name: "TestServer"
@@ -183,11 +233,14 @@ environments:
       token: "tok"
 `)
 
-		cfg, err := config.Load(path)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		checkNoError(t, err)
-		checkEqual(t, "TestServer", cfg.Server.Name)
-	})
+	if cfg.Server.Name != tcTestServer {
+		t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, tcTestServer)
+	}
 }
 
 func TestSelectEnvironment(t *testing.T) {
@@ -257,26 +310,37 @@ func TestSelectEnvironment(t *testing.T) {
 			env, err := tt.cfg.SelectEnvironment(tt.input)
 
 			if tt.wantErr != nil {
-				checkError(t, err)
-				checkErrorIs(t, err, tt.wantErr)
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("error = %v, want %v", err, tt.wantErr)
+				}
 
 				return
 			}
 
-			checkNoError(t, err)
-			checkEqual(t, tt.wantLabel, env.Label)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if env.Label != tt.wantLabel {
+				t.Errorf("env.Label = %v, want %v", env.Label, tt.wantLabel)
+			}
 		})
 	}
 }
 
 func TestGetConfigPathWithEnvOverride(t *testing.T) {
 	dir := t.TempDir()
+
 	customPath := filepath.Join(dir, "custom-config.yml")
-	checkNoError(t, os.WriteFile(customPath, []byte(""), 0o600))
+	if err := os.WriteFile(customPath, []byte(""), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	t.Setenv("LINODEMCP_CONFIG_PATH", customPath)
 
-	checkEqual(t, customPath, config.GetConfigPath())
+	if config.GetConfigPath() != customPath {
+		t.Errorf("config.GetConfigPath() = %v, want %v", config.GetConfigPath(), customPath)
+	}
 }
 
 func TestApplyEnvironmentOverrides(t *testing.T) {
@@ -296,10 +360,23 @@ environments:
 `)
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkEqual(t, "EnvServer", cfg.Server.Name)
-	checkEqual(t, "error", cfg.Server.LogLevel)
-	checkEqual(t, "https://override.api.com", cfg.Environments["default"].Linode.APIURL)
-	checkEqual(t, "env-token", cfg.Environments["default"].Linode.Token)
+	if cfg.Server.Name != "EnvServer" {
+		t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, "EnvServer")
+	}
+
+	if cfg.Server.LogLevel != "error" {
+		t.Errorf("cfg.Server.LogLevel = %v, want %v", cfg.Server.LogLevel, "error")
+	}
+
+	if cfg.Environments["default"].Linode.APIURL != "https://override.api.com" {
+		t.Errorf("got %v, want %v", cfg.Environments["default"].Linode.APIURL, "https://override.api.com")
+	}
+
+	if cfg.Environments["default"].Linode.Token != "env-token" {
+		t.Errorf("got %v, want %v", cfg.Environments["default"].Linode.Token, "env-token")
+	}
 }

@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -19,130 +18,210 @@ import (
 
 const toolStackScriptGet = "linode_stackscript_get"
 
-func TestLinodeStackScriptGetTool(t *testing.T) {
+func TestLinodeStackScriptGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeStackScriptGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeStackScriptGetTool(cfg)
+	if tool.Name != toolStackScriptGet {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolStackScriptGet)
+	}
 
-		assert.Equal(t, toolStackScriptGet, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyStackScriptID, "schema should include stackscript_id")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		script := linode.StackScript{ID: 123, Label: "deploy-base", Description: "Base deploy script"}
+	if _, ok := tool.InputSchema.Properties[keyStackScriptID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyStackScriptID)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/stackscripts/123", r.URL.Path, "request path should include StackScript ID")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(script))
-		}))
-		t.Cleanup(srv.Close)
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 123})
-		result, err := handler(t.Context(), req)
+func TestLinodeStackScriptGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	script := linode.StackScript{ID: 123, Label: "deploy-base", Description: "Base deploy script"}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "deploy-base", "response should contain StackScript label")
-		assert.Contains(t, textContent.Text, "123", "response should contain StackScript ID")
-	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-	t.Run("client failure returns tool error", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.Path != "/linode/stackscripts/123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/stackscripts/123")
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/stackscripts/123", r.URL.Path, "request path should include StackScript ID")
-			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(script); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 123})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "deploy-base") {
+		t.Errorf("textContent.Text does not contain %v", "deploy-base")
+	}
+
+	if !strings.Contains(textContent.Text, "123") {
+		t.Errorf("textContent.Text does not contain %v", "123")
+	}
+}
+
+func TestLinodeStackScriptGetToolClientFailureReturnsToolError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/linode/stackscripts/123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/stackscripts/123")
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 123})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve StackScript") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve StackScript")
+	}
+
+	if !strings.Contains(textContent.Text, errTemporaryFailure) {
+		t.Errorf("textContent.Text does not contain %v", errTemporaryFailure)
+	}
+}
+
+func TestLinodeStackScriptGetToolRejectsInvalidStackscriptIdBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	invalidValues := map[string]any{
+		caseMissing:     nil,
+		caseBlank:       "",
+		caseNumeric:     "123",
+		caseZero:        0,
+		caseNegative:    -1,
+		caseSlash:       paymentMethodIDSlash,
+		caseQuery:       "123?query",
+		caseFragment:    "123#fragment",
+		caseDotdot:      pathTraversalValue,
+		"prefixed path": "../123",
+	}
+
+	for name, value := range invalidValues {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				called.Store(true)
 			}))
-		}))
-		t.Cleanup(srv.Close)
+			t.Cleanup(srv.Close)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 123})
-		result, err := handler(t.Context(), req)
+			args := map[string]any{}
+			if name != caseMissing {
+				args[keyStackScriptID] = value
+			}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "client failure should return a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve StackScript")
-		assert.Contains(t, textContent.Text, errTemporaryFailure)
-	})
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-	t.Run("rejects invalid stackscript_id before client call", func(t *testing.T) {
-		t.Parallel()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		invalidValues := map[string]any{
-			caseMissing:     nil,
-			caseBlank:       "",
-			caseNumeric:     "123",
-			caseZero:        0,
-			caseNegative:    -1,
-			caseSlash:       paymentMethodIDSlash,
-			caseQuery:       "123?query",
-			caseFragment:    "123#fragment",
-			caseDotdot:      pathTraversalValue,
-			"prefixed path": "../123",
-		}
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		for name, value := range invalidValues {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-					called.Store(true)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
-
-				args := map[string]any{}
-				if name != caseMissing {
-					args[keyStackScriptID] = value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.True(t, result.IsError, "invalid stackscript_id should return a tool error")
-				assert.False(t, called.Load(), "invalid stackscript_id should be rejected before client call")
-			})
-		}
-	})
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
 }

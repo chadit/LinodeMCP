@@ -19,7 +19,9 @@ func TestResolveDefaultAuditDirHonorsXDGStateHome(t *testing.T) {
 	got := audit.ResolveDefaultAuditDir()
 
 	expected := filepath.Join(customState, audit.UserAuditDirRelative)
-	checkEqual(t, expected, got, "audit dir must be $XDG_STATE_HOME/linodemcp when set")
+	if got != expected {
+		t.Errorf("got = %v, want %v", got, expected)
+	}
 }
 
 // TestResolveDefaultAuditDirFallsBackToHomeDir verifies the
@@ -41,11 +43,9 @@ func TestResolveDefaultAuditDirFallsBackToHomeDir(t *testing.T) {
 	systemPath := audit.SystemAuditDir
 	homePath := filepath.Join(fakeHome, ".local", "state", audit.UserAuditDirRelative)
 
-	mustTrue(
-		t,
-		got == systemPath || got == homePath,
-		"audit dir must be system path or home-based path; got %q", got,
-	)
+	if got != systemPath && got != homePath {
+		t.Fatal("expected condition to be true")
+	}
 }
 
 // TestUserAuditDirRelativeConstantValue pins the constant value so a
@@ -54,11 +54,9 @@ func TestResolveDefaultAuditDirFallsBackToHomeDir(t *testing.T) {
 func TestUserAuditDirRelativeConstantValue(t *testing.T) {
 	t.Parallel()
 
-	checkEqual(
-		t, "linodemcp", audit.UserAuditDirRelative,
-		"UserAuditDirRelative is part of the on-disk layout contract; "+
-			"a rename here breaks existing deployments",
-	)
+	if audit.UserAuditDirRelative != "linodemcp" {
+		t.Errorf("audit.UserAuditDirRelative = %v, want %v", audit.UserAuditDirRelative, "linodemcp")
+	}
 }
 
 // TestSystemAuditDirConstantValue pins the system path so a change
@@ -66,9 +64,7 @@ func TestUserAuditDirRelativeConstantValue(t *testing.T) {
 func TestSystemAuditDirConstantValue(t *testing.T) {
 	t.Parallel()
 
-	checkEqual(
-		t, "/var/log/linodemcp", audit.SystemAuditDir,
-		"SystemAuditDir is part of the on-disk layout contract; "+
-			"a change here breaks existing system-service deployments",
-	)
+	if audit.SystemAuditDir != "/var/log/linodemcp" {
+		t.Errorf("audit.SystemAuditDir = %v, want %v", audit.SystemAuditDir, "/var/log/linodemcp")
+	}
 }

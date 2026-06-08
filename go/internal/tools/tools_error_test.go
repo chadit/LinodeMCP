@@ -4,19 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
 // Confirm that API failures are surfaced as user-visible error results across multiple tool handlers.
-func TestToolHandlersAPIErrorResponses(t *testing.T) {
-	t.Parallel()
-
+func TestToolHandlersAPIErrorResponsesListInstances(t *testing.T) {
 	type errorCase struct {
 		statusCode   int
 		errorMessage string
@@ -24,115 +22,196 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 	}
 
 	errorCases := []errorCase{
-		{statusCode: http.StatusInternalServerError, errorMessage: "server error", label: "500_server_error"},
-		{statusCode: http.StatusUnauthorized, errorMessage: "invalid token", label: "401_unauthorized"},
-		{statusCode: http.StatusForbidden, errorMessage: "forbidden", label: "403_forbidden"},
-		{statusCode: http.StatusTooManyRequests, errorMessage: "rate limit", label: "429_rate_limit"},
+		{statusCode: http.StatusInternalServerError, errorMessage: tcServerErrorMsg, label: tcServerError},
+		{statusCode: http.StatusUnauthorized, errorMessage: tcInvalidTokenMsg, label: tcUnauthorized},
+		{statusCode: http.StatusForbidden, errorMessage: errForbidden, label: tcForbidden},
+		{statusCode: http.StatusTooManyRequests, errorMessage: tcRateLimitMsg, label: tcRateLimit},
 	}
 
-	t.Run("ListInstances", func(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 
-		for _, errCase := range errorCases {
-			t.Run(errCase.label, func(t *testing.T) {
-				t.Parallel()
+	for _, errCase := range errorCases {
+		t.Run(errCase.label, func(t *testing.T) {
+			t.Parallel()
 
-				srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
-				defer srv.Close()
+			srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
+			defer srv.Close()
 
-				cfg := newTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+			cfg := newTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeInstanceListTool(cfg)
 
-				req := createRequestWithArgs(t, map[string]any{})
-				result, err := handler(t.Context(), req)
+			req := createRequestWithArgs(t, map[string]any{})
 
-				require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "should return an error result for status %d", errCase.statusCode)
-				assertErrorContains(t, result, errCase.errorMessage)
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errCase.errorMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, errCase.errorMessage)
+			}
+		})
+	}
+}
+
+func TestToolHandlersAPIErrorResponsesGetInstance(t *testing.T) {
+	type errorCase struct {
+		statusCode   int
+		errorMessage string
+		label        string
+	}
+
+	errorCases := []errorCase{
+		{statusCode: http.StatusInternalServerError, errorMessage: tcServerErrorMsg, label: tcServerError},
+		{statusCode: http.StatusUnauthorized, errorMessage: tcInvalidTokenMsg, label: tcUnauthorized},
+		{statusCode: http.StatusForbidden, errorMessage: errForbidden, label: tcForbidden},
+		{statusCode: http.StatusTooManyRequests, errorMessage: tcRateLimitMsg, label: tcRateLimit},
+	}
+
+	t.Parallel()
+
+	for _, errCase := range errorCases {
+		t.Run(errCase.label, func(t *testing.T) {
+			t.Parallel()
+
+			srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
+			defer srv.Close()
+
+			cfg := newTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+
+			req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errCase.errorMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, errCase.errorMessage)
+			}
+		})
+	}
+}
+
+func TestToolHandlersAPIErrorResponsesCreateInstance(t *testing.T) {
+	type errorCase struct {
+		statusCode   int
+		errorMessage string
+		label        string
+	}
+
+	errorCases := []errorCase{
+		{statusCode: http.StatusInternalServerError, errorMessage: tcServerErrorMsg, label: tcServerError},
+		{statusCode: http.StatusUnauthorized, errorMessage: tcInvalidTokenMsg, label: tcUnauthorized},
+		{statusCode: http.StatusForbidden, errorMessage: errForbidden, label: tcForbidden},
+		{statusCode: http.StatusTooManyRequests, errorMessage: tcRateLimitMsg, label: tcRateLimit},
+	}
+
+	t.Parallel()
+
+	for _, errCase := range errorCases {
+		t.Run(errCase.label, func(t *testing.T) {
+			t.Parallel()
+
+			srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
+			defer srv.Close()
+
+			cfg := newTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
+
+			req := createRequestWithArgs(t, map[string]any{
+				keyConfirm:    true,
+				keyRegion:     regionUSEast,
+				keyType:       typeG6Nanode1,
+				keyImage:      imageIDUbuntu2204,
+				keyLabel:      "test",
+				keyRootPass:   rootPassStrong,
+				keyFirewallID: 12345,
 			})
-		}
-	})
 
-	t.Run("GetInstance", func(t *testing.T) {
-		t.Parallel()
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-		for _, errCase := range errorCases {
-			t.Run(errCase.label, func(t *testing.T) {
-				t.Parallel()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-				srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
-				defer srv.Close()
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-				cfg := newTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errCase.errorMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, errCase.errorMessage)
+			}
+		})
+	}
+}
 
-				req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
-				result, err := handler(t.Context(), req)
+func TestToolHandlersAPIErrorResponsesListDomainRecords(t *testing.T) {
+	type errorCase struct {
+		statusCode   int
+		errorMessage string
+		label        string
+	}
 
-				require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "should return an error result for status %d", errCase.statusCode)
-				assertErrorContains(t, result, errCase.errorMessage)
-			})
-		}
-	})
+	errorCases := []errorCase{
+		{statusCode: http.StatusInternalServerError, errorMessage: tcServerErrorMsg, label: tcServerError},
+		{statusCode: http.StatusUnauthorized, errorMessage: tcInvalidTokenMsg, label: tcUnauthorized},
+		{statusCode: http.StatusForbidden, errorMessage: errForbidden, label: tcForbidden},
+		{statusCode: http.StatusTooManyRequests, errorMessage: tcRateLimitMsg, label: tcRateLimit},
+	}
 
-	t.Run("CreateInstance", func(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 
-		for _, errCase := range errorCases {
-			t.Run(errCase.label, func(t *testing.T) {
-				t.Parallel()
+	for _, errCase := range errorCases {
+		t.Run(errCase.label, func(t *testing.T) {
+			t.Parallel()
 
-				srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
-				defer srv.Close()
+			srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
+			defer srv.Close()
 
-				cfg := newTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
+			cfg := newTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeDomainRecordListTool(cfg)
 
-				req := createRequestWithArgs(t, map[string]any{
-					keyConfirm:    true,
-					keyRegion:     regionUSEast,
-					keyType:       typeG6Nanode1,
-					keyImage:      imageIDUbuntu2204,
-					keyLabel:      "test",
-					keyRootPass:   rootPassStrong,
-					keyFirewallID: 12345,
-				})
-				result, err := handler(t.Context(), req)
+			req := createRequestWithArgs(t, map[string]any{keyDomainID: "123"})
 
-				require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "should return an error result for status %d", errCase.statusCode)
-				assertErrorContains(t, result, errCase.errorMessage)
-			})
-		}
-	})
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-	t.Run("ListDomainRecords", func(t *testing.T) {
-		t.Parallel()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		for _, errCase := range errorCases {
-			t.Run(errCase.label, func(t *testing.T) {
-				t.Parallel()
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-				srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
-				defer srv.Close()
-
-				cfg := newTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeDomainRecordListTool(cfg)
-
-				req := createRequestWithArgs(t, map[string]any{keyDomainID: "123"})
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "should return an error result for status %d", errCase.statusCode)
-				assertErrorContains(t, result, errCase.errorMessage)
-			})
-		}
-	})
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errCase.errorMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, errCase.errorMessage)
+			}
+		})
+	}
 }
 
 // TestToolHandlersMalformedJSONErrorResponse verifies that tool handlers
@@ -152,12 +231,23 @@ func TestToolHandlersMalformedJSONErrorResponse(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
-	result, err := handler(t.Context(), req)
 
-	require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.IsError, "should return an error result for malformed JSON response")
-	assertErrorContains(t, result, "internal server error")
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "internal server error") {
+		t.Errorf("error text %q does not contain %q", text.Text, "internal server error")
+	}
 }
 
 // newErrorServer creates an httptest server that returns a Linode API error response.
@@ -167,9 +257,12 @@ func newErrorServer(t *testing.T, statusCode int, errorMessage string) *httptest
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"errors": []map[string]string{{"reason": errorMessage}},
-		}), "test server should encode error response")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 }
 

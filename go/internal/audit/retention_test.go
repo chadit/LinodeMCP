@@ -16,7 +16,9 @@ func writeRotatedFile(t *testing.T, dir, name string) string {
 	t.Helper()
 
 	path := filepath.Join(dir, name)
-	mustNoError(t, os.WriteFile(path, []byte("x\n"), 0o600), "write %s", name)
+	if err := os.WriteFile(path, []byte("x\n"), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	return path
 }
@@ -49,14 +51,33 @@ func TestRetentionSweepRemovesExpiredKeepsRecent(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	mustNoError(t, err, "sweep must succeed on a readable dir")
-	checkEqual(t, 2, removed, "exactly the two pre-cutoff files should be removed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	checkNoFileExists(t, expiredGz, "file before cutoff must be deleted")
-	checkNoFileExists(t, expiredPlain, "uncompressed file before cutoff must be deleted")
-	checkFileExists(t, cutoffDay, "file dated on the cutoff day must be kept")
-	checkFileExists(t, recent, "recent file must be kept")
-	checkFileExists(t, active, "active audit.log must never be swept")
+	if removed != 2 {
+		t.Errorf("removed = %v, want %v", removed, 2)
+	}
+
+	if _, statErr := os.Stat(expiredGz); statErr == nil {
+		t.Errorf("file %v should not exist", expiredGz)
+	}
+
+	if _, statErr := os.Stat(expiredPlain); statErr == nil {
+		t.Errorf("file %v should not exist", expiredPlain)
+	}
+
+	if _, statErr := os.Stat(cutoffDay); statErr != nil {
+		t.Errorf("file %v does not exist: %v", cutoffDay, statErr)
+	}
+
+	if _, statErr := os.Stat(recent); statErr != nil {
+		t.Errorf("file %v does not exist: %v", recent, statErr)
+	}
+
+	if _, statErr := os.Stat(active); statErr != nil {
+		t.Errorf("file %v does not exist: %v", active, statErr)
+	}
 }
 
 // TestRetentionSweepDisabledWhenZero verifies retentionDays<=0 is a
@@ -75,9 +96,17 @@ func TestRetentionSweepDisabledWhenZero(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	mustNoError(t, err, "disabled sweep must not error")
-	checkEqual(t, 0, removed, "retention=0 disables deletion")
-	checkFileExists(t, old, "retention=0 must keep even very old files")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if removed != 0 {
+		t.Errorf("removed = %v, want %v", removed, 0)
+	}
+
+	if _, statErr := os.Stat(old); statErr != nil {
+		t.Errorf("file %v does not exist: %v", old, statErr)
+	}
 }
 
 // TestRetentionSweepIgnoresUnrelatedFiles verifies the sweeper only
@@ -108,11 +137,18 @@ func TestRetentionSweepIgnoresUnrelatedFiles(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	mustNoError(t, err, "sweep must succeed")
-	checkEqual(t, 0, removed, "no recognized rotated files means nothing removed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if removed != 0 {
+		t.Errorf("removed = %v, want %v", removed, 0)
+	}
 
 	for _, path := range paths {
-		checkFileExists(t, path, "non-rotated file must be left alone: %s", path)
+		if _, statErr := os.Stat(path); statErr != nil {
+			t.Errorf("file %v does not exist: %v", path, statErr)
+		}
 	}
 }
 
@@ -131,6 +167,11 @@ func TestRetentionSweepMissingDirErrors(t *testing.T) {
 	)
 
 	removed, err := sweeper.Sweep()
-	mustError(t, err, "missing dir must surface an error")
-	checkEqual(t, 0, removed, "no files removed when dir is missing")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if removed != 0 {
+		t.Errorf("removed = %v, want %v", removed, 0)
+	}
 }

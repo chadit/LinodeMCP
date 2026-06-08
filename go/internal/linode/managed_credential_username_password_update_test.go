@@ -2,14 +2,13 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -32,36 +31,74 @@ func TestClientUpdateManagedCredentialUsernamePasswordSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedCredentialUsernamePasswordUpdatePath, r.URL.Path, "request path should update managed credential username and password")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != managedCredentialUsernamePasswordUpdatePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialUsernamePasswordUpdatePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
 		var got map[string]any
-		assert.NoError(t, json.Unmarshal(body, &got))
-		assert.Equal(t, managedCredentialUsernamePasswordUpdatePassword, got["password"])
-		assert.Equal(t, managedCredentialUsernamePasswordUpdateUsername, got["username"])
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{
+		if !reflect.DeepEqual(got["password"], managedCredentialUsernamePasswordUpdatePassword) {
+			t.Errorf("got %v, want %v", got["password"], managedCredentialUsernamePasswordUpdatePassword)
+		}
+
+		if !reflect.DeepEqual(got["username"], managedCredentialUsernamePasswordUpdateUsername) {
+			t.Errorf("got %v, want %v", got["username"], managedCredentialUsernamePasswordUpdateUsername)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ManagedCredential{
 			ID:            9991,
 			Label:         managedCredentialUsernamePasswordUpdateLabel,
 			LastDecrypted: managedCredentialUsernamePasswordUpdateTimestamp,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.UpdateManagedCredentialUsernamePassword(t.Context(), 9991, request)
 
-	require.NoError(t, err, "UpdateManagedCredentialUsernamePassword should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, 9991, got.ID)
-	assert.Equal(t, managedCredentialUsernamePasswordUpdateLabel, got.Label)
-	assert.Equal(t, managedCredentialUsernamePasswordUpdateTimestamp, got.LastDecrypted)
+	got, err := client.UpdateManagedCredentialUsernamePassword(t.Context(), 9991, request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != 9991 {
+		t.Errorf("got.ID = %v, want %v", got.ID, 9991)
+	}
+
+	if got.Label != managedCredentialUsernamePasswordUpdateLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, managedCredentialUsernamePasswordUpdateLabel)
+	}
+
+	if got.LastDecrypted != managedCredentialUsernamePasswordUpdateTimestamp {
+		t.Errorf("got.LastDecrypted = %v, want %v", got.LastDecrypted, managedCredentialUsernamePasswordUpdateTimestamp)
+	}
 }
 
 func TestClientUpdateManagedCredentialUsernamePasswordNetworkError(t *testing.T) {
@@ -70,13 +107,18 @@ func TestClientUpdateManagedCredentialUsernamePasswordNetworkError(t *testing.T)
 	client := linode.NewClient("http://127.0.0.1:1", "test-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.UpdateManagedCredentialUsernamePassword(t.Context(), 9991, &linode.UpdateManagedCredentialUsernamePasswordRequest{Password: managedCredentialUsernamePasswordUpdatePassword})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "UpdateManagedCredentialUsernamePassword should fail when the server is unreachable")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &netErr)
+	}
 
-	var netErr *linode.NetworkError
-
-	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
-	assert.Equal(t, "UpdateManagedCredentialUsernamePassword", netErr.Operation)
+	if netErr.Operation != "UpdateManagedCredentialUsernamePassword" {
+		t.Errorf("netErr.Operation = %v, want %v", netErr.Operation, "UpdateManagedCredentialUsernamePassword")
+	}
 }
 
 func TestClientUpdateManagedCredentialUsernamePasswordAPIError(t *testing.T) {
@@ -85,23 +127,36 @@ func TestClientUpdateManagedCredentialUsernamePasswordAPIError(t *testing.T) {
 	request := &linode.UpdateManagedCredentialUsernamePasswordRequest{Password: managedCredentialUsernamePasswordUpdatePassword}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedCredentialUsernamePasswordUpdatePath, r.URL.Path, "request path should update managed credential username and password")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != managedCredentialUsernamePasswordUpdatePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialUsernamePasswordUpdatePath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "restricted users cannot update managed credential username/password"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.UpdateManagedCredentialUsernamePassword(t.Context(), 9991, request)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err)
-
-	var apiErr *linode.APIError
-	assert.ErrorAs(t, err, &apiErr)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &apiErr)
+	}
 }
 
 func TestClientUpdateManagedCredentialUsernamePasswordDoesNotRetry(t *testing.T) {
@@ -111,17 +166,32 @@ func TestClientUpdateManagedCredentialUsernamePasswordDoesNotRetry(t *testing.T)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, managedCredentialUsernamePasswordUpdatePath, r.URL.Path, "request path should update managed credential username and password")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != managedCredentialUsernamePasswordUpdatePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialUsernamePasswordUpdatePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		assert.NoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	_, err := client.UpdateManagedCredentialUsernamePassword(t.Context(), 9991, &linode.UpdateManagedCredentialUsernamePasswordRequest{Password: managedCredentialUsernamePasswordUpdatePassword})
 
-	require.Error(t, err, "UpdateManagedCredentialUsernamePassword should fail on 500 response")
-	assert.Equal(t, int32(1), attempts.Load(), "UpdateManagedCredentialUsernamePassword must not retry and replay a mutating request")
+	_, err := client.UpdateManagedCredentialUsernamePassword(t.Context(), 9991, &linode.UpdateManagedCredentialUsernamePasswordRequest{Password: managedCredentialUsernamePasswordUpdatePassword})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }

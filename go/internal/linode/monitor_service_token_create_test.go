@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -20,70 +22,133 @@ func TestClientCreateMonitorServiceTokenSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		monitorCheckEqual(t, monitorServiceTokenPath, r.URL.Path, "request path should match")
-		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
-		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != monitorServiceTokenPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceTokenPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var body map[string]any
-		if !monitorCheckNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		monitorCheckEqual(t, []any{float64(10), float64(20)}, body["entity_ids"])
+		if !reflect.DeepEqual(body["entity_ids"], []any{float64(10), float64(20)}) {
+			t.Errorf("got %v, want %v", body["entity_ids"], []any{float64(10), float64(20)})
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyToken: "monitor-token"}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyToken: "monitor-token"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeDatabase, monitorServiceTokenCreateRequest())
 
-	monitorRequireNoError(t, err)
-	monitorRequireNotNil(t, got)
-	monitorCheckEqual(t, "monitor-token", got.Token)
+	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeDatabase, monitorServiceTokenCreateRequest())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Token != tcMonitorToken {
+		t.Errorf("got.Token = %v, want %v", got.Token, tcMonitorToken)
+	}
 }
 
 func TestClientCreateMonitorServiceTokenEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, "/monitor/services/dbaas%2Fpostgres/token", r.URL.EscapedPath(), "request path should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyToken: "monitor-token"}))
+		if r.URL.EscapedPath() != "/monitor/services/dbaas%2Fpostgres/token" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/monitor/services/dbaas%2Fpostgres/token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyToken: "monitor-token"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeWithSlash, monitorServiceTokenCreateRequest())
 
-	monitorRequireNoError(t, err)
-	monitorRequireNotNil(t, got)
-	monitorCheckEqual(t, "monitor-token", got.Token)
+	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeWithSlash, monitorServiceTokenCreateRequest())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Token != tcMonitorToken {
+		t.Errorf("got.Token = %v, want %v", got.Token, tcMonitorToken)
+	}
 }
 
 func TestClientCreateMonitorServiceTokenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		monitorCheckEqual(t, monitorServiceTokenPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != monitorServiceTokenPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceTokenPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeDatabase, monitorServiceTokenCreateRequest())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	monitorRequireError(t, err)
-	monitorCheckNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := monitorRequireAPIError(t, err)
-	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	monitorCheckEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientCreateMonitorServiceTokenDoesNotRetryTransientError(t *testing.T) {
@@ -92,17 +157,31 @@ func TestClientCreateMonitorServiceTokenDoesNotRetryTransientError(t *testing.T)
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		monitorCheckEqual(t, monitorServiceTokenPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != monitorServiceTokenPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceTokenPath)
+		}
+
 		calls.Add(1)
 		http.Error(w, "temporary", http.StatusServiceUnavailable)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeDatabase, monitorServiceTokenCreateRequest())
 
-	monitorRequireError(t, err)
-	monitorCheckNil(t, got)
-	monitorCheckEqual(t, int32(1), calls.Load(), "token creation must not retry after transient failure")
+	got, err := client.CreateMonitorServiceToken(t.Context(), monitorServiceTypeDatabase, monitorServiceTokenCreateRequest())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

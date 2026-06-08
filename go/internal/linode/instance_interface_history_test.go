@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -14,12 +15,25 @@ func TestClientListInstanceInterfaceHistorySuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/linode/instances/123/interfaces/history", r.URL.Path, "request path should match")
-		checkEqual(t, "page=2&page_size=50", r.URL.RawQuery, "request query should match")
-		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/linode/instances/123/interfaces/history" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/interfaces/history")
+		}
+
+		if r.URL.RawQuery != tcPage2PageSize50 {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, tcPage2PageSize50)
+		}
+
+		if r.Header.Get("Authorization") != managedIssueAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedIssueAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				"interface_history_id": 3,
 				"interface_id":         221,
@@ -34,34 +48,73 @@ func TestClientListInstanceInterfaceHistorySuccess(t *testing.T) {
 			keyPage:    2,
 			keyPages:   4,
 			keyResults: 1,
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	history, err := client.ListInstanceInterfaceHistory(t.Context(), 123, 2, 50)
 
-	requireNoError(t, err, "ListInstanceInterfaceHistory should succeed on 200 response")
-	requireNotNil(t, history)
-	requireLenOne(t, history.Data)
-	checkEqual(t, 3, history.Data[0].InterfaceHistoryID)
-	checkEqual(t, 221, history.Data[0].InterfaceID)
-	checkEqual(t, 123, history.Data[0].LinodeID)
-	checkEqual(t, 1, history.Data[0].Version)
-	checkEqual(t, 2, history.Page)
-	checkEqual(t, 4, history.Pages)
-	checkEqual(t, 1, history.Results)
+	history, err := client.ListInstanceInterfaceHistory(t.Context(), 123, 2, 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if history == nil {
+		t.Fatal("history is nil")
+	}
+
+	if len(history.Data) != 1 {
+		t.Fatalf("len(history.Data) = %d, want 1", len(history.Data))
+	}
+
+	if history.Data[0].InterfaceHistoryID != 3 {
+		t.Errorf("history.Data[0].InterfaceHistoryID = %v, want %v", history.Data[0].InterfaceHistoryID, 3)
+	}
+
+	if history.Data[0].InterfaceID != 221 {
+		t.Errorf("history.Data[0].InterfaceID = %v, want %v", history.Data[0].InterfaceID, 221)
+	}
+
+	if history.Data[0].LinodeID != 123 {
+		t.Errorf("history.Data[0].LinodeID = %v, want %v", history.Data[0].LinodeID, 123)
+	}
+
+	if history.Data[0].Version != 1 {
+		t.Errorf("history.Data[0].Version = %v, want %v", history.Data[0].Version, 1)
+	}
+
+	if history.Page != 2 {
+		t.Errorf("history.Page = %v, want %v", history.Page, 2)
+	}
+
+	if history.Pages != 4 {
+		t.Errorf("history.Pages = %v, want %v", history.Pages, 4)
+	}
+
+	if history.Results != 1 {
+		t.Errorf("history.Results = %v, want %v", history.Results, 1)
+	}
 }
 
 func TestClientListInstanceInterfaceHistoryInvalidLinodeID(t *testing.T) {
 	t.Parallel()
 
 	client := linode.NewClient("https://api.linode.com/v4", "token", nil, linode.WithMaxRetries(0))
-	history, err := client.ListInstanceInterfaceHistory(t.Context(), 0, 0, 0)
 
-	requireError(t, err, "non-positive linode ID should fail before request")
-	checkNil(t, history)
-	requireErrorIs(t, err, linode.ErrLinodeIDPositive)
+	history, err := client.ListInstanceInterfaceHistory(t.Context(), 0, 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if history != nil {
+		t.Errorf("history = %v, want nil", history)
+	}
+
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 }
 
 func TestClientListInstanceInterfaceHistoryAPIError(t *testing.T) {
@@ -69,17 +122,25 @@ func TestClientListInstanceInterfaceHistoryAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}), "encoding error response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	history, err := client.ListInstanceInterfaceHistory(t.Context(), 123, 0, 0)
 
-	requireError(t, err, "ListInstanceInterfaceHistory should surface API errors")
-	checkNil(t, history)
+	history, err := client.ListInstanceInterfaceHistory(t.Context(), 123, 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if history != nil {
+		t.Errorf("history = %v, want nil", history)
+	}
 }
 
 func TestClientListInstanceInterfaceHistoryRetriesTransientError(t *testing.T) {
@@ -90,24 +151,38 @@ func TestClientListInstanceInterfaceHistoryRetriesTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}), "encoding transient error response should not fail")
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{"interface_history_id": 3}},
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1))
-	history, err := client.ListInstanceInterfaceHistory(t.Context(), 123, 0, 0)
 
-	requireNoError(t, err, "GET history list should retry transient failures")
-	requireNotNil(t, history)
-	checkEqual(t, int32(2), calls.Load())
+	history, err := client.ListInstanceInterfaceHistory(t.Context(), 123, 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if history == nil {
+		t.Fatal("history is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }

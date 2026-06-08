@@ -16,7 +16,9 @@ func writeRetryTestResponse(t *testing.T, w http.ResponseWriter, body string) {
 	t.Helper()
 
 	_, err := w.Write([]byte(body))
-	checkNoError(t, err, "writing response should not fail")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
 // TestRetryableClientGetProfileSuccessNoRetry verifies that a successful
@@ -28,8 +30,11 @@ func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "user1"}), "encoding profile response should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{Username: "user1"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -43,9 +48,17 @@ func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 	)
 
 	profile, err := client.GetProfile(t.Context())
-	mustNoError(t, err, "GetProfile should succeed on first attempt")
-	checkEqual(t, "user1", profile.Username, "username should match the API response")
-	checkEqual(t, int32(1), callCount.Load(), "should only call the API once on success")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if profile.Username != "user1" {
+		t.Errorf("profile.Username = %v, want %v", profile.Username, "user1")
+	}
+
+	if callCount.Load() != int32(1) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(1))
+	}
 }
 
 // TestRetryableClientRetriesOnServerError verifies that the retry client
@@ -64,8 +77,11 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "recovered"}), "encoding recovered profile should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{Username: "recovered"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -79,9 +95,17 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 	)
 
 	profile, err := client.GetProfile(t.Context())
-	mustNoError(t, err, "GetProfile should succeed after retries")
-	checkEqual(t, "recovered", profile.Username, "username should match the recovered response")
-	checkEqual(t, int32(3), callCount.Load(), "should retry twice then succeed on third attempt")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if profile.Username != tcRecovered {
+		t.Errorf("profile.Username = %v, want %v", profile.Username, tcRecovered)
+	}
+
+	if callCount.Load() != int32(3) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(3))
+	}
 }
 
 // TestRetryableClientNoRetryOnAuthError verifies that authentication errors
@@ -108,8 +132,13 @@ func TestRetryableClientNoRetryOnAuthError(t *testing.T) {
 	)
 
 	_, err := client.GetProfile(t.Context())
-	mustError(t, err, "GetProfile should fail on auth error")
-	checkEqual(t, int32(1), callCount.Load(), "should not retry authentication errors")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if callCount.Load() != int32(1) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(1))
+	}
 }
 
 // TestRetryableClientExhaustsRetries verifies that the retry client gives
@@ -136,9 +165,13 @@ func TestRetryableClientExhaustsRetries(t *testing.T) {
 	)
 
 	_, err := client.GetProfile(t.Context())
-	mustError(t, err, "GetProfile should fail after exhausting retries")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 	// 1 initial + 2 retries = 3 total calls.
-	checkEqual(t, int32(3), callCount.Load(), "should exhaust all retries (1 initial + 2 retries)")
+	if callCount.Load() != int32(3) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(3))
+	}
 }
 
 // TestRetryableClientContextCancelStopsRetry verifies that canceling the
@@ -180,9 +213,14 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	}()
 
 	_, err := client.GetProfile(ctx)
-	mustError(t, err, "GetProfile should fail when context is canceled")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 	// Should have been canceled before exhausting all retries.
-	checkLess(t, callCount.Load(), int32(6), "should stop before exhausting all retries")
+	if callCount.Load() >= int32(6) {
+		t.Errorf("callCount.Load() = %v, want < %v", callCount.Load(), int32(6))
+	}
+
 	<-done
 }
 
@@ -205,8 +243,11 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -223,13 +264,23 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 	profile, err := client.GetProfile(t.Context())
 	elapsed := time.Since(start)
 
-	mustNoError(t, err, "GetProfile should succeed after honoring Retry-After")
-	checkEqual(t, "ok", profile.Username, "should return the recovered profile")
-	checkEqual(t, int32(2), callCount.Load(), "should call API twice (one 429, one OK)")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if profile.Username != managedServiceStatus {
+		t.Errorf("profile.Username = %v, want %v", profile.Username, managedServiceStatus)
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 	// Retry-After of 1s honored; pure exponential with BaseDelay=1ms would
 	// have completed in microseconds. >=900ms tolerates timer slop while
 	// clearly distinguishing from the backoff path.
-	checkGreaterOrEqual(t, elapsed, 900*time.Millisecond, "should wait the Retry-After hint, not the BaseDelay backoff")
+	if elapsed < 900*time.Millisecond {
+		t.Errorf("elapsed = %v, want >= %v", elapsed, 900*time.Millisecond)
+	}
 }
 
 // TestRetryClampsRetryAfterToMaxDelay verifies that an absurdly large
@@ -250,8 +301,11 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -268,10 +322,14 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 	_, err := client.GetProfile(t.Context())
 	elapsed := time.Since(start)
 
-	mustNoError(t, err, "GetProfile should succeed within clamped delay")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	// 3600s hint must be clamped to 50ms MaxDelay; 200ms ceiling allows
 	// generous CI headroom without admitting an unclamped wait.
-	checkLess(t, elapsed, 200*time.Millisecond, "Retry-After should be clamped to MaxDelay")
+	if elapsed >= 200*time.Millisecond {
+		t.Errorf("elapsed = %v, want < %v", elapsed, 200*time.Millisecond)
+	}
 }
 
 // TestRetryableClientListInstancesRetries verifies that ListInstances
@@ -290,13 +348,16 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.Instance{{ID: 1, Label: "srv-1"}},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}), "encoding instances response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -310,8 +371,13 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 	)
 
 	instances, err := client.ListInstances(t.Context())
-	mustNoError(t, err, "ListInstances should succeed after retry")
-	checkLen(t, instances, 1, "should return one instance after retry")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(instances) != 1 {
+		t.Errorf("len(instances) = %d, want %d", len(instances), 1)
+	}
 }
 
 // TestRetryableClientListInstanceConfigsRetries verifies that ListInstanceConfigs
@@ -322,7 +388,9 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+		if r.URL.Path != tcLinodeInstances123Configs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs)
+		}
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -332,13 +400,16 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.InstanceConfig{{ID: 77, Label: labelBootConfig}},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}), "encoding configs response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -352,9 +423,17 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 	)
 
 	configs, err := client.ListInstanceConfigs(t.Context(), 123, 0, 0)
-	mustNoError(t, err, "ListInstanceConfigs should succeed after retry")
-	checkLen(t, configs, 1, "should return one config after retry")
-	checkEqual(t, int32(2), callCount.Load(), "should retry once")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(configs) != 1 {
+		t.Errorf("len(configs) = %d, want %d", len(configs), 1)
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 }
 
 // TestRetryableClientGetInstanceInterfaceRetries verifies that GetInstanceInterface
@@ -365,7 +444,9 @@ func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
+		if r.URL.Path != tcLinodeInstances123Interfaces456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces456)
+		}
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -375,8 +456,11 @@ func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}), "encoding interface response should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -390,10 +474,21 @@ func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
 	)
 
 	instanceInterface, err := client.GetInstanceInterface(t.Context(), 123, 456)
-	mustNoError(t, err, "GetInstanceInterface should succeed after retry")
-	mustNotNil(t, instanceInterface, "interface should be returned")
-	checkEqual(t, 456, instanceInterface.ID, "interface ID should match")
-	checkEqual(t, int32(2), callCount.Load(), "should retry once")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if instanceInterface == nil {
+		t.Fatal("instanceInterface is nil")
+	}
+
+	if instanceInterface.ID != 456 {
+		t.Errorf("instanceInterface.ID = %v, want %v", instanceInterface.ID, 456)
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 }
 
 // TestRetryableClientListInstanceConfigInterfacesRetries verifies that ListInstanceConfigInterfaces
@@ -404,7 +499,9 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
+		if r.URL.Path != tcLinodeInstances123Configs456Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs456Interfaces)
+		}
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -414,8 +511,11 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode([]linode.ConfigInterfaceResponse{{ID: 101, Purpose: purposePublic}}), "encoding interfaces response should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode([]linode.ConfigInterfaceResponse{{ID: 101, Purpose: purposePublic}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -429,9 +529,17 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 	)
 
 	interfaces, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
-	mustNoError(t, err, "ListInstanceConfigInterfaces should succeed after retry")
-	checkLen(t, interfaces, 1, "should return one interface after retry")
-	checkEqual(t, int32(2), callCount.Load(), "should retry once")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(interfaces) != 1 {
+		t.Errorf("len(interfaces) = %d, want %d", len(interfaces), 1)
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 }
 
 // TestRetryableClientGetInstanceConfigInterfaceRetries verifies that GetInstanceConfigInterface
@@ -442,7 +550,9 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+		if r.URL.Path != tcLinodeInstances123Configs789Interfaces456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs789Interfaces456)
+		}
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -452,8 +562,11 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposePublic}), "encoding interface response should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposePublic}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -467,12 +580,29 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 	)
 
 	configInterface, err := client.GetInstanceConfigInterface(t.Context(), 123, 789, 456)
-	mustNoError(t, err, "GetInstanceConfigInterface should succeed after retry")
-	mustNotNil(t, configInterface, "interface should be returned")
-	checkEqual(t, purposePublic, configInterface.Purpose, "interface purpose should match")
-	checkEqual(t, 456, configInterface.ID, "interface ID should match")
-	checkTrue(t, configInterface.Active, "interface active flag should match")
-	checkEqual(t, int32(2), callCount.Load(), "should retry once")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if configInterface == nil {
+		t.Fatal("configInterface is nil")
+	}
+
+	if configInterface.Purpose != purposePublic {
+		t.Errorf("configInterface.Purpose = %v, want %v", configInterface.Purpose, purposePublic)
+	}
+
+	if configInterface.ID != 456 {
+		t.Errorf("configInterface.ID = %v, want %v", configInterface.ID, 456)
+	}
+
+	if !configInterface.Active {
+		t.Error("configInterface.Active = false, want true")
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 }
 
 // TestRetryableClientGetInstanceRetries verifies that GetInstance retries
@@ -485,7 +615,9 @@ func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/123/volumes", r.URL.Path, "request path should match")
+		if r.URL.Path != tcLinodeInstances123Volumes {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Volumes)
+		}
 
 		count := callCount.Add(1)
 		if count == 1 {
@@ -495,13 +627,16 @@ func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyData:    []linode.Volume{{ID: 321, Label: "data-volume"}},
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []linode.Volume{{ID: 321, Label: dataVolumeLabel}},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}), "encoding volumes response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -515,9 +650,17 @@ func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
 	)
 
 	volumes, err := client.ListInstanceVolumes(t.Context(), 123, 0, 0)
-	mustNoError(t, err, "ListInstanceVolumes should succeed after retry")
-	checkLen(t, volumes, 1, "should return one volume after retry")
-	checkEqual(t, int32(2), callCount.Load(), "should retry once")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(volumes) != 1 {
+		t.Errorf("len(volumes) = %d, want %d", len(volumes), 1)
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 }
 
 func TestRetryableClientGetInstanceRetries(t *testing.T) {
@@ -534,8 +677,11 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}), "encoding instance response should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -549,8 +695,13 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 	)
 
 	instance, err := client.GetInstance(t.Context(), 99)
-	mustNoError(t, err, "GetInstance should succeed after retry")
-	checkEqual(t, 99, instance.ID, "instance ID should match the request")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if instance.ID != 99 {
+		t.Errorf("instance.ID = %v, want %v", instance.ID, 99)
+	}
 }
 
 // TestRetryableClientUpdateInstanceSuccess verifies that UpdateInstance sends
@@ -563,10 +714,15 @@ func TestRetryableClientUpdateInstanceSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount.Add(1)
 
-		checkEqual(t, http.MethodPut, r.Method, "should use PUT method")
-		checkEqual(t, "/linode/instances/42", r.URL.Path, "endpoint should match")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/linode/instances/42" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/42")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		writeRetryTestResponse(t, w, `{"id":42,"label":"updated-label","tags":["prod"],"status":"running"}`)
 	}))
 	defer srv.Close()
@@ -586,10 +742,21 @@ func TestRetryableClientUpdateInstanceSuccess(t *testing.T) {
 	}
 
 	instance, err := client.UpdateInstance(t.Context(), 42, req)
-	mustNoError(t, err, "UpdateInstance should succeed")
-	checkEqual(t, 42, instance.ID, "instance ID should match")
-	checkEqual(t, "updated-label", instance.Label, "label should match updated value")
-	checkEqual(t, int32(1), callCount.Load(), "should only call the API once on success")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if instance.ID != 42 {
+		t.Errorf("instance.ID = %v, want %v", instance.ID, 42)
+	}
+
+	if instance.Label != "updated-label" {
+		t.Errorf("instance.Label = %v, want %v", instance.Label, "updated-label")
+	}
+
+	if callCount.Load() != int32(1) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(1))
+	}
 }
 
 // TestRetryableClientUpdateInstanceRetries verifies that UpdateInstance retries
@@ -608,7 +775,7 @@ func TestRetryableClientUpdateInstanceRetries(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		writeRetryTestResponse(t, w, `{"id":99,"label":"updated-ok","status":"running"}`)
 	}))
 	defer srv.Close()
@@ -625,9 +792,17 @@ func TestRetryableClientUpdateInstanceRetries(t *testing.T) {
 	req := &linode.UpdateInstanceRequest{Label: "updated-ok"}
 
 	instance, err := client.UpdateInstance(t.Context(), 99, req)
-	mustNoError(t, err, "UpdateInstance should succeed after retry")
-	checkEqual(t, 99, instance.ID, "instance ID should match")
-	checkEqual(t, int32(2), callCount.Load(), "should retry once then succeed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if instance.ID != 99 {
+		t.Errorf("instance.ID = %v, want %v", instance.ID, 99)
+	}
+
+	if callCount.Load() != int32(2) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+	}
 }
 
 // TestRetryableClientUpdateInstanceNoRetryOnAuthError verifies that
@@ -656,6 +831,11 @@ func TestRetryableClientUpdateInstanceNoRetryOnAuthError(t *testing.T) {
 	req := &linode.UpdateInstanceRequest{Label: "auth-test-label"}
 
 	_, err := client.UpdateInstance(t.Context(), 42, req)
-	mustError(t, err, "UpdateInstance should return an error on 401")
-	checkEqual(t, int32(1), callCount.Load(), "should not retry on auth errors")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if callCount.Load() != int32(1) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(1))
+	}
 }

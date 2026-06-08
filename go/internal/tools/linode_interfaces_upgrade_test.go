@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -16,9 +16,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeInterfacesUpgradeTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInterfacesUpgradeToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -26,19 +24,48 @@ func TestLinodeInterfacesUpgradeTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeInterfacesUpgradeTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_interfaces_upgrade", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_interfaces_upgrade" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_interfaces_upgrade")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyLinodeID, keyConfigID, keyDryRun, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
+}
+
+func TestLinodeInterfacesUpgradeToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInterfacesUpgradeTool(cfg)
 
 	confirmTests := []struct {
 		name  string
@@ -60,13 +87,34 @@ func TestLinodeInterfacesUpgradeTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
 		})
 	}
+}
+
+func TestLinodeInterfacesUpgradeToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInterfacesUpgradeTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -88,131 +136,216 @@ func TestLinodeInterfacesUpgradeTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInterfacesUpgradeToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		configID := 4567
+	configID := 4567
 
-		var dryRun bool
+	var dryRun bool
 
-		response := linode.UpgradeLinodeInterfacesResponse{
-			ConfigID: configID,
-			DryRun:   dryRun,
-			Interfaces: []linode.InstanceInterface{
-				{ID: 0, MACAddress: macAddressFixture},
-			},
+	response := linode.UpgradeLinodeInterfacesResponse{
+		ConfigID: configID,
+		DryRun:   dryRun,
+		Interfaces: []linode.InstanceInterface{
+			{ID: 0, MACAddress: macAddressFixture},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/linode/instances/123/upgrade-interfaces", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-
-			var got linode.UpgradeLinodeInterfacesRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
-
-			if assert.NotNil(t, got.ConfigID, "config_id should be sent") {
-				assert.Equal(t, configID, *got.ConfigID, "config_id should match")
-			}
-
-			if assert.NotNil(t, got.DryRun, "dry_run should be sent") {
-				assert.False(t, *got.DryRun, "dry_run should match")
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(response), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.Path != "/linode/instances/123/upgrade-interfaces" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/upgrade-interfaces")
 		}
-		_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123),
-			keyConfigID: float64(configID),
-			keyDryRun:   dryRun,
-			keyConfirm:  true,
-		}))
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, macAddressFixture, "response should contain MAC address")
-		assert.Contains(t, textContent.Text, "4567", "response should contain config ID")
-	})
-
-	t.Run("omitted dry_run defaults to preview", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/linode/instances/123/upgrade-interfaces", r.URL.Path, "request path should match")
-
-			var got linode.UpgradeLinodeInterfacesRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
-			assert.Nil(t, got.ConfigID, "config_id should be omitted")
-
-			if assert.NotNil(t, got.DryRun, "dry_run should default to true") {
-				assert.True(t, *got.DryRun, "dry_run default should preview")
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.UpgradeLinodeInterfacesResponse{DryRun: true}), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
-		_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfirm: true}))
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errForbidden}},
-			}), "encoding error response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		var got linode.UpgradeLinodeInterfacesRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfirm: true}))
+		if got.ConfigID == nil {
+			t.Fatal("config_id should be sent")
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to upgrade interfaces for instance 123")
-	})
+		if *got.ConfigID != configID {
+			t.Errorf("*got.ConfigID = %v, want %v", *got.ConfigID, configID)
+		}
+
+		if got.DryRun == nil {
+			t.Fatal("dry_run should be sent")
+		}
+
+		if *got.DryRun {
+			t.Error("*got.DryRun = true, want false")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: float64(123),
+		keyConfigID: float64(configID),
+		keyDryRun:   dryRun,
+		keyConfirm:  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, macAddressFixture) {
+		t.Errorf("textContent.Text does not contain %v", macAddressFixture)
+	}
+
+	if !strings.Contains(textContent.Text, "4567") {
+		t.Errorf("textContent.Text does not contain %v", "4567")
+	}
+}
+
+func TestLinodeInterfacesUpgradeToolOmittedDryRunDefaultsToPreview(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/linode/instances/123/upgrade-interfaces" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/upgrade-interfaces")
+		}
+
+		var got linode.UpgradeLinodeInterfacesRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if got.ConfigID != nil {
+			t.Errorf("got.ConfigID = %v, want nil", got.ConfigID)
+		}
+
+		if got.DryRun == nil {
+			t.Fatal("dry_run should default to true")
+		}
+
+		if !(*got.DryRun) {
+			t.Error("*got.DryRun = false, want true")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.UpgradeLinodeInterfacesResponse{DryRun: true}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeInterfacesUpgradeToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to upgrade interfaces for instance 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to upgrade interfaces for instance 123")
+	}
 }

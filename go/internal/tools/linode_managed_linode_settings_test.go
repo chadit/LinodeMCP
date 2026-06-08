@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -23,133 +22,211 @@ const (
 	managedLinodeSettingsLabel    = "linode123"
 )
 
-func TestLinodeManagedLinodeSettingsTool(t *testing.T) {
+func TestLinodeManagedLinodeSettingsToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+	if tool.Name != managedLinodeSettingsToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, managedLinodeSettingsToolName)
+	}
 
-		assert.Equal(t, managedLinodeSettingsToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyPage, "schema should include page")
-		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only list tool must not require confirm")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		port := 2222
-		user := keyGrantLinode
-		settings := linode.PaginatedResponse[linode.ManagedLinodeSettings]{
-			Data: []linode.ManagedLinodeSettings{{
-				ID:    123,
-				Label: managedLinodeSettingsLabel,
-				Group: managedLinodeSettingsGroup,
-				SSH: linode.ManagedLinodeSettingsSSH{
-					Access: true,
-					IP:     "203.0.113.1",
-					Port:   &port,
-					User:   &user,
-				},
-			}},
-			Page:    2,
-			Pages:   3,
-			Results: 7,
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	}
+}
+
+func TestLinodeManagedLinodeSettingsToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	port := 2222
+	user := keyGrantLinode
+	settings := linode.PaginatedResponse[linode.ManagedLinodeSettings]{
+		Data: []linode.ManagedLinodeSettings{{
+			ID:    123,
+			Label: managedLinodeSettingsLabel,
+			Group: managedLinodeSettingsGroup,
+			SSH: linode.ManagedLinodeSettingsSSH{
+				Access: true,
+				IP:     "203.0.113.1",
+				Port:   &port,
+				User:   &user,
+			},
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 7,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, managedLinodeSettingsPath, r.URL.Path, "request path should match managed Linode settings endpoint")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(settings))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25}))
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, managedLinodeSettingsLabel, "response should contain Linode label")
-		assert.Contains(t, textContent.Text, "203.0.113.1", "response should contain SSH IP")
-	})
-
-	t.Run("invalid pagination rejects before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
-			{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+		if r.URL.Path != managedLinodeSettingsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsPath)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid pagination should be an error result")
-				assertErrorContains(t, result, testCase.wantMessage)
-				assert.Equal(t, int32(0), calls.Load(), "request validation must fail before client call")
-			})
+		if r.URL.RawQuery != longviewSubscriptionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsToolQuery)
 		}
-	})
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, managedLinodeSettingsPath, r.URL.Path, "request path should match managed Linode settings endpoint")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+		w.Header().Set("Content-Type", "application/json")
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to retrieve linode_managed_linode_settings")
-		assertErrorContains(t, result, errForbidden)
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, managedLinodeSettingsLabel) {
+		t.Errorf("textContent.Text does not contain %v", managedLinodeSettingsLabel)
+	}
+
+	if !strings.Contains(textContent.Text, "203.0.113.1") {
+		t.Errorf("textContent.Text does not contain %v", "203.0.113.1")
+	}
+}
+
+func TestLinodeManagedLinodeSettingsToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedLinodeSettingsToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedLinodeSettingsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsPath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_linode_settings") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_linode_settings")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

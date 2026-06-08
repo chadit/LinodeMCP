@@ -2,13 +2,11 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -24,53 +22,93 @@ func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 		Status: "enabled",
 		Rules: linode.FirewallRules{
 			Version:        2,
-			Fingerprint:    "997dd135",
+			Fingerprint:    firewallRulesFingerprint,
 			InboundPolicy:  policyDrop,
 			OutboundPolicy: policyAccept,
 		},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallRuleVersions, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(firewall))
+		if r.URL.Path != endpointFirewallRuleVersions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallRuleVersions)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(firewall); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListFirewallRuleVersions(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ListFirewallRuleVersions should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, 2, result.Rules.Version)
-	assert.Equal(t, "997dd135", result.Rules.Fingerprint)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if result.Rules.Version != 2 {
+		t.Errorf("result.Rules.Version = %v, want %v", result.Rules.Version, 2)
+	}
+
+	if result.Rules.Fingerprint != firewallRulesFingerprint {
+		t.Errorf("result.Rules.Fingerprint = %v, want %v", result.Rules.Fingerprint, firewallRulesFingerprint)
+	}
 }
 
 func TestClientListFirewallRuleVersionsHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallRuleVersions, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointFirewallRuleVersions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallRuleVersions)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListFirewallRuleVersions(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "ListFirewallRuleVersions should fail on HTTP error")
-	assert.Nil(t, result, "no firewall should be returned")
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 }
 
 func TestClientListFirewallRuleVersionsRejectsInvalidInput(t *testing.T) {
@@ -88,9 +126,17 @@ func TestClientListFirewallRuleVersionsRejectsInvalidInput(t *testing.T) {
 
 	result, err := client.ListFirewallRuleVersions(t.Context(), 0)
 
-	require.ErrorIs(t, err, linode.ErrFirewallIDPositive, "invalid input should be rejected")
-	assert.Nil(t, result, "no firewall should be returned")
-	assert.False(t, called.Load(), "client should not call API for invalid input")
+	if !errors.Is(err, linode.ErrFirewallIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrFirewallIDPositive)
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	if called.Load() {
+		t.Error("called.Load() = true, want false")
+	}
 }
 
 func TestClientListFirewallRuleVersionsRetriesTransientFailure(t *testing.T) {
@@ -101,64 +147,119 @@ func TestClientListFirewallRuleVersionsRetriesTransientFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			hj, ok := w.(http.Hijacker)
-			if !assert.True(t, ok, "response writer should support hijacking") {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer should support hijacking")
+
 				return
 			}
 
-			conn, _, err := hj.Hijack()
-			if !assert.NoError(t, err) {
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
-			assert.NoError(t, conn.Close())
+			if err := conn.Close(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointFirewallRuleVersions, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Firewall{ID: 123}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointFirewallRuleVersions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallRuleVersions)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Firewall{ID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListFirewallRuleVersions(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ListFirewallRuleVersions should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 123, result.ID)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientGetFirewallRuleVersionSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewall := linode.Firewall{ID: 123, Label: "web-firewall", Rules: linode.FirewallRules{Version: 2, Fingerprint: "997dd135", Inbound: []linode.FirewallRule{{Action: policyAccept, Protocol: protocolTCP, Ports: "443", Label: "allow-https"}}}}
+	firewall := linode.Firewall{ID: 123, Label: "web-firewall", Rules: linode.FirewallRules{Version: 2, Fingerprint: firewallRulesFingerprint, Inbound: []linode.FirewallRule{{Action: policyAccept, Protocol: protocolTCP, Ports: "443", Label: "allow-https"}}}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(firewall))
+		if r.URL.Path != endpointFirewallHistoryRule2 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallHistoryRule2)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(firewall); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetFirewallRuleVersion(t.Context(), 123, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "GetFirewallRuleVersion should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, "web-firewall", result.Label)
-	assert.Equal(t, 2, result.Rules.Version)
-	require.Len(t, result.Rules.Inbound, 1)
-	assert.Equal(t, "allow-https", result.Rules.Inbound[0].Label)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Label != instanceFirewallLabelFixture {
+		t.Errorf("result.Label = %v, want %v", result.Label, "web-firewall")
+	}
+
+	if result.Rules.Version != 2 {
+		t.Errorf("result.Rules.Version = %v, want %v", result.Rules.Version, 2)
+	}
+
+	if len(result.Rules.Inbound) != 1 {
+		t.Fatalf("len(result.Rules.Inbound) = %d, want %d", len(result.Rules.Inbound), 1)
+	}
+
+	if result.Rules.Inbound[0].Label != "allow-https" {
+		t.Errorf("result.Rules.Inbound[0].Label = %v, want %v", result.Rules.Inbound[0].Label, "allow-https")
+	}
 }
 
 func TestClientGetFirewallRuleVersionRejectsInvalidInput(t *testing.T) {
@@ -191,9 +292,17 @@ func TestClientGetFirewallRuleVersionRejectsInvalidInput(t *testing.T) {
 
 			result, err := client.GetFirewallRuleVersion(t.Context(), testCase.firewallID, testCase.version)
 
-			require.ErrorIs(t, err, testCase.wantErr, "invalid input should be rejected")
-			assert.Nil(t, result, "no rule should be returned")
-			assert.False(t, called.Load(), "client should not call API for invalid input")
+			if !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("error = %v, want %v", err, testCase.wantErr)
+			}
+
+			if result != nil {
+				t.Errorf("result = %v, want nil", result)
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
 		})
 	}
 }
@@ -202,21 +311,34 @@ func TestClientGetFirewallRuleVersionHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointFirewallHistoryRule2 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallHistoryRule2)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		assert.NoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetFirewallRuleVersion(t.Context(), 123, 2)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "GetFirewallRuleVersion should fail on HTTP error")
-	assert.Nil(t, result, "no rule should be returned")
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 }
 
 func TestClientGetFirewallRuleVersionRetriesTransientFailure(t *testing.T) {
@@ -227,34 +349,59 @@ func TestClientGetFirewallRuleVersionRetriesTransientFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			hj, ok := w.(http.Hijacker)
-			if !assert.True(t, ok, "response writer should support hijacking") {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer should support hijacking")
+
 				return
 			}
 
-			conn, _, err := hj.Hijack()
-			if !assert.NoError(t, err) {
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
-			assert.NoError(t, conn.Close())
+			if err := conn.Close(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/networking/firewalls/123/history/rules/2", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Firewall{ID: 123, Label: "retried"}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointFirewallHistoryRule2 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallHistoryRule2)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Firewall{ID: 123, Label: "retried"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetFirewallRuleVersion(t.Context(), 123, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "GetFirewallRuleVersion should succeed after retry")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, "retried", result.Label)
-	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Label != "retried" {
+		t.Errorf("result.Label = %v, want %v", result.Label, "retried")
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }

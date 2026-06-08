@@ -1,6 +1,8 @@
 package server_test
 
 import (
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
@@ -23,7 +25,9 @@ func TestAuditMiddlewareWritesEventOnSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	sink := audit.NewCapturingSink()
 	srv.SetAuditSink(sink)
@@ -31,20 +35,34 @@ func TestAuditMiddlewareWritesEventOnSuccess(t *testing.T) {
 	_ = srv.HandleMessage(t.Context(), []byte(helloCallMessage))
 
 	events := sink.Events()
-	requireNotEmpty(t, events, "audit middleware must produce at least one event")
+	if len(events) == 0 {
+		t.Fatal("events is empty")
+	}
 
 	helloEvent := findEventByTool(events, "hello")
-	requireNotNil(t, helloEvent, "audit middleware must record an event for the hello call")
+	if helloEvent == nil {
+		t.Fatal("helloEvent is nil")
+	}
 
-	assertEqual(t, audit.CapabilityMeta, helloEvent.ToolCapability,
-		"hello carries the CapMeta tag")
-	assertEqual(t, audit.StatusSuccess, helloEvent.Status,
-		"hello returns a successful result")
-	assertGreaterOrEqual(t, helloEvent.LatencyMS, int64(0),
-		"latency populates from Finalize")
-	assertNil(t, helloEvent.Error, "successful call has nil Error pointer")
-	assertEqual(t, "Auditor", helloEvent.Args["name"],
-		"args carry the request's arguments verbatim when not sensitive")
+	if helloEvent.ToolCapability != audit.CapabilityMeta {
+		t.Errorf("helloEvent.ToolCapability = %v, want %v", helloEvent.ToolCapability, audit.CapabilityMeta)
+	}
+
+	if helloEvent.Status != audit.StatusSuccess {
+		t.Errorf("helloEvent.Status = %v, want %v", helloEvent.Status, audit.StatusSuccess)
+	}
+
+	if helloEvent.LatencyMS < int64(0) {
+		t.Errorf("got %v, want >= %v", helloEvent.LatencyMS, int64(0))
+	}
+
+	if helloEvent.Error != nil {
+		t.Errorf("helloEvent.Error = %v, want nil", helloEvent.Error)
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["name"], "Auditor") {
+		t.Errorf("got %v, want %v", helloEvent.Args["name"], "Auditor")
+	}
 }
 
 // TestSetAuditSinkNilRestoresNoop locks the documented contract for
@@ -55,7 +73,9 @@ func TestSetAuditSinkNilRestoresNoop(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Install a capturing sink, then clear it. After clearing, the
 	// next tool call must not crash and must not feed the previous
@@ -66,8 +86,9 @@ func TestSetAuditSinkNilRestoresNoop(t *testing.T) {
 
 	_ = srv.HandleMessage(t.Context(), []byte(helloCallMessage))
 
-	assertEmpty(t, sink.Events(),
-		"previously-installed sink must not receive events after SetAuditSink(nil)")
+	if len(sink.Events()) != 0 {
+		t.Errorf("sink.Events() = %v, want empty", sink.Events())
+	}
 }
 
 // findEventByTool walks the captured events and returns a pointer to
@@ -116,7 +137,9 @@ func TestAuditMiddlewareRedactsPIIWhenFlagOn(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	sink := audit.NewCapturingSink()
 	srv.SetAuditSink(sink)
@@ -125,22 +148,47 @@ func TestAuditMiddlewareRedactsPIIWhenFlagOn(t *testing.T) {
 	_ = srv.HandleMessage(t.Context(), []byte(helloCallWithPIIArgs))
 
 	events := sink.Events()
-	helloEvent := findEventByTool(events, "hello")
-	requireNotNil(t, helloEvent)
 
-	assertTrue(t, audit.IsRedacted(helloEvent.Args["phone"]),
-		"phone is PII and must be redacted when redact_pii=true")
-	assertTrue(t, audit.IsRedacted(helloEvent.Args["tax_id"]))
-	assertTrue(t, audit.IsRedacted(helloEvent.Args["address_1"]))
-	assertTrue(t, audit.IsRedacted(helloEvent.Args["city"]))
-	assertTrue(t, audit.IsRedacted(helloEvent.Args["token"]),
-		"credential is always redacted regardless of redact_pii")
-	assertEqual(t, "us", helloEvent.Args["country"],
-		"country is a non-sensitive filter, must pass through")
-	assertEqual(t, "Auditor", helloEvent.Args["name"],
-		"non-PII non-credential args pass through")
-	assertContains(t, helloEvent.ArgsRedacted, "phone")
-	assertContains(t, helloEvent.ArgsRedacted, "token")
+	helloEvent := findEventByTool(events, "hello")
+	if helloEvent == nil {
+		t.Fatal("helloEvent is nil")
+	}
+
+	if !audit.IsRedacted(helloEvent.Args["phone"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !audit.IsRedacted(helloEvent.Args["tax_id"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !audit.IsRedacted(helloEvent.Args["address_1"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !audit.IsRedacted(helloEvent.Args["city"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !audit.IsRedacted(helloEvent.Args["token"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["country"], "us") {
+		t.Errorf("got %v, want %v", helloEvent.Args["country"], "us")
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["name"], "Auditor") {
+		t.Errorf("got %v, want %v", helloEvent.Args["name"], "Auditor")
+	}
+
+	if !slices.Contains(helloEvent.ArgsRedacted, "phone") {
+		t.Errorf("helloEvent.ArgsRedacted does not contain %v", "phone")
+	}
+
+	if !slices.Contains(helloEvent.ArgsRedacted, "token") {
+		t.Errorf("helloEvent.ArgsRedacted does not contain %v", "token")
+	}
 }
 
 // TestAuditMiddlewareLeavesPIIWhenFlagOff is the inverse: with the
@@ -151,7 +199,9 @@ func TestAuditMiddlewareLeavesPIIWhenFlagOff(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	sink := audit.NewCapturingSink()
 	srv.SetAuditSink(sink)
@@ -161,17 +211,37 @@ func TestAuditMiddlewareLeavesPIIWhenFlagOff(t *testing.T) {
 	_ = srv.HandleMessage(t.Context(), []byte(helloCallWithPIIArgs))
 
 	events := sink.Events()
-	helloEvent := findEventByTool(events, "hello")
-	requireNotNil(t, helloEvent)
 
-	assertEqual(t, "+1-555-0100", helloEvent.Args["phone"],
-		"PII passes through when redact_pii=false")
-	assertEqual(t, "TX-99", helloEvent.Args["tax_id"])
-	assertEqual(t, "123 Main St", helloEvent.Args["address_1"])
-	assertEqual(t, "Springfield", helloEvent.Args["city"])
-	assertTrue(t, audit.IsRedacted(helloEvent.Args["token"]),
-		"credential is redacted even with redact_pii=false")
-	assertNotContains(t, helloEvent.ArgsRedacted, "phone",
-		"PII names absent from ArgsRedacted when flag is off")
-	assertContains(t, helloEvent.ArgsRedacted, "token")
+	helloEvent := findEventByTool(events, "hello")
+	if helloEvent == nil {
+		t.Fatal("helloEvent is nil")
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["phone"], "+1-555-0100") {
+		t.Errorf("got %v, want %v", helloEvent.Args["phone"], "+1-555-0100")
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["tax_id"], "TX-99") {
+		t.Errorf("got %v, want %v", helloEvent.Args["tax_id"], "TX-99")
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["address_1"], "123 Main St") {
+		t.Errorf("got %v, want %v", helloEvent.Args["address_1"], "123 Main St")
+	}
+
+	if !reflect.DeepEqual(helloEvent.Args["city"], "Springfield") {
+		t.Errorf("got %v, want %v", helloEvent.Args["city"], "Springfield")
+	}
+
+	if !audit.IsRedacted(helloEvent.Args["token"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if slices.Contains(helloEvent.ArgsRedacted, "phone") {
+		t.Errorf("helloEvent.ArgsRedacted should not contain %v", "phone")
+	}
+
+	if !slices.Contains(helloEvent.ArgsRedacted, "token") {
+		t.Errorf("helloEvent.ArgsRedacted does not contain %v", "token")
+	}
 }

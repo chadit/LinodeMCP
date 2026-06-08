@@ -2,11 +2,10 @@ package tools_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -24,7 +23,7 @@ type testItem struct {
 // cleared without panic", which this test pins. Suppression must be
 // inline on the func declaration so newer golangci-lint releases
 // associate the directive with the function.
-func TestSetLiveConfigSourceLifecycle(t *testing.T) { //nolint:paralleltest // SetLiveConfigSource manipulates a process-wide hook.
+func TestSetLiveConfigSourceLifecycle(_ *testing.T) { //nolint:paralleltest // SetLiveConfigSource manipulates a process-wide hook.
 	defer tools.SetLiveConfigSource(nil)
 
 	snapshot := &config.Config{Server: config.ServerConfig{Name: "snap"}}
@@ -32,66 +31,96 @@ func TestSetLiveConfigSourceLifecycle(t *testing.T) { //nolint:paralleltest // S
 	// Set, clear, set with a different function, clear again. Each step
 	// must not panic. The store is a sync/atomic.Pointer; correctness of
 	// load/store under concurrent access is stdlib's contract.
-	require.NotPanics(t, func() {
-		tools.SetLiveConfigSource(func() *config.Config { return snapshot })
-	})
-	require.NotPanics(t, func() {
-		tools.SetLiveConfigSource(nil)
-	})
-	require.NotPanics(t, func() {
-		tools.SetLiveConfigSource(func() *config.Config { return nil })
-	})
-	require.NotPanics(t, func() {
-		tools.SetLiveConfigSource(nil)
-	})
+	tools.SetLiveConfigSource(func() *config.Config { return snapshot })
+	tools.SetLiveConfigSource(nil)
+	tools.SetLiveConfigSource(func() *config.Config { return nil })
+	tools.SetLiveConfigSource(nil)
 }
 
 // Ensures all tool response serialization paths work correctly.
-func TestMarshalToolResponse(t *testing.T) {
+func TestMarshalToolResponseValidStruct(t *testing.T) {
 	t.Parallel()
 
-	t.Run("valid struct", func(t *testing.T) {
-		t.Parallel()
+	input := map[string]string{"key": "value"}
 
-		input := map[string]string{"key": "value"}
+	result, err := tools.MarshalToolResponse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := tools.MarshalToolResponse(input)
-		require.NoError(t, err, "valid struct should marshal without error")
-		require.NotNil(t, result, "result should not be nil for valid input")
-		require.NotEmpty(t, result.Content, "result content should not be empty")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "expected TextContent type")
-		assert.Contains(t, textContent.Text, `"key"`, "output should contain the key")
-		assert.Contains(t, textContent.Text, `"value"`, "output should contain the value")
+	if len(result.Content) == 0 {
+		t.Fatal("result.Content is empty")
+	}
 
-		// Verify the output is valid JSON.
-		var parsed map[string]string
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &parsed), "output should be valid JSON")
-		assert.Equal(t, "value", parsed["key"], "parsed value should match input")
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-	t.Run("nil input", func(t *testing.T) {
-		t.Parallel()
+	if !strings.Contains(textContent.Text, `"key"`) {
+		t.Errorf("textContent.Text does not contain %v", `"key"`)
+	}
 
-		result, err := tools.MarshalToolResponse(nil)
-		require.NoError(t, err, "nil input should marshal without error")
-		require.NotNil(t, result, "result should not be nil for nil input")
-		require.NotEmpty(t, result.Content, "result content should not be empty for nil input")
+	if !strings.Contains(textContent.Text, `"value"`) {
+		t.Errorf("textContent.Text does not contain %v", `"value"`)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "expected TextContent type for nil input")
-		assert.Equal(t, "null", textContent.Text, "nil input should produce null JSON text")
-	})
+	// Verify the output is valid JSON.
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(textContent.Text), &parsed); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("unmarshalable type", func(t *testing.T) {
-		t.Parallel()
+	if parsed["key"] != "value" {
+		t.Errorf("got %v, want %v", parsed["key"], "value")
+	}
+}
 
-		result, err := tools.MarshalToolResponse(make(chan int))
-		require.Error(t, err, "channel type should fail to marshal")
-		assert.Nil(t, result, "result should be nil when marshaling fails")
-		assert.ErrorContains(t, err, "failed to marshal response", "error should describe the marshal failure")
-	})
+func TestMarshalToolResponseNilInput(t *testing.T) {
+	t.Parallel()
+
+	result, err := tools.MarshalToolResponse(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Content) == 0 {
+		t.Fatal("result.Content is empty")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if textContent.Text != databaseJSONNull {
+		t.Errorf("textContent.Text = %v, want %v", textContent.Text, databaseJSONNull)
+	}
+}
+
+func TestMarshalToolResponseUnmarshalableType(t *testing.T) {
+	t.Parallel()
+
+	result, err := tools.MarshalToolResponse(make(chan int))
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	if err == nil {
+		t.Error("expected a marshal error, got nil")
+	}
 }
 
 // Validates the safety gate for destructive write operations.
@@ -152,18 +181,30 @@ func TestRequireConfirm(t *testing.T) {
 			result := tools.RequireConfirm(&request, "set confirm=true to proceed")
 
 			if tt.wantNil {
-				assert.Nil(t, result, "confirm result should be nil for %s", tt.name)
+				if result != nil {
+					t.Errorf("result = %v, want nil", result)
+				}
 
 				return
 			}
 
-			require.NotNil(t, result, "confirm result should be non-nil for %s", tt.name)
-			assert.True(t, result.IsError, "result should be an error for %s", tt.name)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
 			if tt.checkBody != "" {
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "expected TextContent type for %s", tt.name)
-				assert.Contains(t, textContent.Text, tt.checkBody, "error body should contain expected text for %s", tt.name)
+				if !ok {
+					t.Fatal("ok = false, want true")
+				}
+
+				if !strings.Contains(textContent.Text, tt.checkBody) {
+					t.Errorf("textContent.Text does not contain %v", tt.checkBody)
+				}
 			}
 		})
 	}
@@ -231,10 +272,14 @@ func TestFilterByField(t *testing.T) {
 			t.Parallel()
 
 			filtered := tools.FilterByField(tt.items, tt.filter, statusExtractor)
-			assert.Len(t, filtered, tt.wantLen, "filtered length for %s", tt.name)
+			if len(filtered) != tt.wantLen {
+				t.Errorf("len(filtered) = %d, want %d", len(filtered), tt.wantLen)
+			}
 
 			for idx, wantName := range tt.wantNames {
-				assert.Equal(t, wantName, filtered[idx].Name, "filtered item name at index %d for %s", idx, tt.name)
+				if filtered[idx].Name != wantName {
+					t.Errorf("filtered[idx].Name = %v, want %v", filtered[idx].Name, wantName)
+				}
 			}
 		})
 	}
@@ -299,10 +344,14 @@ func TestFilterByContains(t *testing.T) {
 			t.Parallel()
 
 			filtered := tools.FilterByContains(tt.items, tt.substr, nameExtractor)
-			assert.Len(t, filtered, tt.wantLen, "filtered length for %s", tt.name)
+			if len(filtered) != tt.wantLen {
+				t.Errorf("len(filtered) = %d, want %d", len(filtered), tt.wantLen)
+			}
 
 			for idx, wantName := range tt.wantNames {
-				assert.Equal(t, wantName, filtered[idx].Name, "filtered item name at index %d for %s", idx, tt.name)
+				if filtered[idx].Name != wantName {
+					t.Errorf("filtered[idx].Name = %v, want %v", filtered[idx].Name, wantName)
+				}
 			}
 		})
 	}
@@ -358,18 +407,29 @@ func TestFormatListResponse(t *testing.T) {
 			t.Parallel()
 
 			result, err := tools.FormatListResponse(tt.items, tt.filters, "items")
-			require.NoError(t, err, "FormatListResponse should not error for %s", tt.name)
-			require.NotNil(t, result, "result should not be nil for %s", tt.name)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
 			textContent, ok := result.Content[0].(mcp.TextContent)
-			require.True(t, ok, "expected TextContent type for %s", tt.name)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
 
 			for _, want := range tt.wantContains {
-				assert.Contains(t, textContent.Text, want, "response should contain %q for %s", want, tt.name)
+				if !strings.Contains(textContent.Text, want) {
+					t.Errorf("textContent.Text does not contain %v", want)
+				}
 			}
 
 			for _, notWant := range tt.wantNotContain {
-				assert.NotContains(t, textContent.Text, notWant, "response should not contain %q for %s", notWant, tt.name)
+				if strings.Contains(textContent.Text, notWant) {
+					t.Errorf("textContent.Text should not contain %v", notWant)
+				}
 			}
 		})
 	}

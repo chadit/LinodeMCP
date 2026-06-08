@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -10,18 +11,32 @@ func TestRegionGetToolRegisteredAsRead(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+
 	infos := srv.ToolInfos()
-	requireNotEmpty(t, infos, "server must expose registered tools")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	for _, info := range infos {
 		if info.Name != "linode_region_get" {
 			continue
 		}
 
-		assertEqual(t, profiles.CapRead, info.Capability, "region get is a read-only route")
-		assertContains(t, info.InputSchema.Properties, "region_id", "region_id parameter should be exported")
-		assertContains(t, info.InputSchema.Required, "region_id", "region_id should be required")
-		assertNotContains(t, info.InputSchema.Properties, "confirm", "read-only route should not require confirm")
+		if info.Capability != profiles.CapRead {
+			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+		}
+
+		if _, ok := info.InputSchema.Properties["region_id"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "region_id")
+		}
+
+		if !slices.Contains(info.InputSchema.Required, "region_id") {
+			t.Errorf("info.InputSchema.Required does not contain %v", "region_id")
+		}
+
+		if _, ok := info.InputSchema.Properties["confirm"]; ok {
+			t.Errorf("info.InputSchema.Properties has unexpected key %v", "confirm")
+		}
 
 		return
 	}

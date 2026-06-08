@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -15,319 +17,483 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeFirewallRulesListTool(t *testing.T) {
+func TestLinodeFirewallRulesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeFirewallRulesListTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeFirewallRulesListTool(&config.Config{})
+	if tool.Name != "linode_firewall_rules_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_rules_list")
+	}
 
-		expectEqual(t, "linode_firewall_rules_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		rules := linode.FirewallRules{
-			InboundPolicy:  policyDrop,
-			OutboundPolicy: policyAccept,
-			Inbound: []linode.FirewallRule{{
-				Action:   policyAccept,
-				Protocol: "TCP",
-				Ports:    "443",
-				Label:    "allow-https",
-			}},
-		}
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/123/rules", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(rules))
-		}))
-		t.Cleanup(srv.Close)
+	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallRulesListTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, firewallRuleLabelAllowHTTPS, "response should include rule label")
-		expectContains(t, textContent.Text, policyDrop, "response should include inbound policy")
-	})
-
-	t.Run("rejects invalid firewall id before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := map[string]any{
-			caseMissingFirewallPathID:   nil,
-			caseZeroFirewallPathID:      float64(0),
-			caseFractionalLinodeID:      float64(123.5),
-			caseSlashFirewallPathID:     paymentMethodIDSlash,
-			caseQueryFirewallPathID:     databaseInvalidInstanceIDQuery,
-			caseTraversalFirewallPathID: pathTraversalValue,
-		}
-
-		for name, rawID := range cases {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallRulesListTool(cfg)
-
-				args := map[string]any{}
-				if rawID != nil {
-					args[keyFirewallID] = rawID
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid firewall_id should be rejected")
-				assertErrorContains(t, result, errFirewallIDPositive)
-				expectFalse(t, called.Load(), "client should not be called for invalid firewall_id")
-			})
-		}
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/123/rules", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallRulesListTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve linode_firewall_rules_list")
-	})
+	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
+	}
 }
 
-func TestLinodeFirewallRulesUpdateTool(t *testing.T) {
+func TestLinodeFirewallRulesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	rules := linode.FirewallRules{
+		InboundPolicy:  policyDrop,
+		OutboundPolicy: policyAccept,
+		Inbound: []linode.FirewallRule{{
+			Action:   policyAccept,
+			Protocol: "TCP",
+			Ports:    "443",
+			Label:    "allow-https",
+		}},
+	}
 
-		tool, capability, handler := tools.NewLinodeFirewallRulesUpdateTool(&config.Config{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		expectEqual(t, "linode_firewall_rules_update", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapWrite, capability, "tool should be write capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		expectContains(t, tool.InputSchema.Properties, keyInbound, "schema should include inbound property")
-		expectContains(t, tool.InputSchema.Properties, keyOutbound, "schema should include outbound property")
-		expectContains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm property")
-		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-		expectContains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-	})
+		if r.URL.Path != tcNetworkingFirewalls123Rules {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Rules)
+		}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/networking/firewalls/123/rules", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
 
-			var got linode.FirewallRules
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
+		if err := json.NewEncoder(w).Encode(rules); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-			if checkLen(t, got.Inbound, 1) {
-				checkEqual(t, firewallRuleLabelAllowHTTPS, got.Inbound[0].Label)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallRulesListTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, firewallRuleLabelAllowHTTPS) {
+		t.Errorf("textContent.Text does not contain %v", firewallRuleLabelAllowHTTPS)
+	}
+
+	if !strings.Contains(textContent.Text, policyDrop) {
+		t.Errorf("textContent.Text does not contain %v", policyDrop)
+	}
+}
+
+func TestLinodeFirewallRulesListToolRejectsInvalidFirewallIdBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]any{
+		caseMissingFirewallPathID:   nil,
+		caseZeroFirewallPathID:      float64(0),
+		caseFractionalLinodeID:      float64(123.5),
+		caseSlashFirewallPathID:     paymentMethodIDSlash,
+		caseQueryFirewallPathID:     databaseInvalidInstanceIDQuery,
+		caseTraversalFirewallPathID: pathTraversalValue,
+	}
+
+	for name, rawID := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallRulesListTool(cfg)
+
+			args := map[string]any{}
+			if rawID != nil {
+				args[keyFirewallID] = rawID
 			}
 
-			checkEmpty(t, got.Outbound)
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(linode.FirewallRules{InboundPolicy: policyDrop, Inbound: got.Inbound}))
-		}))
-		t.Cleanup(srv.Close)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyFirewallID: float64(123),
-			keyInbound:    `[{"action":"ACCEPT","protocol":"TCP","ports":"443","label":"allow-https"}]`,
-			keyOutbound:   databaseJSONArray,
-			keyConfirm:    true,
-		}))
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
+				t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+			}
 
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, "updated successfully", "response should confirm update")
-		expectContains(t, textContent.Text, firewallRuleLabelAllowHTTPS, "response should include rule label")
-	})
+func TestLinodeFirewallRulesListToolClientError(t *testing.T) {
+	t.Parallel()
 
-	t.Run("requires explicit confirm before client call", func(t *testing.T) {
-		t.Parallel()
-
-		confirmTests := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissing, set: false},
-			{name: caseConfirmFalse, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, tt := range confirmTests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
-
-				args := map[string]any{keyFirewallID: float64(123), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray}
-				if tt.set {
-					args[keyConfirm] = tt.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "missing or invalid confirm should be rejected")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				expectFalse(t, called.Load(), "client should not be called without confirm=true")
-			})
-		}
-	})
-
-	t.Run("rejects invalid inputs before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := map[string]struct {
-			args map[string]any
-			want string
-		}{
-			caseMissingFirewallPathID:   {args: map[string]any{keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
-			caseZeroFirewallPathID:      {args: map[string]any{keyFirewallID: float64(0), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
-			caseFractionalLinodeID:      {args: map[string]any{keyFirewallID: float64(123.5), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
-			caseSlashFirewallPathID:     {args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
-			caseQueryFirewallPathID:     {args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
-			caseTraversalFirewallPathID: {args: map[string]any{keyFirewallID: pathTraversalValue, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
-			"missing inbound":           {args: map[string]any{keyFirewallID: float64(123), keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound is required"},
-			"invalid inbound":           {args: map[string]any{keyFirewallID: float64(123), keyInbound: jsonObjectEmpty, keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound must be a JSON array"},
-			"null outbound":             {args: map[string]any{keyFirewallID: float64(123), keyInbound: databaseJSONArray, keyOutbound: `null`, keyConfirm: true}, want: "outbound must be a JSON array"},
+		if r.URL.Path != tcNetworkingFirewalls123Rules {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Rules)
 		}
 
-		for name, tt := range cases {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
 
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid input should be rejected")
-				assertErrorContains(t, result, tt.want)
-				expectFalse(t, called.Load(), "client should not be called for invalid input")
-			})
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
-	})
+	}))
+	t.Cleanup(srv.Close)
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallRulesListTool(cfg)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/networking/firewalls/123/rules", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyFirewallID: float64(123),
-			keyInbound:    databaseJSONArray,
-			keyOutbound:   databaseJSONArray,
-			keyConfirm:    true,
-		}))
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update linode_firewall_rules_update")
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_rules_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_rules_list")
+	}
+}
+
+func TestLinodeFirewallRulesUpdateToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeFirewallRulesUpdateTool(&config.Config{})
+
+	if tool.Name != "linode_firewall_rules_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_rules_update")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyFirewallID, keyInbound, keyOutbound, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyFirewallID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeFirewallRulesUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcNetworkingFirewalls123Rules {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Rules)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		var got linode.FirewallRules
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if len(got.Inbound) != 1 {
+			t.Errorf("len(got.Inbound) = %d, want %d", len(got.Inbound), 1)
+		}
+
+		if len(got.Inbound) == 1 && got.Inbound[0].Label != firewallRuleLabelAllowHTTPS {
+			t.Errorf("got.Inbound[0].Label = %v, want %v", got.Inbound[0].Label, firewallRuleLabelAllowHTTPS)
+		}
+
+		if len(got.Outbound) != 0 {
+			t.Errorf("got.Outbound = %v, want empty", got.Outbound)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.FirewallRules{InboundPolicy: policyDrop, Inbound: got.Inbound}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(123),
+		keyInbound:    `[{"action":"ACCEPT","protocol":"TCP","ports":"443","label":"allow-https"}]`,
+		keyOutbound:   databaseJSONArray,
+		keyConfirm:    true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
+
+	if !strings.Contains(textContent.Text, firewallRuleLabelAllowHTTPS) {
+		t.Errorf("textContent.Text does not contain %v", firewallRuleLabelAllowHTTPS)
+	}
+}
+
+func TestLinodeFirewallRulesUpdateToolRequiresExplicitConfirmBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	confirmTests := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissing, set: false},
+		{name: caseConfirmFalse, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, tt := range confirmTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+
+			args := map[string]any{keyFirewallID: float64(123), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray}
+			if tt.set {
+				args[keyConfirm] = tt.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallRulesUpdateToolRejectsInvalidInputsBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		args map[string]any
+		want string
+	}{
+		caseMissingFirewallPathID:   {args: map[string]any{keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		caseZeroFirewallPathID:      {args: map[string]any{keyFirewallID: float64(0), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		caseFractionalLinodeID:      {args: map[string]any{keyFirewallID: float64(123.5), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		caseSlashFirewallPathID:     {args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		caseQueryFirewallPathID:     {args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		caseTraversalFirewallPathID: {args: map[string]any{keyFirewallID: pathTraversalValue, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		"missing inbound":           {args: map[string]any{keyFirewallID: float64(123), keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound is required"},
+		"invalid inbound":           {args: map[string]any{keyFirewallID: float64(123), keyInbound: jsonObjectEmpty, keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound must be a JSON array"},
+		"null outbound":             {args: map[string]any{keyFirewallID: float64(123), keyInbound: databaseJSONArray, keyOutbound: `null`, keyConfirm: true}, want: "outbound must be a JSON array"},
+	}
+
+	for name, tt := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.want)
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallRulesUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcNetworkingFirewalls123Rules {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Rules)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(123),
+		keyInbound:    databaseJSONArray,
+		keyOutbound:   databaseJSONArray,
+		keyConfirm:    true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_firewall_rules_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_firewall_rules_update")
+	}
 }

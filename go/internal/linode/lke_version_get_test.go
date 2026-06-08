@@ -32,7 +32,7 @@ func TestClientGetLKEVersionSuccess(t *testing.T) {
 			t.Errorf("Authorization header = %q, want %q", got, lkeAuthHeader)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
 		if err := json.NewEncoder(w).Encode(version); err != nil {
 			t.Errorf("encoding response failed: %v", err)
@@ -68,7 +68,7 @@ func TestClientGetLKEVersionEscapesPathSegment(t *testing.T) {
 			t.Errorf("escaped path = %q, want %q", got, "/lke/versions/1.29%2Fedge")
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
 		if err := json.NewEncoder(w).Encode(linode.LKEVersion{ID: lkeVersionWithSlash}); err != nil {
 			t.Errorf("encoding response failed: %v", err)
@@ -137,7 +137,7 @@ func TestClientGetLKEVersionRetriesReadOnlyRoute(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
 		if err := json.NewEncoder(w).Encode(linode.LKEVersion{ID: lkeVersion129}); err != nil {
 			t.Errorf("encoding response failed: %v", err)

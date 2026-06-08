@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -27,151 +27,258 @@ const (
 	keyIPs                       = "ips"
 )
 
-func TestLinodeNetworkingIPsListTool(t *testing.T) {
+func TestLinodeNetworkingIPsListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeNetworkingIPListTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeNetworkingIPListTool(&config.Config{})
+	if tool.Name != "linode_networking_ips_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ips_list")
+	}
 
-		assert.Equal(t, "linode_networking_ips_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		assert.Contains(t, tool.InputSchema.Properties, "skip_ipv6_rdns", "tool should declare skip_ipv6_rdns")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		ips := linode.PaginatedResponse[linode.IPAddress]{
-			Data: []linode.IPAddress{{
-				Address: networkingIPAddressFixture,
-				Type:    keyIPv4,
-				Public:  true,
-				Region:  regionUSEast,
-			}},
-			Page:    1,
-			Pages:   1,
-			Results: 1,
-		}
+	if _, ok := tool.InputSchema.Properties["skip_ipv6_rdns"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "skip_ipv6_rdns")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/ips", r.URL.Path, "request path should match")
-			assert.Equal(t, "true", r.URL.Query().Get("skip_ipv6_rdns"), "skip_ipv6_rdns query should match")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(ips))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPListTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"skip_ipv6_rdns": true}))
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
-		assert.Contains(t, textContent.Text, regionUSEast, "response should include region")
-	})
-
-	t.Run("invalid skip_ipv6_rdns", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeNetworkingIPListTool(&config.Config{})
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"skip_ipv6_rdns": boolStringTrue}))
-
-		require.NoError(t, err, "handler should return MCP error result, not Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "invalid skip_ipv6_rdns should be a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "skip_ipv6_rdns must be a boolean")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodeNetworkingIPGetTool(t *testing.T) {
+func TestLinodeNetworkingIPsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	ips := linode.PaginatedResponse[linode.IPAddress]{
+		Data: []linode.IPAddress{{
+			Address: networkingIPAddressFixture,
+			Type:    keyIPv4,
+			Public:  true,
+			Region:  regionUSEast,
+		}},
+		Page:    1,
+		Pages:   1,
+		Results: 1,
+	}
 
-		tool, capability, handler := tools.NewLinodeNetworkingIPGetTool(&config.Config{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		assert.Equal(t, "linode_networking_ip_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		assert.Contains(t, tool.InputSchema.Properties, keyAddress, "tool should declare address")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+		if r.URL.Path != "/networking/ips" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ips")
+		}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.Query().Get("skip_ipv6_rdns") != boolStringTrue {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("skip_ipv6_rdns"), boolStringTrue)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/networking/ips/"+networkingIPAddressFixture, r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
-				Address: networkingIPAddressFixture,
-				Type:    keyIPv4,
-				Public:  true,
-				Region:  regionUSEast,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+		w.Header().Set("Content-Type", "application/json")
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+		if err := json.NewEncoder(w).Encode(ips); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPAddressFixture}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPListTool(cfg)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"skip_ipv6_rdns": true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
-		assert.Contains(t, textContent.Text, regionUSEast, "response should include region")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+	if !strings.Contains(textContent.Text, networkingIPAddressFixture) {
+		t.Errorf("textContent.Text does not contain %v", networkingIPAddressFixture)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPAddressFixture}))
+	if !strings.Contains(textContent.Text, regionUSEast) {
+		t.Errorf("textContent.Text does not contain %v", regionUSEast)
+	}
+}
 
-		require.NoError(t, err, "handler should return MCP error result, not Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve networking IP")
-		assertErrorContains(t, result, "not found")
-	})
+func TestLinodeNetworkingIPsListToolInvalidSkipIpv6Rdns(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeNetworkingIPListTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"skip_ipv6_rdns": boolStringTrue}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "skip_ipv6_rdns must be a boolean") {
+		t.Errorf("textContent.Text does not contain %v", "skip_ipv6_rdns must be a boolean")
+	}
+}
+
+func TestLinodeNetworkingIPGetToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeNetworkingIPGetTool(&config.Config{})
+
+	if tool.Name != "linode_networking_ip_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyAddress]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyAddress)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNetworkingIPGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/networking/ips/"+networkingIPAddressFixture {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ips/"+networkingIPAddressFixture)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{
+			Address: networkingIPAddressFixture,
+			Type:    keyIPv4,
+			Public:  true,
+			Region:  regionUSEast,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPAddressFixture}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, networkingIPAddressFixture) {
+		t.Errorf("textContent.Text does not contain %v", networkingIPAddressFixture)
+	}
+
+	if !strings.Contains(textContent.Text, regionUSEast) {
+		t.Errorf("textContent.Text does not contain %v", regionUSEast)
+	}
+}
+
+func TestLinodeNetworkingIPGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPAddressFixture}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve networking IP") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve networking IP")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "not found") {
+		t.Errorf("error text %q does not contain %q", text.Text, "not found")
+	}
+}
+
+func TestLinodeNetworkingIPGetToolAddress(t *testing.T) {
+	t.Parallel()
 
 	for name, address := range map[string]any{
 		caseMissingAddress:        nil,
@@ -203,130 +310,216 @@ func TestLinodeNetworkingIPGetTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid address should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "address rejection must happen before client call")
-		})
-	}
-
-	t.Run("IPv6 success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/networking/ips/2001:db8::1", r.URL.EscapedPath(), "request path should preserve valid IPv6 segment")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPv6AddressFixture}))
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "IPv6 lookup should be valid")
-	})
-}
-
-func TestLinodeNetworkingIPUpdateRDNSTool(t *testing.T) {
-	t.Parallel()
-
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-
-		tool, capability, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(&config.Config{})
-
-		assert.Equal(t, "linode_networking_ip_update_rdns", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.Contains(t, tool.InputSchema.Properties, keyAddress, "tool should declare address")
-		assert.Contains(t, tool.InputSchema.Properties, keyRDNS, "tool should declare rdns")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Equal(t, "/networking/ips/"+networkingIPAddressFixture, r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-
-			var body linode.UpdateNetworkingIPRequest
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.Equal(t, rdnsTestExampleOrg, body.RDNS)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
-				Address: networkingIPAddressFixture,
-				RDNS:    rdnsTestExampleOrg,
-				Type:    keyIPv4,
-				Public:  true,
-				Region:  regionUSEast,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyAddress: networkingIPAddressFixture,
-			keyRDNS:    rdnsTestExampleOrg,
-			keyConfirm: true,
-		}))
+func TestLinodeNetworkingIPGetToolIPv6Success(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/networking/ips/2001:db8::1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/networking/ips/2001:db8::1")
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
-		assert.Contains(t, textContent.Text, rdnsTestExampleOrg, "response should include rdns")
-	})
+		w.Header().Set("Content-Type", "application/json")
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPv6AddressFixture}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyAddress: networkingIPAddressFixture,
-			keyRDNS:    rdnsTestExampleOrg,
-			keyConfirm: true,
-		}))
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		require.NoError(t, err, "handler should return MCP error result, not Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to update networking IP")
-		assertErrorContains(t, result, "not found")
-	})
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeNetworkingIPUpdateRDNSToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(&config.Config{})
+
+	if tool.Name != "linode_networking_ip_update_rdns" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_update_rdns")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	for _, key := range []string{keyAddress, keyRDNS, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNetworkingIPUpdateRDNSToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/networking/ips/"+networkingIPAddressFixture {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ips/"+networkingIPAddressFixture)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		var body linode.UpdateNetworkingIPRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
+			return
+		}
+
+		if body.RDNS != rdnsTestExampleOrg {
+			t.Errorf("body.RDNS = %v, want %v", body.RDNS, rdnsTestExampleOrg)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{
+			Address: networkingIPAddressFixture,
+			RDNS:    rdnsTestExampleOrg,
+			Type:    keyIPv4,
+			Public:  true,
+			Region:  regionUSEast,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyAddress: networkingIPAddressFixture,
+		keyRDNS:    rdnsTestExampleOrg,
+		keyConfirm: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, networkingIPAddressFixture) {
+		t.Errorf("textContent.Text does not contain %v", networkingIPAddressFixture)
+	}
+
+	if !strings.Contains(textContent.Text, rdnsTestExampleOrg) {
+		t.Errorf("textContent.Text does not contain %v", rdnsTestExampleOrg)
+	}
+}
+
+func TestLinodeNetworkingIPUpdateRDNSToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyAddress: networkingIPAddressFixture,
+		keyRDNS:    rdnsTestExampleOrg,
+		keyConfirm: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update networking IP") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update networking IP")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "not found") {
+		t.Errorf("error text %q does not contain %q", text.Text, "not found")
+	}
+}
+
+func TestLinodeNetworkingIPUpdateRDNSToolConfirm(t *testing.T) {
+	t.Parallel()
 
 	for name, confirm := range map[string]any{
 		caseMissingConfirm: nil,
@@ -355,13 +548,27 @@ func TestLinodeNetworkingIPUpdateRDNSTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid confirm should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeNetworkingIPUpdateRDNSToolArgs(t *testing.T) {
+	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
 		caseMissingAddress:        {keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
@@ -388,83 +595,155 @@ func TestLinodeNetworkingIPUpdateRDNSTool(t *testing.T) {
 			_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid arguments should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "argument rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
 }
 
-func TestLinodeNetworkingIPAllocateTool(t *testing.T) {
+func TestLinodeNetworkingIPAllocateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
+	if tool.Name != "linode_networking_ip_allocate" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_allocate")
+	}
 
-		assert.Equal(t, "linode_networking_ip_allocate", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.Contains(t, tool.InputSchema.Properties, "linode_id", "tool should declare linode_id")
-		assert.Contains(t, tool.InputSchema.Properties, "type", "tool should declare type")
-		assert.Contains(t, tool.InputSchema.Properties, "public", "tool should declare public")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ips", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+	if _, ok := tool.InputSchema.Properties["linode_id"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "linode_id")
+	}
 
-			var body linode.AllocateNetworkingIPRequest
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
-			}
+	if _, ok := tool.InputSchema.Properties["type"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "type")
+	}
 
-			assert.Equal(t, 123, body.LinodeID)
-			assert.True(t, body.Public)
-			assert.Equal(t, keyIPv4, body.Type)
+	if _, ok := tool.InputSchema.Properties["public"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "public")
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
-				Address:  networkingIPAddressFixture,
-				Type:     keyIPv4,
-				Public:   true,
-				Region:   regionUSEast,
-				LinodeID: 123,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyConfirm)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(cfg)
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID:   123,
-			keyType:       keyIPv4,
-			purposePublic: true,
-			keyConfirm:    true,
-		}))
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+func TestLinodeNetworkingIPAllocateToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
-		assert.Contains(t, textContent.Text, "allocated", "response should describe allocation")
-	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/networking/ips" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ips")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		var body linode.AllocateNetworkingIPRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
+			return
+		}
+
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
+
+		if !body.Public {
+			t.Error("body.Public = false, want true")
+		}
+
+		if body.Type != keyIPv4 {
+			t.Errorf("body.Type = %v, want %v", body.Type, keyIPv4)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{
+			Address:  networkingIPAddressFixture,
+			Type:     keyIPv4,
+			Public:   true,
+			Region:   regionUSEast,
+			LinodeID: 123,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID:   123,
+		keyType:       keyIPv4,
+		purposePublic: true,
+		keyConfirm:    true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, networkingIPAddressFixture) {
+		t.Errorf("textContent.Text does not contain %v", networkingIPAddressFixture)
+	}
+
+	if !strings.Contains(textContent.Text, "allocated") {
+		t.Errorf("textContent.Text does not contain %v", "allocated")
+	}
+}
+
+func TestLinodeNetworkingIPAllocateToolConfirm(t *testing.T) {
+	t.Parallel()
 
 	for name, confirm := range map[string]any{
 		caseRequiresConfirm:        nil,
@@ -493,13 +772,27 @@ func TestLinodeNetworkingIPAllocateTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid confirm should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeNetworkingIPAllocateToolArgs(t *testing.T) {
+	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
 		"missing linode_id": {keyType: keyIPv4, purposePublic: true, keyConfirm: true},
@@ -516,104 +809,180 @@ func TestLinodeNetworkingIPAllocateTool(t *testing.T) {
 			_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 		})
 	}
 }
 
-func TestLinodeNetworkingIPAssignTool(t *testing.T) {
+func TestLinodeNetworkingIPAssignToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
+	if tool.Name != "linode_networking_ips_assign" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ips_assign")
+	}
 
-		assert.Equal(t, "linode_networking_ips_assign", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.Contains(t, tool.InputSchema.Properties, keyRegion, "tool should declare region")
-		assert.Contains(t, tool.InputSchema.Properties, keyAssignments, "tool should declare assignments")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ips/assign", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+	for _, key := range []string{keyRegion, keyAssignments, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-			var body linode.AssignNetworkingIPsRequest
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
-			}
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
 
-			assert.Equal(t, regionUSEast, body.Region)
-			assert.Len(t, body.Assignments, 1)
-			assert.Equal(t, networkingIPAddressFixture, body.Assignments[0].Address)
-			assert.Equal(t, 123, body.Assignments[0].LinodeID)
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-			w.Header().Set("Content-Type", "application/json")
-			_, writeErr := w.Write([]byte(`{}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+func TestLinodeNetworkingIPAssignToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPAssignTool(cfg)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion:      regionUSEast,
-			keyAssignments: networkingIPAssignmentJSON,
-			keyConfirm:     true,
-		}))
+		if r.URL.Path != "/networking/ips/assign" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ips/assign")
+		}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "updated", "response should describe assignment update")
-	})
+		var body linode.AssignNetworkingIPsRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+			return
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+		if body.Region != regionUSEast {
+			t.Errorf("body.Region = %v, want %v", body.Region, regionUSEast)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPAssignTool(cfg)
+		if len(body.Assignments) != 1 {
+			t.Errorf("len(body.Assignments) = %d, want %d", len(body.Assignments), 1)
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion:      regionUSEast,
-			keyAssignments: networkingIPAssignmentJSON,
-			keyConfirm:     true,
-		}))
+		if body.Assignments[0].Address != networkingIPAddressFixture {
+			t.Errorf("body.Assignments[0].Address = %v, want %v", body.Assignments[0].Address, networkingIPAddressFixture)
+		}
 
-		require.NoError(t, err, "handler should return MCP error result, not Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to assign networking IPs")
-		assertErrorContains(t, result, "forbidden")
-	})
+		if body.Assignments[0].LinodeID != 123 {
+			t.Errorf("body.Assignments[0].LinodeID = %v, want %v", body.Assignments[0].LinodeID, 123)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		_, writeErr := w.Write([]byte(`{}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPAssignTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion:      regionUSEast,
+		keyAssignments: networkingIPAssignmentJSON,
+		keyConfirm:     true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated") {
+		t.Errorf("textContent.Text does not contain %v", "updated")
+	}
+}
+
+func TestLinodeNetworkingIPAssignToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPAssignTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion:      regionUSEast,
+		keyAssignments: networkingIPAssignmentJSON,
+		keyConfirm:     true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to assign networking IPs") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to assign networking IPs")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNetworkingIPAssignToolConfirm(t *testing.T) {
+	t.Parallel()
 
 	for name, confirm := range map[string]any{
 		caseRequiresConfirm:        nil,
@@ -642,13 +1011,27 @@ func TestLinodeNetworkingIPAssignTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid confirm should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeNetworkingIPAssignToolArgs(t *testing.T) {
+	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
 		caseMissingRegion:     {keyAssignments: networkingIPAssignmentJSON, keyConfirm: true},
@@ -665,104 +1048,180 @@ func TestLinodeNetworkingIPAssignTool(t *testing.T) {
 			_, _, handler := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 		})
 	}
 }
 
-func TestLinodeNetworkingIPv4AssignTool(t *testing.T) {
+func TestLinodeNetworkingIPv4AssignToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
+	if tool.Name != "linode_networking_ipv4_assign" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ipv4_assign")
+	}
 
-		assert.Equal(t, "linode_networking_ipv4_assign", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.Contains(t, tool.InputSchema.Properties, keyRegion, "tool should declare region")
-		assert.Contains(t, tool.InputSchema.Properties, keyAssignments, "tool should declare assignments")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ipv4/assign", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+	for _, key := range []string{keyRegion, keyAssignments, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-			var body linode.AssignNetworkingIPsRequest
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
-			}
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
 
-			assert.Equal(t, regionUSEast, body.Region)
-			assert.Len(t, body.Assignments, 1)
-			assert.Equal(t, networkingIPAddressFixture, body.Assignments[0].Address)
-			assert.Equal(t, 123, body.Assignments[0].LinodeID)
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-			w.Header().Set("Content-Type", "application/json")
-			_, writeErr := w.Write([]byte(`{}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+func TestLinodeNetworkingIPv4AssignToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion:      regionUSEast,
-			keyAssignments: networkingIPAssignmentJSON,
-			keyConfirm:     true,
-		}))
+		if r.URL.Path != "/networking/ipv4/assign" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ipv4/assign")
+		}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "updated", "response should describe assignment update")
-	})
+		var body linode.AssignNetworkingIPsRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+			return
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+		if body.Region != regionUSEast {
+			t.Errorf("body.Region = %v, want %v", body.Region, regionUSEast)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+		if len(body.Assignments) != 1 {
+			t.Errorf("len(body.Assignments) = %d, want %d", len(body.Assignments), 1)
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion:      regionUSEast,
-			keyAssignments: networkingIPAssignmentJSON,
-			keyConfirm:     true,
-		}))
+		if body.Assignments[0].Address != networkingIPAddressFixture {
+			t.Errorf("body.Assignments[0].Address = %v, want %v", body.Assignments[0].Address, networkingIPAddressFixture)
+		}
 
-		require.NoError(t, err, "handler should return MCP error result, not Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to assign networking IPv4s")
-		assertErrorContains(t, result, "forbidden")
-	})
+		if body.Assignments[0].LinodeID != 123 {
+			t.Errorf("body.Assignments[0].LinodeID = %v, want %v", body.Assignments[0].LinodeID, 123)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		_, writeErr := w.Write([]byte(`{}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion:      regionUSEast,
+		keyAssignments: networkingIPAssignmentJSON,
+		keyConfirm:     true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated") {
+		t.Errorf("textContent.Text does not contain %v", "updated")
+	}
+}
+
+func TestLinodeNetworkingIPv4AssignToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion:      regionUSEast,
+		keyAssignments: networkingIPAssignmentJSON,
+		keyConfirm:     true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to assign networking IPv4s") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to assign networking IPv4s")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNetworkingIPv4AssignToolConfirm(t *testing.T) {
+	t.Parallel()
 
 	for name, confirm := range map[string]any{
 		caseRequiresConfirm:        nil,
@@ -791,51 +1250,77 @@ func TestLinodeNetworkingIPv4AssignTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid confirm should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeNetworkingIPv4AssignToolRejectsNonIpv4AssignmentsBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		calls.Add(1)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+	for name, assignments := range map[string]string{
+		"ipv6 assignment":   `[{"address":"2001:db8::1","linode_id":123}]`,
+		"malformed address": `[{"address":"not-an-ip","linode_id":123}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+				keyRegion:      regionUSEast,
+				keyAssignments: assignments,
+				keyConfirm:     true,
+			}))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "IP address must be a valid IPv4 address") {
+				t.Errorf("error text %q does not contain %q", text.Text, "IP address must be a valid IPv4 address")
+			}
 		})
 	}
 
-	t.Run("rejects non-ipv4 assignments before client call", func(t *testing.T) {
-		t.Parallel()
+	if calls.Load() != int32(0) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+	}
+}
 
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-			calls.Add(1)
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
-
-		for name, assignments := range map[string]string{
-			"ipv6 assignment":   `[{"address":"2001:db8::1","linode_id":123}]`,
-			"malformed address": `[{"address":"not-an-ip","linode_id":123}]`,
-		} {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-					keyRegion:      regionUSEast,
-					keyAssignments: assignments,
-					keyConfirm:     true,
-				}))
-
-				require.NoError(t, err, "handler should return MCP error result, not Go error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid IPv4 assignment should be a tool error")
-				assertErrorContains(t, result, "IP address must be a valid IPv4 address")
-			})
-		}
-
-		assert.Equal(t, int32(0), calls.Load(), "IPv4 validation must happen before client call")
-	})
+func TestLinodeNetworkingIPv4AssignToolArgs(t *testing.T) {
+	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
 		caseMissingRegion:     {keyAssignments: networkingIPAssignmentJSON, keyConfirm: true},
@@ -852,144 +1337,237 @@ func TestLinodeNetworkingIPv4AssignTool(t *testing.T) {
 			_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 		})
 	}
 }
 
-func TestLinodeNetworkingIPShareTool(t *testing.T) {
+func TestLinodeNetworkingIPShareToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+	if tool.Name != "linode_networking_ips_share" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ips_share")
+	}
 
-		assert.Equal(t, "linode_networking_ips_share", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
-		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "tool should declare linode_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyIPs, "tool should declare ips")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ipv4/share", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+	for _, key := range []string{keyLinodeID, keyIPs, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-			var body linode.ShareNetworkingIPsRequest
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
-			}
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
 
-			assert.Equal(t, 123, body.LinodeID)
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-			if !assert.Len(t, body.IPs, 1) {
-				return
-			}
+func TestLinodeNetworkingIPShareToolSuccess(t *testing.T) {
+	t.Parallel()
 
-			assert.Equal(t, networkingIPAddressFixture, body.IPs[0])
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			_, writeErr := w.Write([]byte(`{}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+		if r.URL.Path != "/networking/ipv4/share" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ipv4/share")
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID: 123,
-			keyIPs:      networkingIPShareJSON,
-			keyConfirm:  true,
-		}))
+		var body linode.ShareNetworkingIPsRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+			return
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "updated", "response should describe sharing update")
-	})
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
 
-	t.Run("empty ips array", func(t *testing.T) {
-		t.Parallel()
+		if len(body.IPs) != 1 {
+			t.Errorf("len(body.IPs) = %d, want %d", len(body.IPs), 1)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ipv4/share", r.URL.Path, "request path should match")
+			return
+		}
 
-			var body linode.ShareNetworkingIPsRequest
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
-			}
+		if body.IPs[0] != networkingIPAddressFixture {
+			t.Errorf("body.IPs[0] = %v, want %v", body.IPs[0], networkingIPAddressFixture)
+		}
 
-			assert.Equal(t, 123, body.LinodeID)
-			assert.Empty(t, body.IPs, "empty ips array should pass through")
+		w.Header().Set("Content-Type", "application/json")
 
-			w.Header().Set("Content-Type", "application/json")
-			_, writeErr := w.Write([]byte(`{}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+		_, writeErr := w.Write([]byte(`{}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID: 123,
-			keyIPs:      `[]`,
-			keyConfirm:  true,
-		}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: 123,
+		keyIPs:      networkingIPShareJSON,
+		keyConfirm:  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "empty ips array should be accepted")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+	if !strings.Contains(textContent.Text, "updated") {
+		t.Errorf("textContent.Text does not contain %v", "updated")
+	}
+}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID: 123,
-			keyIPs:      networkingIPShareJSON,
-			keyConfirm:  true,
-		}))
+func TestLinodeNetworkingIPShareToolEmptyIpsArray(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err, "handler should return MCP error result, not Go error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to share networking IPs")
-		assertErrorContains(t, result, "forbidden")
-	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/networking/ipv4/share" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ipv4/share")
+		}
+
+		var body linode.ShareNetworkingIPsRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
+			return
+		}
+
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
+
+		if len(body.IPs) != 0 {
+			t.Errorf("body.IPs = %v, want empty", body.IPs)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		_, writeErr := w.Write([]byte(`{}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: 123,
+		keyIPs:      `[]`,
+		keyConfirm:  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeNetworkingIPShareToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: 123,
+		keyIPs:      networkingIPShareJSON,
+		keyConfirm:  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to share networking IPs") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to share networking IPs")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNetworkingIPShareToolConfirm(t *testing.T) {
+	t.Parallel()
 
 	for name, confirm := range map[string]any{
 		caseRequiresConfirm:        nil,
@@ -1018,13 +1596,27 @@ func TestLinodeNetworkingIPShareTool(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid confirm should be a tool error")
-			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeNetworkingIPShareToolArgs(t *testing.T) {
+	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
 		"missing linode_id": {keyIPs: networkingIPShareJSON, keyConfirm: true},
@@ -1041,10 +1633,17 @@ func TestLinodeNetworkingIPShareTool(t *testing.T) {
 			_, _, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should return MCP error result, not Go error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 		})
 	}
 }

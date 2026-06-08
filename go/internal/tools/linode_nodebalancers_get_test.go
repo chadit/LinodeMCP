@@ -1,7 +1,10 @@
 package tools_test
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -31,11 +34,23 @@ func TestLinodeNodeBalancerGetToolValidation(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
 }

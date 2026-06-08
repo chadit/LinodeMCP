@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,19 +20,37 @@ func TestClientAssignPlacementGroupLinodesRoute(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"), "authorization header should match")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups528Assign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups528Assign)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var body map[string][]int
 
 		decodeErr := json.NewDecoder(r.Body).Decode(&body)
-		checkNoError(t, decodeErr, "request body should decode")
-		checkEqual(t, []int{123, 456}, body["linodes"], "request body should include linodes")
+		if decodeErr != nil {
+			t.Errorf("unexpected error: %v", decodeErr)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if !reflect.DeepEqual(body["linodes"], []int{123, 456}) {
+			t.Errorf("got %v, want %v", body["linodes"], []int{123, 456})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyID:                   528,
 			keyLabel:                "PG_Miami_failover",
 			keyRegion:               regionUSMIA,
@@ -41,23 +61,38 @@ func TestClientAssignPlacementGroupLinodesRoute(t *testing.T) {
 				{keyLinodeID: 123, keyIsCompliant: true},
 				{keyLinodeID: 456, keyIsCompliant: true},
 			},
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	group, err := client.AssignPlacementGroupLinodes(t.Context(), 528, &linode.AssignPlacementGroupLinodesRequest{Linodes: []int{123, 456}})
 
-	requireNoError(t, err, "AssignPlacementGroupLinodes should succeed")
-	requireNotNil(t, group, "response should not be nil")
-	checkEqual(t, 528, group.ID, "group ID should match")
+	group, err := client.AssignPlacementGroupLinodes(t.Context(), 528, &linode.AssignPlacementGroupLinodesRequest{Linodes: []int{123, 456}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if group == nil {
+		t.Fatal("group is nil")
+	}
+
+	if group.ID != 528 {
+		t.Errorf("group.ID = %v, want %v", group.ID, 528)
+	}
 
 	if len(group.Members) != 2 {
 		t.Fatalf("length differs: got %d, want %d", len(group.Members), 2)
 	}
 
-	checkEqual(t, 123, group.Members[0].LinodeID, "first member should match")
-	checkEqual(t, int32(1), requestCount.Load(), "assignment should make one request")
+	if group.Members[0].LinodeID != 123 {
+		t.Errorf("group.Members[0].LinodeID = %v, want %v", group.Members[0].LinodeID, 123)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientAssignPlacementGroupLinodesDoesNotRetryTransientPost(t *testing.T) {
@@ -67,11 +102,21 @@ func TestClientAssignPlacementGroupLinodesDoesNotRetryTransientPost(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups528Assign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups528Assign)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -84,31 +129,59 @@ func TestClientAssignPlacementGroupLinodesDoesNotRetryTransientPost(t *testing.T
 		linode.WithMaxDelay(time.Millisecond),
 		linode.WithJitter(false),
 	)
-	group, err := client.AssignPlacementGroupLinodes(t.Context(), 528, &linode.AssignPlacementGroupLinodesRequest{Linodes: []int{123}})
 
-	requireError(t, err, "transient POST error should be returned")
-	checkNil(t, group, "failed assignment should not return a group")
-	checkEqual(t, int32(1), requestCount.Load(), "state-changing POST must not be retried")
+	group, err := client.AssignPlacementGroupLinodes(t.Context(), 528, &linode.AssignPlacementGroupLinodesRequest{Linodes: []int{123}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if group != nil {
+		t.Errorf("group = %v, want nil", group)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientAssignPlacementGroupLinodesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups/528/assign", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups528Assign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups528Assign)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	group, err := client.AssignPlacementGroupLinodes(t.Context(), 528, &linode.AssignPlacementGroupLinodesRequest{Linodes: []int{123}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "API error should be returned")
-	checkNil(t, group, "failed assignment should not return a group")
+	if group != nil {
+		t.Errorf("group = %v, want nil", group)
+	}
 
-	apiErr := requireAPIError(t, err, "API error should be returned")
-	checkEqual(t, errForbidden, apiErr.Message, "API error reason should match")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }

@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -14,105 +17,152 @@ import (
 )
 
 // End-to-end verification of LKE cluster listing and filtering.
-func TestLinodeLKEClustersListTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClustersListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, _, handler := tools.NewLinodeLKEClusterListTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Name != "linode_lke_cluster_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_list")
+	}
 
-		clusters := []linode.LKECluster{
-			{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
-			{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEClustersListToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	clusters := []linode.LKECluster{
+		{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
+		{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    clusters,
-				keyPage:    1,
-				keyPages:   1,
-				keyResults: 2,
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    clusters,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 2,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterListTool(srvCfg)
+	}))
+	defer srv.Close()
 
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := srvHandler(t.Context(), req)
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterListTool(srvCfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	req := createRequestWithArgs(t, map[string]any{})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, labelProdCluster, "response should contain prod-cluster")
-		expectContainsWithMode(t, false, textContent.Text, "dev-cluster", "response should contain dev-cluster")
-	})
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	t.Run("filter by label", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		clusters := []linode.LKECluster{
-			{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
-			{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
-			{ID: 3, Label: "staging-prod", Region: regionUSWest, K8sVersion: lkeVersion129, Status: statusReady},
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, labelProdCluster) {
+		t.Errorf("textContent.Text does not contain %v", labelProdCluster)
+	}
+
+	if !strings.Contains(textContent.Text, "dev-cluster") {
+		t.Errorf("textContent.Text does not contain %v", "dev-cluster")
+	}
+}
+
+func TestLinodeLKEClustersListToolFilterByLabel(t *testing.T) {
+	t.Parallel()
+
+	clusters := []linode.LKECluster{
+		{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
+		{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
+		{ID: 3, Label: "staging-prod", Region: regionUSWest, K8sVersion: lkeVersion129, Status: statusReady},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    clusters,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 3,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
+	}))
+	defer srv.Close()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    clusters,
-				keyPage:    1,
-				keyPages:   1,
-				keyResults: 3,
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterListTool(srvCfg)
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterListTool(srvCfg)
+	req := createRequestWithArgs(t, map[string]any{keyLabel: canRunEnvProd})
 
-		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
-		result, err := srvHandler(t.Context(), req)
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, labelProdCluster, "response should contain prod-cluster")
-		expectContainsWithMode(t, false, textContent.Text, "staging-prod", "response should contain staging-prod")
-		expectNotContains(t, textContent.Text, "dev-cluster", "response should not contain dev-cluster")
-	})
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, labelProdCluster) {
+		t.Errorf("textContent.Text does not contain %v", labelProdCluster)
+	}
+
+	if !strings.Contains(textContent.Text, "staging-prod") {
+		t.Errorf("textContent.Text does not contain %v", "staging-prod")
+	}
+
+	if strings.Contains(textContent.Text, "dev-cluster") {
+		t.Errorf("textContent.Text should not contain %v", "dev-cluster")
+	}
 }
 
 // End-to-end verification of LKE cluster get workflow.
-func TestLinodeLKEClusterGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClusterGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -120,12 +170,30 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEClusterGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_lke_cluster_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEClusterGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEClusterGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -139,54 +207,86 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEClusterGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		cluster := linode.LKECluster{
-			ID: 123, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
+	cluster := linode.LKECluster{
+		ID: 123, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkeClusterGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkeClusterGetPath)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(cluster), "encoding response should not fail")
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if err := json.NewEncoder(w).Encode(cluster); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterGetTool(srvCfg)
+	}))
+	defer srv.Close()
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
-		result, err := srvHandler(t.Context(), req)
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterGetTool(srvCfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, labelProdCluster, "response should contain cluster label")
-		expectContainsWithMode(t, false, textContent.Text, lkeVersion129, "response should contain k8s version")
-	})
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, labelProdCluster) {
+		t.Errorf("textContent.Text does not contain %v", labelProdCluster)
+	}
+
+	if !strings.Contains(textContent.Text, lkeVersion129) {
+		t.Errorf("textContent.Text does not contain %v", lkeVersion129)
+	}
 }
 
 // TestLinodeLKEPoolsListTool verifies the LKE pools list tool
 // registers correctly, validates cluster_id, and returns pool data.
-func TestLinodeLKEPoolsListTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEPoolsListToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -194,67 +294,116 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEPoolListTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_pool_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingClusterID, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errClusterIDRequired)
-	})
+	if tool.Name != "linode_lke_pool_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_pool_list")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		pools := []linode.LKENodePool{
-			{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3},
-			{ID: 11, ClusterID: 123, Type: "g6-standard-4", Count: 2},
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEPoolsListToolCaseMissingClusterID(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEPoolListTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errClusterIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errClusterIDRequired)
+	}
+}
+
+func TestLinodeLKEPoolsListToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	pools := []linode.LKENodePool{
+		{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3},
+		{ID: 11, ClusterID: 123, Type: "g6-standard-4", Count: 2},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/pools" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/pools")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/pools", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: pools, keyPage: 1, keyPages: 1, keyResults: 2,
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: pools, keyPage: 1, keyPages: 1, keyResults: 2,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolListTool(srvCfg)
+	}))
+	defer srv.Close()
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
-		result, err := srvHandler(t.Context(), req)
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEPoolListTool(srvCfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, typeG6Standard2, "response should contain pool type")
-		expectContainsWithMode(t, false, textContent.Text, "g6-standard-4", "response should contain pool type")
-		expectContainsWithMode(t, false, textContent.Text, `"count": 2`, "response should contain pool count")
-	})
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, typeG6Standard2) {
+		t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
+	}
+
+	if !strings.Contains(textContent.Text, "g6-standard-4") {
+		t.Errorf("textContent.Text does not contain %v", "g6-standard-4")
+	}
+
+	if !strings.Contains(textContent.Text, `"count": 2`) {
+		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	}
 }
 
 // TestLinodeLKEPoolGetTool verifies the LKE pool get tool
 // registers correctly, validates required fields, and retrieves pool details.
-func TestLinodeLKEPoolGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEPoolGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -262,12 +411,30 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEPoolGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_pool_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_lke_pool_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_pool_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEPoolGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEPoolGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -281,51 +448,80 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEPoolGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3}
+	pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/pools/10", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(pool), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkePoolGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkePoolGetPath)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyPoolID: "10"})
-		result, err := srvHandler(t.Context(), req)
+		w.Header().Set("Content-Type", "application/json")
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		if err := json.NewEncoder(w).Encode(pool); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, typeG6Standard2, "response should contain pool type")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEPoolGetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyPoolID: "10"})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, typeG6Standard2) {
+		t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
+	}
 }
 
 // TestLinodeLKENodeGetTool verifies the LKE node get tool
 // registers correctly, validates required fields, and retrieves node details.
-func TestLinodeLKENodeGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKENodeGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -333,12 +529,30 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKENodeGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_node_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_lke_node_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_node_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKENodeGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKENodeGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -352,52 +566,84 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKENodeGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		node := linode.LKENode{ID: idAbc123, InstanceID: 456, Status: statusReady}
+	node := linode.LKENode{ID: idAbc123, InstanceID: 456, Status: statusReady}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/nodes/abc-123", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(node), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/nodes/abc-123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/nodes/abc-123")
 		}
-		_, _, srvHandler := tools.NewLinodeLKENodeGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyNodeID: idAbc123})
-		result, err := srvHandler(t.Context(), req)
+		w.Header().Set("Content-Type", "application/json")
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		if err := json.NewEncoder(w).Encode(node); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, idAbc123, "response should contain node ID")
-		expectContainsWithMode(t, false, textContent.Text, statusReady, "response should contain node status")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKENodeGetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyNodeID: idAbc123})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, idAbc123) {
+		t.Errorf("textContent.Text does not contain %v", idAbc123)
+	}
+
+	if !strings.Contains(textContent.Text, statusReady) {
+		t.Errorf("textContent.Text does not contain %v", statusReady)
+	}
 }
 
 // TestLinodeLKEKubeconfigGetTool verifies the LKE kubeconfig get tool
 // registers correctly, validates cluster_id, and returns kubeconfig data.
-func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEKubeconfigGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -405,55 +651,100 @@ func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEKubeconfigGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_kubeconfig_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingClusterID, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errClusterIDRequired)
-	})
+	if tool.Name != "linode_lke_kubeconfig_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_kubeconfig_get")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		kubeconfig := linode.LKEKubeconfig{
-			Kubeconfig: "YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3Rlcg==",
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEKubeconfigGetToolCaseMissingClusterID(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEKubeconfigGetTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errClusterIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errClusterIDRequired)
+	}
+}
+
+func TestLinodeLKEKubeconfigGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	kubeconfig := linode.LKEKubeconfig{
+		Kubeconfig: "YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3Rlcg==",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/kubeconfig" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/kubeconfig")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/kubeconfig", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(kubeconfig), "encoding response should not fail")
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if err := json.NewEncoder(w).Encode(kubeconfig); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEKubeconfigGetTool(srvCfg)
+	}))
+	defer srv.Close()
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
-		result, err := srvHandler(t.Context(), req)
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEKubeconfigGetTool(srvCfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3Rlcg==", "response should contain kubeconfig data")
-	})
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3Rlcg==") {
+		t.Errorf("textContent.Text does not contain %v", "YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3Rlcg==")
+	}
 }
 
 // TestLinodeLKEDashboardGetTool verifies the LKE dashboard get tool
@@ -466,9 +757,18 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		checkEqual(t, "linode_lke_dashboard_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+
+		if tool.Name != "linode_lke_dashboard_get" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_dashboard_get")
+		}
+
+		if tool.Description == "" {
+			t.Error("tool.Description is empty")
+		}
+
+		if handler == nil {
+			t.Fatal("handler is nil")
+		}
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -477,9 +777,15 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 		dashboard := linode.LKEDashboard{URL: "https://dashboard.lke.example.com"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/dashboard", r.URL.Path, "request path should match")
+			if r.URL.Path != "/lke/clusters/123/dashboard" {
+				t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/dashboard")
+			}
+
 			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(dashboard), "encoding response should not fail")
+
+			if err := json.NewEncoder(w).Encode(dashboard); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}))
 		defer srv.Close()
 
@@ -491,15 +797,28 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeLKEDashboardGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
-		result, err := srvHandler(t.Context(), req)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		result, err := srvHandler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "https://dashboard.lke.example.com", "response should contain dashboard URL")
+		if !ok {
+			t.Error("ok = false, want true")
+		}
+
+		if !strings.Contains(textContent.Text, "https://dashboard.lke.example.com") {
+			t.Errorf("textContent.Text does not contain %v", "https://dashboard.lke.example.com")
+		}
 	})
 }
 
@@ -513,9 +832,18 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		checkEqual(t, "linode_lke_api_endpoint_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+
+		if tool.Name != "linode_lke_api_endpoint_list" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_api_endpoint_list")
+		}
+
+		if tool.Description == "" {
+			t.Error("tool.Description is empty")
+		}
+
+		if handler == nil {
+			t.Fatal("handler is nil")
+		}
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -526,11 +854,17 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/api-endpoints", r.URL.Path, "request path should match")
+			if r.URL.Path != "/lke/clusters/123/api-endpoints" {
+				t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/api-endpoints")
+			}
+
 			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyData: endpoints, keyPage: 1, keyPages: 1, keyResults: 1,
-			}), "encoding response should not fail")
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}))
 		defer srv.Close()
 
@@ -542,15 +876,28 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeLKEAPIEndpointListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
-		result, err := srvHandler(t.Context(), req)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		result, err := srvHandler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "abc123.us-east.lke.example.com", "response should contain API endpoint")
+		if !ok {
+			t.Error("ok = false, want true")
+		}
+
+		if !strings.Contains(textContent.Text, "abc123.us-east.lke.example.com") {
+			t.Errorf("textContent.Text does not contain %v", "abc123.us-east.lke.example.com")
+		}
 	})
 }
 
@@ -564,9 +911,18 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		checkEqual(t, "linode_lke_acl_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+
+		if tool.Name != "linode_lke_acl_get" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_acl_get")
+		}
+
+		if tool.Description == "" {
+			t.Error("tool.Description is empty")
+		}
+
+		if handler == nil {
+			t.Fatal("handler is nil")
+		}
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -581,9 +937,15 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
+			if r.URL.Path != lkeACLGetPath {
+				t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkeACLGetPath)
+			}
+
 			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
+
+			if err := json.NewEncoder(w).Encode(acl); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}))
 		defer srv.Close()
 
@@ -595,16 +957,32 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeLKEACLGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
-		result, err := srvHandler(t.Context(), req)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		result, err := srvHandler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "10.0.0.1/32", "response should contain IPv4 address")
-		expectContainsWithMode(t, false, textContent.Text, cidrV6, "response should contain IPv6 address")
+		if !ok {
+			t.Error("ok = false, want true")
+		}
+
+		if !strings.Contains(textContent.Text, "10.0.0.1/32") {
+			t.Errorf("textContent.Text does not contain %v", "10.0.0.1/32")
+		}
+
+		if !strings.Contains(textContent.Text, cidrV6) {
+			t.Errorf("textContent.Text does not contain %v", cidrV6)
+		}
 	})
 }
 
@@ -618,9 +996,18 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		checkEqual(t, "linode_lke_version_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+
+		if tool.Name != "linode_lke_version_list" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_version_list")
+		}
+
+		if tool.Description == "" {
+			t.Error("tool.Description is empty")
+		}
+
+		if handler == nil {
+			t.Fatal("handler is nil")
+		}
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -629,11 +1016,17 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 		versions := []linode.LKEVersion{{ID: lkeVersion129}, {ID: lkeVersion128}, {ID: "1.27"}}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/versions", r.URL.Path, "request path should match")
+			if r.URL.Path != "/lke/versions" {
+				t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/versions")
+			}
+
 			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyData: versions, keyPage: 1, keyPages: 1, keyResults: 3,
-			}), "encoding response should not fail")
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}))
 		defer srv.Close()
 
@@ -645,24 +1038,38 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeLKEVersionListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
-		result, err := srvHandler(t.Context(), req)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		result, err := srvHandler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, lkeVersion129, "response should contain version 1.29")
-		expectContainsWithMode(t, false, textContent.Text, lkeVersion128, "response should contain version 1.28")
+		if !ok {
+			t.Error("ok = false, want true")
+		}
+
+		if !strings.Contains(textContent.Text, lkeVersion129) {
+			t.Errorf("textContent.Text does not contain %v", lkeVersion129)
+		}
+
+		if !strings.Contains(textContent.Text, lkeVersion128) {
+			t.Errorf("textContent.Text does not contain %v", lkeVersion128)
+		}
 	})
 }
 
 // TestLinodeLKEVersionGetTool verifies the LKE version get tool
 // registers correctly, validates the version parameter, and returns version details.
-func TestLinodeLKEVersionGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEVersionGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -670,76 +1077,140 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEVersionGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_version_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run("missing version", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "version is required")
-	})
+	if tool.Name != "linode_lke_version_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_version_get")
+	}
 
-	t.Run("invalid version path parameter", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		for _, versionCase := range []struct {
-			name  string
-			value string
-		}{
-			{name: "separator version", value: lkeVersionWithSlash},
-			{name: "query version", value: lkeVersionWithQuery},
-			{name: "traversal version", value: lkeVersionTraversal},
-		} {
-			t.Run(versionCase.name, func(t *testing.T) {
-				t.Parallel()
-				req := createRequestWithArgs(t, map[string]any{keyVersion: versionCase.value})
-				result, err := handler(t.Context(), req)
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, "version must be a Kubernetes version ID")
-			})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEVersionGetToolMissingVersion(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEVersionGetTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "version is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "version is required")
+	}
+}
+
+func TestLinodeLKEVersionGetToolInvalidVersionPathParameter(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEVersionGetTool(cfg)
+
+	t.Parallel()
+
+	for _, versionCase := range []struct {
+		name  string
+		value string
+	}{
+		{name: "separator version", value: lkeVersionWithSlash},
+		{name: "query version", value: lkeVersionWithQuery},
+		{name: "traversal version", value: lkeVersionTraversal},
+	} {
+		t.Run(versionCase.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, map[string]any{keyVersion: versionCase.value})
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "version must be a Kubernetes version ID") {
+				t.Errorf("error text %q does not contain %q", text.Text, "version must be a Kubernetes version ID")
+			}
+		})
+	}
+}
+
+func TestLinodeLKEVersionGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	version := linode.LKEVersion{ID: lkeVersion129}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/versions/1.29" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/versions/1.29")
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		w.Header().Set("Content-Type", "application/json")
 
-		version := linode.LKEVersion{ID: lkeVersion129}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/versions/1.29", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(version), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if err := json.NewEncoder(w).Encode(version); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEVersionGetTool(srvCfg)
+	}))
+	defer srv.Close()
 
-		req := createRequestWithArgs(t, map[string]any{keyVersion: lkeVersion129})
-		result, err := srvHandler(t.Context(), req)
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEVersionGetTool(srvCfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	req := createRequestWithArgs(t, map[string]any{keyVersion: lkeVersion129})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, lkeVersion129, "response should contain version")
-	})
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, lkeVersion129) {
+		t.Errorf("textContent.Text does not contain %v", lkeVersion129)
+	}
 }
 
 // TestLinodeLKETypesListTool verifies the LKE types list tool
@@ -752,9 +1223,18 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		checkEqual(t, "linode_lke_type_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+
+		if tool.Name != "linode_lke_type_list" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_type_list")
+		}
+
+		if tool.Description == "" {
+			t.Error("tool.Description is empty")
+		}
+
+		if handler == nil {
+			t.Fatal("handler is nil")
+		}
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -768,11 +1248,17 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/types", r.URL.Path, "request path should match")
+			if r.URL.Path != "/lke/types" {
+				t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/types")
+			}
+
 			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyData: types, keyPage: 1, keyPages: 1, keyResults: 1,
-			}), "encoding response should not fail")
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}))
 		defer srv.Close()
 
@@ -784,15 +1270,28 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeLKETypeListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
-		result, err := srvHandler(t.Context(), req)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		result, err := srvHandler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, typeG6Standard2, "response should contain type ID")
+		if !ok {
+			t.Error("ok = false, want true")
+		}
+
+		if !strings.Contains(textContent.Text, typeG6Standard2) {
+			t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
+		}
 	})
 }
 
@@ -803,55 +1302,89 @@ const (
 	errLKETierInvalidChoice = "tier must be 'standard' or 'enterprise'"
 )
 
-func TestLinodeLKETierVersionsListTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKETierVersionsListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, _, handler := tools.NewLinodeLKETierVersionListTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_tier_version_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyLKETier, "tier must be marked required")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Name != "linode_lke_tier_version_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_tier_version_list")
+	}
 
-		tierVersions := []linode.LKETierVersion{
-			{ID: lkeVersion129, Tier: classStandard},
-			{ID: lkeVersion128, Tier: classStandard},
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyLKETier) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyLKETier)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKETierVersionsListToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	tierVersions := []linode.LKETierVersion{
+		{ID: lkeVersion129, Tier: classStandard},
+		{ID: lkeVersion128, Tier: classStandard},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/tiers/standard/versions" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/tiers/standard/versions")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/tiers/standard/versions", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: tierVersions, keyPage: 1, keyPages: 1, keyResults: 2,
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: tierVersions, keyPage: 1, keyPages: 1, keyResults: 2,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, srvHandler := tools.NewLinodeLKETierVersionListTool(srvCfg)
+	}))
+	defer srv.Close()
 
-		req := createRequestWithArgs(t, map[string]any{keyLKETier: classStandard})
-		result, err := srvHandler(t.Context(), req)
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKETierVersionListTool(srvCfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+	req := createRequestWithArgs(t, map[string]any{keyLKETier: classStandard})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, classStandard, "response should contain standard tier")
-	})
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, classStandard) {
+		t.Errorf("textContent.Text does not contain %v", classStandard)
+	}
+}
+
+func TestLinodeLKETierVersionsListToolInvalid(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	_, _, handler := tools.NewLinodeLKETierVersionListTool(cfg)
 
 	invalidCases := []struct {
 		name string
@@ -863,25 +1396,32 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 		{name: "query tier", args: map[string]any{keyLKETier: "standard?x=1"}, want: errLKETierInvalidChoice},
 		{name: "traversal tier", args: map[string]any{keyLKETier: pathTraversalValue}, want: errLKETierInvalidChoice},
 	}
-
 	for _, testCase := range invalidCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "invalid tier should return a tool error")
-			assertErrorContains(t, result, testCase.want)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
+			}
 		})
 	}
 }
 
 // End-to-end verification of LKE cluster creation workflow.
-func TestLinodeLKEClusterCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClusterCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -889,20 +1429,55 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEClusterCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_create", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContainsWithMode(t, false, tool.Description, "WARNING", "tool description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, "label", "schema should include label")
-		expectContainsWithMode(t, false, props, "region", "schema should include region")
-		expectContainsWithMode(t, false, props, "k8s_version", "schema should include k8s_version")
-		expectContainsWithMode(t, false, props, "node_pools", "schema should include node_pools")
-		expectContainsWithMode(t, false, props, "confirm", "schema should include confirm")
-	})
+	if tool.Name != "linode_lke_cluster_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props[keySupportTicketRegion]; !ok {
+		t.Errorf("props missing key %v", keySupportTicketRegion)
+	}
+
+	if _, ok := props["k8s_version"]; !ok {
+		t.Errorf("props missing key %v", "k8s_version")
+	}
+
+	if _, ok := props["node_pools"]; !ok {
+		t.Errorf("props missing key %v", "node_pools")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeLKEClusterCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEClusterCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -934,58 +1509,93 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEClusterCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		cluster := linode.LKECluster{
-			ID: 999, Label: labelTestCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
+	cluster := linode.LKECluster{
+		ID: 999, Label: labelTestCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(cluster), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterCreateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129,
-			keyNodePools: lkePoolSnapshot, keyConfirm: true,
-		})
-		result, err := srvHandler(t.Context(), req)
+		w.Header().Set("Content-Type", "application/json")
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		if err := json.NewEncoder(w).Encode(cluster); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, labelTestCluster, "response should contain cluster label")
-		expectContainsWithMode(t, false, textContent.Text, "999", "response should contain cluster ID")
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterCreateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129,
+		keyNodePools: lkePoolSnapshot, keyConfirm: true,
 	})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, labelTestCluster) {
+		t.Errorf("textContent.Text does not contain %v", labelTestCluster)
+	}
+
+	if !strings.Contains(textContent.Text, "999") {
+		t.Errorf("textContent.Text does not contain %v", "999")
+	}
 }
 
 // TestLinodeLKEClusterUpdateTool verifies the LKE cluster update tool
 // registers correctly, validates required fields, and updates clusters.
-func TestLinodeLKEClusterUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClusterUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -993,17 +1603,43 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEClusterUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_update", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, "cluster_id", "schema should include cluster_id")
-		expectContainsWithMode(t, false, props, "label", "schema should include label")
-		expectContainsWithMode(t, false, props, "confirm", "schema should include confirm")
-	})
+	if tool.Name != "linode_lke_cluster_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_update")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["cluster_id"]; !ok {
+		t.Errorf("props missing key %v", "cluster_id")
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeLKEClusterUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEClusterUpdateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1017,54 +1653,86 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEClusterUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
 
-		cluster := linode.LKECluster{
-			ID: 123, Label: "updated-cluster", Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
+	cluster := linode.LKECluster{
+		ID: 123, Label: "updated-cluster", Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkeClusterGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkeClusterGetPath)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(cluster), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterUpdateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyLabel: "updated-cluster", keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
+		w.Header().Set("Content-Type", "application/json")
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		if err := json.NewEncoder(w).Encode(cluster); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "modified successfully", "response should confirm update")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterUpdateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyLabel: "updated-cluster", keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
 }
 
 // TestLinodeLKEClusterDeleteTool verifies the LKE cluster delete tool
 // registers correctly, validates required fields, and deletes clusters.
-func TestLinodeLKEClusterDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClusterDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1072,13 +1740,34 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContainsWithMode(t, false, tool.Description, "WARNING", "tool description should contain WARNING")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_lke_cluster_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+}
+
+func TestLinodeLKEClusterDeleteToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1092,49 +1781,78 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEClusterDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkeClusterGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkeClusterGetPath)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterDeleteTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
 }
 
 // TestLinodeLKEClusterRecycleTool verifies the LKE cluster recycle tool
 // registers correctly, validates confirm, and recycles cluster nodes.
-func TestLinodeLKEClusterRecycleTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClusterRecycleToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1142,59 +1860,102 @@ func TestLinodeLKEClusterRecycleTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEClusterRecycleTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_recycle", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_cluster_recycle" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_recycle")
+	}
 
-	t.Run("successful recycle", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/recycle", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKEClusterRecycleToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEClusterRecycleTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEClusterRecycleToolSuccessfulRecycle(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/recycle" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/recycle")
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterRecycleTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "recycle initiated successfully", "response should confirm recycle")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterRecycleTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "recycle initiated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "recycle initiated successfully")
+	}
 }
 
 // TestLinodeLKEClusterRegenerateTool verifies the LKE cluster regenerate tool
 // registers correctly, validates confirm, and regenerates cluster credentials.
-func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEClusterRegenerateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1202,58 +1963,101 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEClusterRegenerateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_cluster_regenerate", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_cluster_regenerate" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_cluster_regenerate")
+	}
 
-	t.Run("successful regenerate", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/regenerate", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKEClusterRegenerateToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEClusterRegenerateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEClusterRegenerateToolSuccessfulRegenerate(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/regenerate" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/regenerate")
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClusterRegenerateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "regenerated successfully", "response should confirm regeneration")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEClusterRegenerateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "regenerated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "regenerated successfully")
+	}
 }
 
 // End-to-end verification of LKE pool creation workflow.
-func TestLinodeLKEPoolCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEPoolCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1261,18 +2065,47 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEPoolCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_pool_create", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, "cluster_id", "schema should include cluster_id")
-		expectContainsWithMode(t, false, props, "type", "schema should include type")
-		expectContainsWithMode(t, false, props, "count", "schema should include count")
-		expectContainsWithMode(t, false, props, "confirm", "schema should include confirm")
-	})
+	if tool.Name != "linode_lke_pool_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_pool_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["cluster_id"]; !ok {
+		t.Errorf("props missing key %v", "cluster_id")
+	}
+
+	if _, ok := props["type"]; !ok {
+		t.Errorf("props missing key %v", "type")
+	}
+
+	if _, ok := props["count"]; !ok {
+		t.Errorf("props missing key %v", "count")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeLKEPoolCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEPoolCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1287,54 +2120,86 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEPoolCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		pool := linode.LKENodePool{ID: 50, ClusterID: 123, Type: typeG6Standard2, Count: 3}
+	pool := linode.LKENodePool{ID: 50, ClusterID: 123, Type: typeG6Standard2, Count: 3}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/pools", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(pool), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/pools" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/pools")
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolCreateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123), keyType: typeG6Standard2, keyCount: float64(3), keyConfirm: true,
-		})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.Header().Set("Content-Type", "application/json")
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, typeG6Standard2, "response should contain pool type")
+		if err := json.NewEncoder(w).Encode(pool); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEPoolCreateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123), keyType: typeG6Standard2, keyCount: float64(3), keyConfirm: true,
 	})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, typeG6Standard2) {
+		t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
+	}
 }
 
 // TestLinodeLKEPoolUpdateTool verifies the LKE pool update tool
 // registers correctly, validates confirm, and updates node pools.
-func TestLinodeLKEPoolUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEPoolUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1342,63 +2207,109 @@ func TestLinodeLKEPoolUpdateTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEPoolUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_pool_update", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_pool_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_pool_update")
+	}
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 5}
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/pools/10", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(pool), "encoding response should not fail")
-		}))
-		defer srv.Close()
+func TestLinodeLKEPoolUpdateToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEPoolUpdateTool(cfg)
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEPoolUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
+
+	pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 5}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkePoolGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkePoolGetPath)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolUpdateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5), keyConfirm: true,
-		})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.Header().Set("Content-Type", "application/json")
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "modified successfully", "response should confirm update")
+		if err := json.NewEncoder(w).Encode(pool); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEPoolUpdateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5), keyConfirm: true,
 	})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
 }
 
 // TestLinodeLKEPoolDeleteTool verifies the LKE pool delete tool
 // registers correctly, validates confirm, and deletes node pools.
-func TestLinodeLKEPoolDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEPoolDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1406,58 +2317,101 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_pool_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_pool_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_pool_delete")
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/pools/10", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKEPoolDeleteToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEPoolDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkePoolGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkePoolGetPath)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "deleted", "response should confirm deletion")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEPoolDeleteTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "deleted") {
+		t.Errorf("textContent.Text does not contain %v", "deleted")
+	}
 }
 
 // TestLinodeLKEPoolRecycleTool verifies the LKE pool recycle tool
 // registers correctly, validates confirm, and recycles pool nodes.
-func TestLinodeLKEPoolRecycleTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEPoolRecycleToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1465,59 +2419,102 @@ func TestLinodeLKEPoolRecycleTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEPoolRecycleTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_pool_recycle", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_pool_recycle" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_pool_recycle")
+	}
 
-	t.Run("successful recycle", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/pools/10/recycle", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKEPoolRecycleToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEPoolRecycleTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEPoolRecycleToolSuccessfulRecycle(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/pools/10/recycle" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/pools/10/recycle")
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolRecycleTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "recycle initiated successfully", "response should confirm recycle")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEPoolRecycleTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "recycle initiated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "recycle initiated successfully")
+	}
 }
 
 // TestLinodeLKENodeDeleteTool verifies the LKE node delete tool
 // registers correctly, validates required fields, and deletes nodes.
-func TestLinodeLKENodeDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKENodeDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1525,12 +2522,30 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_node_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_lke_node_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_node_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKENodeDeleteToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1544,50 +2559,82 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKENodeDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/nodes/abc-123", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/nodes/abc-123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/nodes/abc-123")
 		}
-		_, _, srvHandler := tools.NewLinodeLKENodeDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "deleted", "response should confirm deletion")
-		expectContainsWithMode(t, false, textContent.Text, idAbc123, "response should contain node ID")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKENodeDeleteTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "deleted") {
+		t.Errorf("textContent.Text does not contain %v", "deleted")
+	}
+
+	if !strings.Contains(textContent.Text, idAbc123) {
+		t.Errorf("textContent.Text does not contain %v", idAbc123)
+	}
 }
 
 // TestLinodeLKENodeRecycleTool verifies the LKE node recycle tool
 // registers correctly, validates confirm, and recycles individual nodes.
-func TestLinodeLKENodeRecycleTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKENodeRecycleToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1595,59 +2642,102 @@ func TestLinodeLKENodeRecycleTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKENodeRecycleTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_node_recycle", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_node_recycle" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_node_recycle")
+	}
 
-	t.Run("successful recycle", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/nodes/abc-123/recycle", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKENodeRecycleToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKENodeRecycleTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKENodeRecycleToolSuccessfulRecycle(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/nodes/abc-123/recycle" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/nodes/abc-123/recycle")
 		}
-		_, _, srvHandler := tools.NewLinodeLKENodeRecycleTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "recycle initiated successfully", "response should confirm recycle")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKENodeRecycleTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "recycle initiated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "recycle initiated successfully")
+	}
 }
 
 // TestLinodeLKEKubeconfigDeleteTool verifies the LKE kubeconfig delete tool
 // registers correctly, validates confirm, and regenerates the kubeconfig.
-func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEKubeconfigDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1655,58 +2745,101 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_kubeconfig_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_kubeconfig_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_kubeconfig_delete")
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/kubeconfig", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKEKubeconfigDeleteToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEKubeconfigDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/kubeconfig" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/kubeconfig")
 		}
-		_, _, srvHandler := tools.NewLinodeLKEKubeconfigDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "regenerated successfully", "response should confirm regeneration")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEKubeconfigDeleteTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "regenerated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "regenerated successfully")
+	}
 }
 
 // TestLinodeLKEServiceTokenDeleteTool verifies the LKE service token delete tool
 // registers correctly, validates confirm, and regenerates the service token.
-func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEServiceTokenDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1714,12 +2847,30 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_service_token_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_lke_service_token_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_service_token_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeLKEServiceTokenDeleteToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
 
 	confirmCases := []struct {
 		name  string
@@ -1730,7 +2881,6 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 		{name: caseStringConfirmRejected, value: boolStringTrue},
 		{name: caseNumericConfirmRejected, value: float64(1)},
 	}
-
 	for i := range confirmCases {
 		confirmCase := confirmCases[i]
 		t.Run(confirmCase.name, func(t *testing.T) {
@@ -1742,50 +2892,78 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 			}
 
 			req := createRequestWithArgs(t, args)
-			result, err := handler(t.Context(), req)
 
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
 		})
 	}
+}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeLKEServiceTokenDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/servicetoken", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lke/clusters/123/servicetoken" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/lke/clusters/123/servicetoken")
 		}
-		_, _, srvHandler := tools.NewLinodeLKEServiceTokenDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "regenerated successfully", "response should confirm regeneration")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEServiceTokenDeleteTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "regenerated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "regenerated successfully")
+	}
 }
 
 // TestLinodeLKEACLUpdateTool verifies the LKE ACL update tool
 // registers correctly, validates confirm, and updates control plane ACLs.
-func TestLinodeLKEACLUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEACLUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1793,127 +2971,183 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEACLUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_acl_update", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, "cluster_id", "schema should include cluster_id")
-		expectContainsWithMode(t, false, props, statusEnabled, "schema should include enabled")
-		expectContainsWithMode(t, false, props, keyIPv4, "schema should include ipv4")
-		expectContainsWithMode(t, false, props, "ipv6", "schema should include ipv6")
-		expectContainsWithMode(t, false, props, "confirm", "schema should include confirm")
-	})
+	if tool.Name != "linode_lke_acl_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_acl_update")
+	}
 
-	t.Run("rejects non-true confirm before client call", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		tests := []struct {
-			name    string
-			confirm any
-			include bool
-		}{
-			{name: caseMissingConfirm},
-			{name: caseFalseConfirm, confirm: false, include: true},
-			{name: caseStringConfirm, confirm: boolStringTrue, include: true},
-			{name: caseNumericConfirm, confirm: 1, include: true},
-		}
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
+	props := tool.InputSchema.Properties
+	if _, ok := props["cluster_id"]; !ok {
+		t.Errorf("props missing key %v", "cluster_id")
+	}
 
-				called := make(chan struct{}, 1)
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called <- struct{}{}
+	if _, ok := props[statusEnabled]; !ok {
+		t.Errorf("props missing key %v", statusEnabled)
+	}
 
-					w.WriteHeader(http.StatusTeapot)
-				}))
-				t.Cleanup(srv.Close)
+	if _, ok := props[keyIPv4]; !ok {
+		t.Errorf("props missing key %v", keyIPv4)
+	}
 
-				srvCfg := &config.Config{
-					Environments: map[string]config.EnvironmentConfig{
-						envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-					},
-				}
-				_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
+	if _, ok := props[tcIpv6]; !ok {
+		t.Errorf("props missing key %v", tcIpv6)
+	}
 
-				args := map[string]any{keyClusterID: float64(123), statusEnabled: true}
-				if tt.include {
-					args[keyConfirm] = tt.confirm
-				}
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
 
-				req := createRequestWithArgs(t, args)
-				result, err := srvHandler(t.Context(), req)
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
+func TestLinodeLKEACLUpdateToolRejectsNonTrueConfirmBeforeClientCall(t *testing.T) {
+	t.Parallel()
 
-				select {
-				case <-called:
-					t.Error("handler should reject confirm before client call")
-				default:
-				}
+	tests := []struct {
+		name    string
+		confirm any
+		include bool
+	}{
+		{name: caseMissingConfirm},
+		{name: caseFalseConfirm, confirm: false, include: true},
+		{name: caseStringConfirm, confirm: boolStringTrue, include: true},
+		{name: caseNumericConfirm, confirm: 1, include: true},
+	}
 
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-			})
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+			called := make(chan struct{}, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called <- struct{}{}
 
-		acl := linode.LKEControlPlaneACL{
-			Enabled: true,
-			Addresses: linode.LKEControlPlaneACLAddresses{
-				IPv4: []string{"10.0.0.1/32", "192.168.1.0/24"},
-				IPv6: []string{cidrV6},
-			},
-		}
+				w.WriteHeader(http.StatusTeapot)
+			}))
+			t.Cleanup(srv.Close)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
+			srvCfg := &config.Config{
+				Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+				},
+			}
+			_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
 
-			var got linode.UpdateLKEControlPlaneACLRequest
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
-			checkEqual(t, acl, got.ACL, "request body should match ACL payload")
+			args := map[string]any{keyClusterID: float64(123), statusEnabled: true}
+			if tt.include {
+				args[keyConfirm] = tt.confirm
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
+			req := createRequestWithArgs(t, args)
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
+			result, err := srvHandler(t.Context(), req)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123), statusEnabled: true,
-			keyIPv4: "10.0.0.1/32, 192.168.1.0/24", "ipv6": cidrV6, keyConfirm: true,
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			select {
+			case <-called:
+				t.Error("handler should reject confirm before client call")
+			default:
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
 		})
-		result, err := srvHandler(t.Context(), req)
+	}
+}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "modified successfully", "response should confirm update")
+	acl := linode.LKEControlPlaneACL{
+		Enabled: true,
+		Addresses: linode.LKEControlPlaneACLAddresses{
+			IPv4: []string{"10.0.0.1/32", "192.168.1.0/24"},
+			IPv6: []string{cidrV6},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkeACLGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkeACLGetPath)
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		var got linode.UpdateLKEControlPlaneACLRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(got.ACL, acl) {
+			t.Errorf("got.ACL = %v, want %v", got.ACL, acl)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(acl); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123), statusEnabled: true,
+		keyIPv4: "10.0.0.1/32, 192.168.1.0/24", tcIpv6: cidrV6, keyConfirm: true,
 	})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
 }
 
 // TestLinodeLKEACLDeleteTool verifies the LKE ACL delete tool
 // registers correctly, validates confirm, and deletes control plane ACLs.
-func TestLinodeLKEACLDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeLKEACLDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1921,304 +3155,454 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 	}
 	tool, _, handler := tools.NewLinodeLKEACLDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_lke_acl_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
-		result, err := handler(t.Context(), req)
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	if tool.Name != "linode_lke_acl_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_lke_acl_delete")
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+func TestLinodeLKEACLDeleteToolCaseMissingConfirm(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeLKEACLDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeLKEACLDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != lkeACLGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkeACLGetPath)
 		}
-		_, _, srvHandler := tools.NewLinodeLKEACLDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeLKEACLDeleteTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
 }
 
 // Dry-run coverage for LKE cluster delete. Sibling function keeps the
 // main test's subtest count below maintidx's threshold.
-func TestLinodeLKEClusterDeleteToolDryRun(t *testing.T) {
+func TestLinodeLKEClusterDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
 
-		tool, _, _ := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, "dry_run")
+func TestLinodeLKEClusterDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	clusterBody := `{"id":123,"label":"prod-cluster","region":"us-east","k8s_version":"1.29","status":"ready"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == lkeClusterGetPath {
+			_, _ = w.Write([]byte(clusterBody))
+
+			return
+		}
+
+		// The Tier A walk also lists node pools; an empty page keeps
+		// this subtest on the no-mutation and preview-shape contract.
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123),
+		keyDryRun:    true,
 	})
 
-	t.Run("preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		clusterBody := `{"id":123,"label":"prod-cluster","region":"us-east","k8s_version":"1.29","status":"ready"}`
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Error("isText = false, want true")
+	}
 
-			if r.Method != http.MethodGet {
-				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-				w.WriteHeader(http.StatusInternalServerError)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
+	if !reflect.DeepEqual(body["tool"], "linode_lke_cluster_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_lke_cluster_delete")
+	}
 
-			if r.URL.Path == lkeClusterGetPath {
-				_, _ = w.Write([]byte(clusterBody))
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Error("isWouldObject = false, want true")
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
 
-			// The Tier A walk also lists node pools; an empty page keeps
-			// this subtest on the no-mutation and preview-shape contract.
-			_, _ = w.Write([]byte(`{}`))
-		}))
-		defer srv.Close()
+	if !reflect.DeepEqual(would["path"], lkeClusterGetPath) {
+		t.Errorf("got %v, want %v", would["path"], lkeClusterGetPath)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
+	if len(methodsSeen) == 0 {
+		t.Error("methodsSeen is empty")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123),
-			keyDryRun:    true,
-		})
-		result, err := handler(t.Context(), req)
+	if slices.Contains(methodsSeen, http.MethodDelete) {
+		t.Errorf("methodsSeen should not contain %v", http.MethodDelete)
+	}
+}
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError)
+func TestLinodeLKEClusterDeleteToolDryRunStillValidatesClusterId(t *testing.T) {
+	t.Parallel()
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		expectTrue(t, isText)
+	_, _, handler := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 
-		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		checkEqual(t, true, body[keyDryRun])
-		checkEqual(t, "linode_lke_cluster_delete", body["tool"])
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		expectTrue(t, isWouldObject)
-		checkEqual(t, "DELETE", would["method"])
-		checkEqual(t, "/lke/clusters/123", would["path"])
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		expectNotEmpty(t, methodsSeen, "dry_run must read state")
-		expectNotContains(t, methodsSeen, http.MethodDelete,
-			"dry_run must never issue a DELETE")
-	})
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-	t.Run("still validates cluster_id", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		checkTrueWithMode(t, false, result.IsError)
-		assertErrorContains(t, result, errClusterIDRequired)
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errClusterIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errClusterIDRequired)
+	}
 }
 
 // Dry-run coverage for LKE pool delete via the ByTwoIDs helper.
-func TestLinodeLKEPoolDeleteToolDryRun(t *testing.T) {
+func TestLinodeLKEPoolDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
 
-		tool, _, _ := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, "dry_run")
+func TestLinodeLKEPoolDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	poolBody := `{"id":10,"count":3,"type":"g6-standard-2","nodes":[]}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+		if r.URL.Path != lkePoolGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, lkePoolGetPath)
+		}
+
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(poolBody))
+
+			return
+		}
+
+		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123),
+		keyPoolID:    float64(10),
+		keyDryRun:    true,
 	})
 
-	t.Run("preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		poolBody := `{"id":10,"count":3,"type":"g6-standard-2","nodes":[]}`
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			checkEqual(t, "/lke/clusters/123/pools/10", r.URL.Path)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Error("isText = false, want true")
+	}
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(poolBody))
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(body["tool"], "linode_lke_pool_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_lke_pool_delete")
+	}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
+	would, wouldOK := body["would_execute"].(map[string]any)
+	if !wouldOK {
+		t.Error("wouldOK = false, want true")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123),
-			keyPoolID:    float64(10),
-			keyDryRun:    true,
-		})
-		result, err := handler(t.Context(), req)
+	if !reflect.DeepEqual(would["path"], lkePoolGetPath) {
+		t.Errorf("got %v, want %v", would["path"], lkePoolGetPath)
+	}
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError)
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		expectTrue(t, isText)
+func TestLinodeLKEPoolDeleteToolDryRunStillValidatesClusterId(t *testing.T) {
+	t.Parallel()
 
-		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		checkEqual(t, "linode_lke_pool_delete", body["tool"])
-		would, wouldOK := body["would_execute"].(map[string]any)
-		expectTrue(t, wouldOK)
-		checkEqual(t, "DELETE", would["method"])
-		checkEqual(t, "/lke/clusters/123/pools/10", would["path"])
-
-		checkEqual(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+	_, _, handler := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{
+		keyPoolID: float64(10),
+		keyDryRun: true,
 	})
 
-	t.Run("still validates cluster_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		_, _, handler := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{
-			keyPoolID: float64(10),
-			keyDryRun: true,
-		})
-		result, err := handler(t.Context(), req)
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		expectNoError(t, err)
-		checkTrueWithMode(t, false, result.IsError)
-		assertErrorContains(t, result, errClusterIDRequired)
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errClusterIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errClusterIDRequired)
+	}
 }
 
 // Dry-run coverage for LKE node delete (mixed int + string IDs).
-func TestLinodeLKENodeDeleteToolDryRun(t *testing.T) {
+func TestLinodeLKENodeDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
 
-		tool, _, _ := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, "dry_run")
+func TestLinodeLKENodeDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	nodeBody := `{"id":"123-abc","instance_id":456,"status":"ready"}`
+	expectedPath := "/lke/clusters/123/nodes/123-abc"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+		if r.URL.Path != expectedPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, expectedPath)
+		}
+
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(nodeBody))
+
+			return
+		}
+
+		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123),
+		keyNodeID:    "123-abc",
+		keyDryRun:    true,
 	})
 
-	t.Run("preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		nodeBody := `{"id":"123-abc","instance_id":456,"status":"ready"}`
-		expectedPath := "/lke/clusters/123/nodes/123-abc"
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			checkEqual(t, expectedPath, r.URL.Path)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Error("isText = false, want true")
+	}
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(nodeBody))
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(body["tool"], "linode_lke_node_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_lke_node_delete")
+	}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
+	would, wouldOK := body["would_execute"].(map[string]any)
+	if !wouldOK {
+		t.Error("wouldOK = false, want true")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123),
-			keyNodeID:    "123-abc",
-			keyDryRun:    true,
-		})
-		result, err := handler(t.Context(), req)
+	if !reflect.DeepEqual(would["path"], expectedPath) {
+		t.Errorf("got %v, want %v", would["path"], expectedPath)
+	}
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError)
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		expectTrue(t, isText)
+func TestLinodeLKENodeDeleteToolDryRunStillValidatesNodeId(t *testing.T) {
+	t.Parallel()
 
-		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		checkEqual(t, "linode_lke_node_delete", body["tool"])
-		would, wouldOK := body["would_execute"].(map[string]any)
-		expectTrue(t, wouldOK)
-		checkEqual(t, "DELETE", would["method"])
-		checkEqual(t, expectedPath, would["path"])
-
-		checkEqual(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+	_, _, handler := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123),
+		keyDryRun:    true,
 	})
 
-	t.Run("still validates node_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		_, _, handler := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{
-			keyClusterID: float64(123),
-			keyDryRun:    true,
-		})
-		result, err := handler(t.Context(), req)
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		expectNoError(t, err)
-		checkTrueWithMode(t, false, result.IsError)
-		assertErrorContains(t, result, "node_id is required")
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "node_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "node_id is required")
+	}
 }
 
 // Dry-run coverage for LKE kubeconfig delete. The fetch returns the
@@ -2231,7 +3615,9 @@ func TestLinodeLKEKubeconfigDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEKubeconfigDeleteTool(&config.Config{})
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, "dry_run")
+		if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+		}
 	})
 
 	t.Run("preview fetches cluster, never kubeconfig", func(t *testing.T) {
@@ -2244,7 +3630,7 @@ func TestLinodeLKEKubeconfigDeleteToolDryRun(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			pathsSeen = append(pathsSeen, r.Method+" "+r.URL.Path)
 
-			if r.Method == http.MethodGet && r.URL.Path == "/lke/clusters/123" {
+			if r.Method == http.MethodGet && r.URL.Path == lkeClusterGetPath {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(clusterBody))
 
@@ -2265,31 +3651,59 @@ func TestLinodeLKEKubeconfigDeleteToolDryRun(t *testing.T) {
 			keyClusterID: float64(123),
 			keyDryRun:    true,
 		})
-		result, err := handler(t.Context(), req)
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError)
+		result, err := handler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		expectTrue(t, isText)
+		if !isText {
+			t.Error("isText = false, want true")
+		}
 
 		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		checkEqual(t, "linode_lke_kubeconfig_delete", body["tool"])
-		would, wouldOK := body["would_execute"].(map[string]any)
-		expectTrue(t, wouldOK)
-		checkEqual(t, "DELETE", would["method"])
-		checkEqual(t, "/lke/clusters/123/kubeconfig", would["path"],
-			"would_execute.path must point at kubeconfig sub-resource")
+		if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		checkEqual(t, []string{"GET /lke/clusters/123"}, pathsSeen,
-			"dry_run must only fetch cluster metadata, never the kubeconfig itself")
+		if !reflect.DeepEqual(body["tool"], "linode_lke_kubeconfig_delete") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_lke_kubeconfig_delete")
+		}
+
+		would, wouldOK := body["would_execute"].(map[string]any)
+		if !wouldOK {
+			t.Error("wouldOK = false, want true")
+		}
+
+		if !reflect.DeepEqual(would["method"], "DELETE") {
+			t.Errorf("got %v, want %v", would["method"], "DELETE")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/lke/clusters/123/kubeconfig") {
+			t.Errorf("got %v, want %v", would["path"], "/lke/clusters/123/kubeconfig")
+		}
+
+		if !reflect.DeepEqual(pathsSeen, []string{tcGETLkeClusters123}) {
+			t.Errorf("pathsSeen = %v, want %v", pathsSeen, []string{tcGETLkeClusters123})
+		}
 
 		state, stateOK := body["current_state"].(map[string]any)
-		expectTrue(t, stateOK)
-		expectNotContains(t, state, "kubeconfig",
-			"current_state must NOT include kubeconfig credential material")
+		if !stateOK {
+			t.Error("stateOK = false, want true")
+		}
+
+		if _, ok := state["kubeconfig"]; ok {
+			t.Errorf("state has unexpected key %v", "kubeconfig")
+		}
 	})
 }
 
@@ -2302,7 +3716,9 @@ func TestLinodeLKEServiceTokenDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEServiceTokenDeleteTool(&config.Config{})
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, "dry_run")
+		if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+		}
 	})
 
 	t.Run("preview fetches cluster, never service token", func(t *testing.T) {
@@ -2315,7 +3731,7 @@ func TestLinodeLKEServiceTokenDeleteToolDryRun(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			pathsSeen = append(pathsSeen, r.Method+" "+r.URL.Path)
 
-			if r.Method == http.MethodGet && r.URL.Path == "/lke/clusters/123" {
+			if r.Method == http.MethodGet && r.URL.Path == lkeClusterGetPath {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(clusterBody))
 
@@ -2336,23 +3752,45 @@ func TestLinodeLKEServiceTokenDeleteToolDryRun(t *testing.T) {
 			keyClusterID: float64(123),
 			keyDryRun:    true,
 		})
-		result, err := handler(t.Context(), req)
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError)
+		result, err := handler(t.Context(), req)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
 
 		textContent, isText := result.Content[0].(mcp.TextContent)
-		expectTrue(t, isText)
+		if !isText {
+			t.Error("isText = false, want true")
+		}
 
 		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		checkEqual(t, "linode_lke_service_token_delete", body["tool"])
-		would, wouldOK := body["would_execute"].(map[string]any)
-		expectTrue(t, wouldOK)
-		checkEqual(t, "/lke/clusters/123/servicetoken", would["path"])
+		if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		checkEqual(t, []string{"GET /lke/clusters/123"}, pathsSeen,
-			"dry_run must only fetch cluster metadata, never the service token itself")
+		if !reflect.DeepEqual(body["tool"], "linode_lke_service_token_delete") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_lke_service_token_delete")
+		}
+
+		would, wouldOK := body["would_execute"].(map[string]any)
+		if !wouldOK {
+			t.Error("wouldOK = false, want true")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/lke/clusters/123/servicetoken") {
+			t.Errorf("got %v, want %v", would["path"], "/lke/clusters/123/servicetoken")
+		}
+
+		if !reflect.DeepEqual(pathsSeen, []string{tcGETLkeClusters123}) {
+			t.Errorf("pathsSeen = %v, want %v", pathsSeen, []string{tcGETLkeClusters123})
+		}
 	})
 }

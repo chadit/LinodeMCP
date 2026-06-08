@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -27,128 +27,207 @@ const (
 	managedServiceOversizedID    = 9007199254740992.0
 )
 
-func TestLinodeManagedServiceGetTool(t *testing.T) {
+func TestLinodeManagedServiceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeManagedServiceGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeManagedServiceGetTool(cfg)
+	if tool.Name != managedServiceGetToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, managedServiceGetToolName)
+	}
 
-		assert.Equal(t, managedServiceGetToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "managed service lookup should be CapRead")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyManagedServiceID, "schema should include service_id")
-		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyManagedServiceID, "service_id must be marked required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("invalid service id rejected before client call", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		cases := []struct {
-			name string
-			args map[string]any
-		}{
-			{name: caseMissingServiceID, args: map[string]any{}},
-			{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0}},
-			{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1}},
-			{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944"}},
-			{name: caseFractionalServiceID, args: map[string]any{keyManagedServiceID: 9944.5}},
-			{name: caseOversizedServiceID, args: map[string]any{keyManagedServiceID: managedServiceOversizedID}},
-			{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID}},
-			{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID}},
-			{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue}},
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyManagedServiceID]; !ok {
+		t.Errorf("props missing key %v", keyManagedServiceID)
+	}
+
+	if _, ok := props[keyConfirm]; ok {
+		t.Errorf("props has unexpected key %v", keyConfirm)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyManagedServiceID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyManagedServiceID)
+	}
+}
+
+func TestLinodeManagedServiceGetToolInvalidServiceIdRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: caseMissingServiceID, args: map[string]any{}},
+		{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0}},
+		{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1}},
+		{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944"}},
+		{name: caseFractionalServiceID, args: map[string]any{keyManagedServiceID: 9944.5}},
+		{name: caseOversizedServiceID, args: map[string]any{keyManagedServiceID: managedServiceOversizedID}},
+		{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID}},
+		{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID}},
+		{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "service_id") {
+				t.Errorf("error text %q does not contain %q", text.Text, "service_id")
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedServiceGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid request should be a tool error")
-				assertErrorContains(t, result, "service_id")
-				assert.Equal(t, int32(0), calls, "request validation must fail before client call")
-			})
+		if r.URL.Path != managedServiceToolPathValue {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedServiceToolPathValue)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, managedServiceToolPathValue, r.URL.Path, "request path should include service ID")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
-				ID:          managedServiceToolIDValue,
-				Label:       managedServiceToolLabelValue,
-				ServiceType: managedServiceTypeURL,
-				Status:      "ok",
-				Address:     managedServiceToolAddress,
-				Timeout:     30,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+		w.Header().Set("Content-Type", "application/json")
 
-		_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+		if err := json.NewEncoder(w).Encode(linode.ManagedService{
+			ID:          managedServiceToolIDValue,
+			Label:       managedServiceToolLabelValue,
+			ServiceType: managedServiceTypeURL,
+			Status:      "ok",
+			Address:     managedServiceToolAddress,
+			Timeout:     30,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue}))
+	_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, managedServiceToolLabelValue, "response should include label")
-		assert.Contains(t, textContent.Text, managedServiceToolAddress, "response should include address")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, managedServiceToolPathValue, r.URL.Path, "request path should include service ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errForbidden}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+	if !strings.Contains(textContent.Text, managedServiceToolLabelValue) {
+		t.Errorf("textContent.Text does not contain %v", managedServiceToolLabelValue)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue}))
+	if !strings.Contains(textContent.Text, managedServiceToolAddress) {
+		t.Errorf("textContent.Text does not contain %v", managedServiceToolAddress)
+	}
+}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to retrieve linode_managed_service_get")
-		assertErrorContains(t, result, errForbidden)
-	})
+func TestLinodeManagedServiceGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedServiceToolPathValue {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedServiceToolPathValue)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_service_get") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_service_get")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func managedServiceConfig(apiURL string) *config.Config {

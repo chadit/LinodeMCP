@@ -50,8 +50,11 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 	}
 
 	srv := newCapabilityTestServer(t)
+
 	infos := srv.AllToolInfos()
-	requireNotEmpty(t, infos, "server must register at least one tool")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	redactionSet := audit.RedactionFieldSet()
 
@@ -66,14 +69,9 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 			}
 
 			_, redacted := redactionSet[argName]
-			assertTruef(
-				t, redacted,
-				"tool %q declares arg %q which looks sensitive (matches one of %v) "+
-					"but is not in the audit redaction list; add it to "+
-					"RedactionFields() in both Go and Python, or allowlist it in "+
-					"knownSafe with a justification",
-				info.Name, argName, sensitiveSubstrings,
-			)
+			if !redacted {
+				t.Error("redacted = false, want true")
+			}
 		}
 	}
 }
@@ -129,8 +127,11 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 	}
 
 	srv := newCapabilityTestServer(t)
+
 	infos := srv.AllToolInfos()
-	requireNotEmpty(t, infos, "server must register at least one tool")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	piiSet := audit.RedactionFieldSetPII()
 	credSet := audit.RedactionFieldSet()
@@ -146,15 +147,11 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 			}
 
 			_, inPII := piiSet[argName]
+
 			_, inCred := credSet[argName]
-			assertTruef(
-				t, inPII || inCred,
-				"tool %q declares arg %q which looks like PII (matches one of %v) "+
-					"but is not in the PII redaction list; add it to "+
-					"RedactionFieldsPII() in both Go and Python, or allowlist it "+
-					"in knownSafePII with a justification",
-				info.Name, argName, piiSubstrings,
-			)
+			if !inPII && !inCred {
+				t.Error("expected condition to be true")
+			}
 		}
 	}
 }

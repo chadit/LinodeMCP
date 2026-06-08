@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -14,234 +17,381 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeFirewallSettingsListTool(t *testing.T) {
+func TestLinodeFirewallSettingsListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeFirewallSettingsListTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeFirewallSettingsListTool(&config.Config{})
+	if tool.Name != "linode_firewall_settings_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_settings_list")
+	}
 
-		expectEqual(t, "linode_firewall_settings_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, "page", "schema should include page property")
-		expectContains(t, tool.InputSchema.Properties, "page_size", "schema should include page_size property")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		settings := linode.FirewallSettings{DefaultFirewallIDs: linode.FirewallDefaultIDs{
-			Linode: 100, NodeBalancer: 101, PublicInterface: 200, VPCInterface: 201,
-		}}
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/settings", r.URL.Path, "request path should match")
-			checkEqual(t, "2", r.URL.Query().Get("page"), "page query should match")
-			checkEqual(t, "50", r.URL.Query().Get("page_size"), "page_size query should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(settings))
-		}))
-		defer srv.Close()
+	if _, ok := tool.InputSchema.Properties["page"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "page")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallSettingsListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{"page": float64(2), "page_size": float64(50)})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, keyDefaultFirewallIDs, "response should include default firewall IDs")
-		expectContains(t, textContent.Text, "nodebalancer", "response should include nodebalancer default")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/settings", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallSettingsListTool(cfg)
-
-		result, err := handler(t.Context(), mcp.CallToolRequest{})
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve linode_firewall_settings_list")
-	})
+	if _, ok := tool.InputSchema.Properties["page_size"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "page_size")
+	}
 }
 
-func TestLinodeFirewallSettingsUpdateTool(t *testing.T) {
+func TestLinodeFirewallSettingsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	settings := linode.FirewallSettings{DefaultFirewallIDs: linode.FirewallDefaultIDs{
+		Linode: 100, NodeBalancer: 101, PublicInterface: 200, VPCInterface: 201,
+	}}
 
-		tool, capability, handler := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		expectEqual(t, "linode_firewall_settings_update", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapAdmin, capability, "tool should require admin capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyDefaultFirewallIDs, "schema should include default_firewall_ids property")
-		expectContains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContains(t, tool.InputSchema.Required, keyDefaultFirewallIDs, "default_firewall_ids must be marked required")
-		expectContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+		if r.URL.Path != tcNetworkingFirewallsSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewallsSettings)
+		}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.Query().Get("page") != "2" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("page"), "2")
+		}
 
-		settings := linode.FirewallSettings{DefaultFirewallIDs: linode.FirewallDefaultIDs{
-			Linode: 100, NodeBalancer: 101, PublicInterface: 102, VPCInterface: 103,
-		}}
+		if r.URL.Query().Get("page_size") != "50" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("page_size"), "50")
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/networking/firewalls/settings", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
 
-			var body map[string]map[string]int
-			if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallSettingsListTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"page": float64(2), "page_size": float64(50)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, keyDefaultFirewallIDs) {
+		t.Errorf("textContent.Text does not contain %v", keyDefaultFirewallIDs)
+	}
+
+	if !strings.Contains(textContent.Text, fwDeviceTypeNodeBalancer) {
+		t.Errorf("textContent.Text does not contain %v", fwDeviceTypeNodeBalancer)
+	}
+}
+
+func TestLinodeFirewallSettingsListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNetworkingFirewallsSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewallsSettings)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallSettingsListTool(cfg)
+
+	result, err := handler(t.Context(), mcp.CallToolRequest{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_settings_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_settings_list")
+	}
+}
+
+func TestLinodeFirewallSettingsUpdateToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
+
+	if tool.Name != "linode_firewall_settings_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_settings_update")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyDefaultFirewallIDs, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyDefaultFirewallIDs, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeFirewallSettingsUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	settings := linode.FirewallSettings{DefaultFirewallIDs: linode.FirewallDefaultIDs{
+		Linode: 100, NodeBalancer: 101, PublicInterface: 102, VPCInterface: 103,
+	}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcNetworkingFirewallsSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewallsSettings)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		var body map[string]map[string]int
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body[keyDefaultFirewallIDs], map[string]int{keyDefaultFirewallLinode: 100, fwDeviceTypeNodeBalancer: 101, tcPublicInterface: 102, tcVPCInterface: 103}) {
+			t.Errorf("body[keyDefaultFirewallIDs] = %v, want %v", body[keyDefaultFirewallIDs], map[string]int{keyDefaultFirewallLinode: 100, fwDeviceTypeNodeBalancer: 101, tcPublicInterface: 102, tcVPCInterface: 103})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyDefaultFirewallIDs: map[string]any{keyDefaultFirewallLinode: float64(100), fwDeviceTypeNodeBalancer: float64(101), tcPublicInterface: float64(102), tcVPCInterface: float64(103)},
+		keyConfirm:            true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Default firewall settings updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Default firewall settings updated successfully")
+	}
+
+	if !strings.Contains(textContent.Text, keyDefaultFirewallIDs) {
+		t.Errorf("textContent.Text does not contain %v", keyDefaultFirewallIDs)
+	}
+}
+
+func TestLinodeFirewallSettingsUpdateToolConfirmRequired(t *testing.T) {
+	t.Parallel()
+
+	for _, confirm := range []any{nil, false, boolStringTrue, float64(1)} {
+		t.Run("reject", func(t *testing.T) {
+			t.Parallel()
+
+			_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
+
+			args := map[string]any{keyDefaultFirewallIDs: map[string]any{keyDefaultFirewallLinode: float64(100)}}
+			if confirm != nil {
+				args[keyConfirm] = confirm
 			}
 
-			checkEqual(t, map[string]int{keyDefaultFirewallLinode: 100, "nodebalancer": 101, "public_interface": 102, "vpc_interface": 103}, body[keyDefaultFirewallIDs])
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(settings))
-		}))
-		defer srv.Close()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(cfg)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyDefaultFirewallIDs: map[string]any{keyDefaultFirewallLinode: float64(100), "nodebalancer": float64(101), "public_interface": float64(102), "vpc_interface": float64(103)},
-			keyConfirm:            true,
-		}))
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
+		})
+	}
+}
 
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
+func TestLinodeFirewallSettingsUpdateToolInvalidDefaultFirewallIDs(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, "Default firewall settings updated successfully", "response should include success message")
-		expectContains(t, textContent.Text, keyDefaultFirewallIDs, "response should include default firewall IDs")
-	})
+	cases := []struct {
+		name string
+		ids  any
+		want string
+	}{
+		{name: caseMissing, ids: nil, want: "default_firewall_ids is required"},
+		{name: "empty", ids: map[string]any{}, want: "non-empty object"},
+		{name: "unsupported key", ids: map[string]any{keyDefaultFirewallLinode: float64(100), "bad": float64(101)}, want: "unsupported key"},
+		{name: caseZero, ids: map[string]any{keyDefaultFirewallLinode: float64(0)}, want: errPositiveInteger},
+		{name: caseNegative, ids: map[string]any{keyDefaultFirewallLinode: float64(-1)}, want: errPositiveInteger},
+		{name: "fractional", ids: map[string]any{keyDefaultFirewallLinode: float64(1.5)}, want: errPositiveInteger},
+		{name: caseString, ids: map[string]any{keyDefaultFirewallLinode: "100"}, want: errPositiveInteger},
+	}
 
-	t.Run("confirm required", func(t *testing.T) {
-		t.Parallel()
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-		for _, confirm := range []any{nil, false, boolStringTrue, float64(1)} {
-			t.Run("reject", func(t *testing.T) {
-				t.Parallel()
+			_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
 
-				_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
+			args := map[string]any{keyConfirm: true}
+			if testCase.ids != nil {
+				args[keyDefaultFirewallIDs] = testCase.ids
+			}
 
-				args := map[string]any{keyDefaultFirewallIDs: map[string]any{keyDefaultFirewallLinode: float64(100)}}
-				if confirm != nil {
-					args[keyConfirm] = confirm
-				}
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, "confirm=true")
-			})
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallSettingsUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
-	})
 
-	t.Run("invalid default firewall IDs", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			ids  any
-			want string
-		}{
-			{name: caseMissing, ids: nil, want: "default_firewall_ids is required"},
-			{name: "empty", ids: map[string]any{}, want: "non-empty object"},
-			{name: "unsupported key", ids: map[string]any{keyDefaultFirewallLinode: float64(100), "bad": float64(101)}, want: "unsupported key"},
-			{name: caseZero, ids: map[string]any{keyDefaultFirewallLinode: float64(0)}, want: errPositiveInteger},
-			{name: caseNegative, ids: map[string]any{keyDefaultFirewallLinode: float64(-1)}, want: errPositiveInteger},
-			{name: "fractional", ids: map[string]any{keyDefaultFirewallLinode: float64(1.5)}, want: errPositiveInteger},
-			{name: caseString, ids: map[string]any{keyDefaultFirewallLinode: "100"}, want: errPositiveInteger},
+		if r.URL.Path != tcNetworkingFirewallsSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewallsSettings)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
 
-				_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
-
-				args := map[string]any{keyConfirm: true}
-				if testCase.ids != nil {
-					args[keyDefaultFirewallIDs] = testCase.ids
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, testCase.want)
-			})
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
-	})
+	}))
+	defer srv.Close()
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(cfg)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/networking/firewalls/settings", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		defer srv.Close()
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyDefaultFirewallIDs: map[string]any{keyDefaultFirewallLinode: float64(100)},
+		keyConfirm:            true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallSettingsUpdateTool(cfg)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyDefaultFirewallIDs: map[string]any{keyDefaultFirewallLinode: float64(100)},
-			keyConfirm:            true,
-		}))
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update linode_firewall_settings_update")
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_firewall_settings_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_firewall_settings_update")
+	}
 }

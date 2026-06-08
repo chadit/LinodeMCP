@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -21,63 +22,123 @@ func TestClientGetTypeSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, linodeTypeEscapedPath, r.URL.EscapedPath(), "request path should include type id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeID, Label: "Linode 4GB"}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != linodeTypeEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), linodeTypeEscapedPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeID, Label: "Linode 4GB"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetType(t.Context(), linodeTypeID)
 
-	requireNoError(t, err)
-	requireNotNil(t, got)
-	checkEqual(t, linodeTypeID, got.ID)
-	checkEqual(t, "Linode 4GB", got.Label)
+	got, err := client.GetType(t.Context(), linodeTypeID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != linodeTypeID {
+		t.Errorf("got.ID = %v, want %v", got.ID, linodeTypeID)
+	}
+
+	if got.Label != "Linode 4GB" {
+		t.Errorf("got.Label = %v, want %v", got.Label, "Linode 4GB")
+	}
 }
 
 func TestClientGetTypeEscapesPathSeparators(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, linodeTypeEscapedSeparatorPath, r.URL.EscapedPath(), "request path should escape type id")
-		checkEmpty(t, r.URL.RawQuery, "encoded query separator should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeIDWithSeparators}))
+		if r.URL.EscapedPath() != linodeTypeEscapedSeparatorPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), linodeTypeEscapedSeparatorPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeIDWithSeparators}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetType(t.Context(), linodeTypeIDWithSeparators)
 
-	requireNoError(t, err)
-	requireNotNil(t, got)
-	checkEqual(t, linodeTypeIDWithSeparators, got.ID)
+	got, err := client.GetType(t.Context(), linodeTypeIDWithSeparators)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != linodeTypeIDWithSeparators {
+		t.Errorf("got.ID = %v, want %v", got.ID, linodeTypeIDWithSeparators)
+	}
 }
 
 func TestClientGetTypeAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, linodeTypeEscapedPath, r.URL.EscapedPath(), "request path should include type id")
+		if r.URL.EscapedPath() != linodeTypeEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), linodeTypeEscapedPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.GetType(t.Context(), linodeTypeID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err)
-	checkNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := requireAPIError(t, err)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetTypeRetriesTransientRead(t *testing.T) {
@@ -87,26 +148,43 @@ func TestClientGetTypeRetriesTransientRead(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, linodeTypeEscapedPath, r.URL.EscapedPath(), "request path should include type id")
+
+		if r.URL.EscapedPath() != linodeTypeEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), linodeTypeEscapedPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeID}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeID}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetType(t.Context(), linodeTypeID)
 
-	requireNoError(t, err)
-	requireNotNil(t, got)
-	checkEqual(t, int32(2), attempts.Load(), "read-only GET route may retry transient failures")
+	got, err := client.GetType(t.Context(), linodeTypeID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }

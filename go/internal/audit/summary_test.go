@@ -1,7 +1,9 @@
 package audit_test
 
 import (
+	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,8 +16,13 @@ func TestValidateGroupByDefaultsToToolStatus(t *testing.T) {
 	t.Parallel()
 
 	got, err := audit.ValidateGroupBy(nil)
-	mustNoError(t, err)
-	checkEqual(t, []string{colTool, colStatus}, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got, []string{colTool, colStatus}) {
+		t.Errorf("got = %v, want %v", got, []string{colTool, colStatus})
+	}
 }
 
 // TestValidateGroupByAcceptsAllowed verifies allowlisted columns pass
@@ -23,9 +30,14 @@ func TestValidateGroupByDefaultsToToolStatus(t *testing.T) {
 func TestValidateGroupByAcceptsAllowed(t *testing.T) {
 	t.Parallel()
 
-	got, err := audit.ValidateGroupBy([]string{"capability", "profile", "environment"})
-	mustNoError(t, err)
-	checkEqual(t, []string{"capability", "profile", "environment"}, got)
+	got, err := audit.ValidateGroupBy([]string{tcCapability, tcProfile, tcEnvironment})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got, []string{tcCapability, tcProfile, tcEnvironment}) {
+		t.Errorf("got = %v, want %v", got, []string{tcCapability, tcProfile, tcEnvironment})
+	}
 }
 
 // TestValidateGroupByRejectsUnknown verifies an unknown column is a
@@ -34,8 +46,9 @@ func TestValidateGroupByRejectsUnknown(t *testing.T) {
 	t.Parallel()
 
 	_, err := audit.ValidateGroupBy([]string{colTool, "bogus"})
-	mustError(t, err)
-	checkErrorIs(t, err, audit.ErrUnknownGroupByColumn)
+	if !errors.Is(err, audit.ErrUnknownGroupByColumn) {
+		t.Errorf("error = %v, want %v", err, audit.ErrUnknownGroupByColumn)
+	}
 }
 
 // TestSummarizeCountsByGroup verifies bucketing and count-descending
@@ -51,12 +64,29 @@ func TestSummarizeCountsByGroup(t *testing.T) {
 
 	rows := audit.Summarize(events, []string{colTool, colStatus})
 
-	mustLen(t, rows, 2, "two distinct tool+status buckets")
-	checkEqual(t, "linode_instance_list", rows[0].Groups[colTool], "highest count sorts first")
-	checkEqual(t, "success", rows[0].Groups[colStatus])
-	checkEqual(t, 2, rows[0].Count)
-	checkEqual(t, "linode_instance_delete", rows[1].Groups[colTool])
-	checkEqual(t, 1, rows[1].Count)
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want %d", len(rows), 2)
+	}
+
+	if rows[0].Groups[colTool] != tcLinodeInstanceList {
+		t.Errorf("rows[0].Groups[colTool] = %v, want %v", rows[0].Groups[colTool], tcLinodeInstanceList)
+	}
+
+	if rows[0].Groups[colStatus] != "success" {
+		t.Errorf("rows[0].Groups[colStatus] = %v, want %v", rows[0].Groups[colStatus], "success")
+	}
+
+	if rows[0].Count != 2 {
+		t.Errorf("rows[0].Count = %v, want %v", rows[0].Count, 2)
+	}
+
+	if rows[1].Groups[colTool] != tcLinodeInstanceDelete {
+		t.Errorf("rows[1].Groups[colTool] = %v, want %v", rows[1].Groups[colTool], tcLinodeInstanceDelete)
+	}
+
+	if rows[1].Count != 1 {
+		t.Errorf("rows[1].Count = %v, want %v", rows[1].Count, 1)
+	}
 }
 
 // TestLoadWindowJSONLAndSQLiteAgree verifies both sources return the
@@ -76,28 +106,46 @@ func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 	writeJSONLFile(t, filepath.Join(jsonlDir, "audit.log"), false, events)
 
 	jsonlEvents, err := audit.LoadWindow(t.Context(), "", jsonlDir, time.Time{}, true)
-	mustNoError(t, err)
-	checkLen(t, jsonlEvents, 3, "JSONL returns all three events with include_meta")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(jsonlEvents) != 3 {
+		t.Errorf("len(jsonlEvents) = %d, want %d", len(jsonlEvents), 3)
+	}
 
 	// SQLite source.
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
+
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)
-	mustNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for idx := range events {
 		sink.Write(t.Context(), &events[idx])
 	}
 
-	mustNoError(t, sink.Close())
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	sqliteEvents, err := audit.LoadWindow(t.Context(), dbPath, "", time.Time{}, true)
-	mustNoError(t, err)
-	checkLen(t, sqliteEvents, 3, "SQLite returns all three events with include_meta")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(sqliteEvents) != 3 {
+		t.Errorf("len(sqliteEvents) = %d, want %d", len(sqliteEvents), 3)
+	}
 
 	// Both produce the same summary.
 	jsonlRows := audit.Summarize(jsonlEvents, []string{colTool})
+
 	sqliteRows := audit.Summarize(sqliteEvents, []string{colTool})
-	checkEqual(t, jsonlRows, sqliteRows, "both sources summarize identically")
+	if !reflect.DeepEqual(sqliteRows, jsonlRows) {
+		t.Errorf("sqliteRows = %v, want %v", sqliteRows, jsonlRows)
+	}
 }
 
 // TestLoadWindowExcludesMetaByDefault verifies include_meta=false
@@ -114,9 +162,17 @@ func TestLoadWindowExcludesMetaByDefault(t *testing.T) {
 	writeJSONLFile(t, filepath.Join(jsonlDir, "audit.log"), false, events)
 
 	got, err := audit.LoadWindow(t.Context(), "", jsonlDir, time.Time{}, false)
-	mustNoError(t, err)
-	mustLen(t, got, 1, "meta event excluded when include_meta is false")
-	checkEqual(t, "linode_instance_list", got[0].Tool)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].Tool != tcLinodeInstanceList {
+		t.Errorf("got[0].Tool = %v, want %v", got[0].Tool, tcLinodeInstanceList)
+	}
 }
 
 // TestLoadWindowMissingDirReturnsEmpty verifies querying before any
@@ -127,6 +183,11 @@ func TestLoadWindowMissingDirReturnsEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-audit-yet")
 
 	got, err := audit.LoadWindow(t.Context(), "", missing, time.Time{}, true)
-	mustNoError(t, err)
-	checkEmpty(t, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Errorf("got = %v, want empty", got)
+	}
 }

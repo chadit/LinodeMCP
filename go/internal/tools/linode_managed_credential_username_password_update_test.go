@@ -5,12 +5,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -26,208 +26,334 @@ const (
 	managedCredentialUsernamePasswordToolUsername = "johndoe"
 )
 
-func TestLinodeManagedCredentialUsernamePasswordUpdateTool(t *testing.T) {
+func TestLinodeManagedCredentialUsernamePasswordUpdateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+	if tool.Name != "linode_managed_credential_username_password_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_credential_username_password_update")
+	}
 
-		assert.Equal(t, "linode_managed_credential_username_password_update", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "credential username/password update should be admin capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Properties, managedCredentialIDParam, "schema should include credential_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyDiskPassword, "schema should include password")
-	})
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-	t.Run("confirm required before client call", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissing, set: false},
-			{name: caseConfirmFalse, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyConfirm, managedCredentialIDParam, keyDiskPassword} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+}
+
+func TestLinodeManagedCredentialUsernamePasswordUpdateToolConfirmRequiredBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissing, set: false},
+		{name: caseConfirmFalse, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+
+			args := map[string]any{managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedCredentialUsernamePasswordUpdateToolRequiredArgumentsRejectBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: caseMissingCredentialID, args: map[string]any{keyConfirm: true, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+		{name: caseZeroCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: 0, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+		{name: "slash credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991/2", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+		{name: "query credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991?x=1", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+		{name: caseTraversalCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: pathTraversalValue, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+		{name: "missing username password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991}, wantMessage: managedCredentialsToolPasswordReq},
+		{name: "blank username password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: blankString}, wantMessage: managedCredentialsToolPasswordReq},
+		{name: "numeric password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: 12}, wantMessage: "password must be a string"},
+		{name: "numeric username", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword, keyUsername: 12}, wantMessage: "username must be a string"},
+		{name: "blank username", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword, keyUsername: blankString}, wantMessage: "username must be a non-empty string"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedCredentialUsernamePasswordUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
-
-				args := map[string]any{managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				assert.Equal(t, int32(0), calls.Load(), "confirm failure must happen before client call")
-			})
-		}
-	})
-
-	t.Run("required arguments reject before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: caseMissingCredentialID, args: map[string]any{keyConfirm: true, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
-			{name: caseZeroCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: 0, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
-			{name: "slash credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991/2", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
-			{name: "query credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991?x=1", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
-			{name: caseTraversalCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: pathTraversalValue, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
-			{name: "missing username password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991}, wantMessage: managedCredentialsToolPasswordReq},
-			{name: "blank username password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: blankString}, wantMessage: managedCredentialsToolPasswordReq},
-			{name: "numeric password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: 12}, wantMessage: "password must be a string"},
-			{name: "numeric username", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword, keyUsername: 12}, wantMessage: "username must be a string"},
-			{name: "blank username", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword, keyUsername: blankString}, wantMessage: "username must be a non-empty string"},
+		if r.URL.Path != managedCredentialUsernamePasswordToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialUsernamePasswordToolPath)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid input should be an error result")
-				assertErrorContains(t, result, testCase.wantMessage)
-				assert.Equal(t, int32(0), calls.Load(), "validation failure must happen before client call")
-			})
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, managedCredentialUsernamePasswordToolPath, r.URL.Path, "request path should update managed credential username and password")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-			body, err := io.ReadAll(r.Body)
-			assert.NoError(t, err)
+		var got map[string]any
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-			var got map[string]any
-			assert.NoError(t, json.Unmarshal(body, &got))
-			assert.Equal(t, managedCredentialUsernamePasswordToolPassword, got[keyDiskPassword])
-			assert.Equal(t, managedCredentialUsernamePasswordToolUsername, got[keyUsername])
+		if !reflect.DeepEqual(got[keyDiskPassword], managedCredentialUsernamePasswordToolPassword) {
+			t.Errorf("got[keyDiskPassword] = %v, want %v", got[keyDiskPassword], managedCredentialUsernamePasswordToolPassword)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{ID: 9991, Label: managedCredentialUsernamePasswordToolLabel, LastDecrypted: managedCredentialUsernamePasswordToolTime}))
-		}))
-		t.Cleanup(srv.Close)
+		if !reflect.DeepEqual(got[keyUsername], managedCredentialUsernamePasswordToolUsername) {
+			t.Errorf("got[keyUsername] = %v, want %v", got[keyUsername], managedCredentialUsernamePasswordToolUsername)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyConfirm:               true,
-			managedCredentialIDParam: 9991,
-			keyDiskPassword:          managedCredentialUsernamePasswordToolPassword,
-			keyUsername:              managedCredentialUsernamePasswordToolUsername,
-		}))
+		if err := json.NewEncoder(w).Encode(linode.ManagedCredential{ID: 9991, Label: managedCredentialUsernamePasswordToolLabel, LastDecrypted: managedCredentialUsernamePasswordToolTime}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, managedCredentialUsernamePasswordToolLabel, "response should contain credential label")
-		assert.Contains(t, textContent.Text, managedCredentialUsernamePasswordToolTime, "response should contain last decrypted timestamp")
-		assert.NotContains(t, textContent.Text, managedCredentialUsernamePasswordToolPassword, "response should not echo submitted password")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyConfirm:               true,
+		managedCredentialIDParam: 9991,
+		keyDiskPassword:          managedCredentialUsernamePasswordToolPassword,
+		keyUsername:              managedCredentialUsernamePasswordToolUsername,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("success without username omits username", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, managedCredentialUsernamePasswordToolPath, r.URL.Path, "request path should update managed credential username and password")
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-			body, err := io.ReadAll(r.Body)
-			assert.NoError(t, err)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-			var got map[string]any
-			assert.NoError(t, json.Unmarshal(body, &got))
-			assert.Equal(t, managedCredentialUsernamePasswordToolPassword, got[keyDiskPassword])
-			assert.NotContains(t, got, keyUsername, "username should be omitted when not provided")
+	if !strings.Contains(textContent.Text, managedCredentialUsernamePasswordToolLabel) {
+		t.Errorf("textContent.Text does not contain %v", managedCredentialUsernamePasswordToolLabel)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{ID: 9991, Label: managedCredentialUsernamePasswordToolLabel, LastDecrypted: managedCredentialUsernamePasswordToolTime}))
-		}))
-		t.Cleanup(srv.Close)
+	if !strings.Contains(textContent.Text, managedCredentialUsernamePasswordToolTime) {
+		t.Errorf("textContent.Text does not contain %v", managedCredentialUsernamePasswordToolTime)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+	if strings.Contains(textContent.Text, managedCredentialUsernamePasswordToolPassword) {
+		t.Errorf("textContent.Text should not contain %v", managedCredentialUsernamePasswordToolPassword)
+	}
+}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}))
+func TestLinodeManagedCredentialUsernamePasswordUpdateToolSuccessWithoutUsernameOmitsUsername(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.Path != managedCredentialUsernamePasswordToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialUsernamePasswordToolPath)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, managedCredentialUsernamePasswordToolPath, r.URL.Path, "request path should update managed credential username and password")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+		var got map[string]any
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}))
+		if !reflect.DeepEqual(got[keyDiskPassword], managedCredentialUsernamePasswordToolPassword) {
+			t.Errorf("got[keyDiskPassword] = %v, want %v", got[keyDiskPassword], managedCredentialUsernamePasswordToolPassword)
+		}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to update linode_managed_credential_username_password_update")
-		assertErrorContains(t, result, errForbidden)
-	})
+		if _, ok := got[keyUsername]; ok {
+			t.Errorf("got has unexpected key %v", keyUsername)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.ManagedCredential{ID: 9991, Label: managedCredentialUsernamePasswordToolLabel, LastDecrypted: managedCredentialUsernamePasswordToolTime}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeManagedCredentialUsernamePasswordUpdateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != managedCredentialUsernamePasswordToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialUsernamePasswordToolPath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_managed_credential_username_password_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_managed_credential_username_password_update")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

@@ -1,6 +1,7 @@
 package linode_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -25,7 +26,9 @@ func TestCircuitBreakerDisabledWhenThresholdZero(t *testing.T) {
 		breaker.RecordFailure()
 	}
 
-	mustNoError(t, breaker.Allow(), "threshold 0 disables the breaker entirely")
+	if err := breaker.Allow(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestCircuitBreakerTripsAtThreshold(t *testing.T) {
@@ -35,12 +38,17 @@ func TestCircuitBreakerTripsAtThreshold(t *testing.T) {
 
 	breaker.RecordFailure()
 	breaker.RecordFailure()
-	mustNoError(t, breaker.Allow(), "two failures (below threshold) should not trip")
+
+	if err := breaker.Allow(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	breaker.RecordFailure()
+
 	err := breaker.Allow()
-	mustError(t, err, "third failure should trip the breaker")
-	mustErrorIs(t, err, linode.ErrCircuitOpen, "trip rejects with ErrCircuitOpen")
+	if !errors.Is(err, linode.ErrCircuitOpen) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
+	}
 }
 
 func TestCircuitBreakerHalfOpenAfterTimeout(t *testing.T) {
@@ -51,12 +59,20 @@ func TestCircuitBreakerHalfOpenAfterTimeout(t *testing.T) {
 
 		breaker.RecordFailure()
 		breaker.RecordFailure()
-		mustErrorIs(t, breaker.Allow(), linode.ErrCircuitOpen, "should be open after threshold")
+
+		if err := breaker.Allow(); !errors.Is(err, linode.ErrCircuitOpen) {
+			t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
+		}
 
 		time.Sleep(70 * time.Millisecond)
 
-		mustNoError(t, breaker.Allow(), "after cooldown one probe is admitted (half-open)")
-		mustErrorIs(t, breaker.Allow(), linode.ErrCircuitOpen, "concurrent probe attempts rejected")
+		if err := breaker.Allow(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if err := breaker.Allow(); !errors.Is(err, linode.ErrCircuitOpen) {
+			t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
+		}
 	})
 }
 
@@ -69,12 +85,20 @@ func TestCircuitBreakerClosesOnSuccessfulProbe(t *testing.T) {
 		breaker.RecordFailure()
 		breaker.RecordFailure()
 		time.Sleep(30 * time.Millisecond)
-		mustNoError(t, breaker.Allow(), "half-open probe admitted")
+
+		if err := breaker.Allow(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		breaker.RecordSuccess()
 
-		mustNoError(t, breaker.Allow(), "successful probe closes the breaker")
-		mustNoError(t, breaker.Allow(), "closed state lets every request through")
+		if err := breaker.Allow(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if err := breaker.Allow(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	})
 }
 
@@ -87,11 +111,16 @@ func TestCircuitBreakerReopensOnFailedProbe(t *testing.T) {
 		breaker.RecordFailure()
 		breaker.RecordFailure()
 		time.Sleep(30 * time.Millisecond)
-		mustNoError(t, breaker.Allow(), "half-open probe admitted")
+
+		if err := breaker.Allow(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		breaker.RecordFailure()
 
-		mustErrorIs(t, breaker.Allow(), linode.ErrCircuitOpen, "failed probe must re-open")
+		if err := breaker.Allow(); !errors.Is(err, linode.ErrCircuitOpen) {
+			t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
+		}
 	})
 }
 
@@ -106,7 +135,10 @@ func TestCircuitBreakerSuccessResetsFailures(t *testing.T) {
 
 	breaker.RecordFailure()
 	breaker.RecordFailure()
-	mustNoError(t, breaker.Allow(), "success resets failure count")
+
+	if err := breaker.Allow(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestCircuitBreakerNilSafe(t *testing.T) {
@@ -114,9 +146,12 @@ func TestCircuitBreakerNilSafe(t *testing.T) {
 
 	var breaker *linode.CircuitBreaker
 
-	mustNoError(t, breaker.Allow(), "nil breaker allows")
-	mustNotPanics(t, breaker.RecordSuccess, "nil breaker recordSuccess is a no-op")
-	mustNotPanics(t, breaker.RecordFailure, "nil breaker recordFailure is a no-op")
+	if err := breaker.Allow(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	breaker.RecordSuccess()
+	breaker.RecordFailure()
 }
 
 // TestExecuteWithRetryTripsCircuitOnExhaustion drives the integration through
@@ -147,17 +182,31 @@ func TestExecuteWithRetryTripsCircuitOnExhaustion(t *testing.T) {
 
 	// First exhaustion: 1 initial + 1 retry = 2 upstream calls.
 	_, err := client.GetProfile(t.Context())
-	mustError(t, err, "first attempt should fail after retry exhaustion")
-	checkEqual(t, int32(2), calls.Load(), "first exhaustion runs the full retry budget")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 
 	// Second exhaustion: another 2 calls, breaker trips after.
 	_, err = client.GetProfile(t.Context())
-	mustError(t, err, "second attempt should also fail")
-	checkEqual(t, int32(4), calls.Load(), "second exhaustion runs the budget again")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(4) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(4))
+	}
 
 	// Third call: breaker open, must NOT touch upstream.
 	_, err = client.GetProfile(t.Context())
-	mustError(t, err)
-	mustErrorIs(t, err, linode.ErrCircuitOpen, "open breaker rejects without calling upstream")
-	checkEqual(t, int32(4), calls.Load(), "open breaker must not invoke upstream")
+	if !errors.Is(err, linode.ErrCircuitOpen) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
+	}
+
+	if calls.Load() != int32(4) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(4))
+	}
 }

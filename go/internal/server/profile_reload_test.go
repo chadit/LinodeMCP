@@ -1,6 +1,8 @@
 package server_test
 
 import (
+	"errors"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -18,42 +20,67 @@ func TestReloadProfileAddsAndRemovesTools(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	requireNoError(t, err, "default-profile server must construct cleanly")
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
 
 	before := toolNames(srv)
-	requireContains(t, before, toolInstancesList,
-		"default profile must start with read tools")
-	requireNotContains(t, before, toolInstanceCreate,
-		"default profile must start without write tools")
+	if !slices.Contains(before, toolInstancesList) {
+		t.Fatalf("before does not contain %v", toolInstancesList)
+	}
+
+	if slices.Contains(before, toolInstanceCreate) {
+		t.Fatalf("before should not contain %v", toolInstanceCreate)
+	}
 
 	full := fullAccessConfig()
 
-	requireNoError(t, srv.ReloadProfile(full),
-		"reload to full-access on healthy config must succeed")
+	if err := srv.ReloadProfile(full); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	after := toolNames(srv)
-	assertEqual(t, profiles.BuiltinFullAccess, srv.ActiveProfile().Name,
-		"ActiveProfile must reflect the reloaded value")
-	assertContains(t, after, toolInstanceCreate,
-		"reload to full-access must add write tools")
-	assertContains(t, after, toolInstancesList,
-		"reload to full-access must keep read tools")
-	assertGreater(t, len(after), len(before),
-		"full-access registers strictly more tools than default")
+	if srv.ActiveProfile().Name != profiles.BuiltinFullAccess {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profiles.BuiltinFullAccess)
+	}
+
+	if !slices.Contains(after, toolInstanceCreate) {
+		t.Errorf("after does not contain %v", toolInstanceCreate)
+	}
+
+	if !slices.Contains(after, toolInstancesList) {
+		t.Errorf("after does not contain %v", toolInstancesList)
+	}
+
+	if len(after) <= len(before) {
+		t.Errorf("got %v, want > %v", len(after), len(before))
+	}
 
 	// Reload back to default; the write tool added above must come off.
-	requireNoError(t, srv.ReloadProfile(baseTestConfig()),
-		"reload back to default must succeed")
+	if err := srv.ReloadProfile(baseTestConfig()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	back := toolNames(srv)
-	assertEqual(t, profiles.BuiltinDefault, srv.ActiveProfile().Name)
-	assertNotContains(t, back, toolInstanceCreate,
-		"reload back to default must remove write tools")
-	assertContains(t, back, toolInstancesList,
-		"reload back to default must keep read tools")
-	assertLen(t, back, len(before),
-		"reload round-trip must restore the original tool count")
+	if srv.ActiveProfile().Name != profiles.BuiltinDefault {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profiles.BuiltinDefault)
+	}
+
+	if slices.Contains(back, toolInstanceCreate) {
+		t.Errorf("back should not contain %v", toolInstanceCreate)
+	}
+
+	if !slices.Contains(back, toolInstancesList) {
+		t.Errorf("back does not contain %v", toolInstancesList)
+	}
+
+	if len(back) != len(before) {
+		t.Errorf("len(back) = %d, want %d", len(back), len(before))
+	}
 }
 
 // TestReloadProfileDisabledBuiltinIsNoOp confirms that reloading into a
@@ -64,8 +91,13 @@ func TestReloadProfileDisabledBuiltinIsNoOp(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	requireNoError(t, err)
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
 
 	originalProfile := srv.ActiveProfile().Name
 	originalTools := toolNames(srv)
@@ -77,14 +109,24 @@ func TestReloadProfileDisabledBuiltinIsNoOp(t *testing.T) {
 	}
 
 	err = srv.ReloadProfile(bad)
-	requireError(t, err, "reload into disabled built-in must fail")
-	requireErrorIs(t, err, profiles.ErrActiveProfileDisabled,
-		"error must wrap profiles.ErrActiveProfileDisabled")
+	if !errors.Is(err, profiles.ErrActiveProfileDisabled) {
+		t.Fatalf("error = %v, want %v", err, profiles.ErrActiveProfileDisabled)
+	}
 
-	assertEqual(t, originalProfile, srv.ActiveProfile().Name,
-		"failed reload must leave ActiveProfile untouched")
-	assertElementsMatch(t, originalTools, toolNames(srv),
-		"failed reload must leave the registered tool set untouched")
+	if srv.ActiveProfile().Name != originalProfile {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, originalProfile)
+	}
+	{
+		gotEls := slices.Clone(toolNames(srv))
+		wantEls := slices.Clone(originalTools)
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", toolNames(srv), originalTools)
+		}
+	}
 }
 
 // TestReloadProfileUnknownIsNoOp verifies the same no-op semantics when
@@ -94,8 +136,13 @@ func TestReloadProfileUnknownIsNoOp(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	requireNoError(t, err)
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
 
 	originalProfile := srv.ActiveProfile().Name
 	originalTools := toolNames(srv)
@@ -104,12 +151,24 @@ func TestReloadProfileUnknownIsNoOp(t *testing.T) {
 	bad.ActiveProfile = "definitely-not-a-real-profile"
 
 	err = srv.ReloadProfile(bad)
-	requireError(t, err)
-	requireErrorIs(t, err, profiles.ErrActiveProfileUnknown,
-		"error must wrap profiles.ErrActiveProfileUnknown")
+	if !errors.Is(err, profiles.ErrActiveProfileUnknown) {
+		t.Fatalf("error = %v, want %v", err, profiles.ErrActiveProfileUnknown)
+	}
 
-	assertEqual(t, originalProfile, srv.ActiveProfile().Name)
-	assertElementsMatch(t, originalTools, toolNames(srv))
+	if srv.ActiveProfile().Name != originalProfile {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, originalProfile)
+	}
+	{
+		gotEls := slices.Clone(toolNames(srv))
+		wantEls := slices.Clone(originalTools)
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", toolNames(srv), originalTools)
+		}
+	}
 }
 
 // TestReloadProfileNilConfigRejected confirms ReloadProfile guards against
@@ -119,17 +178,31 @@ func TestReloadProfileNilConfigRejected(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	requireNoError(t, err)
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
 
 	originalTools := toolNames(srv)
 
 	err = srv.ReloadProfile(nil)
-	requireError(t, err)
-	requireErrorIs(t, err, server.ErrConfigNil,
-		"nil-config reload must return ErrConfigNil")
-	assertElementsMatch(t, originalTools, toolNames(srv),
-		"nil-config reload must not mutate the tool set")
+	if !errors.Is(err, server.ErrConfigNil) {
+		t.Fatalf("error = %v, want %v", err, server.ErrConfigNil)
+	}
+	{
+		gotEls := slices.Clone(toolNames(srv))
+		wantEls := slices.Clone(originalTools)
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", toolNames(srv), originalTools)
+		}
+	}
 }
 
 // TestReloadProfileToSingleUserDefinedTool exercises the user-defined
@@ -141,11 +214,17 @@ func TestReloadProfileToSingleUserDefinedTool(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireGreater(t, len(srv.Tools()), 1,
-		"full-access must start with more than one tool")
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
+
+	if len(srv.Tools()) <= 1 {
+		t.Fatalf("got %v, want > %v", len(srv.Tools()), 1)
+	}
 
 	cfg := baseTestConfig()
 	cfg.ActiveProfile = profileSingleTool
@@ -156,12 +235,26 @@ func TestReloadProfileToSingleUserDefinedTool(t *testing.T) {
 		},
 	}
 
-	requireNoError(t, srv.ReloadProfile(cfg))
+	if err := srv.ReloadProfile(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	names := toolNames(srv)
-	assertElementsMatch(t, []string{toolVolumesList}, names,
-		"reload into single-tool profile must shrink the registered set to just that tool")
-	assertEqual(t, profileSingleTool, srv.ActiveProfile().Name)
+	{
+		gotEls := slices.Clone(names)
+		wantEls := slices.Clone([]string{toolVolumesList})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", names, []string{toolVolumesList})
+		}
+	}
+
+	if srv.ActiveProfile().Name != profileSingleTool {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profileSingleTool)
+	}
 }
 
 // TestReloadProfileRepeatedReloadsConverge confirms the reload path is
@@ -173,26 +266,50 @@ func TestReloadProfileRepeatedReloadsConverge(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	full := fullAccessConfig()
 	defaultCfg := baseTestConfig()
 
 	for range 3 {
-		requireNoError(t, srv.ReloadProfile(full))
-		requireNoError(t, srv.ReloadProfile(defaultCfg))
+		if err := srv.ReloadProfile(full); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if err := srv.ReloadProfile(defaultCfg); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
-	requireNoError(t, srv.ReloadProfile(full))
+	if err := srv.ReloadProfile(full); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profiles.BuiltinFullAccess, srv.ActiveProfile().Name)
-	assertContains(t, toolNames(srv), toolInstanceCreate,
-		"after a final reload to full-access, write tools must be live")
+	if srv.ActiveProfile().Name != profiles.BuiltinFullAccess {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profiles.BuiltinFullAccess)
+	}
+
+	if !slices.Contains(toolNames(srv), toolInstanceCreate) {
+		t.Errorf("toolNames(srv) does not contain %v", toolInstanceCreate)
+	}
 
 	// Compare against a fresh full-access server to verify the cycle
 	// did not lose or duplicate tools.
 	fresh, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
-	assertElementsMatch(t, toolNames(fresh), toolNames(srv),
-		"reloaded full-access tool set must equal a freshly constructed one")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	{
+		gotEls := slices.Clone(toolNames(srv))
+		wantEls := slices.Clone(toolNames(fresh))
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", toolNames(srv), toolNames(fresh))
+		}
+	}
 }

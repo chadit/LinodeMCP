@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -23,119 +24,211 @@ const (
 	monitorAlertDefinitionToolServiceType = "linode"
 )
 
-func TestLinodeMonitorAlertDefinitionsTool(t *testing.T) {
+func TestLinodeMonitorAlertDefinitionsToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
 
-		cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+	if tool.Name != monitorAlertDefinitionsToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorAlertDefinitionsToolName)
+	}
 
-		tool, capability, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
-		assertEqual(t, monitorAlertDefinitionsToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		assertContains(t, tool.InputSchema.Properties, "environment", "tool should expose shared environment argument")
-		assertNotContains(t, tool.InputSchema.Properties, "confirm", "read-only tool should not expose confirm")
-		assertContains(t, tool.InputSchema.Properties, keyPage, "tool should expose page argument")
-		assertContains(t, tool.InputSchema.Properties, keyPageSize, "tool should expose page_size argument")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorAlertDefinitionsToolPath, r.URL.Path, "request path should match")
-			assertEqual(t, monitorAlertDefinitionsToolQuery, r.URL.RawQuery, "request query should include pagination")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{
-					keyID:          monitorAlertDefinitionToolID,
-					keyLabel:       monitorAlertDefinitionToolLabel,
-					keyType:        monitorAlertDefinitionToolType,
-					keyServiceType: monitorAlertDefinitionToolServiceType,
-				}},
-				keyPage:    1,
-				keyPages:   1,
-				keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	if _, ok := tool.InputSchema.Properties[canRunKeyEnv]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", canRunKeyEnv)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+	if _, ok := tool.InputSchema.Properties["confirm"]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", "confirm")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, monitorAlertDefinitionToolLabel, "response should contain definition label")
-		assertContains(t, textContent.Text, monitorAlertDefinitionToolServiceType, "response should contain service type")
-	})
+	for _, key := range []string{keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-	t.Run("invalid pagination rejects before client", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
-			{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+func TestLinodeMonitorAlertDefinitionsToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
-
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-				requireNoError(t, err, "handler should return validation as a tool error")
-				requireNotNil(t, result, "result should not be nil")
-				assertTrue(t, result.IsError, "invalid pagination should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				requireTrue(t, ok, "content should be TextContent")
-				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
+		if r.URL.Path != monitorAlertDefinitionsToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertDefinitionsToolPath)
 		}
-	})
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.RawQuery != monitorAlertDefinitionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, monitorAlertDefinitionsToolQuery)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorAlertDefinitionsToolPath, r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should return API failures as tool errors")
-		requireNotNil(t, result, "result should not be nil")
-		assertTrue(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Failed to retrieve "+monitorAlertDefinitionsToolName, "response should identify failed tool")
-		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{
+				keyID:          monitorAlertDefinitionToolID,
+				keyLabel:       monitorAlertDefinitionToolLabel,
+				keyType:        monitorAlertDefinitionToolType,
+				keyServiceType: monitorAlertDefinitionToolServiceType,
+			}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, monitorAlertDefinitionToolLabel) {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertDefinitionToolLabel)
+	}
+
+	if !strings.Contains(textContent.Text, monitorAlertDefinitionToolServiceType) {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertDefinitionToolServiceType)
+	}
+}
+
+func TestLinodeMonitorAlertDefinitionsToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodeMonitorAlertDefinitionsToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertDefinitionsToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertDefinitionsToolPath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorAlertDefinitionsToolName) {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorAlertDefinitionsToolName)
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
 }

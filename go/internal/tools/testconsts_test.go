@@ -597,3 +597,120 @@ const (
 const (
 	keyEnvironment = "environment"
 )
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcAccount                                    = "/account"
+	tcAccountOauthClientsClient123               = "/account/oauth-clients/client-123"
+	tcAccountOauthClientsClient123Thumbnail      = "/account/oauth-clients/client-123/thumbnail"
+	tcAccountPaymentMethods123                   = "/account/payment-methods/123"
+	tcAccountServiceTransfersServiceTokenExample = "/account/service-transfers/service-token-example"
+	tcDestroys                                   = "destroys"
+	tcDevSda                                     = "/dev/sda"
+	tcFrequency                                  = "frequency"
+	tcGETLkeClusters123                          = "GET /lke/clusters/123"
+	tcImagesSharegroups1234                      = "/images/sharegroups/1234"
+	tcLinodeInstanceShutdown                     = "linode_instance_shutdown"
+	tcLinodeInstances123Configs                  = "/linode/instances/123/configs"
+	tcLinodeInstances123Configs789               = "/linode/instances/123/configs/789"
+	tcLinodeInstances123Configs789Interfaces456  = "/linode/instances/123/configs/789/interfaces/456"
+	tcLinodeInstances123Disks                    = "/linode/instances/123/disks"
+	tcLinodeInstances123Disks10                  = "/linode/instances/123/disks/10"
+	tcLinodeInstances123Firewalls                = "/linode/instances/123/firewalls"
+	tcLinodeInstances123Interfaces               = "/linode/instances/123/interfaces"
+	tcLinodeInstances123Interfaces456            = "/linode/instances/123/interfaces/456"
+	tcLinodeInstances123Ips                      = "/linode/instances/123/ips"
+	tcLinodeInstances123Ips20301131              = "/linode/instances/123/ips/203.0.113.1"
+	tcLit                                        = "203.0.113.0/24"
+	tcLongviewClients789                         = "/longview/clients/789"
+	tcNetworkingFirewalls123Devices              = "/networking/firewalls/123/devices"
+	tcNetworkingFirewalls123Devices456           = "/networking/firewalls/123/devices/456"
+	tcNetworkingFirewalls123Rules                = "/networking/firewalls/123/rules"
+	tcNetworkingFirewalls789                     = "/networking/firewalls/789"
+	tcNetworkingFirewallsSettings                = "/networking/firewalls/settings"
+	tcNetworkingIpv6Ranges                       = "/networking/ipv6/ranges"
+	tcNetworkingIpv6Ranges20010db82F64           = "/networking/ipv6/ranges/2001:0db8::%2F64"
+	tcNetworkingVlans                            = "/networking/vlans"
+	tcNodebalancers123Configs                    = "/nodebalancers/123/configs"
+	tcNodebalancers123Configs456                 = "/nodebalancers/123/configs/456"
+	tcNodebalancers123Configs456Nodes            = "/nodebalancers/123/configs/456/nodes"
+	tcNodebalancers123Configs456Nodes789         = "/nodebalancers/123/configs/456/nodes/789"
+	tcNodebalancers123Firewalls                  = "/nodebalancers/123/firewalls"
+	tcNodebalancers444                           = "/nodebalancers/444"
+	tcObjectStorageBucketsUsEast1MyBucket        = "/object-storage/buckets/us-east-1/my-bucket"
+	tcObjectStorageBucketsUsEast1MyBucketSsl     = "/object-storage/buckets/us-east-1/my-bucket/ssl"
+	tcObjectStorageKeys42                        = "/object-storage/keys/42"
+	tcPlacementGroups                            = "/placement/groups"
+	tcPlacementGroups528                         = "/placement/groups/528"
+	tcProd                                       = " prod "
+	tcProfileApps12345                           = "/profile/apps/12345"
+	tcProfileDevices12345                        = "/profile/devices/12345"
+	tcProfilePhoneNumber                         = "/profile/phone-number"
+	tcProfilePreferences                         = "/profile/preferences"
+	tcProfileSecurityQuestions                   = "/profile/security-questions"
+	tcProfileSshkeys123                          = "/profile/sshkeys/123"
+	tcProfileTokens                              = "/profile/tokens"
+	tcProfileTokens12345                         = "/profile/tokens/12345"
+	tcPublicAccess                               = "public_access"
+	tcScopeRead                                  = "scope:read"
+	tcSupportTickets                             = "/support/tickets"
+	tcTags                                       = "/tags"
+	tcVolumes333                                 = "/volumes/333"
+	tcVpcs123                                    = "/vpcs/123"
+	tcVpcs123Subnets10                           = "/vpcs/123/subnets/10"
+)
+
+// Additional repeated map-key literals extracted to satisfy goconst.
+const (
+	tcHourOfDay       = "hour_of_day"
+	tcPublicInterface = "public_interface"
+	tcVPCInterface    = "vpc_interface"
+)
+
+const tcWeekly = "weekly"
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcForbidden    = "403_forbidden"
+	tcRateLimit    = "429_rate_limit"
+	tcServerError  = "500_server_error"
+	tcUnauthorized = "401_unauthorized"
+)
+
+// Repeated error-message literals extracted to satisfy goconst.
+const (
+	tcServerErrorMsg  = "server error"
+	tcInvalidTokenMsg = "invalid token"
+	tcRateLimitMsg    = "rate limit"
+)
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcAllowedEnvironments = "allowed_environments"
+	tcAllowedTools        = "allowed_tools"
+	tcBackups             = "backups"
+	tcBackupsEnabled      = "backups_enabled"
+	tcCloudInit           = "cloud_init"
+	tcCustomUpload        = "custom upload"
+	tcNetworkHelper       = "network_helper"
+	tcRequiredTokenScopes = "required_token_scopes"
+)
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcAction          = "action"
+	tcInstance        = "instance"
+	tcLinodeDomainGet = "linode_domain_get"
+	tcManaged         = "managed"
+)
+
+// goconst composite-context literals.
+const (
+	tcKind = "kind"
+)
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcHealth = "/health"
+	tcIpv6   = "ipv6"
+)

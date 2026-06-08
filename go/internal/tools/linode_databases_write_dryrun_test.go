@@ -3,10 +3,9 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -26,7 +25,9 @@ func TestLinodeDatabaseInstanceCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstanceCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -41,31 +42,55 @@ func TestLinodeDatabaseInstanceCreateToolDryRun(t *testing.T) {
 			keyRegion:           regionUSEast,
 			keyDryRun:           true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_instance_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, databaseInstancesPath, would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], databaseInstancesPath) {
+			t.Errorf("got %v, want %v", would["path"], databaseInstancesPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyType:             databaseInstanceType,
 			databaseEngineParam: databaseEngineID,
 			keyRegion:           regionUSEast,
 			keyDryRun:           true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
 	})
 }
 
@@ -76,7 +101,9 @@ func TestLinodeDatabasePostgreSQLInstanceCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -91,16 +118,31 @@ func TestLinodeDatabasePostgreSQLInstanceCreateToolDryRun(t *testing.T) {
 			keyRegion:           regionUSEast,
 			keyDryRun:           true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbPGInstancesPath, would["path"])
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstancesPath) {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstancesPath)
+		}
 	})
 }
 
@@ -111,7 +153,9 @@ func TestLinodeDatabaseInstanceUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstanceUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads instance then would PUT", func(t *testing.T) {
@@ -125,17 +169,35 @@ func TestLinodeDatabaseInstanceUpdateToolDryRun(t *testing.T) {
 			keyLabel:      testRenamedLabel,
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_instance_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, dbMySQLInstanceGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbMySQLInstanceGetPath) {
+			t.Errorf("got %v, want %v", would["path"], dbMySQLInstanceGetPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -146,7 +208,9 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads instance then would PUT", func(t *testing.T) {
@@ -160,17 +224,35 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolDryRun(t *testing.T) {
 			keyLabel:      testRenamedLabel,
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, dbPGInstanceGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstanceGetPath) {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstanceGetPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -181,7 +263,9 @@ func TestLinodeDatabaseInstancePatchToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstancePatchTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without patching", func(t *testing.T) {
@@ -194,17 +278,35 @@ func TestLinodeDatabaseInstancePatchToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_instance_patch", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_patch") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_patch")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbMySQLInstanceGetPath+"/patch", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbMySQLInstanceGetPath+"/patch") {
+			t.Errorf("got %v, want %v", would["path"], dbMySQLInstanceGetPath+"/patch")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -215,7 +317,9 @@ func TestLinodeDatabasePostgreSQLInstancePatchToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstancePatchTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without patching", func(t *testing.T) {
@@ -228,17 +332,35 @@ func TestLinodeDatabasePostgreSQLInstancePatchToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_patch", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_patch") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_patch")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbPGInstanceGetPath+"/patch", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstanceGetPath+"/patch") {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstanceGetPath+"/patch")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -249,7 +371,9 @@ func TestLinodeDatabaseInstanceSuspendToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstanceSuspendTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without suspending", func(t *testing.T) {
@@ -262,17 +386,35 @@ func TestLinodeDatabaseInstanceSuspendToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_instance_suspend", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_suspend") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_suspend")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbMySQLInstanceGetPath+"/suspend", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbMySQLInstanceGetPath+"/suspend") {
+			t.Errorf("got %v, want %v", would["path"], dbMySQLInstanceGetPath+"/suspend")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -283,7 +425,9 @@ func TestLinodeDatabasePostgreSQLInstanceSuspendToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without suspending", func(t *testing.T) {
@@ -296,17 +440,35 @@ func TestLinodeDatabasePostgreSQLInstanceSuspendToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_suspend", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_suspend") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_suspend")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbPGInstanceGetPath+"/suspend", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstanceGetPath+"/suspend") {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstanceGetPath+"/suspend")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -317,7 +479,9 @@ func TestLinodeDatabaseInstanceResumeToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstanceResumeTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without resuming", func(t *testing.T) {
@@ -330,17 +494,35 @@ func TestLinodeDatabaseInstanceResumeToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_instance_resume", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_resume") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_resume")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbMySQLInstanceGetPath+"/resume", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbMySQLInstanceGetPath+"/resume") {
+			t.Errorf("got %v, want %v", would["path"], dbMySQLInstanceGetPath+"/resume")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -351,7 +533,9 @@ func TestLinodeDatabasePostgreSQLInstanceResumeToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without resuming", func(t *testing.T) {
@@ -364,17 +548,35 @@ func TestLinodeDatabasePostgreSQLInstanceResumeToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_resume", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_resume") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_resume")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbPGInstanceGetPath+"/resume", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstanceGetPath+"/resume") {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstanceGetPath+"/resume")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -385,7 +587,9 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstanceCredentialsGetTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads the instance not the secret", func(t *testing.T) {
@@ -398,20 +602,40 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		preview := dryRunResultText(t, result)
-		assert.NotContains(t, preview, "password", "dry_run must not surface credential material")
+		if strings.Contains(preview, "password") {
+			t.Errorf("preview should not contain %v", "password")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(preview), &body))
-		assert.Equal(t, "linode_database_instance_credentials_get", body["tool"])
+		if err := json.Unmarshal([]byte(preview), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_credentials_get") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_credentials_get")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "GET", would["method"])
-		assert.Equal(t, dbMySQLInstanceGetPath+"/credentials", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run reads the parent instance, never the credentials endpoint")
+		if !reflect.DeepEqual(would["method"], "GET") {
+			t.Errorf("got %v, want %v", would["method"], "GET")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbMySQLInstanceGetPath+"/credentials") {
+			t.Errorf("got %v, want %v", would["path"], dbMySQLInstanceGetPath+"/credentials")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -422,7 +646,9 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsGetToolDryRun(t *testing.T) 
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads the instance not the secret", func(t *testing.T) {
@@ -435,17 +661,35 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsGetToolDryRun(t *testing.T) 
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_credentials_get", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_credentials_get") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_credentials_get")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "GET", would["method"])
-		assert.Equal(t, dbPGInstanceGetPath+"/credentials", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run reads the parent instance, never the credentials endpoint")
+		if !reflect.DeepEqual(would["method"], "GET") {
+			t.Errorf("got %v, want %v", would["method"], "GET")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstanceGetPath+"/credentials") {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstanceGetPath+"/credentials")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -456,7 +700,9 @@ func TestLinodeDatabaseInstanceCredentialsResetToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabaseInstanceCredentialsResetTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads the instance not the secret", func(t *testing.T) {
@@ -469,20 +715,40 @@ func TestLinodeDatabaseInstanceCredentialsResetToolDryRun(t *testing.T) {
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		preview := dryRunResultText(t, result)
-		assert.NotContains(t, preview, "password", "dry_run must not surface the rotated credential")
+		if strings.Contains(preview, "password") {
+			t.Errorf("preview should not contain %v", "password")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(preview), &body))
-		assert.Equal(t, "linode_database_instance_credentials_reset", body["tool"])
+		if err := json.Unmarshal([]byte(preview), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_instance_credentials_reset") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_credentials_reset")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbMySQLInstanceGetPath+"/credentials/reset", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run reads the parent instance, never resets")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbMySQLInstanceGetPath+"/credentials/reset") {
+			t.Errorf("got %v, want %v", would["path"], dbMySQLInstanceGetPath+"/credentials/reset")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -493,7 +759,9 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolDryRun(t *testing.T
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads the instance not the secret", func(t *testing.T) {
@@ -506,16 +774,34 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolDryRun(t *testing.T
 			keyInstanceID: float64(123),
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_database_postgresql_instance_credentials_reset", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_database_postgresql_instance_credentials_reset") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_postgresql_instance_credentials_reset")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, dbPGInstanceGetPath+"/credentials/reset", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run reads the parent instance, never resets")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], dbPGInstanceGetPath+"/credentials/reset") {
+			t.Errorf("got %v, want %v", would["path"], dbPGInstanceGetPath+"/credentials/reset")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }

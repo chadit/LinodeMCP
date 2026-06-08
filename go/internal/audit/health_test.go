@@ -24,15 +24,37 @@ func TestCollectHealthJSONL(t *testing.T) {
 	})
 
 	report, err := audit.CollectHealth(t.Context(), "", dir)
-	mustNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	checkEqual(t, filepath.Join(dir, "audit.log"), report.JSONLPath)
-	checkTrue(t, report.ActiveLogExists, "active audit.log must be detected")
-	checkEqual(t, 1, report.RotatedFileCount, "one rotated file present")
-	checkEqual(t, "2026-05-18", report.OldestRotatedDate)
-	checkPositive(t, report.DiskBytes, "disk usage must account for the written files")
-	checkZero(t, report.DroppedEvents, "synchronous sinks never drop")
-	checkNil(t, report.SQLite, "SQLite section absent when no path given")
+	if report.JSONLPath != filepath.Join(dir, "audit.log") {
+		t.Errorf("report.JSONLPath = %v, want %v", report.JSONLPath, filepath.Join(dir, "audit.log"))
+	}
+
+	if !report.ActiveLogExists {
+		t.Error("report.ActiveLogExists = false, want true")
+	}
+
+	if report.RotatedFileCount != 1 {
+		t.Errorf("report.RotatedFileCount = %v, want %v", report.RotatedFileCount, 1)
+	}
+
+	if report.OldestRotatedDate != "2026-05-18" {
+		t.Errorf("report.OldestRotatedDate = %v, want %v", report.OldestRotatedDate, "2026-05-18")
+	}
+
+	if report.DiskBytes <= 0 {
+		t.Errorf("report.DiskBytes = %v, want a positive value", report.DiskBytes)
+	}
+
+	if report.DroppedEvents != 0 {
+		t.Errorf("report.DroppedEvents = %v, want zero", report.DroppedEvents)
+	}
+
+	if report.SQLite != nil {
+		t.Errorf("report.SQLite = %v, want nil", report.SQLite)
+	}
 }
 
 // TestCollectHealthSQLite verifies the SQLite portion: row count,
@@ -43,7 +65,9 @@ func TestCollectHealthSQLite(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
 
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)
-	mustNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	oldest := time.Date(2026, time.May, 18, 8, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, time.May, 20, 8, 0, 0, 0, time.UTC)
@@ -55,16 +79,34 @@ func TestCollectHealthSQLite(t *testing.T) {
 		sink.Write(t.Context(), &evt)
 	}
 
-	mustNoError(t, sink.Close())
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	report, err := audit.CollectHealth(t.Context(), dbPath, t.TempDir())
-	mustNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNotNil(t, report.SQLite, "SQLite section present when path given")
-	checkEqual(t, int64(2), report.SQLite.EventCount)
-	checkEqual(t, oldest.UnixNano(), report.SQLite.OldestEventUnixNS, "oldest event timestamp")
-	checkPositive(t, report.SQLite.DBBytes, "database file has non-zero size")
-	checkEqual(t, dbPath, report.SQLite.Path)
+	if report.SQLite == nil {
+		t.Fatal("report.SQLite is nil")
+	}
+
+	if report.SQLite.EventCount != int64(2) {
+		t.Errorf("report.SQLite.EventCount = %v, want %v", report.SQLite.EventCount, int64(2))
+	}
+
+	if report.SQLite.OldestEventUnixNS != oldest.UnixNano() {
+		t.Errorf("report.SQLite.OldestEventUnixNS = %v, want %v", report.SQLite.OldestEventUnixNS, oldest.UnixNano())
+	}
+
+	if report.SQLite.DBBytes <= 0 {
+		t.Errorf("report.SQLite.DBBytes = %v, want a positive value", report.SQLite.DBBytes)
+	}
+
+	if report.SQLite.Path != dbPath {
+		t.Errorf("report.SQLite.Path = %v, want %v", report.SQLite.Path, dbPath)
+	}
 }
 
 // TestCollectHealthMissingDirIsEmpty verifies an absent JSONL directory
@@ -75,10 +117,23 @@ func TestCollectHealthMissingDirIsEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-audit-yet")
 
 	report, err := audit.CollectHealth(t.Context(), "", missing)
-	mustNoError(t, err, "missing dir is not an error")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	checkFalse(t, report.ActiveLogExists)
-	checkZero(t, report.RotatedFileCount)
-	checkEmpty(t, report.OldestRotatedDate)
-	checkZero(t, report.DiskBytes)
+	if report.ActiveLogExists {
+		t.Error("report.ActiveLogExists = true, want false")
+	}
+
+	if report.RotatedFileCount != 0 {
+		t.Errorf("report.RotatedFileCount = %v, want zero", report.RotatedFileCount)
+	}
+
+	if report.OldestRotatedDate != "" {
+		t.Errorf("report.OldestRotatedDate = %v, want empty", report.OldestRotatedDate)
+	}
+
+	if report.DiskBytes != 0 {
+		t.Errorf("report.DiskBytes = %v, want zero", report.DiskBytes)
+	}
 }

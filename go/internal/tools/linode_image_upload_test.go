@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -25,87 +28,157 @@ const (
 	keyTags                  = "tags"
 )
 
-func TestLinodeImageUploadTool(t *testing.T) {
+func TestLinodeImageUploadToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeImageUploadTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeImageUploadTool(&config.Config{})
+	if tool.Name != imageUploadToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, imageUploadToolName)
+	}
 
-		assertEqual(t, imageUploadToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapWrite, capability, "tool should be write capability")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		props := tool.InputSchema.Properties
-		assertContains(t, props, keyLabel, "schema should include label")
-		assertContains(t, props, keyRegion, "schema should include region")
-		assertContains(t, props, keyDescription, "schema should include description")
-		assertContains(t, props, "cloud_init", "schema should include cloud_init")
-		assertContains(t, props, keyTags, "schema should include tags")
-		assertContains(t, props, keyConfirm, "mutating upload tool must require confirm")
-		assertContains(t, tool.InputSchema.Required, keyLabel, "label must be marked required")
-		assertContains(t, tool.InputSchema.Required, keyRegion, "region must be marked required")
-		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			assertEqual(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
-			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
 
-			var body map[string]any
-			if !assertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
+	if _, ok := props[keyRegion]; !ok {
+		t.Errorf("props missing key %v", keyRegion)
+	}
 
-			assertEqual(t, imageUploadLabelFixture, body[keyLabel])
-			assertEqual(t, regionUSEast, body["region"])
-			assertEqual(t, "custom upload", body[keyDescription])
-			assertEqual(t, true, body["cloud_init"])
-			assertEqual(t, []any{envProd, imageUploadTagWeb}, body[keyTags])
+	if _, ok := props[keyDescription]; !ok {
+		t.Errorf("props missing key %v", keyDescription)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"image": map[string]any{
-					keyBetaID:      "private/99",
-					keyLabel:       imageUploadLabelFixture,
-					keyDescription: "custom upload",
-					keyStatus:      imageUploadStatusFixture,
-					keyRegion:      regionUSEast,
-					keyTags:        []string{envProd, imageUploadTagWeb},
-				},
-				"upload_to": imageUploadTargetFixture,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	if _, ok := props[tcCloudInit]; !ok {
+		t.Errorf("props missing key %v", tcCloudInit)
+	}
 
-		_, _, handler := tools.NewLinodeImageUploadTool(imageUploadConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:       imageUploadLabelFixture,
-			keyRegion:      regionUSEast,
-			keyDescription: "custom upload",
-			"cloud_init":   true,
-			keyTags:        `["prod","web"]`,
-			keyConfirm:     true,
-		}))
+	if _, ok := props[keyTags]; !ok {
+		t.Errorf("props missing key %v", keyTags)
+	}
 
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Image upload", "response should include success message")
-		assertContains(t, textContent.Text, "private/99", "response should include image ID")
-		assertContains(t, textContent.Text, imageUploadTargetFixture, "response should include upload target")
-	})
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{keyLabel, keyRegion, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodeImageUploadToolValidation(t *testing.T) {
+func TestLinodeImageUploadToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/images/upload" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/upload")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		for key, want := range map[string]any{
+			keyLabel:               imageUploadLabelFixture,
+			keySupportTicketRegion: regionUSEast,
+			keyDescription:         tcCustomUpload,
+			tcCloudInit:            true,
+			keyTags:                []any{envProd, imageUploadTagWeb},
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"image": map[string]any{
+				keyBetaID:      "private/99",
+				keyLabel:       imageUploadLabelFixture,
+				keyDescription: tcCustomUpload,
+				keyStatus:      imageUploadStatusFixture,
+				keyRegion:      regionUSEast,
+				keyTags:        []string{envProd, imageUploadTagWeb},
+			},
+			"upload_to": imageUploadTargetFixture,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeImageUploadTool(imageUploadConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:       imageUploadLabelFixture,
+		keyRegion:      regionUSEast,
+		keyDescription: tcCustomUpload,
+		tcCloudInit:    true,
+		keyTags:        `["prod","web"]`,
+		keyConfirm:     true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Image upload") {
+		t.Errorf("textContent.Text does not contain %v", "Image upload")
+	}
+
+	if !strings.Contains(textContent.Text, "private/99") {
+		t.Errorf("textContent.Text does not contain %v", "private/99")
+	}
+
+	if !strings.Contains(textContent.Text, imageUploadTargetFixture) {
+		t.Errorf("textContent.Text does not contain %v", imageUploadTargetFixture)
+	}
+}
+
+func TestLinodeImageUploadToolValidationClientErrorConfirm(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
@@ -128,13 +201,27 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			requireNoError(t, err)
-			requireNotNil(t, result)
-			assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
-			assertEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeImageUploadToolValidationClientErrorTt(t *testing.T) {
+	t.Parallel()
 
 	for _, tt := range []struct {
 		name string
@@ -158,38 +245,64 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 			t.Cleanup(closeServer)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			requireNoError(t, err)
-			requireNotNil(t, result)
-			assertTrue(t, result.IsError, "invalid input should be an error result")
-			assertErrorContains(t, result, tt.want)
-			assertEqual(t, int32(0), calls.Load(), "validation must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.want)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeImageUploadToolValidationClientErrorDirect(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
 
-		_, _, handler := tools.NewLinodeImageUploadTool(imageUploadConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:   imageUploadLabelFixture,
-			keyRegion:  regionUSEast,
-			keyConfirm: true,
-		}))
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	_, _, handler := tools.NewLinodeImageUploadTool(imageUploadConfig(srv.URL))
 
-		requireNoError(t, err)
-		requireNotNil(t, result)
-		assertTrue(t, result.IsError, "upstream API error should be an error result")
-		assertErrorContains(t, result, "Failed to upload image")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:   imageUploadLabelFixture,
+		keyRegion:  regionUSEast,
+		keyConfirm: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to upload image") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to upload image")
+	}
 }
 
 func imageUploadConfig(apiURL string) *config.Config {
@@ -212,10 +325,13 @@ func imageUploadHandlerWithCallCounter(
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"image":     map[string]any{keyBetaID: "private/99"},
 			"upload_to": imageUploadTargetFixture,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 
 	_, _, handler := tools.NewLinodeImageUploadTool(imageUploadConfig(srv.URL))

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -25,181 +27,286 @@ const (
 	errEmailNonEmpty          = "email must be a non-empty string"
 )
 
-func TestLinodeAccountUserCreateTool(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
+func TestLinodeAccountUserCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeAccountUserCreateTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeAccountUserCreateTool(cfg)
+	if tool.Name != accountUserCreateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, accountUserCreateToolName)
+	}
 
-		assert.Equal(t, accountUserCreateToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "user creation should be CapAdmin")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyUsername, "schema should include username")
-		assert.Contains(t, props, keyEmail, "schema should include email")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyUsername, "username must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyEmail, "email must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("confirm required before client call", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissingConfirm, set: false},
-			{name: caseRequiresConfirm, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyUsername]; !ok {
+		t.Errorf("props missing key %v", keyUsername)
+	}
+
+	if _, ok := props[keyEmail]; !ok {
+		t.Errorf("props missing key %v", keyEmail)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{keyUsername, keyEmail, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
 		}
+	}
+}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+func TestLinodeAccountUserCreateToolConfirmRequiredBeforeClientCall(t *testing.T) {
+	t.Parallel()
 
-				var calls int32
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
 
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
+			var calls int32
 
-				args := map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				req := createRequestWithArgs(t, args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
-			})
-		}
-	})
-
-	t.Run("invalid request rejected before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: caseMissingUsername, args: map[string]any{keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameRequired},
-			{name: caseEmptyUsername, args: map[string]any{keyUsername: "", keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
-			{name: caseBlankUsername, args: map[string]any{keyUsername: blankString, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
-			{name: caseNumericUsername, args: map[string]any{keyUsername: 123, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
-			{name: "missing email", args: map[string]any{keyUsername: accountUserUsername, keyConfirm: true}, wantMessage: errEmailRequired},
-			{name: "empty email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: "", keyConfirm: true}, wantMessage: errEmailNonEmpty},
-			{name: "blank email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: blankString, keyConfirm: true}, wantMessage: errEmailNonEmpty},
-			{name: "numeric email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: 123, keyConfirm: true}, wantMessage: errEmailNonEmpty},
-		}
-
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
-
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid request should be a tool error")
-				assertErrorContains(t, result, testCase.wantMessage)
-				assert.Equal(t, int32(0), calls, "request validation must fail before client call")
-			})
-		}
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			var got linode.CreateAccountUserRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-			assert.Equal(t, accountUserUsername, got.Username)
-			assert.Equal(t, accountUserEmail, got.Email)
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUsername, Email: accountUserEmail, UserType: "default"}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail, keyConfirm: true})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, accountUserUsername, "response should include username")
-		assert.Contains(t, textContent.Text, accountUserEmail, "response should include email")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
 			}))
-		}))
-		defer srv.Close()
+			defer srv.Close()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail, keyConfirm: true})
-		result, err := handler(t.Context(), req)
+			args := map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to create linode_account_user_create")
-		assertErrorContains(t, result, errForbidden)
-	})
+			req := createRequestWithArgs(t, args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeAccountUserCreateToolInvalidRequestRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: caseMissingUsername, args: map[string]any{keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameRequired},
+		{name: caseEmptyUsername, args: map[string]any{keyUsername: "", keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
+		{name: caseBlankUsername, args: map[string]any{keyUsername: blankString, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
+		{name: caseNumericUsername, args: map[string]any{keyUsername: 123, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
+		{name: "missing email", args: map[string]any{keyUsername: accountUserUsername, keyConfirm: true}, wantMessage: errEmailRequired},
+		{name: "empty email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: "", keyConfirm: true}, wantMessage: errEmailNonEmpty},
+		{name: "blank email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: blankString, keyConfirm: true}, wantMessage: errEmailNonEmpty},
+		{name: "numeric email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: 123, keyConfirm: true}, wantMessage: errEmailNonEmpty},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeAccountUserCreateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != accountUsersTestPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountUsersTestPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var got linode.CreateAccountUserRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if got.Username != accountUserUsername {
+			t.Errorf("got.Username = %v, want %v", got.Username, accountUserUsername)
+		}
+
+		if got.Email != accountUserEmail {
+			t.Errorf("got.Email = %v, want %v", got.Email, accountUserEmail)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUsername, Email: accountUserEmail, UserType: "default"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, accountUserUsername) {
+		t.Errorf("textContent.Text does not contain %v", accountUserUsername)
+	}
+
+	if !strings.Contains(textContent.Text, accountUserEmail) {
+		t.Errorf("textContent.Text does not contain %v", accountUserEmail)
+	}
+}
+
+func TestLinodeAccountUserCreateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != accountUsersTestPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountUsersTestPath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_user_create") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_user_create")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

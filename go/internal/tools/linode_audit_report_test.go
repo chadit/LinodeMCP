@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -32,11 +31,25 @@ func TestLinodeAuditReportDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeAuditReportTool(&config.Config{})
 
-	assert.Equal(t, "linode_audit_report", tool.Name)
-	assert.Equal(t, profiles.CapMeta, capability, "report is CapMeta so every profile can read it")
-	require.NotNil(t, handler)
-	assert.Contains(t, tool.InputSchema.Properties, "name")
-	assert.Contains(t, tool.InputSchema.Required, "name")
+	if tool.Name != "linode_audit_report" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_report")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties["name"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "name")
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, "name") {
+		t.Errorf("tool.InputSchema.Required does not contain %v", "name")
+	}
 }
 
 // TestLinodeAuditReportUnknownName returns an error result rather than
@@ -47,9 +60,17 @@ func TestLinodeAuditReportUnknownName(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditReportTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "does-not-exist"}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 }
 
 // TestLinodeAuditReportSummary runs a list-of-destroys report against
@@ -61,7 +82,9 @@ func TestLinodeAuditReportSummary(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	if err := os.MkdirAll(auditDir, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusSuccess, 1),
@@ -84,21 +107,48 @@ func TestLinodeAuditReportSummary(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditReportTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "destroys"}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
 	var decoded reportResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
-	assert.Equal(t, "destroys", decoded.Name)
-	assert.Equal(t, config.ReportOutputSummary, decoded.Output)
-	assert.Equal(t, 3, decoded.TotalEvents, "three destroy events match, the read event is excluded")
-	require.Len(t, decoded.Rows, 2, "instance_delete and volume_delete buckets")
-	assert.Equal(t, 2, decoded.Rows[0].Count, "instance_delete is the higher bucket")
+	if err := json.Unmarshal([]byte(textContent.Text), &decoded); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if decoded.Name != tcDestroys {
+		t.Errorf("decoded.Name = %v, want %v", decoded.Name, tcDestroys)
+	}
+
+	if decoded.Output != config.ReportOutputSummary {
+		t.Errorf("decoded.Output = %v, want %v", decoded.Output, config.ReportOutputSummary)
+	}
+
+	if decoded.TotalEvents != 3 {
+		t.Errorf("decoded.TotalEvents = %v, want %v", decoded.TotalEvents, 3)
+	}
+
+	if len(decoded.Rows) != 2 {
+		t.Fatalf("len(decoded.Rows) = %d, want %d", len(decoded.Rows), 2)
+	}
+
+	if decoded.Rows[0].Count != 2 {
+		t.Errorf("decoded.Rows[0].Count = %v, want %v", decoded.Rows[0].Count, 2)
+	}
 }
 
 // TestLinodeAuditReportListLimit returns matching events as a list and
@@ -108,7 +158,9 @@ func TestLinodeAuditReportListLimit(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	if err := os.MkdirAll(auditDir, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
@@ -131,15 +183,30 @@ func TestLinodeAuditReportListLimit(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditReportTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "recent-reads"}))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
 	var decoded reportResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
-	assert.Equal(t, config.ReportOutputList, decoded.Output)
-	assert.Equal(t, 2, decoded.TotalEvents, "capped at the report's limit")
-	assert.Len(t, decoded.Events, 2)
+	if err := json.Unmarshal([]byte(textContent.Text), &decoded); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if decoded.Output != config.ReportOutputList {
+		t.Errorf("decoded.Output = %v, want %v", decoded.Output, config.ReportOutputList)
+	}
+
+	if decoded.TotalEvents != 2 {
+		t.Errorf("decoded.TotalEvents = %v, want %v", decoded.TotalEvents, 2)
+	}
+
+	if len(decoded.Events) != 2 {
+		t.Errorf("len(decoded.Events) = %d, want %d", len(decoded.Events), 2)
+	}
 }

@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -19,28 +21,57 @@ func TestClientUnassignPlacementGroupSuccess(t *testing.T) {
 	updated := linode.PlacementGroup{ID: 789, Label: placementGroupTestLabel, Region: managedServiceRegion, PlacementGroupType: placementGroupTypeAntiAffinityTest, PlacementGroupPolicy: placementGroupPolicyStrictTest, IsCompliant: true}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups/789/unassign", r.URL.Path, "request path should be /placement/groups/789/unassign")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups789Unassign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups789Unassign)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var got linode.PlacementGroupUnassignRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "expected no error")
-		checkEqual(t, request, &got, "values differ")
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(updated), "expected no error")
+		if !reflect.DeepEqual(&got, request) {
+			t.Errorf("got %v, want %v", &got, request)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(updated); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.UnassignPlacementGroup(t.Context(), 789, request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "UnassignPlacementGroup should succeed on 200 response")
-	requireNotNil(t, got, "result should not be nil")
-	checkEqual(t, updated.ID, got.ID, "values differ")
-	checkEqual(t, updated.Label, got.Label, "values differ")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != updated.ID {
+		t.Errorf("got.ID = %v, want %v", got.ID, updated.ID)
+	}
+
+	if got.Label != updated.Label {
+		t.Errorf("got.Label = %v, want %v", got.Label, updated.Label)
+	}
 }
 
 func TestClientUnassignPlacementGroupRequiresLinodes(t *testing.T) {
@@ -63,8 +94,13 @@ func TestClientUnassignPlacementGroupRequiresLinodes(t *testing.T) {
 
 			got, err := client.UnassignPlacementGroup(t.Context(), 789, tt.req)
 
-			requireErrorIs(t, err, linode.ErrPlacementGroupUnassignLinodesRequired, "expected matching error")
-			checkNil(t, got, "expected nil")
+			if !errors.Is(err, linode.ErrPlacementGroupUnassignLinodesRequired) {
+				t.Fatalf("error = %v, want %v", err, linode.ErrPlacementGroupUnassignLinodesRequired)
+			}
+
+			if got != nil {
+				t.Errorf("got = %v, want nil", got)
+			}
 		})
 	}
 }
@@ -73,23 +109,42 @@ func TestClientUnassignPlacementGroupAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups/789/unassign", r.URL.Path, "request path should be /placement/groups/789/unassign")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups789Unassign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups789Unassign)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.UnassignPlacementGroup(t.Context(), 789, &linode.PlacementGroupUnassignRequest{Linodes: []int{123}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "UnassignPlacementGroup should return API errors")
-	checkNil(t, got, "expected nil")
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := requireAPIError(t, err, "UnassignPlacementGroup should return API errors")
-	checkEqual(t, errForbidden, apiErr.Message, "API error reason should match")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientUnassignPlacementGroupDoesNotRetryTransientError(t *testing.T) {
@@ -99,18 +154,32 @@ func TestClientUnassignPlacementGroupDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups/789/unassign", r.URL.Path, "request path should be /placement/groups/789/unassign")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups789Unassign {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups789Unassign)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPlacementGroupUnassignError}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPlacementGroupUnassignError}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.UnassignPlacementGroup(t.Context(), 789, &linode.PlacementGroupUnassignRequest{Linodes: []int{123}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "UnassignPlacementGroup should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "placement group unassignment must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

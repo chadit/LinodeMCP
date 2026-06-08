@@ -3,10 +3,10 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -22,7 +22,7 @@ func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
 		"/linode/instances/123": linode.Instance{
-			ID: 123, Label: "web-prod-01", Status: "running", Type: "g6-standard-2",
+			ID: 123, Label: "web-prod-01", Status: statusRunning, Type: "g6-standard-2",
 		},
 		"/linode/instances/123/volumes": linode.PaginatedResponse[linode.Volume]{
 			Data: []linode.Volume{{ID: 6789, Label: "data-vol", Size: 50}},
@@ -44,42 +44,78 @@ func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 		keyInstanceID: float64(123),
 		keyDryRun:     true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assert.Equal(t, "linode_instance_delete", body["tool"])
+	if !reflect.DeepEqual(body["tool"], canRunDestroyTool) {
+		t.Errorf("got %v, want %v", body["tool"], canRunDestroyTool)
+	}
 
 	would, _ := body["would_execute"].(map[string]any)
-	assert.Equal(t, "DELETE", would["method"])
-	assert.Equal(t, "/linode/instances/123", would["path"])
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], instanceGetPath) {
+		t.Errorf("got %v, want %v", would["path"], instanceGetPath)
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 3, "expected volume, public_ip, and firewall dependencies")
+	if len(deps) != 3 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 3)
+	}
 
 	kinds := make([]string, 0, len(deps))
 
 	for _, entry := range deps {
-		dep, ok := entry.(map[string]any)
-		require.True(t, ok, "dependency entry should be an object")
+		dep, depOK := entry.(map[string]any)
+		if !depOK {
+			t.Fatal("ok = false, want true")
+		}
 
-		kind, ok := dep["kind"].(string)
-		require.True(t, ok, "dependency should have a string kind")
+		kind, ok := dep[tcKind].(string)
+		if !ok {
+			t.Fatal("ok = false, want true")
+		}
 
 		kinds = append(kinds, kind)
 	}
 
-	assert.ElementsMatch(t, []string{"volume", "public_ip", "firewall"}, kinds)
+	{
+		gotEls := slices.Clone(kinds)
+		wantEls := slices.Clone([]string{"volume", "public_ip", "firewall"})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", kinds, []string{"volume", "public_ip", "firewall"})
+		}
+	}
 
 	billing, _ := body["billing_delta"].(map[string]any)
-	assert.Equal(t, "-20.00", billing["monthly_change_usd"])
+	if !reflect.DeepEqual(billing["monthly_change_usd"], "-20.00") {
+		t.Errorf("got %v, want %v", billing["monthly_change_usd"], "-20.00")
+	}
 
 	warnings, _ := body["warnings"].([]any)
-	assert.NotEmpty(t, warnings, "a running instance should produce a warning")
+	if len(warnings) == 0 {
+		t.Error("warnings is empty")
+	}
 
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	if slices.Contains(*methods, http.MethodDelete) {
+		t.Errorf("*methods should not contain %v", http.MethodDelete)
+	}
 }
 
 // TestLinodeInstanceRebuildToolDryRunSideEffects exercises the Phase 2 Tier A
@@ -107,24 +143,45 @@ func TestLinodeInstanceRebuildToolDryRunSideEffects(t *testing.T) {
 		keyRootPass: rootPassStrong,
 		keyDryRun:   true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_instance_rebuild", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_instance_rebuild") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_instance_rebuild")
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	require.Len(t, sideEffects, 1, "the disk is erased and recreated")
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
 	warnings, _ := body["warnings"].([]any)
-	require.NotEmpty(t, warnings)
+	if len(warnings) == 0 {
+		t.Fatal("warnings is empty")
+	}
 
 	warning, ok := warnings[len(warnings)-1].(string)
-	require.True(t, ok)
-	assert.Contains(t, warning, "linode/debian12")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-	assert.NotContains(t, *methods, http.MethodPost, "dry_run must not issue a POST")
+	if !strings.Contains(warning, "linode/debian12") {
+		t.Errorf("warning does not contain %v", "linode/debian12")
+	}
+
+	if slices.Contains(*methods, http.MethodPost) {
+		t.Errorf("*methods should not contain %v", http.MethodPost)
+	}
 }
 
 // TestLinodeInstancePasswordResetToolDryRunSideEffects exercises the Phase 2
@@ -145,20 +202,36 @@ func TestLinodeInstancePasswordResetToolDryRunSideEffects(t *testing.T) {
 		keyRootPass: rootPassStrong,
 		keyDryRun:   true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_instance_password_reset", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_instance_password_reset") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_instance_password_reset")
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	require.Len(t, sideEffects, 1, "power-down and reboot is the side effect")
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
 	warnings, _ := body["warnings"].([]any)
-	assert.NotEmpty(t, warnings, "a running instance should produce a downtime warning")
+	if len(warnings) == 0 {
+		t.Error("warnings is empty")
+	}
 
-	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
 }
 
 // TestLinodeInstanceRescueToolDryRunSideEffects exercises the Phase 2 Tier A
@@ -178,18 +251,35 @@ func TestLinodeInstanceRescueToolDryRunSideEffects(t *testing.T) {
 		keyLinodeID: float64(123),
 		keyDryRun:   true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_instance_rescue", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_instance_rescue") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_instance_rescue")
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	require.Len(t, sideEffects, 1, "rescue-mode reboot is the side effect")
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
-	assert.NotEmpty(t, body["warnings"], "a running instance should produce a downtime warning")
-	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+	if body["warnings"] == nil {
+		t.Fatal("expected non-empty value")
+	}
+
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
 }
 
 // TestLinodeInstanceBackupRestoreToolDryRunSideEffects exercises the Phase 2
@@ -210,20 +300,42 @@ func TestLinodeInstanceBackupRestoreToolDryRunSideEffects(t *testing.T) {
 		"overwrite":       true,
 		keyDryRun:         true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_instance_backup_restore", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_instance_backup_restore") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_instance_backup_restore")
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	require.Len(t, sideEffects, 1, "the overwrite restore is the side effect")
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
 	effect, ok := sideEffects[0].(string)
-	require.True(t, ok)
-	assert.Contains(t, effect, "999", "side effect should name the target instance")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-	assert.NotEmpty(t, body["warnings"], "overwrite=true should produce a data-loss warning")
-	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+	if !strings.Contains(effect, "999") {
+		t.Errorf("effect does not contain %v", "999")
+	}
+
+	if body["warnings"] == nil {
+		t.Fatal("expected non-empty value")
+	}
+
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
 }

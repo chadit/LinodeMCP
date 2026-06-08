@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -31,16 +30,28 @@ func TestLinodeAuditRecentDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
 
-	assert.Equal(t, "linode_audit_recent", tool.Name, "tool name should match")
-	assert.Equal(t, profiles.CapMeta, capability, "audit query is CapMeta so every profile can read it")
-	require.NotNil(t, handler, "handler should not be nil")
+	if tool.Name != "linode_audit_recent" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_recent")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
 	for _, param := range []string{"limit", keySince, "until", "tool", "capability", "status", "include_meta"} {
-		assert.Contains(t, props, param, "schema should declare the %q filter", param)
+		if _, ok := props[param]; !ok {
+			t.Errorf("props missing key %v", param)
+		}
 	}
 
-	assert.NotContains(t, props, "confirm", "a read-only query must not declare confirm")
+	if _, ok := props["confirm"]; ok {
+		t.Errorf("props has unexpected key %v", "confirm")
+	}
 }
 
 // TestLinodeAuditRecentReturnsEvents drives the handler end-to-end
@@ -52,7 +63,9 @@ func TestLinodeAuditRecentReturnsEvents(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750), "create audit dir")
+	if err := os.MkdirAll(auditDir, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
@@ -63,19 +76,35 @@ func TestLinodeAuditRecentReturnsEvents(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
-	require.NoError(t, err, "handler must not error")
-	require.NotNil(t, result, "result must not be nil")
-	assert.False(t, result.IsError, "default query must succeed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	decoded := decodeAuditResult(t, result)
-	assert.Equal(t, 2, decoded.Count, "meta event excluded by default leaves two")
-	require.Len(t, decoded.Events, 2, "two events returned")
-	assert.Equal(t, "linode_instance_delete", decoded.Events[0].Tool,
-		"newest event (written last) must come first")
+	if decoded.Count != 2 {
+		t.Errorf("decoded.Count = %v, want %v", decoded.Count, 2)
+	}
+
+	if len(decoded.Events) != 2 {
+		t.Fatalf("len(decoded.Events) = %d, want %d", len(decoded.Events), 2)
+	}
+
+	if decoded.Events[0].Tool != canRunDestroyTool {
+		t.Errorf("decoded.Events[0].Tool = %v, want %v", decoded.Events[0].Tool, canRunDestroyTool)
+	}
 
 	for i := range decoded.Events {
-		assert.NotEqual(t, audit.CapabilityMeta, decoded.Events[i].ToolCapability,
-			"meta events must be excluded without include_meta")
+		if decoded.Events[i].ToolCapability == audit.CapabilityMeta {
+			t.Errorf("decoded.Events[i].ToolCapability = %v, do not want %v", decoded.Events[i].ToolCapability, audit.CapabilityMeta)
+		}
 	}
 }
 
@@ -87,13 +116,26 @@ func TestLinodeAuditRecentInvalidSince(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySince: "not-a-timestamp"}))
-	require.NoError(t, err, "handler returns the error in the result, not as a Go error")
-	require.NotNil(t, result, "result must not be nil")
-	assert.True(t, result.IsError, "a malformed since must produce an error result")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
-	assert.Contains(t, textContent.Text, "since", "error should name the bad parameter")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "since") {
+		t.Errorf("textContent.Text does not contain %v", "since")
+	}
 }
 
 // auditEvent builds an event at second `seq` of a fixed minute, so a
@@ -117,13 +159,17 @@ func writeAuditLog(t *testing.T, path string, events []audit.Event) {
 	t.Helper()
 
 	file, err := os.Create(path) //nolint:gosec // path from test tmp dir
-	require.NoError(t, err, "create %s", path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	defer func() { _ = file.Close() }()
 
 	encoder := json.NewEncoder(file)
 	for i := range events {
-		require.NoError(t, encoder.Encode(&events[i]), "encode event %d", i)
+		if err := encoder.Encode(&events[i]); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 }
 
@@ -132,11 +178,15 @@ func decodeAuditResult(t *testing.T, result *mcp.CallToolResult) auditRecentResu
 	t.Helper()
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
 	var decoded auditRecentResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded), "response must be valid JSON")
+	if err := json.Unmarshal([]byte(textContent.Text), &decoded); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	return decoded
 }

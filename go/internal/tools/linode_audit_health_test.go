@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -31,10 +29,21 @@ func TestLinodeAuditHealthDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeAuditHealthTool(&config.Config{})
 
-	assert.Equal(t, "linode_audit_health", tool.Name)
-	assert.Equal(t, profiles.CapMeta, capability, "health is CapMeta so every profile can read it")
-	require.NotNil(t, handler)
-	assert.NotContains(t, tool.InputSchema.Properties, "confirm", "a read-only query must not declare confirm")
+	if tool.Name != "linode_audit_health" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_health")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties["confirm"]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", "confirm")
+	}
 }
 
 // TestLinodeAuditHealthReportsJSONL drives the handler against a temp
@@ -45,7 +54,9 @@ func TestLinodeAuditHealthReportsJSONL(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	if err := os.MkdirAll(auditDir, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
@@ -54,18 +65,42 @@ func TestLinodeAuditHealthReportsJSONL(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditHealthTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
 	var decoded healthResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
-	assert.Equal(t, filepath.Join(auditDir, "audit.log"), decoded.JSONLPath)
-	assert.True(t, decoded.ActiveLogExists, "active log must be reported")
-	assert.Zero(t, decoded.RotatedFileCount, "no rotated files written")
-	assert.Zero(t, decoded.DroppedEvents)
+	if err := json.Unmarshal([]byte(textContent.Text), &decoded); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if decoded.JSONLPath != filepath.Join(auditDir, "audit.log") {
+		t.Errorf("decoded.JSONLPath = %v, want %v", decoded.JSONLPath, filepath.Join(auditDir, "audit.log"))
+	}
+
+	if !decoded.ActiveLogExists {
+		t.Error("decoded.ActiveLogExists = false, want true")
+	}
+
+	if decoded.RotatedFileCount != 0 {
+		t.Errorf("decoded.RotatedFileCount = %v, want zero", decoded.RotatedFileCount)
+	}
+
+	if decoded.DroppedEvents != 0 {
+		t.Errorf("decoded.DroppedEvents = %v, want zero", decoded.DroppedEvents)
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -32,8 +34,8 @@ const (
 // filter assertions exercise both inclusion and exclusion paths.
 func fixtureCatalog() []profiles.ToolDescriptor {
 	return []profiles.ToolDescriptor{
-		{Name: "linode_instance_boot", Capability: profiles.CapWrite},
-		{Name: "linode_domain_get", Capability: profiles.CapRead},
+		{Name: toolInstanceBoot, Capability: profiles.CapWrite},
+		{Name: tcLinodeDomainGet, Capability: profiles.CapRead},
 		{Name: "hello", Capability: profiles.CapMeta},
 	}
 }
@@ -50,15 +52,24 @@ func callListTools(t *testing.T, args map[string]any) []map[string]any {
 	req.Params.Arguments = args
 
 	result, err := handler(t.Context(), req)
-	expectNoError(t, err)
-	expectNotNil(t, result)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok, "result content must be TextContent")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
 	var out []map[string]any
 
-	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &out))
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	return out
 }
@@ -73,10 +84,21 @@ func TestListToolsRegistration(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeProfileListToolsTool(fixtureCatalog)
 
-	checkEqual(t, "linode_profile_list_tools", tool.Name)
-	expectNotEmpty(t, tool.Description)
-	checkEqual(t, profiles.CapMeta, capability)
-	expectNotNil(t, handler)
+	if tool.Name != "linode_profile_list_tools" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_list_tools")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
 // TestListToolsReturnsAllEntriesUnfiltered locks the no-filter path:
@@ -87,7 +109,9 @@ func TestListToolsReturnsAllEntriesUnfiltered(t *testing.T) {
 
 	entries := callListTools(t, nil)
 
-	expectLen(t, entries, 3)
+	if len(entries) != 3 {
+		t.Errorf("len(entries) = %d, want %d", len(entries), 3)
+	}
 
 	got := make(map[string]string, len(entries))
 	for _, entry := range entries {
@@ -96,9 +120,15 @@ func TestListToolsReturnsAllEntriesUnfiltered(t *testing.T) {
 		got[name] = capability
 	}
 
-	checkEqual(t, "CapWrite", got["linode_instance_boot"])
-	checkEqual(t, "CapRead", got["linode_domain_get"])
-	checkEqual(t, "CapMeta", got["hello"])
+	for key, want := range map[string]any{
+		toolInstanceBoot:  "CapWrite",
+		tcLinodeDomainGet: "CapRead",
+		"hello":           "CapMeta",
+	} {
+		if !reflect.DeepEqual(got[key], want) {
+			t.Errorf("got[%v] = %v, want %v", key, got[key], want)
+		}
+	}
 }
 
 // TestListToolsCategoriesPopulated verifies the categories field is
@@ -116,9 +146,17 @@ func TestListToolsCategoriesPopulated(t *testing.T) {
 		categories[name] = cats
 	}
 
-	expectContainsWithMode(t, false, categories["linode_instance_boot"], "compute", "linode_instance_boot must carry the compute category")
-	expectContainsWithMode(t, false, categories["linode_domain_get"], dnsCategory, "linode_domain_get must carry the dns category")
-	expectContainsWithMode(t, false, categories["hello"], "core", "hello must carry the core category")
+	if !slices.Contains(categories[toolInstanceBoot], "compute") {
+		t.Errorf("collection does not contain %v", "compute")
+	}
+
+	if !slices.Contains(categories[tcLinodeDomainGet], dnsCategory) {
+		t.Errorf("collection does not contain %v", dnsCategory)
+	}
+
+	if !slices.Contains(categories["hello"], "core") {
+		t.Errorf("collection does not contain %v", "core")
+	}
 }
 
 // TestListToolsCategoryFilterMatches restricts the output to one
@@ -129,8 +167,13 @@ func TestListToolsCategoryFilterMatches(t *testing.T) {
 
 	entries := callListTools(t, map[string]any{argCategory: dnsCategory})
 
-	expectLen(t, entries, 1, "only linode_domain_get carries the dns category")
-	checkEqual(t, "linode_domain_get", entries[0]["name"])
+	if len(entries) != 1 {
+		t.Errorf("len(entries) = %d, want %d", len(entries), 1)
+	}
+
+	if !reflect.DeepEqual(entries[0]["name"], tcLinodeDomainGet) {
+		t.Errorf("got %v, want %v", entries[0]["name"], tcLinodeDomainGet)
+	}
 }
 
 // TestListToolsCategoryFilterRejectsUnknown is the empty-result path:
@@ -142,7 +185,9 @@ func TestListToolsCategoryFilterRejectsUnknown(t *testing.T) {
 
 	entries := callListTools(t, map[string]any{argCategory: missingCategoryName})
 
-	checkEmpty(t, entries)
+	if len(entries) != 0 {
+		t.Errorf("entries = %v, want empty", entries)
+	}
 }
 
 // TestListToolsCapabilityFilterLongForm checks the CapXxx form of the
@@ -153,8 +198,13 @@ func TestListToolsCapabilityFilterLongForm(t *testing.T) {
 
 	entries := callListTools(t, map[string]any{argCapability: "CapWrite"})
 
-	expectLen(t, entries, 1)
-	checkEqual(t, "linode_instance_boot", entries[0]["name"])
+	if len(entries) != 1 {
+		t.Errorf("len(entries) = %d, want %d", len(entries), 1)
+	}
+
+	if !reflect.DeepEqual(entries[0]["name"], toolInstanceBoot) {
+		t.Errorf("got %v, want %v", entries[0]["name"], toolInstanceBoot)
+	}
 }
 
 // TestListToolsCapabilityFilterShortForm checks the short form
@@ -166,8 +216,13 @@ func TestListToolsCapabilityFilterShortForm(t *testing.T) {
 
 	entries := callListTools(t, map[string]any{argCapability: "write"})
 
-	expectLen(t, entries, 1)
-	checkEqual(t, "linode_instance_boot", entries[0]["name"])
+	if len(entries) != 1 {
+		t.Errorf("len(entries) = %d, want %d", len(entries), 1)
+	}
+
+	if !reflect.DeepEqual(entries[0]["name"], toolInstanceBoot) {
+		t.Errorf("got %v, want %v", entries[0]["name"], toolInstanceBoot)
+	}
 }
 
 // TestListToolsCapabilityFilterCaseInsensitive confirms case folding
@@ -177,12 +232,22 @@ func TestListToolsCapabilityFilterCaseInsensitive(t *testing.T) {
 	t.Parallel()
 
 	upper := callListTools(t, map[string]any{argCapability: "WRITE"})
-	expectLen(t, upper, 1)
-	checkEqual(t, "linode_instance_boot", upper[0]["name"])
+	if len(upper) != 1 {
+		t.Errorf("len(upper) = %d, want %d", len(upper), 1)
+	}
+
+	if !reflect.DeepEqual(upper[0]["name"], toolInstanceBoot) {
+		t.Errorf("got %v, want %v", upper[0]["name"], toolInstanceBoot)
+	}
 
 	mixed := callListTools(t, map[string]any{argCapability: "Read"})
-	expectLen(t, mixed, 1)
-	checkEqual(t, "linode_domain_get", mixed[0]["name"])
+	if len(mixed) != 1 {
+		t.Errorf("len(mixed) = %d, want %d", len(mixed), 1)
+	}
+
+	if !reflect.DeepEqual(mixed[0]["name"], tcLinodeDomainGet) {
+		t.Errorf("got %v, want %v", mixed[0]["name"], tcLinodeDomainGet)
+	}
 }
 
 // TestListToolsCombinedFilters runs category and capability together.
@@ -195,15 +260,22 @@ func TestListToolsCombinedFilters(t *testing.T) {
 		argCategory:   dnsCategory,
 		argCapability: "read",
 	})
-	expectLen(t, matchEntries, 1)
-	checkEqual(t, "linode_domain_get", matchEntries[0]["name"])
+	if len(matchEntries) != 1 {
+		t.Errorf("len(matchEntries) = %d, want %d", len(matchEntries), 1)
+	}
+
+	if !reflect.DeepEqual(matchEntries[0]["name"], tcLinodeDomainGet) {
+		t.Errorf("got %v, want %v", matchEntries[0]["name"], tcLinodeDomainGet)
+	}
 
 	// dns + Write matches nothing (no DNS write tools in the fixture).
 	missEntries := callListTools(t, map[string]any{
 		argCategory:   dnsCategory,
 		argCapability: "write",
 	})
-	checkEmpty(t, missEntries)
+	if len(missEntries) != 0 {
+		t.Errorf("missEntries = %v, want empty", missEntries)
+	}
 }
 
 // TestListToolsEmptyCatalogReturnsEmptyArray locks the JSON shape on
@@ -216,11 +288,18 @@ func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	_, _, handler := tools.NewLinodeProfileListToolsTool(emptyProvider)
 
 	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok)
-	checkEqual(t, "[]", textContent.Text, "empty catalog must serialize as [], not null")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if textContent.Text != databaseJSONArray {
+		t.Errorf("textContent.Text = %v, want %v", textContent.Text, databaseJSONArray)
+	}
 }
 
 // TestListToolsRespectsContextCancellation locks the cancellation
@@ -239,7 +318,9 @@ func TestListToolsRespectsContextCancellation(t *testing.T) {
 		t.Fatalf("expected error %v, got %v", context.Canceled, err)
 	}
 
-	expectNil(t, result)
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 }
 
 // TestListCategoriesRegistration mirrors the registration contract
@@ -249,10 +330,21 @@ func TestListCategoriesRegistration(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeProfileListCategoriesTool(fixtureCatalog)
 
-	checkEqual(t, "linode_profile_list_categories", tool.Name)
-	expectNotEmpty(t, tool.Description)
-	checkEqual(t, profiles.CapMeta, capability)
-	expectNotNil(t, handler)
+	if tool.Name != "linode_profile_list_categories" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_list_categories")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
 // TestListCategoriesReturnsDeduplicatedCounts is the substantive
@@ -266,13 +358,19 @@ func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 	_, _, handler := tools.NewLinodeProfileListCategoriesTool(fixtureCatalog)
 
 	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
 	var entries []map[string]any
-	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &entries))
+	if err := json.Unmarshal([]byte(textContent.Text), &entries); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	// JSON unmarshal yields float64 for numbers; convert to int so
 	// the comparison is exact rather than approximate.
@@ -286,10 +384,16 @@ func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 	// linode_instance_boot carries both compute and compute_actions.
 	// linode_domain_get carries dns. hello carries core. Each tool
 	// contributes 1 to each of its categories.
-	checkEqual(t, 1, counts["compute"], "compute count should be 1")
-	checkEqual(t, 1, counts["compute_actions"], "compute_actions count should be 1")
-	checkEqual(t, 1, counts[dnsCategory], "dns count should be 1")
-	checkEqual(t, 1, counts["core"], "core count should be 1")
+	for key, want := range map[string]any{
+		"compute":         1,
+		"compute_actions": 1,
+		dnsCategory:       1,
+		"core":            1,
+	} {
+		if !reflect.DeepEqual(counts[key], want) {
+			t.Errorf("counts[%v] = %v, want %v", key, counts[key], want)
+		}
+	}
 }
 
 // TestListCategoriesSortedByName locks the deterministic-output
@@ -302,12 +406,16 @@ func TestListCategoriesSortedByName(t *testing.T) {
 	_, _, handler := tools.NewLinodeProfileListCategoriesTool(fixtureCatalog)
 
 	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
 
 	var entries []map[string]any
-	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &entries))
+	if err := json.Unmarshal([]byte(textContent.Text), &entries); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	names := make([]string, len(entries))
 	for i, entry := range entries {
@@ -317,11 +425,10 @@ func TestListCategoriesSortedByName(t *testing.T) {
 	for nameIndex := 1; nameIndex < len(names); nameIndex++ {
 		if names[nameIndex-1] > names[nameIndex] {
 			t.Errorf(
-				"expected values to be increasing at index %d: %q > %q%s",
+				"categories must come back in sorted order: values must increase at index %d: %q > %q",
 				nameIndex,
 				names[nameIndex-1],
 				names[nameIndex],
-				expectationMessage([]string{"categories must come back in sorted order"}),
 			)
 		}
 	}
@@ -336,8 +443,12 @@ func TestListCategoriesEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	_, _, handler := tools.NewLinodeProfileListCategoriesTool(emptyProvider)
 
 	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
-	checkEqual(t, "[]", textContent.Text, "empty catalog must serialize as [], not null")
+	if textContent.Text != databaseJSONArray {
+		t.Errorf("textContent.Text = %v, want %v", textContent.Text, databaseJSONArray)
+	}
 }

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -25,276 +26,457 @@ const (
 	caseNumericPlacementGroupLabel  = "numeric label"
 )
 
-func TestLinodePlacementGroupListTool(t *testing.T) {
+func TestLinodePlacementGroupListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodePlacementGroupListTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodePlacementGroupListTool(cfg)
+	if tool.Name != "linode_placement_groups_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_groups_list")
+	}
 
-		assert.Equal(t, "linode_placement_groups_list", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyPage, "schema should include page")
-		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only list tool must not require confirm")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		groups := []linode.PlacementGroup{{ID: 123, Label: "pg-east", Region: regionUSEast, PlacementGroupType: "anti_affinity:local", PlacementGroupPolicy: "strict", IsCompliant: true}}
+	for _, key := range []string{keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    groups,
-				keyPage:    2,
-				keyPages:   3,
-				keyResults: 51,
-			}))
-		}))
-		defer srv.Close()
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "pg-east", "response should contain placement group label")
-		assert.Contains(t, textContent.Text, "us-east", "response should contain region")
-	})
-
-	t.Run("invalid page_size", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-		_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyPageSize: 24})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "invalid page_size should be an error result")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "upstream API error should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve placement groups")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodePlacementGroupUpdateTool(t *testing.T) {
+func TestLinodePlacementGroupListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	groups := []linode.PlacementGroup{{ID: 123, Label: "pg-east", Region: regionUSEast, PlacementGroupType: "anti_affinity:local", PlacementGroupPolicy: "strict", IsCompliant: true}}
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
-
-		assert.Equal(t, "linode_placement_group_update", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "placement group update should be CapWrite")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, placementGroupIDKey, "schema should include group_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyLabel, "schema should include label")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Required, placementGroupIDKey, "group_id must be required")
-		assert.Contains(t, tool.InputSchema.Required, keyLabel, "label must be required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
-
-	t.Run("requires confirm", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissingConfirm, set: false},
-			{name: caseRequiresConfirm, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-					t.Fatalf("confirm failure must happen before client call")
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
-
-				args := map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.True(t, result.IsError, "confirm failure should be a tool error")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-			})
-		}
-	})
-
-	t.Run("invalid request", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: "missing group_id", args: map[string]any{keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDRequired},
-			{name: "zero group_id", args: map[string]any{placementGroupIDKey: 0, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: "group_id must be an integer greater than or equal to 1"},
-			{name: "string group_id", args: map[string]any{placementGroupIDKey: "123", keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
-			{name: "fractional group_id", args: map[string]any{placementGroupIDKey: 123.5, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
-			{name: "slash group_id", args: map[string]any{placementGroupIDKey: placementGroupSlashID, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
-			{name: "query group_id", args: map[string]any{placementGroupIDKey: "12?x=1", keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
-			{name: "dotdot group_id", args: map[string]any{placementGroupIDKey: pathTraversalValue, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
-			{name: caseEmptyLabel, args: map[string]any{placementGroupIDKey: 123, keyLabel: "", keyConfirm: true}, wantMessage: placementGroupLabelBlankMessage},
-			{name: caseNumericPlacementGroupLabel, args: map[string]any{placementGroupIDKey: 123, keyLabel: 123, keyConfirm: true}, wantMessage: placementGroupLabelBlankMessage},
+		if r.URL.Path != tcPlacementGroups {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-					t.Fatalf("request validation must happen before client call")
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.True(t, result.IsError, "invalid request should be a tool error")
-				assertErrorContains(t, result, testCase.wantMessage)
-			})
+		if r.URL.RawQuery != longviewSubscriptionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsToolQuery)
 		}
-	})
 
-	t.Run("dry run", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		cfg := &config.Config{}
-		_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyDryRun: true}))
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    groups,
+			keyPage:    2,
+			keyPages:   3,
+			keyResults: 51,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError, "dry run should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "linode_placement_group_update")
-		assert.Contains(t, textContent.Text, "PUT")
-		assert.Contains(t, textContent.Text, "/placement/groups/123")
-		assert.Contains(t, textContent.Text, "side_effects")
-		assert.Contains(t, textContent.Text, "label is set to")
-	})
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Equal(t, "/placement/groups/123", r.URL.Path, "request path should include group ID")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-			var body map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			assert.Equal(t, placementGroupUpdatedLabel, body[keyLabel])
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 123, Label: placementGroupUpdatedLabel, Region: regionUSEast}))
-		}))
-		defer srv.Close()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}))
+	if !strings.Contains(textContent.Text, "pg-east") {
+		t.Errorf("textContent.Text does not contain %v", "pg-east")
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, placementGroupUpdatedLabel, "response should include updated label")
-	})
+	if !strings.Contains(textContent.Text, "us-east") {
+		t.Errorf("textContent.Text does not contain %v", "us-east")
+	}
+}
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodePlacementGroupListToolInvalidPageSize(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Equal(t, "/placement/groups/123", r.URL.Path, "request path should include group ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+	cfg := &config.Config{}
+	_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyPageSize: 24})
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}))
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "upstream API error should be an error result")
-		assertErrorContains(t, result, "Failed to update linode_placement_group_update")
-		assertErrorContains(t, result, errForbidden)
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+}
+
+func TestLinodePlacementGroupListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve placement groups") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve placement groups")
+	}
+}
+
+func TestLinodePlacementGroupUpdateToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+
+	if tool.Name != "linode_placement_group_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_update")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{placementGroupIDKey, keyLabel, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{placementGroupIDKey, keyLabel, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodePlacementGroupUpdateToolRequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				t.Fatalf("confirm failure must happen before client call")
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+
+			args := map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+		})
+	}
+}
+
+func TestLinodePlacementGroupUpdateToolInvalidRequest(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: "missing group_id", args: map[string]any{keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDRequired},
+		{name: "zero group_id", args: map[string]any{placementGroupIDKey: 0, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: "group_id must be an integer greater than or equal to 1"},
+		{name: "string group_id", args: map[string]any{placementGroupIDKey: "123", keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
+		{name: "fractional group_id", args: map[string]any{placementGroupIDKey: 123.5, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
+		{name: "slash group_id", args: map[string]any{placementGroupIDKey: placementGroupSlashID, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
+		{name: "query group_id", args: map[string]any{placementGroupIDKey: "12?x=1", keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
+		{name: "dotdot group_id", args: map[string]any{placementGroupIDKey: pathTraversalValue, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
+		{name: caseEmptyLabel, args: map[string]any{placementGroupIDKey: 123, keyLabel: "", keyConfirm: true}, wantMessage: placementGroupLabelBlankMessage},
+		{name: caseNumericPlacementGroupLabel, args: map[string]any{placementGroupIDKey: 123, keyLabel: 123, keyConfirm: true}, wantMessage: placementGroupLabelBlankMessage},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				t.Fatalf("request validation must happen before client call")
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodePlacementGroupUpdateToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode_placement_group_update") {
+		t.Errorf("textContent.Text does not contain %v", "linode_placement_group_update")
+	}
+
+	if !strings.Contains(textContent.Text, "PUT") {
+		t.Errorf("textContent.Text does not contain %v", "PUT")
+	}
+
+	if !strings.Contains(textContent.Text, "/placement/groups/123") {
+		t.Errorf("textContent.Text does not contain %v", "/placement/groups/123")
+	}
+
+	if !strings.Contains(textContent.Text, "side_effects") {
+		t.Errorf("textContent.Text does not contain %v", "side_effects")
+	}
+
+	if !strings.Contains(textContent.Text, "label is set to") {
+		t.Errorf("textContent.Text does not contain %v", "label is set to")
+	}
+}
+
+func TestLinodePlacementGroupUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/placement/groups/123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/placement/groups/123")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body[keyLabel], placementGroupUpdatedLabel) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], placementGroupUpdatedLabel)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 123, Label: placementGroupUpdatedLabel, Region: regionUSEast}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, placementGroupUpdatedLabel) {
+		t.Errorf("textContent.Text does not contain %v", placementGroupUpdatedLabel)
+	}
+}
+
+func TestLinodePlacementGroupUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/placement/groups/123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/placement/groups/123")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_placement_group_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_placement_group_update")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

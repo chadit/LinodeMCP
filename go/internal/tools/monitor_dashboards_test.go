@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -26,222 +27,386 @@ const (
 	monitorDashboardToolWidget      = "cpu"
 )
 
-func TestLinodeMonitorDashboardGetTool(t *testing.T) {
+func TestLinodeMonitorDashboardGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
 
-		cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+	if tool.Name != monitorDashboardGetToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorDashboardGetToolName)
+	}
 
-		tool, capability, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
-		assertEqual(t, monitorDashboardGetToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorDashboardToolPath, r.URL.Path, "request path should match")
-			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeMonitorDashboardGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorDashboardToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorDashboardToolPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:      monitorDashboardToolID,
+			keyLabel:   monitorDashboardToolLabel,
+			keyWidgets: []map[string]any{{keyLabel: monitorDashboardToolWidget}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{monitorDashboardIDParam: monitorDashboardToolID})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, monitorDashboardToolLabel) {
+		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolLabel)
+	}
+
+	if !strings.Contains(textContent.Text, monitorDashboardToolWidget) {
+		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolWidget)
+	}
+}
+
+func TestLinodeMonitorDashboardGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorDashboardToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorDashboardToolPath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{monitorDashboardIDParam: monitorDashboardToolID})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorDashboardGetToolName) {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorDashboardGetToolName)
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeMonitorDashboardGetToolInvalidDashboardIdRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: "missing dashboard id", args: map[string]any{}, wantMessage: "dashboard_id is required"},
+		{name: "zero dashboard id", args: map[string]any{monitorDashboardIDParam: 0}, wantMessage: monitorDashboardIDPositiveError},
+		{name: "string dashboard id", args: map[string]any{monitorDashboardIDParam: "30000"}, wantMessage: monitorDashboardIDPositiveError},
+		{name: "separator dashboard id", args: map[string]any{monitorDashboardIDParam: "30000/extra"}, wantMessage: monitorDashboardIDPositiveError},
+		{name: "query dashboard id", args: map[string]any{monitorDashboardIDParam: "30000?x=1"}, wantMessage: monitorDashboardIDPositiveError},
+		{name: "traversal dashboard id", args: map[string]any{monitorDashboardIDParam: pathTraversalValue}, wantMessage: monitorDashboardIDPositiveError},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodeMonitorDashboardsToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+
+	tool, capability, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+	if tool.Name != monitorDashboardsToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorDashboardsToolName)
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeMonitorDashboardsToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorDashboardsToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorDashboardsToolPath)
+		}
+
+		if r.URL.RawQuery != monitorDashboardsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, monitorDashboardsToolQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{
 				keyID:      monitorDashboardToolID,
 				keyLabel:   monitorDashboardToolLabel,
 				keyWidgets: []map[string]any{{keyLabel: monitorDashboardToolWidget}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{monitorDashboardIDParam: monitorDashboardToolID})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, monitorDashboardToolLabel, "response should contain dashboard label")
-		assertContains(t, textContent.Text, monitorDashboardToolWidget, "response should contain dashboard widget")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorDashboardToolPath, r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{monitorDashboardIDParam: monitorDashboardToolID})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should return API failures as tool errors")
-		requireNotNil(t, result, "result should not be nil")
-		assertTrue(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Failed to retrieve "+monitorDashboardGetToolName, "response should identify failed tool")
-		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
-
-	t.Run("invalid dashboard id rejects before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: "missing dashboard id", args: map[string]any{}, wantMessage: "dashboard_id is required"},
-			{name: "zero dashboard id", args: map[string]any{monitorDashboardIDParam: 0}, wantMessage: monitorDashboardIDPositiveError},
-			{name: "string dashboard id", args: map[string]any{monitorDashboardIDParam: "30000"}, wantMessage: monitorDashboardIDPositiveError},
-			{name: "separator dashboard id", args: map[string]any{monitorDashboardIDParam: "30000/extra"}, wantMessage: monitorDashboardIDPositiveError},
-			{name: "query dashboard id", args: map[string]any{monitorDashboardIDParam: "30000?x=1"}, wantMessage: monitorDashboardIDPositiveError},
-			{name: "traversal dashboard id", args: map[string]any{monitorDashboardIDParam: pathTraversalValue}, wantMessage: monitorDashboardIDPositiveError},
+			}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
+	}))
+	t.Cleanup(srv.Close)
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
 
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-				requireNoError(t, err, "handler should return validation as a tool error")
-				requireNotNil(t, result, "result should not be nil")
-				assertTrue(t, result.IsError, "invalid dashboard id should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				requireTrue(t, ok, "content should be TextContent")
-				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
-		}
-	})
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, monitorDashboardToolLabel) {
+		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolLabel)
+	}
+
+	if !strings.Contains(textContent.Text, monitorDashboardToolWidget) {
+		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolWidget)
+	}
 }
 
-func TestLinodeMonitorDashboardsTool(t *testing.T) {
+func TestLinodeMonitorDashboardsToolApiError(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-
-		tool, capability, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
-		assertEqual(t, monitorDashboardsToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorDashboardsToolPath, r.URL.Path, "request path should match")
-			assertEqual(t, monitorDashboardsToolQuery, r.URL.RawQuery, "request query should include pagination")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{
-					keyID:      monitorDashboardToolID,
-					keyLabel:   monitorDashboardToolLabel,
-					keyWidgets: []map[string]any{{keyLabel: monitorDashboardToolWidget}},
-				}},
-				keyPage:    1,
-				keyPages:   1,
-				keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, monitorDashboardToolLabel, "response should contain dashboard label")
-		assertContains(t, textContent.Text, monitorDashboardToolWidget, "response should contain dashboard widget")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorDashboardsToolPath, r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should return API failures as tool errors")
-		requireNotNil(t, result, "result should not be nil")
-		assertTrue(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Failed to retrieve "+monitorDashboardsToolName, "response should identify failed tool")
-		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
-
-	t.Run("invalid pagination rejects before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
-			{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
-
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-				requireNoError(t, err, "handler should return validation as a tool error")
-				requireNotNil(t, result, "result should not be nil")
-				assertTrue(t, result.IsError, "invalid pagination should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				requireTrue(t, ok, "content should be TextContent")
-				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
+		if r.URL.Path != monitorDashboardsToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorDashboardsToolPath)
 		}
-	})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorDashboardsToolName) {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorDashboardsToolName)
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeMonitorDashboardsToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
 }

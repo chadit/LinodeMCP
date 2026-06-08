@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -24,120 +25,202 @@ const (
 	monitorAlertChannelToolEmailType = "email"
 )
 
-func TestLinodeMonitorAlertChannelsTool(t *testing.T) {
+func TestLinodeMonitorAlertChannelsToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
 
-		cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+	if tool.Name != monitorAlertChannelsToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorAlertChannelsToolName)
+	}
 
-		tool, capability, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
-		assertEqual(t, monitorAlertChannelsToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorAlertChannelsToolPath, r.URL.Path, "request path should match")
-			assertEqual(t, monitorAlertChannelsToolQuery, r.URL.RawQuery, "request query should include pagination")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{
-					keyID:          monitorAlertChannelToolID,
-					keyLabel:       monitorAlertChannelToolLabel,
-					keyType:        monitorAlertChannelToolSystem,
-					"channel_type": monitorAlertChannelToolEmailType,
-					"content": map[string]any{
-						monitorAlertChannelToolEmailType: map[string]any{
-							"email_addresses": []string{monitorAlertChannelToolEmail},
-						},
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeMonitorAlertChannelsToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertChannelsToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertChannelsToolPath)
+		}
+
+		if r.URL.RawQuery != monitorAlertChannelsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, monitorAlertChannelsToolQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{
+				keyID:          monitorAlertChannelToolID,
+				keyLabel:       monitorAlertChannelToolLabel,
+				keyType:        monitorAlertChannelToolSystem,
+				"channel_type": monitorAlertChannelToolEmailType,
+				"content": map[string]any{
+					monitorAlertChannelToolEmailType: map[string]any{
+						"email_addresses": []string{monitorAlertChannelToolEmail},
 					},
-				}},
-				keyPage:    2,
-				keyPages:   3,
-				keyResults: 75,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+				},
+			}},
+			keyPage:    2,
+			keyPages:   3,
+			keyResults: 75,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, monitorAlertChannelToolLabel, "response should contain channel label")
-		assertContains(t, textContent.Text, monitorAlertChannelToolEmail, "response should contain email recipient")
-	})
+	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, monitorAlertChannelsToolPath, r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should return API failures as tool errors")
-		requireNotNil(t, result, "result should not be nil")
-		assertTrue(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Failed to retrieve "+monitorAlertChannelsToolName, "response should identify failed tool")
-		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-	t.Run("invalid pagination rejects before client", func(t *testing.T) {
-		t.Parallel()
+	if !strings.Contains(textContent.Text, monitorAlertChannelToolLabel) {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertChannelToolLabel)
+	}
 
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
-			{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	if !strings.Contains(textContent.Text, monitorAlertChannelToolEmail) {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertChannelToolEmail)
+	}
+}
+
+func TestLinodeMonitorAlertChannelsToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
-
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-				requireNoError(t, err, "handler should return validation as a tool error")
-				requireNotNil(t, result, "result should not be nil")
-				assertTrue(t, result.IsError, "invalid pagination should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				requireTrue(t, ok, "content should be TextContent")
-				assertContains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
+		if r.URL.Path != monitorAlertChannelsToolPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertChannelsToolPath)
 		}
-	})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorAlertChannelsToolName) {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorAlertChannelsToolName)
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeMonitorAlertChannelsToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
 }

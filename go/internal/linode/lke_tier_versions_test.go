@@ -27,7 +27,7 @@ func TestClientListLKETierVersionsUsesTierPath(t *testing.T) {
 			t.Errorf("request query = %q, want empty", r.URL.RawQuery)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: versions, keyPage: 1, keyPages: 1, keyResults: 1,
@@ -65,7 +65,7 @@ func TestClientListLKETierVersionsEscapesTierPathSegment(t *testing.T) {
 			t.Errorf("escaped path = %q, want %q", got, "/lke/tiers/standard%2Fenterprise/versions")
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.LKETierVersion{}, keyPage: 1, keyPages: 1, keyResults: 0,

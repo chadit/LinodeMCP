@@ -592,7 +592,6 @@ LinodeMCP/
 
 - [mcp-go](https://github.com/mark3labs/mcp-go) - MCP protocol implementation
 - [yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3) - YAML config parsing
-- [testify](https://github.com/stretchr/testify) - Test assertions
 
 **Python:**
 

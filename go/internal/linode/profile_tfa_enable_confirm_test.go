@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -19,48 +21,87 @@ func TestClientConfirmProfileTFAEnableSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tfa-enable-confirm", r.URL.Path, "request path should be /profile/tfa-enable-confirm")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileTfaEnableConfirm {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTfaEnableConfirm)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]string
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "expected no error")
-		checkEqual(t, map[string]string{"tfa_code": "123456"}, body, "values differ")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{"scratch": "setup-token", keyTFAConfirmExpiry: tfaConfirmExpiry}), "expected no error")
+		if !reflect.DeepEqual(body, map[string]string{"tfa_code": "123456"}) {
+			t.Errorf("body = %v, want %v", body, map[string]string{"tfa_code": "123456"})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{"scratch": "setup-token", keyTFAConfirmExpiry: tfaConfirmExpiry}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ConfirmProfileTFAEnable(t.Context(), &linode.ProfileTFAEnableConfirmRequest{TFACode: "123456"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "ConfirmProfileTFAEnable should succeed on 200 response")
-	checkEqual(t, "setup-token", result["scratch"], "values differ")
-	checkEqual(t, tfaConfirmExpiry, result[keyTFAConfirmExpiry], "values differ")
+	if !reflect.DeepEqual(result["scratch"], "setup-token") {
+		t.Errorf("got %v, want %v", result["scratch"], "setup-token")
+	}
+
+	if !reflect.DeepEqual(result[keyTFAConfirmExpiry], tfaConfirmExpiry) {
+		t.Errorf("result[keyTFAConfirmExpiry] = %v, want %v", result[keyTFAConfirmExpiry], tfaConfirmExpiry)
+	}
 }
 
 func TestClientConfirmProfileTFAEnableAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tfa-enable-confirm", r.URL.Path, "request path should be /profile/tfa-enable-confirm")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileTfaEnableConfirm {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTfaEnableConfirm)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ConfirmProfileTFAEnable(t.Context(), &linode.ProfileTFAEnableConfirmRequest{TFACode: "123456"})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "ConfirmProfileTFAEnable should fail on 403 response")
-
-	_ = requireAPIError(t, err, "ConfirmProfileTFAEnable should return APIError")
+	_, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 }
 
 func TestClientConfirmProfileTFAEnableNoRetryOnTransientFailure(t *testing.T) {
@@ -70,18 +111,32 @@ func TestClientConfirmProfileTFAEnableNoRetryOnTransientFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tfa-enable-confirm", r.URL.Path, "request path should be /profile/tfa-enable-confirm")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileTfaEnableConfirm {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTfaEnableConfirm)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.ConfirmProfileTFAEnable(t.Context(), &linode.ProfileTFAEnableConfirmRequest{TFACode: "123456"})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "ConfirmProfileTFAEnable should return the transient error")
-	checkEqual(t, int32(1), calls.Load(), "security-state-changing POST must not be retried")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

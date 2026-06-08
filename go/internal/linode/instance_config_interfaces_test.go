@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -36,72 +37,148 @@ func TestClientListInstanceConfigInterfacesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(interfaces), "encoding response should not fail")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcLinodeInstances123Configs456Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs456Interfaces)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedIssueAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedIssueAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(interfaces); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
 
-	requireNoError(t, err, "ListInstanceConfigInterfaces should succeed on 200 response")
-	requireLenOne(t, got)
-	checkEqual(t, 103, got[0].ID)
-	checkEqual(t, purposeVPC, got[0].Purpose)
-	checkTrue(t, got[0].Active)
-	requireNotNil(t, got[0].VPCID)
-	checkEqual(t, 111, *got[0].VPCID)
-	requireNotNil(t, got[0].IPv4)
-	requireNotNil(t, got[0].IPv4.NAT1To1, "NAT1To1 should be present")
-	checkEqual(t, "203.0.113.2", *got[0].IPv4.NAT1To1)
+	got, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+
+	if got[0].ID != 103 {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, 103)
+	}
+
+	if got[0].Purpose != purposeVPC {
+		t.Errorf("got[0].Purpose = %v, want %v", got[0].Purpose, purposeVPC)
+	}
+
+	if !got[0].Active {
+		t.Error("got[0].Active = false, want true")
+	}
+
+	if got[0].VPCID == nil {
+		t.Fatal("got[0].VPCID is nil")
+	}
+
+	if *got[0].VPCID != 111 {
+		t.Errorf("*got[0].VPCID = %v, want %v", *got[0].VPCID, 111)
+	}
+
+	if got[0].IPv4 == nil {
+		t.Fatal("got[0].IPv4 is nil")
+	}
+
+	if got[0].IPv4.NAT1To1 == nil {
+		t.Fatal("got[0].IPv4.NAT1To1 is nil")
+	}
+
+	if *got[0].IPv4.NAT1To1 != "203.0.113.2" {
+		t.Errorf("*got[0].IPv4.NAT1To1 = %v, want %v", *got[0].IPv4.NAT1To1, "203.0.113.2")
+	}
 }
 
 func TestClientListInstanceConfigInterfacesAcceptsPaginatedEnvelope(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcLinodeInstances123Configs456Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs456Interfaces)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.ConfigInterfaceResponse{{ID: 101, Purpose: purposePublic}},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
 
-	requireNoError(t, err, "ListInstanceConfigInterfaces should tolerate a paginated envelope")
-	requireLenOne(t, got)
-	checkEqual(t, 101, got[0].ID)
+	got, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+
+	if got[0].ID != 101 {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, 101)
+	}
 }
 
 func TestClientListInstanceConfigInterfacesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
+		if r.URL.Path != tcLinodeInstances123Configs456Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs456Interfaces)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}), "encoding error response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	_, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
 
-	requireError(t, err, "ListInstanceConfigInterfaces should fail on API error")
-	apiErr := requireAPIError(t, err, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	_, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListInstanceConfigInterfacesRejectsInvalidIDs(t *testing.T) {
@@ -132,15 +209,19 @@ func TestClientListInstanceConfigInterfacesRejectsInvalidIDs(t *testing.T) {
 			t.Cleanup(srv.Close)
 
 			client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-			_, err := client.ListInstanceConfigInterfaces(t.Context(), tt.linodeID, tt.configID)
 
-			requireError(t, err, "ListInstanceConfigInterfaces should reject invalid IDs before request")
+			_, err := client.ListInstanceConfigInterfaces(t.Context(), tt.linodeID, tt.configID)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
 
 			if called.Load() {
 				t.Fatalf("invalid IDs should not reach upstream server")
 			}
 
-			requireErrorIs(t, err, tt.wantErr, "error should expose invalid ID sentinel")
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tt.wantErr)
+			}
 		})
 	}
 }

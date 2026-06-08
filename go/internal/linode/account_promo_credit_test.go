@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -19,51 +21,89 @@ func TestClientAddAccountPromoCreditSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
-		checkEmpty(t, r.URL.RawQuery, "promo credit request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountPromoCodes {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPromoCodes)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]any
 
 		decodeErr := json.NewDecoder(r.Body).Decode(&body)
-		checkNoError(t, decodeErr, "decode request body")
+		if decodeErr != nil {
+			t.Errorf("unexpected error: %v", decodeErr)
+		}
 
 		if decodeErr != nil {
 			return
 		}
 
-		checkEqual(t, promoCodeFixture, body["promo_code"], "promo code should be serialized")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encode response body")
+		if !reflect.DeepEqual(body["promo_code"], promoCodeFixture) {
+			t.Errorf("got %v, want %v", body["promo_code"], promoCodeFixture)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.AddAccountPromoCredit(t.Context(), &linode.AddAccountPromoCreditRequest{PromoCode: promoCodeFixture})
-
-	requireNoError(t, err, "AddAccountPromoCredit should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientAddAccountPromoCreditAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountPromoCodes {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPromoCodes)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.AddAccountPromoCredit(t.Context(), &linode.AddAccountPromoCreditRequest{PromoCode: promoCodeFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "AddAccountPromoCredit should propagate API errors")
-	accountCheckForbiddenError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientAddAccountPromoCreditDoesNotRetryTransientError(t *testing.T) {
@@ -74,18 +114,31 @@ func TestClientAddAccountPromoCreditDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountPromoCodes {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPromoCodes)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPromoCreditError}}}), "encode error response body")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPromoCreditError}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
 
 	err := client.AddAccountPromoCredit(t.Context(), &linode.AddAccountPromoCreditRequest{PromoCode: promoCodeFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "AddAccountPromoCredit should return the transient error")
-	checkEqual(t, int32(1), calls.Load(), "mutating promo credit request must not be retried")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

@@ -3,10 +3,12 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -15,57 +17,91 @@ import (
 
 const networkingAssignmentJSON = `[{"address":"192.0.2.1","linode_id":123}]`
 
-func TestLinodeNodeBalancerCreateToolDryRun(t *testing.T) {
+func TestLinodeNodeBalancerCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeNodeBalancerCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeNodeBalancerCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeNodeBalancerCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(dryRunNoCallServer(t))
 
-		_, _, handler := tools.NewLinodeNodeBalancerCreateTool(dryRunNoCallServer(t))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion: regionUSEast,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_nodebalancer_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/nodebalancers", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	if !reflect.DeepEqual(body["tool"], "linode_nodebalancer_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_nodebalancer_create")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-nodebalancer side effect")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, regionUSEast, "side effect should name the target region")
+	if !reflect.DeepEqual(would["path"], "/nodebalancers") {
+		t.Errorf("got %v, want %v", would["path"], "/nodebalancers")
+	}
 
-		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns that billing starts immediately")
-	})
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-	t.Run("still validates region", func(t *testing.T) {
-		t.Parallel()
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
-		_, _, handler := tools.NewLinodeNodeBalancerCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "region is required")
-	})
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, regionUSEast) {
+		t.Errorf("effect does not contain %v", regionUSEast)
+	}
+
+	warnings, _ := body["warnings"].([]any)
+	if len(warnings) != 1 {
+		t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
+	}
+}
+
+func TestLinodeNodeBalancerCreateToolDryRunStillValidatesRegion(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "region is required")
+	}
 }
 
 func TestLinodeNodeBalancerUpdateToolDryRun(t *testing.T) {
@@ -75,7 +111,9 @@ func TestLinodeNodeBalancerUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNodeBalancerUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -89,37 +127,71 @@ func TestLinodeNodeBalancerUpdateToolDryRun(t *testing.T) {
 			keyLabel:          testRenamedLabel,
 			keyDryRun:         true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_nodebalancer_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_nodebalancer_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_nodebalancer_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/nodebalancers/123", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/nodebalancers/123") {
+			t.Errorf("got %v, want %v", would["path"], "/nodebalancers/123")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "update surfaces the label change")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, testRenamedLabel) {
+			t.Errorf("effect does not contain %v", testRenamedLabel)
+		}
 	})
 
 	t.Run("still validates nodebalancer_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNodeBalancerUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "nodebalancer_id is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "nodebalancer_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "nodebalancer_id is required")
+		}
 	})
 }
 
@@ -130,7 +202,9 @@ func TestLinodeNodeBalancerFirewallUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNodeBalancerFirewallUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -147,30 +221,57 @@ func TestLinodeNodeBalancerFirewallUpdateToolDryRun(t *testing.T) {
 			keyFirewallIDs:    []any{float64(456)},
 			keyDryRun:         true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_nodebalancer_firewall_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_nodebalancer_firewall_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_nodebalancer_firewall_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/nodebalancers/123/firewalls", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read current firewall assignments")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], tcNodebalancers123Firewalls) {
+			t.Errorf("got %v, want %v", would["path"], tcNodebalancers123Firewalls)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 
 	t.Run("still validates firewall IDs", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNodeBalancerFirewallUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyNodeBalancerID: float64(123),
 			keyDryRun:         true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "firewall_ids is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "firewall_ids is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "firewall_ids is required")
+		}
 	})
 }
 
@@ -181,7 +282,9 @@ func TestLinodeNetworkingIPUpdateRDNSToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNetworkingIPUpdateRDNSTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -195,37 +298,71 @@ func TestLinodeNetworkingIPUpdateRDNSToolDryRun(t *testing.T) {
 			keyRDNS:    rdnsHostFixture,
 			keyDryRun:  true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_networking_ip_update_rdns", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_networking_ip_update_rdns") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_networking_ip_update_rdns")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/networking/ips/"+testPublicIPv4, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/networking/ips/"+testPublicIPv4) {
+			t.Errorf("got %v, want %v", would["path"], "/networking/ips/"+testPublicIPv4)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "update surfaces the rDNS change")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, rdnsHostFixture, "side effect names the new rDNS")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, rdnsHostFixture) {
+			t.Errorf("effect does not contain %v", rdnsHostFixture)
+		}
 	})
 
 	t.Run("still validates address", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRDNS:   "host.example.com",
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "address must be a non-empty string")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "address must be a non-empty string") {
+			t.Errorf("error text %q does not contain %q", text.Text, "address must be a non-empty string")
+		}
 	})
 }
 
@@ -236,7 +373,9 @@ func TestLinodeNetworkingIPAllocateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without allocating", func(t *testing.T) {
@@ -250,31 +389,58 @@ func TestLinodeNetworkingIPAllocateToolDryRun(t *testing.T) {
 			purposePublic: true,
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_networking_ip_allocate", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_networking_ip_allocate") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_networking_ip_allocate")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/networking/ips", would["path"])
-		assert.Nil(t, body["current_state"], "allocate has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/networking/ips") {
+			t.Errorf("got %v, want %v", would["path"], "/networking/ips")
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates linode_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyType:       keyIPv4,
 			purposePublic: true,
 			keyDryRun:     true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "linode_id must be a positive integer")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "linode_id must be a positive integer") {
+			t.Errorf("error text %q does not contain %q", text.Text, "linode_id must be a positive integer")
+		}
 	})
 }
 
@@ -285,7 +451,9 @@ func TestLinodeNetworkingIPAssignToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without assigning", func(t *testing.T) {
@@ -298,30 +466,57 @@ func TestLinodeNetworkingIPAssignToolDryRun(t *testing.T) {
 			keyAssignments: networkingAssignmentJSON,
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_networking_ips_assign", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_networking_ips_assign") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_networking_ips_assign")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/networking/ips/assign", would["path"])
-		assert.Nil(t, body["current_state"], "bulk assign has no single resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/networking/ips/assign") {
+			t.Errorf("got %v, want %v", would["path"], "/networking/ips/assign")
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates region", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyAssignments: networkingAssignmentJSON,
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "region must be a non-empty string")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region must be a non-empty string") {
+			t.Errorf("error text %q does not contain %q", text.Text, "region must be a non-empty string")
+		}
 	})
 }
 
@@ -332,7 +527,9 @@ func TestLinodeNetworkingIPv4AssignToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without assigning", func(t *testing.T) {
@@ -345,30 +542,57 @@ func TestLinodeNetworkingIPv4AssignToolDryRun(t *testing.T) {
 			keyAssignments: networkingAssignmentJSON,
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_networking_ipv4_assign", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_networking_ipv4_assign") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_networking_ipv4_assign")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/networking/ipv4/assign", would["path"])
-		assert.Nil(t, body["current_state"], "bulk assign has no single resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/networking/ipv4/assign") {
+			t.Errorf("got %v, want %v", would["path"], "/networking/ipv4/assign")
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates region", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyAssignments: networkingAssignmentJSON,
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "region must be a non-empty string")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region must be a non-empty string") {
+			t.Errorf("error text %q does not contain %q", text.Text, "region must be a non-empty string")
+		}
 	})
 }
 
@@ -379,7 +603,9 @@ func TestLinodeNetworkingIPShareToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without sharing", func(t *testing.T) {
@@ -392,30 +618,57 @@ func TestLinodeNetworkingIPShareToolDryRun(t *testing.T) {
 			keyIPs:      databaseJSONArray,
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_networking_ips_share", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_networking_ips_share") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_networking_ips_share")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/networking/ipv4/share", would["path"])
-		assert.Nil(t, body["current_state"], "ip share has no single resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/networking/ipv4/share") {
+			t.Errorf("got %v, want %v", would["path"], "/networking/ipv4/share")
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates linode_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyIPs:    databaseJSONArray,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "linode_id must be a positive integer")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "linode_id must be a positive integer") {
+			t.Errorf("error text %q does not contain %q", text.Text, "linode_id must be a positive integer")
+		}
 	})
 }
 
@@ -426,7 +679,9 @@ func TestLinodeIPv6RangeCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeIPv6RangeCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -438,34 +693,68 @@ func TestLinodeIPv6RangeCreateToolDryRun(t *testing.T) {
 			keyPrefixLength: float64(64),
 			keyDryRun:       true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_ipv6_range_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_ipv6_range_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_ipv6_range_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/networking/ipv6/ranges", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], tcNetworkingIpv6Ranges) {
+			t.Errorf("got %v, want %v", would["path"], tcNetworkingIpv6Ranges)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-range side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "/64", "side effect should state the prefix length")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, "/64") {
+			t.Errorf("effect does not contain %v", "/64")
+		}
 	})
 
 	t.Run("still validates prefix_length", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeIPv6RangeCreateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "prefix_length must be an integer between 1 and 128")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "prefix_length must be an integer between 1 and 128") {
+			t.Errorf("error text %q does not contain %q", text.Text, "prefix_length must be an integer between 1 and 128")
+		}
 	})
 }
 
@@ -491,25 +780,50 @@ func TestLinodeNodeBalancerDeleteToolDryRunDependencies(t *testing.T) {
 		keyNodeBalancerID: float64(888),
 		keyDryRun:         true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_nodebalancer_delete", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_nodebalancer_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_nodebalancer_delete")
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 2, "each config is a cascade dependency")
+	if len(deps) != 2 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 2)
+	}
 
 	for _, entry := range deps {
 		dep, gotMap := entry.(map[string]any)
-		require.True(t, gotMap)
-		assert.Equal(t, "nodebalancer_config", dep["kind"])
-		assert.Equal(t, "cascade_deleted", dep["action"])
+		if !gotMap {
+			t.Fatal("gotMap = false, want true")
+		}
+
+		if !reflect.DeepEqual(dep[tcKind], "nodebalancer_config") {
+			t.Errorf("got %v, want %v", dep[tcKind], "nodebalancer_config")
+		}
+
+		if !reflect.DeepEqual(dep[tcAction], "cascade_deleted") {
+			t.Errorf("got %v, want %v", dep[tcAction], "cascade_deleted")
+		}
 	}
 
-	assert.NotEmpty(t, body["warnings"])
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	if body["warnings"] == nil {
+		t.Fatal("expected non-empty value")
+	}
+
+	if slices.Contains(*methods, http.MethodDelete) {
+		t.Errorf("*methods should not contain %v", http.MethodDelete)
+	}
 }
 
 // TestLinodeNodeBalancerConfigDeleteToolDryRunDependencies exercises the Phase
@@ -537,23 +851,48 @@ func TestLinodeNodeBalancerConfigDeleteToolDryRunDependencies(t *testing.T) {
 		keyConfigID:       float64(10),
 		keyDryRun:         true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_nodebalancer_config_delete", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_nodebalancer_config_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_nodebalancer_config_delete")
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 2, "each backend node is a cascade dependency")
+	if len(deps) != 2 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 2)
+	}
 
 	for _, entry := range deps {
 		dep, gotMap := entry.(map[string]any)
-		require.True(t, gotMap)
-		assert.Equal(t, "nodebalancer_node", dep["kind"])
-		assert.Equal(t, "cascade_deleted", dep["action"])
+		if !gotMap {
+			t.Fatal("gotMap = false, want true")
+		}
+
+		if !reflect.DeepEqual(dep[tcKind], "nodebalancer_node") {
+			t.Errorf("got %v, want %v", dep[tcKind], "nodebalancer_node")
+		}
+
+		if !reflect.DeepEqual(dep[tcAction], "cascade_deleted") {
+			t.Errorf("got %v, want %v", dep[tcAction], "cascade_deleted")
+		}
 	}
 
-	assert.NotEmpty(t, body["warnings"])
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	if body["warnings"] == nil {
+		t.Fatal("expected non-empty value")
+	}
+
+	if slices.Contains(*methods, http.MethodDelete) {
+		t.Errorf("*methods should not contain %v", http.MethodDelete)
+	}
 }

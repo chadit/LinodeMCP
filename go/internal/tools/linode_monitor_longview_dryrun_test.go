@@ -3,10 +3,8 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -28,7 +26,9 @@ func TestLinodeLongviewClientCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewClientCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -40,28 +40,52 @@ func TestLinodeLongviewClientCreateToolDryRun(t *testing.T) {
 			keyLabel:  longviewClientLabelFixture,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_longview_client_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_longview_client_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_longview_client_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, longviewClientsBasePath, would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], longviewClientsBasePath) {
+			t.Errorf("got %v, want %v", would["path"], longviewClientsBasePath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeLongviewClientCreateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
 	})
 }
 
@@ -72,7 +96,9 @@ func TestLinodeLongviewPlanUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewPlanUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads plan then would PUT", func(t *testing.T) {
@@ -85,17 +111,35 @@ func TestLinodeLongviewPlanUpdateToolDryRun(t *testing.T) {
 			keyLongviewSubscription: longviewSubscriptionID,
 			keyDryRun:               true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_longview_plan_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_longview_plan_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_longview_plan_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, longviewPlanBasePath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], longviewPlanBasePath) {
+			t.Errorf("got %v, want %v", would["path"], longviewPlanBasePath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -106,7 +150,9 @@ func TestLinodeLongviewClientUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewClientUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads client then would PUT", func(t *testing.T) {
@@ -120,17 +166,35 @@ func TestLinodeLongviewClientUpdateToolDryRun(t *testing.T) {
 			keyLabel:    "renamed-client",
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_longview_client_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_longview_client_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_longview_client_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, longviewClientGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], longviewClientGetPath) {
+			t.Errorf("got %v, want %v", would["path"], longviewClientGetPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -141,7 +205,9 @@ func TestLinodeLongviewClientDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewClientDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without deleting", func(t *testing.T) {
@@ -154,17 +220,35 @@ func TestLinodeLongviewClientDeleteToolDryRun(t *testing.T) {
 			keyClientID: float64(123),
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_longview_client_delete", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_longview_client_delete") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_longview_client_delete")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, longviewClientGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "DELETE") {
+			t.Errorf("got %v, want %v", would["method"], "DELETE")
+		}
+
+		if !reflect.DeepEqual(would["path"], longviewClientGetPath) {
+			t.Errorf("got %v, want %v", would["path"], longviewClientGetPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -175,7 +259,9 @@ func TestLinodeMonitorServiceTokenCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceTokenCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -188,17 +274,35 @@ func TestLinodeMonitorServiceTokenCreateToolDryRun(t *testing.T) {
 			keyEntityIDs:            []any{1, 2},
 			keyDryRun:               true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_monitor_service_token_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_monitor_service_token_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_monitor_service_token_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/monitor/services/dbaas/token", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/monitor/services/dbaas/token") {
+			t.Errorf("got %v, want %v", would["path"], "/monitor/services/dbaas/token")
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 }
 
@@ -209,7 +313,9 @@ func TestLinodeMonitorServiceAlertDefinitionCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -222,29 +328,53 @@ func TestLinodeMonitorServiceAlertDefinitionCreateToolDryRun(t *testing.T) {
 		args[keyDryRun] = true
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, args))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_monitor_service_alert_definition_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_monitor_service_alert_definition_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_monitor_service_alert_definition_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, monitorDBaaSAlertsPath, would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], monitorDBaaSAlertsPath) {
+			t.Errorf("got %v, want %v", would["path"], monitorDBaaSAlertsPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			monitorServiceTypeParam: monitorServiceToolTypeDatabase,
 			keyDryRun:               true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
 	})
 }
 
@@ -255,7 +385,9 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads definition then would PUT", func(t *testing.T) {
@@ -270,17 +402,35 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolDryRun(t *testing.T) {
 			monitorAlertDefinitionLabelParam: "renamed-alert",
 			keyDryRun:                        true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_monitor_service_alert_definition_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_monitor_service_alert_definition_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_monitor_service_alert_definition_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, monitorAlertGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], monitorAlertGetPath) {
+			t.Errorf("got %v, want %v", would["path"], monitorAlertGetPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
@@ -291,7 +441,9 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceAlertDefinitionDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without deleting", func(t *testing.T) {
@@ -305,16 +457,34 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteToolDryRun(t *testing.T) {
 			monitorAlertIDParam:     float64(20000),
 			keyDryRun:               true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_monitor_service_alert_definition_delete", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_monitor_service_alert_definition_delete") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_monitor_service_alert_definition_delete")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, monitorAlertGetPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "DELETE") {
+			t.Errorf("got %v, want %v", would["method"], "DELETE")
+		}
+
+		if !reflect.DeepEqual(would["path"], monitorAlertGetPath) {
+			t.Errorf("got %v, want %v", would["path"], monitorAlertGetPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }

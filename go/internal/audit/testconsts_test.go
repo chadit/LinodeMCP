@@ -4,6 +4,7 @@ package audit_test
 // files. Extracted to satisfy goconst, which counts repeated
 // literals across the package.
 const (
+	tcProfile = "profile"
 	// argLinodeID is the conventional Linode-ID arg key. Reused in
 	// event-construction fixtures across multiple test files.
 	argLinodeID = "linode_id"
@@ -37,4 +38,22 @@ const (
 	// multiple redaction tests. Extracted because the literal now
 	// appears 3+ times.
 	valFakeToken = "abc123"
+)
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcBoom                 = "boom"
+	tcCapability           = "capability"
+	tcFannedOut            = "fanned_out"
+	tcLinodeInstanceCreate = "linode_instance_create"
+	tcLinodeInstanceDelete = "linode_instance_delete"
+	tcLinodeInstanceList   = "linode_instance_list"
+	tcPasswordCreated      = "password_created"
+	tcSSHKeys              = "ssh_keys"
+	tcToolA                = "tool_a"
+)
+
+// Repeated literals extracted to satisfy goconst.
+const (
+	tcEnvironment = "environment"
 )

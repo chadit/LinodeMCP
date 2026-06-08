@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -34,20 +37,52 @@ func TestLinodeImageUpdateToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeImageUpdateTool(&config.Config{})
 
-	assertEqual(t, imageUpdateToolName, tool.Name, "tool name should match")
-	assertEqual(t, profiles.CapWrite, capability, "image update should be write capability")
-	assertNotEmpty(t, tool.Description, "tool should have a description")
-	requireNotNil(t, handler, "handler should not be nil")
+	if tool.Name != imageUpdateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, imageUpdateToolName)
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
-	assertContains(t, props, keyEnvironment, "schema should include environment")
-	assertContains(t, props, imageIDParam, "schema should include image_id")
-	assertContains(t, props, keyLabel, "schema should include label")
-	assertContains(t, props, keyDescription, "schema should include description")
-	assertContains(t, props, keyTags, "schema should include tags")
-	assertContains(t, props, keyConfirm, "schema should include confirm")
-	assertContains(t, tool.InputSchema.Required, imageIDParam, "image_id must be required")
-	assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+	if _, ok := props[keyEnvironment]; !ok {
+		t.Errorf("props missing key %v", keyEnvironment)
+	}
+
+	if _, ok := props[imageIDParam]; !ok {
+		t.Errorf("props missing key %v", imageIDParam)
+	}
+
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	if _, ok := props[keyDescription]; !ok {
+		t.Errorf("props missing key %v", keyDescription)
+	}
+
+	if _, ok := props[keyTags]; !ok {
+		t.Errorf("props missing key %v", keyTags)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{imageIDParam, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 }
 
 func TestLinodeImageUpdateRequiresConfirm(t *testing.T) {
@@ -79,12 +114,25 @@ func TestLinodeImageUpdateRequiresConfirm(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			requireNoError(t, err, "handler should not return Go error")
-			requireNotNil(t, result, "handler should return a result")
-			assertTrue(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			assertEqual(t, int32(0), requestCount.Load(), "confirm failure must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 		})
 	}
 }
@@ -128,12 +176,25 @@ func TestLinodeImageUpdateRejectsInvalidRequest(t *testing.T) {
 			t.Cleanup(cleanup)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			requireNoError(t, err, "handler should not return Go error")
-			requireNotNil(t, result, "handler should return a result")
-			assertTrue(t, result.IsError, "invalid request should be a tool error")
-			assertErrorContains(t, result, testCase.wantContains)
-			assertEqual(t, int32(0), requestCount.Load(), "validation must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantContains)
+			}
+
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 		})
 	}
 }
@@ -144,23 +205,47 @@ func TestLinodeImageUpdateSuccess(t *testing.T) {
 	tags := []string{envProd, imageUploadTagWeb}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		assertEqual(t, "/images/private%2F12345", r.URL.EscapedPath(), "request path should include escaped image ID")
-		assertEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.EscapedPath() != "/images/private%2F12345" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F12345")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
 		var body map[string]any
-		assertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-		assertEqual(t, imageUpdateLabel, body[keyLabel], "label should be sent")
-		assertEqual(t, imageUpdateDescription, body[keyDescription], "description should be sent")
-		assertEqual(t, []any{envProd, imageUploadTagWeb}, body[keyTags], "tags should be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		for key, want := range map[string]any{
+			keyLabel:       imageUpdateLabel,
+			keyDescription: imageUpdateDescription,
+			keyTags:        []any{envProd, imageUploadTagWeb},
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(linode.Image{ID: imageIDFixture, Label: imageUpdateLabel, Description: imageUpdateDescription, Tags: tags}))
+
+		if err := json.NewEncoder(w).Encode(linode.Image{ID: imageIDFixture, Label: imageUpdateLabel, Description: imageUpdateDescription, Tags: tags}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageUpdateTool(imageUpdateConfig(srv.URL))
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		imageIDParam:   imageIDFixture,
 		keyLabel:       imageUpdateLabel,
@@ -168,15 +253,30 @@ func TestLinodeImageUpdateSuccess(t *testing.T) {
 		keyTags:        `["prod","web"]`,
 		keyConfirm:     true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "handler should not return Go error")
-	requireNotNil(t, result, "handler should return a result")
-	assertFalse(t, result.IsError, "result should not be a tool error")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	requireTrue(t, ok, "content should be TextContent")
-	assertContains(t, textContent.Text, imageIDFixture, "response should include updated image ID")
-	assertContains(t, textContent.Text, "updated successfully", "response should confirm update")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, imageIDFixture) {
+		t.Errorf("textContent.Text does not contain %v", imageIDFixture)
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
 }
 
 func TestLinodeImageUpdateAcceptsDottedImageIDsAndDecodedTags(t *testing.T) {
@@ -185,27 +285,45 @@ func TestLinodeImageUpdateAcceptsDottedImageIDsAndDecodedTags(t *testing.T) {
 	tags := []string{envProd, imageUploadTagWeb}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertEqual(t, "/images/private%2Fcustom%2Ev1", r.URL.EscapedPath(), "dotted image ID should be escaped as one segment")
+		if r.URL.EscapedPath() != "/images/private%2Fcustom%2Ev1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2Fcustom%2Ev1")
+		}
 
 		var body map[string]any
-		assertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-		assertEqual(t, []any{envProd, imageUploadTagWeb}, body[keyTags], "decoded tags should be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body[keyTags], []any{envProd, imageUploadTagWeb}) {
+			t.Errorf("body[keyTags] = %v, want %v", body[keyTags], []any{envProd, imageUploadTagWeb})
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(linode.Image{ID: "private/custom.v1", Tags: tags}))
+
+		if err := json.NewEncoder(w).Encode(linode.Image{ID: "private/custom.v1", Tags: tags}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageUpdateTool(imageUpdateConfig(srv.URL))
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		imageIDParam: "private/custom.v1",
 		keyTags:      []any{envProd, imageUploadTagWeb},
 		keyConfirm:   true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "handler should not return Go error")
-	requireNotNil(t, result, "handler should return a result")
-	assertFalse(t, result.IsError, "result should not be a tool error")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 }
 
 func TestLinodeImageUpdateSendsEmptyTagsArray(t *testing.T) {
@@ -213,26 +331,45 @@ func TestLinodeImageUpdateSendsEmptyTagsArray(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		assertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
 		tagsValue, tagsPresent := body[keyTags]
-		assertTrue(t, tagsPresent, "tags key should be present")
-		assertEmpty(t, tagsValue, "empty tags array should be sent")
+		if !tagsPresent {
+			t.Error("tagsPresent = false, want true")
+		}
+
+		if v, ok := tagsValue.([]any); ok && len(v) != 0 {
+			t.Errorf("tagsValue = %v, want empty", tagsValue)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(linode.Image{ID: imageIDFixture, Tags: []string{}}))
+
+		if err := json.NewEncoder(w).Encode(linode.Image{ID: imageIDFixture, Tags: []string{}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageUpdateTool(imageUpdateConfig(srv.URL))
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		imageIDParam: imageIDFixture,
 		keyTags:      "[ ]",
 		keyConfirm:   true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "handler should not return Go error")
-	requireNotNil(t, result, "handler should return a result")
-	assertFalse(t, result.IsError, "result should not be a tool error")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 }
 
 func TestLinodeImageUpdateDoesNotMutateArguments(t *testing.T) {
@@ -240,12 +377,15 @@ func TestLinodeImageUpdateDoesNotMutateArguments(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(linode.Image{ID: imageIDFixture}))
+
+		if err := json.NewEncoder(w).Encode(linode.Image{ID: imageIDFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageUpdateTool(imageUpdateConfig(srv.URL))
-	tags := []string{" prod ", imageUploadTagWeb}
+	tags := []string{tcProd, imageUploadTagWeb}
 	args := map[string]any{
 		imageIDParam:      imageIDFixture,
 		keyLabel:          imageUpdateLabel,
@@ -256,13 +396,29 @@ func TestLinodeImageUpdateDoesNotMutateArguments(t *testing.T) {
 	}
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "handler should not return Go error")
-	requireNotNil(t, result, "handler should return a result")
-	assertFalse(t, result.IsError, "result should not be a tool error")
-	assertEqual(t, envKeyDefault, args[keyEnvironment], "environment argument should not be rewritten")
-	assertEqual(t, []string{" prod ", imageUploadTagWeb}, tags, "tag slice should not be mutated")
-	assertEqual(t, "untouched", args["untouched_field"], "unrelated arguments should not be rewritten")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	if !reflect.DeepEqual(args[keyEnvironment], envKeyDefault) {
+		t.Errorf("args[keyEnvironment] = %v, want %v", args[keyEnvironment], envKeyDefault)
+	}
+
+	if !reflect.DeepEqual(tags, []string{tcProd, imageUploadTagWeb}) {
+		t.Errorf("tags = %v, want %v", tags, []string{tcProd, imageUploadTagWeb})
+	}
+
+	if !reflect.DeepEqual(args["untouched_field"], "untouched") {
+		t.Errorf("got %v, want %v", args["untouched_field"], "untouched")
+	}
 }
 
 func TestLinodeImageUpdateClientError(t *testing.T) {
@@ -271,22 +427,36 @@ func TestLinodeImageUpdateClientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"image not found"}]}`))
-		assertNoError(t, err, "writing error response should succeed")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageUpdateTool(imageUpdateConfig(srv.URL))
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		imageIDParam: imageIDFixture,
 		keyLabel:     imageUpdateLabel,
 		keyConfirm:   true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "handler should not return Go error")
-	requireNotNil(t, result, "handler should return a result")
-	assertTrue(t, result.IsError, "result should be a tool error")
-	assertErrorContains(t, result, "Failed to update image")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update image") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update image")
+	}
 }
 
 func newImageUpdateHandler(t *testing.T, requestCount *atomic.Int32) (func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error), func()) {

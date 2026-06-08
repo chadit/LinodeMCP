@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -20,120 +22,195 @@ const (
 	keyTokenID              = "token_id"
 )
 
-func TestLinodeProfileTokenGetTool(t *testing.T) {
+func TestLinodeProfileTokenGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeProfileTokenGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+	if tool.Name != profileTokenGetToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, profileTokenGetToolName)
+	}
 
-		checkEqual(t, profileTokenGetToolName, tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "profile token lookup should be CapRead")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, keyTokenID, "schema should include token_id")
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		if contains(props, keyConfirm) {
-			t.Errorf("expected %v not to contain %v%s", props, keyConfirm, expectationMessage([]string{"read-only get tool must not require confirm"}))
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyTokenID]; !ok {
+		t.Errorf("props missing key %v", keyTokenID)
+	}
+
+	if _, ok := props[keyConfirm]; ok {
+		t.Errorf("read-only get tool must not require confirm: props unexpectedly has key %q", keyConfirm)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyTokenID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyTokenID)
+	}
+}
+
+func TestLinodeProfileTokenGetToolInvalidTokenIdRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: "missing token_id", args: map[string]any{}},
+		{name: "zero token_id", args: map[string]any{keyTokenID: 0}},
+		{name: "slash token_id", args: map[string]any{keyTokenID: "12/34"}},
+		{name: "query token_id", args: map[string]any{keyTokenID: "12?34"}},
+		{name: "traversal token_id", args: map[string]any{keyTokenID: pathTraversalValue}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "token_id must be a positive integer") {
+				t.Errorf("error text %q does not contain %q", text.Text, "token_id must be a positive integer")
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeProfileTokenGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyTokenID, "token_id must be marked required")
-	})
-
-	t.Run("invalid token id rejected before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			args map[string]any
-		}{
-			{name: "missing token_id", args: map[string]any{}},
-			{name: "zero token_id", args: map[string]any{keyTokenID: 0}},
-			{name: "slash token_id", args: map[string]any{keyTokenID: "12/34"}},
-			{name: "query token_id", args: map[string]any{keyTokenID: "12?34"}},
-			{name: "traversal token_id", args: map[string]any{keyTokenID: pathTraversalValue}},
+		if r.URL.Path != tcProfileTokens12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens12345)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				expectNoError(t, err, "handler should not return transport error")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "invalid request should be a tool error")
-				assertErrorContains(t, result, "token_id must be a positive integer")
-				checkEqual(t, int32(0), calls, "request validation must fail before client call")
-			})
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesParam: "*"}))
-		}))
-		defer srv.Close()
+		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesParam: "*"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenID: 12345}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenID: 12345}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "api-token", "response should include token label")
-		expectContainsWithMode(t, false, textContent.Text, `"id": 12345`, "response should include token ID")
-	})
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+	if !strings.Contains(textContent.Text, "api-token") {
+		t.Errorf("textContent.Text does not contain %v", "api-token")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+	if !strings.Contains(textContent.Text, `"id": 12345`) {
+		t.Errorf("textContent.Text does not contain %v", `"id": 12345`)
+	}
+}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenID: 12345}))
+func TestLinodeProfileTokenGetToolApiError(t *testing.T) {
+	t.Parallel()
 
-		expectNoError(t, err, "handler should return API failures as tool errors")
-		expectNotNil(t, result, "result should not be nil")
-		checkTrueWithMode(t, false, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to retrieve linode_profile_token_get")
-		assertErrorContains(t, result, errForbidden)
-	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileTokens12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens12345)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenID: 12345}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_profile_token_get") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_profile_token_get")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

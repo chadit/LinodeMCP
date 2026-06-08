@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -27,28 +28,57 @@ func TestClientCreatePlacementGroupSuccess(t *testing.T) {
 	created := linode.PlacementGroup{ID: 123, Label: request.Label, Region: request.Region, PlacementGroupType: request.PlacementGroupType, PlacementGroupPolicy: request.PlacementGroupPolicy, IsCompliant: true}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var got linode.CreatePlacementGroupRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "expected no error")
-		checkEqual(t, request, &got, "values differ")
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(created), "expected no error")
+		if !reflect.DeepEqual(&got, request) {
+			t.Errorf("got %v, want %v", &got, request)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.CreatePlacementGroup(t.Context(), request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "CreatePlacementGroup should succeed on 200 response")
-	requireNotNil(t, got, "result should not be nil")
-	checkEqual(t, created.ID, got.ID, "values differ")
-	checkEqual(t, created.Label, got.Label, "values differ")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != created.ID {
+		t.Errorf("got.ID = %v, want %v", got.ID, created.ID)
+	}
+
+	if got.Label != created.Label {
+		t.Errorf("got.Label = %v, want %v", got.Label, created.Label)
+	}
 }
 
 func TestClientCreatePlacementGroupDoesNotRetryTransientError(t *testing.T) {
@@ -58,18 +88,32 @@ func TestClientCreatePlacementGroupDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/placement/groups", r.URL.Path, "request path should be /placement/groups")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcPlacementGroups {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPlacementGroupCreateError}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPlacementGroupCreateError}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.CreatePlacementGroup(t.Context(), &linode.CreatePlacementGroupRequest{Label: "pg-test", Region: managedServiceRegion, PlacementGroupType: placementGroupTypeAntiAffinityTest, PlacementGroupPolicy: placementGroupPolicyStrictTest})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "CreatePlacementGroup should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "placement group creation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

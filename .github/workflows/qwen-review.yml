@@ -1,466 +1,466 @@
 name: Qwen Code Review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  review:
-    # Qwen is intentionally limited to Chad's same-repo PRs. Fork PRs and
-    # other authors skip this job so QWEN_API_KEY is not exposed to
-    # untrusted code.
-    if: >-
-      github.event.pull_request.user.login == 'chadit' &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Check required secret
-        id: secrets
-        env:
-          # GitHub masks secret values inside if-conditions, but a boolean
-          # comparison done in env (`secret != ''`) yields a plain
-          # 'true'/'false' string we can branch on without leaking anything.
-          HAS_QWEN_API_KEY: ${{ secrets.QWEN_API_KEY != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          skip=false
-          if [[ "${HAS_QWEN_API_KEY}" != "true" ]]; then
-            echo "::warning title=Qwen review skipped::QWEN_API_KEY secret is not configured. Add it under Settings -> Secrets and variables -> Actions to enable AI code review."
-            skip=true
-          fi
-          echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
+    review:
+        # Qwen is intentionally limited to Chad's same-repo PRs. Fork PRs and
+        # other authors skip this job so QWEN_API_KEY is not exposed to
+        # untrusted code.
+        if: >-
+            github.event.pull_request.user.login == 'chadit' &&
+            github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pull-requests: read
+        steps:
+            - name: Check required secret
+              id: secrets
+              env:
+                  # GitHub masks secret values inside if-conditions, but a boolean
+                  # comparison done in env (`secret != ''`) yields a plain
+                  # 'true'/'false' string we can branch on without leaking anything.
+                  HAS_QWEN_API_KEY: ${{ secrets.QWEN_API_KEY != '' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  skip=false
+                  if [[ "${HAS_QWEN_API_KEY}" != "true" ]]; then
+                    echo "::warning title=Qwen review skipped::QWEN_API_KEY secret is not configured. Add it under Settings -> Secrets and variables -> Actions to enable AI code review."
+                    skip=true
+                  fi
+                  echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
 
-      - name: Checkout codebase
-        if: steps.secrets.outputs.skip != 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+            - name: Checkout codebase
+              if: steps.secrets.outputs.skip != 'true'
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Qwen Code
-        if: steps.secrets.outputs.skip != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --global @qwen-code/qwen-code@0.17.0
-          qwen --version
+            - name: Install Qwen Code
+              if: steps.secrets.outputs.skip != 'true'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  npm install --global @qwen-code/qwen-code@0.17.0
+                  qwen --version
 
-      - name: Prepare review input
-        if: steps.secrets.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p qwen-review/chunks
-          gh pr view "${PR_NUMBER}" --repo "${GH_REPO}" \
-            --json number,title,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions,files \
-            > qwen-review/pr-context.json
-          gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > qwen-review/pr.diff
+            - name: Prepare review input
+              if: steps.secrets.outputs.skip != 'true'
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  GH_REPO: ${{ github.repository }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  mkdir -p qwen-review/chunks
+                  gh pr view "${PR_NUMBER}" --repo "${GH_REPO}" \
+                    --json number,title,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions,files \
+                    > qwen-review/pr-context.json
+                  gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > qwen-review/pr.diff
 
-          python3 <<'PY'
-          import json
-          import pathlib
+                  python3 <<'PY'
+                  import json
+                  import pathlib
 
-          root = pathlib.Path('qwen-review')
-          diff_path = root / 'pr.diff'
-          context_path = root / 'pr-context.json'
-          chunks_dir = root / 'chunks'
-          chunks_dir.mkdir(parents=True, exist_ok=True)
+                  root = pathlib.Path('qwen-review')
+                  diff_path = root / 'pr.diff'
+                  context_path = root / 'pr-context.json'
+                  chunks_dir = root / 'chunks'
+                  chunks_dir.mkdir(parents=True, exist_ok=True)
 
-          context = json.loads(context_path.read_text())
-          compact_context = {
-              key: context.get(key)
-              for key in [
-                  'number',
-                  'title',
-                  'baseRefName',
-                  'headRefName',
-                  'headRefOid',
-                  'changedFiles',
-                  'additions',
-                  'deletions',
-              ]
-          }
-          compact_context['files'] = [
-              {
-                  'path': item.get('path'),
-                  'additions': item.get('additions'),
-                  'deletions': item.get('deletions'),
-                  'changeType': item.get('changeType'),
-              }
-              for item in context.get('files', [])
-          ]
+                  context = json.loads(context_path.read_text())
+                  compact_context = {
+                      key: context.get(key)
+                      for key in [
+                          'number',
+                          'title',
+                          'baseRefName',
+                          'headRefName',
+                          'headRefOid',
+                          'changedFiles',
+                          'additions',
+                          'deletions',
+                      ]
+                  }
+                  compact_context['files'] = [
+                      {
+                          'path': item.get('path'),
+                          'additions': item.get('additions'),
+                          'deletions': item.get('deletions'),
+                          'changeType': item.get('changeType'),
+                      }
+                      for item in context.get('files', [])
+                  ]
 
-          header = '''
-          You are a Senior Staff Backend Engineer conducting a strict PR review.
-          Review only the provided PR metadata and unified diff chunk. Do not use tools. Do not invent findings.
-          The diff chunk contains only files changed by this PR. Do not comment on unchanged files or lines.
-          Return ONLY raw JSON. No markdown fences. No prose before or after JSON.
+                  header = '''
+                  You are a Senior Staff Backend Engineer conducting a strict PR review.
+                  Review only the provided PR metadata and unified diff chunk. Do not use tools. Do not invent findings.
+                  The diff chunk contains only files changed by this PR. Do not comment on unchanged files or lines.
+                  Return ONLY raw JSON. No markdown fences. No prose before or after JSON.
 
-          The JSON object must have exactly these keys:
-          - event: "COMMENT" or "REQUEST_CHANGES"
-          - body: string
-          - comments: array of objects with path, line, body
+                  The JSON object must have exactly these keys:
+                  - event: "COMMENT" or "REQUEST_CHANGES"
+                  - body: string
+                  - comments: array of objects with path, line, body
 
-          Rules:
-          - Use event "REQUEST_CHANGES" only for blocking correctness, security, data-loss, broken API contract, broken tests, or missing required tests for changed behavior.
-          - Use event "COMMENT" for non-blocking findings, weak confidence, style, maintainability, or no findings.
-          - Every comment must target only an added/modified RIGHT-side line present in this unified diff chunk.
-          - If there are no line-specific findings in this chunk, return comments: [] and explain in body.
-          - Focus on correctness, concurrency, route/API contract, error handling, tests, and security.
-          - Avoid style-only comments unless they indicate a real maintenance risk.
+                  Rules:
+                  - Use event "REQUEST_CHANGES" only for blocking correctness, security, data-loss, broken API contract, broken tests, or missing required tests for changed behavior.
+                  - Use event "COMMENT" for non-blocking findings, weak confidence, style, maintainability, or no findings.
+                  - Every comment must target only an added/modified RIGHT-side line present in this unified diff chunk.
+                  - If there are no line-specific findings in this chunk, return comments: [] and explain in body.
+                  - Focus on correctness, concurrency, route/API contract, error handling, tests, and security.
+                  - Avoid style-only comments unless they indicate a real maintenance risk.
 
-          PR metadata JSON follows:
-          '''.strip() + '\n'
+                  PR metadata JSON follows:
+                  '''.strip() + '\n'
 
-          files = []
-          current = []
-          for line in diff_path.read_text(errors='replace').splitlines(keepends=True):
-              if line.startswith('diff --git ') and current:
-                  files.append(''.join(current))
-                  current = [line]
-              else:
-                  current.append(line)
-          if current:
-              files.append(''.join(current))
+                  files = []
+                  current = []
+                  for line in diff_path.read_text(errors='replace').splitlines(keepends=True):
+                      if line.startswith('diff --git ') and current:
+                          files.append(''.join(current))
+                          current = [line]
+                      else:
+                          current.append(line)
+                  if current:
+                      files.append(''.join(current))
 
-          max_chars = 90000
-          chunks = []
-          current_chunk = []
-          current_size = 0
-          for file_diff in files:
-              if current_chunk and current_size + len(file_diff) > max_chars:
-                  chunks.append(''.join(current_chunk))
+                  max_chars = 90000
+                  chunks = []
                   current_chunk = []
                   current_size = 0
-              if len(file_diff) > max_chars:
-                  # Keep review scoped to the changed file, but split very large file diffs
-                  # at hunk boundaries so the CLI prompt never becomes an oversized argv.
-                  prefix = []
-                  active = []
-                  parts = []
-                  for line in file_diff.splitlines(keepends=True):
-                      if line.startswith('diff --git ') or line.startswith('index ') or line.startswith('--- ') or line.startswith('+++ '):
-                          prefix.append(line)
-                      elif line.startswith('@@') and active:
-                          parts.append(''.join(prefix + active))
-                          active = [line]
-                      else:
-                          active.append(line)
-                  if active:
-                      parts.append(''.join(prefix + active))
-                  for part in parts:
-                      if current_chunk and current_size + len(part) > max_chars:
+                  for file_diff in files:
+                      if current_chunk and current_size + len(file_diff) > max_chars:
                           chunks.append(''.join(current_chunk))
                           current_chunk = []
                           current_size = 0
-                      current_chunk.append(part)
-                      current_size += len(part)
-                  continue
-              current_chunk.append(file_diff)
-              current_size += len(file_diff)
-          if current_chunk:
-              chunks.append(''.join(current_chunk))
-          if not chunks:
-              chunks = ['']
-
-          for index, chunk in enumerate(chunks, 1):
-              prompt = (
-                  header
-                  + json.dumps(compact_context, indent=2)
-                  + f'\n\nUnified diff chunk {index}/{len(chunks)} follows:\n'
-                  + chunk
-              )
-              (chunks_dir / f'prompt-{index:03d}.txt').write_text(prompt)
-          (root / 'chunk-summary.json').write_text(json.dumps({
-              'chunk_count': len(chunks),
-              'max_chunk_chars': max_chars,
-              'prompt_files': [str(p) for p in sorted(chunks_dir.glob('prompt-*.txt'))],
-          }, indent=2) + '\n')
-          print(f"Prepared {len(chunks)} Qwen review prompt chunk(s)")
-          PY
-
-      - name: Run Qwen review
-        if: steps.secrets.outputs.skip != 'true'
-        id: qwen
-        continue-on-error: true
-        env:
-          OPENAI_API_KEY: ${{ secrets.QWEN_API_KEY }}
-          OPENAI_BASE_URL: https://coding-intl.dashscope.aliyuncs.com/v1
-          OPENAI_MODEL: qwen3.6-plus
-          QWEN_CODE_SUPPRESS_YOLO_WARNING: '1'
-        shell: bash
-        run: |
-          set +e
-          overall_rc=0
-          index=0
-          for prompt_file in qwen-review/chunks/prompt-*.txt; do
-            index=$((index + 1))
-            raw_file="qwen-review/review-${index}.raw"
-            stderr_file="qwen-review/qwen-${index}.stderr"
-            exit_file="qwen-review/qwen-${index}.exitcode"
-            # Qwen may perform one internal/tool-planning call even when the
-            # prompt says not to use tools. A zero budget aborts the review
-            # before it emits JSON, hiding the useful result behind artifacts.
-            qwen --auth-type openai \
-              --approval-mode plan \
-              --max-tool-calls 1 \
-              --max-session-turns 4 \
-              --max-wall-time 180s \
-              --output-format text \
-              < "${prompt_file}" \
-              > "${raw_file}" 2> "${stderr_file}"
-            rc=$?
-            echo "${rc}" > "${exit_file}"
-            if [[ "${rc}" != "0" ]]; then
-              overall_rc="${rc}"
-              break
-            fi
-          done
-          set -e
-          echo "exit_code=${overall_rc}" >> "${GITHUB_OUTPUT}"
-          echo "${overall_rc}" > qwen-review/qwen.exitcode
-          exit "${overall_rc}"
-
-      - name: Normalize review artifact
-        if: steps.secrets.outputs.skip != 'true'
-        id: normalize
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          import json
-          import pathlib
-          import re
-
-          root = pathlib.Path('qwen-review')
-
-          summary = {
-              'valid_json': False,
-              'valid_targets': False,
-              'event': None,
-              'comment_count': 0,
-              'invalid_comments': [],
-              'qwen_exit_code': int((root / 'qwen.exitcode').read_text().strip() or '1') if (root / 'qwen.exitcode').exists() else 1,
-              'chunk_count': 0,
-          }
-
-          def load_review(raw_path: pathlib.Path) -> dict:
-              text = raw_path.read_text() if raw_path.exists() else ''
-              text = text.strip()
-              if text.startswith('```'):
-                  text = re.sub(r'^```(?:json)?\s*', '', text)
-                  text = re.sub(r'\s*```$', '', text).strip()
-              review = json.loads(text)
-              if not isinstance(review, dict):
-                  raise ValueError(f'{raw_path.name}: review must be a JSON object')
-              event = review.get('event')
-              if event == 'REQUEST_CHANGE':
-                  event = 'REQUEST_CHANGES'
-                  review['event'] = event
-              if event not in {'COMMENT', 'REQUEST_CHANGES'}:
-                  raise ValueError(f'{raw_path.name}: event must be COMMENT or REQUEST_CHANGES')
-              if not isinstance(review.get('body'), str) or not review['body'].strip():
-                  raise ValueError(f'{raw_path.name}: body must be a non-empty string')
-              if not isinstance(review.get('comments'), list):
-                  raise ValueError(f'{raw_path.name}: comments must be an array')
-              for i, comment in enumerate(review['comments']):
-                  if not isinstance(comment, dict):
-                      raise ValueError(f'{raw_path.name}: comments[{i}] must be an object')
-                  if not isinstance(comment.get('path'), str) or not comment['path']:
-                      raise ValueError(f'{raw_path.name}: comments[{i}].path must be a non-empty string')
-                  if not isinstance(comment.get('line'), int) or comment['line'] < 1:
-                      raise ValueError(f'{raw_path.name}: comments[{i}].line must be a positive integer')
-                  if not isinstance(comment.get('body'), str) or not comment['body'].strip():
-                      raise ValueError(f'{raw_path.name}: comments[{i}].body must be a non-empty string')
-              return review
-
-          try:
-              raw_paths = sorted(root.glob('review-*.raw'))
-              if not raw_paths and (root / 'review.raw').exists():
-                  raw_paths = [root / 'review.raw']
-              if not raw_paths:
-                  raise ValueError('no Qwen review output files found')
-              reviews = [load_review(raw_path) for raw_path in raw_paths]
-              review = {
-                  'event': 'REQUEST_CHANGES' if any(r.get('event') == 'REQUEST_CHANGES' for r in reviews) else 'COMMENT',
-                  'body': '\n\n'.join(f"Chunk {idx}: {r.get('body', '').strip()}" for idx, r in enumerate(reviews, 1)),
-                  'comments': [comment for r in reviews for comment in r.get('comments', [])],
-              }
-
-              summary['valid_json'] = True
-              summary['event'] = review['event']
-              summary['comment_count'] = len(review['comments'])
-              summary['chunk_count'] = len(raw_paths)
-
-              added = {}
-              current = None
-              new_line = None
-              for diff_line in (root / 'pr.diff').read_text().splitlines():
-                  if diff_line.startswith('+++ b/'):
-                      current = diff_line[6:]
-                      added.setdefault(current, set())
-                      new_line = None
-                      continue
-                  if diff_line.startswith('@@'):
-                      match = re.search(r'\+(\d+)(?:,(\d+))?', diff_line)
-                      new_line = int(match.group(1)) if match else None
-                      continue
-                  if current and new_line is not None:
-                      if diff_line.startswith('+') and not diff_line.startswith('+++'):
-                          added[current].add(new_line)
-                          new_line += 1
-                      elif diff_line.startswith('-') and not diff_line.startswith('---'):
-                          pass
-                      else:
-                          new_line += 1
-
-              for i, comment in enumerate(review['comments']):
-                  if comment['line'] not in added.get(comment['path'], set()):
-                      summary['invalid_comments'].append({
-                          'index': i,
-                          'path': comment['path'],
-                          'line': comment['line'],
-                      })
-              summary['valid_targets'] = not summary['invalid_comments']
-              (root / 'review.json').write_text(json.dumps(review, indent=2) + '\n')
-          except Exception as exc:
-              summary['error'] = str(exc)
-
-          (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
-          print(json.dumps(summary, indent=2))
-          print(f"event={summary['event'] or ''}")
-          print(f"valid_json={str(summary['valid_json']).lower()}")
-          print(f"valid_targets={str(summary['valid_targets']).lower()}")
-          with open(pathlib.Path(__import__('os').environ['GITHUB_OUTPUT']), 'a') as out:
-              print(f"event={summary['event'] or ''}", file=out)
-              print(f"valid_json={str(summary['valid_json']).lower()}", file=out)
-              print(f"valid_targets={str(summary['valid_targets']).lower()}", file=out)
-              print(f"qwen_exit_code={summary['qwen_exit_code']}", file=out)
-          PY
-
-      - name: Display Qwen review result
-        if: steps.secrets.outputs.skip != 'true' && always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          import json
-          import os
-          import pathlib
-          import re
-
-          root = pathlib.Path('qwen-review')
-          summary_path = root / 'summary.json'
-          review_path = root / 'review.json'
-          summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
-          review = json.loads(review_path.read_text()) if review_path.exists() else None
-
-          def clipped(text: str, limit: int = 12000) -> str:
-              if len(text) <= limit:
-                  return text
-              return text[:limit] + f"\n\n... truncated {len(text) - limit} characters; download qwen-review artifact for full output ..."
-
-          def redacted(text: str) -> str:
-              patterns = [
-                  (r'(?i)(authorization:\s*bearer\s+)[^\s]+', r'\1***'),
-                  (r'(?i)((?:api[_-]?key|token|password|secret)=)[^\s&]+', r'\1***'),
-                  (r'github_pat_[A-Za-z0-9_]+', 'github_pat_***'),
-                  (r'gh[opsu]_[A-Za-z0-9_]+', 'gh*_***'),
-                  (r'sk-[A-Za-z0-9_-]{12,}', 'sk-***'),
-                  (r'(https?://)[^:/\s]+:[^@/\s]+@', r'\1***:***@'),
-              ]
-              for pattern, replacement in patterns:
-                  text = re.sub(pattern, replacement, text)
-              return text
-
-          lines = [
-              '# Qwen review result',
-              '',
-              f"- Qwen exit code: `{summary.get('qwen_exit_code', '')}`",
-              f"- Valid JSON: `{str(summary.get('valid_json', '')).lower()}`",
-              f"- Valid targets: `{str(summary.get('valid_targets', '')).lower()}`",
-              f"- Event: `{summary.get('event') or ''}`",
-              f"- Comment count: `{summary.get('comment_count', 0)}`",
-              f"- Chunk count: `{summary.get('chunk_count', 0)}`",
-          ]
-          if summary.get('error'):
-              lines.extend(['', '## Normalization error', '', '```text', str(summary['error']), '```'])
-          if summary.get('invalid_comments'):
-              lines.extend(['', '## Invalid comment targets', '', '```json', json.dumps(summary['invalid_comments'], indent=2), '```'])
-          stderr_files = sorted(root.glob('qwen-*.stderr'))
-          if stderr_files:
-              lines.extend(['', '## Qwen stderr', ''])
-              for path in stderr_files:
-                  text = path.read_text(errors='replace').strip()
-                  if not text:
-                      continue
-                  lines.extend([f'### {path.name}', '', '```text', clipped(redacted(text)), '```'])
-          if review:
-              lines.extend(['', '## Review body', '', redacted((review.get('body') or '').strip() or '(empty)')])
-              comments = review.get('comments') or []
-              if comments:
-                  lines.extend(['', '## Review comments'])
-                  for comment in comments:
-                      lines.extend([
-                          '',
-                          f"- `{comment.get('path')}:{comment.get('line')}`",
-                          '',
-                          redacted((comment.get('body') or '').strip()),
-                      ])
-          else:
-              raw_files = sorted(root.glob('review-*.raw'))
-              if raw_files:
-                  lines.extend(['', '## Raw Qwen output'])
-                  for path in raw_files:
-                      text = path.read_text(errors='replace').strip()
-                      if not text:
+                      if len(file_diff) > max_chars:
+                          # Keep review scoped to the changed file, but split very large file diffs
+                          # at hunk boundaries so the CLI prompt never becomes an oversized argv.
+                          prefix = []
+                          active = []
+                          parts = []
+                          for line in file_diff.splitlines(keepends=True):
+                              if line.startswith('diff --git ') or line.startswith('index ') or line.startswith('--- ') or line.startswith('+++ '):
+                                  prefix.append(line)
+                              elif line.startswith('@@') and active:
+                                  parts.append(''.join(prefix + active))
+                                  active = [line]
+                              else:
+                                  active.append(line)
+                          if active:
+                              parts.append(''.join(prefix + active))
+                          for part in parts:
+                              if current_chunk and current_size + len(part) > max_chars:
+                                  chunks.append(''.join(current_chunk))
+                                  current_chunk = []
+                                  current_size = 0
+                              current_chunk.append(part)
+                              current_size += len(part)
                           continue
-                      lines.extend([f'### {path.name}', '', '```text', clipped(redacted(text)), '```'])
-          rendered = '\n'.join(lines) + '\n'
-          print(rendered)
-          summary_file = pathlib.Path(os.environ['GITHUB_STEP_SUMMARY'])
-          with summary_file.open('a') as out:
-              out.write(rendered)
-          PY
+                      current_chunk.append(file_diff)
+                      current_size += len(file_diff)
+                  if current_chunk:
+                      chunks.append(''.join(current_chunk))
+                  if not chunks:
+                      chunks = ['']
 
-      - name: Upload review artifact
-        if: steps.secrets.outputs.skip != 'true' && always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: qwen-review-pr-${{ github.event.pull_request.number }}
-          path: qwen-review/
-          if-no-files-found: error
-          retention-days: 14
+                  for index, chunk in enumerate(chunks, 1):
+                      prompt = (
+                          header
+                          + json.dumps(compact_context, indent=2)
+                          + f'\n\nUnified diff chunk {index}/{len(chunks)} follows:\n'
+                          + chunk
+                      )
+                      (chunks_dir / f'prompt-{index:03d}.txt').write_text(prompt)
+                  (root / 'chunk-summary.json').write_text(json.dumps({
+                      'chunk_count': len(chunks),
+                      'max_chunk_chars': max_chars,
+                      'prompt_files': [str(p) for p in sorted(chunks_dir.glob('prompt-*.txt'))],
+                  }, indent=2) + '\n')
+                  print(f"Prepared {len(chunks)} Qwen review prompt chunk(s)")
+                  PY
 
-      - name: Gate on Qwen result
-        if: steps.secrets.outputs.skip != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          qwen_exit='${{ steps.normalize.outputs.qwen_exit_code }}'
-          valid_json='${{ steps.normalize.outputs.valid_json }}'
-          valid_targets='${{ steps.normalize.outputs.valid_targets }}'
-          event='${{ steps.normalize.outputs.event }}'
+            - name: Run Qwen review
+              if: steps.secrets.outputs.skip != 'true'
+              id: qwen
+              continue-on-error: true
+              env:
+                  OPENAI_API_KEY: ${{ secrets.QWEN_API_KEY }}
+                  OPENAI_BASE_URL: https://coding-intl.dashscope.aliyuncs.com/v1
+                  OPENAI_MODEL: qwen3.7-plus
+                  QWEN_CODE_SUPPRESS_YOLO_WARNING: "1"
+              shell: bash
+              run: |
+                  set +e
+                  overall_rc=0
+                  index=0
+                  for prompt_file in qwen-review/chunks/prompt-*.txt; do
+                    index=$((index + 1))
+                    raw_file="qwen-review/review-${index}.raw"
+                    stderr_file="qwen-review/qwen-${index}.stderr"
+                    exit_file="qwen-review/qwen-${index}.exitcode"
+                    # Qwen may perform one internal/tool-planning call even when the
+                    # prompt says not to use tools. A zero budget aborts the review
+                    # before it emits JSON, hiding the useful result behind artifacts.
+                    qwen --auth-type openai \
+                      --approval-mode plan \
+                      --max-tool-calls 1 \
+                      --max-session-turns 4 \
+                      --max-wall-time 180s \
+                      --output-format text \
+                      < "${prompt_file}" \
+                      > "${raw_file}" 2> "${stderr_file}"
+                    rc=$?
+                    echo "${rc}" > "${exit_file}"
+                    if [[ "${rc}" != "0" ]]; then
+                      overall_rc="${rc}"
+                      break
+                    fi
+                  done
+                  set -e
+                  echo "exit_code=${overall_rc}" >> "${GITHUB_OUTPUT}"
+                  echo "${overall_rc}" > qwen-review/qwen.exitcode
+                  exit "${overall_rc}"
 
-          if [[ "${qwen_exit}" != "0" ]]; then
-            echo "::error title=Qwen review failed::Qwen exited with ${qwen_exit}. See the Display Qwen review result step above."
-            exit 1
-          fi
-          if [[ "${valid_json}" != "true" ]]; then
-            echo "::error title=Qwen review invalid::Qwen did not return valid review JSON. See the Display Qwen review result step above."
-            exit 1
-          fi
-          if [[ "${valid_targets}" != "true" ]]; then
-            echo "::error title=Qwen review invalid targets::One or more comments do not target added PR lines. See the Display Qwen review result step above."
-            exit 1
-          fi
-          if [[ "${event}" == "REQUEST_CHANGES" ]]; then
-            echo "::error title=Qwen requested changes::Qwen returned REQUEST_CHANGES. See the Display Qwen review result step above."
-            exit 1
-          fi
-          echo "Qwen returned ${event}; no blocking review requested."
+            - name: Normalize review artifact
+              if: steps.secrets.outputs.skip != 'true'
+              id: normalize
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  python3 <<'PY'
+                  import json
+                  import pathlib
+                  import re
+
+                  root = pathlib.Path('qwen-review')
+
+                  summary = {
+                      'valid_json': False,
+                      'valid_targets': False,
+                      'event': None,
+                      'comment_count': 0,
+                      'invalid_comments': [],
+                      'qwen_exit_code': int((root / 'qwen.exitcode').read_text().strip() or '1') if (root / 'qwen.exitcode').exists() else 1,
+                      'chunk_count': 0,
+                  }
+
+                  def load_review(raw_path: pathlib.Path) -> dict:
+                      text = raw_path.read_text() if raw_path.exists() else ''
+                      text = text.strip()
+                      if text.startswith('```'):
+                          text = re.sub(r'^```(?:json)?\s*', '', text)
+                          text = re.sub(r'\s*```$', '', text).strip()
+                      review = json.loads(text)
+                      if not isinstance(review, dict):
+                          raise ValueError(f'{raw_path.name}: review must be a JSON object')
+                      event = review.get('event')
+                      if event == 'REQUEST_CHANGE':
+                          event = 'REQUEST_CHANGES'
+                          review['event'] = event
+                      if event not in {'COMMENT', 'REQUEST_CHANGES'}:
+                          raise ValueError(f'{raw_path.name}: event must be COMMENT or REQUEST_CHANGES')
+                      if not isinstance(review.get('body'), str) or not review['body'].strip():
+                          raise ValueError(f'{raw_path.name}: body must be a non-empty string')
+                      if not isinstance(review.get('comments'), list):
+                          raise ValueError(f'{raw_path.name}: comments must be an array')
+                      for i, comment in enumerate(review['comments']):
+                          if not isinstance(comment, dict):
+                              raise ValueError(f'{raw_path.name}: comments[{i}] must be an object')
+                          if not isinstance(comment.get('path'), str) or not comment['path']:
+                              raise ValueError(f'{raw_path.name}: comments[{i}].path must be a non-empty string')
+                          if not isinstance(comment.get('line'), int) or comment['line'] < 1:
+                              raise ValueError(f'{raw_path.name}: comments[{i}].line must be a positive integer')
+                          if not isinstance(comment.get('body'), str) or not comment['body'].strip():
+                              raise ValueError(f'{raw_path.name}: comments[{i}].body must be a non-empty string')
+                      return review
+
+                  try:
+                      raw_paths = sorted(root.glob('review-*.raw'))
+                      if not raw_paths and (root / 'review.raw').exists():
+                          raw_paths = [root / 'review.raw']
+                      if not raw_paths:
+                          raise ValueError('no Qwen review output files found')
+                      reviews = [load_review(raw_path) for raw_path in raw_paths]
+                      review = {
+                          'event': 'REQUEST_CHANGES' if any(r.get('event') == 'REQUEST_CHANGES' for r in reviews) else 'COMMENT',
+                          'body': '\n\n'.join(f"Chunk {idx}: {r.get('body', '').strip()}" for idx, r in enumerate(reviews, 1)),
+                          'comments': [comment for r in reviews for comment in r.get('comments', [])],
+                      }
+
+                      summary['valid_json'] = True
+                      summary['event'] = review['event']
+                      summary['comment_count'] = len(review['comments'])
+                      summary['chunk_count'] = len(raw_paths)
+
+                      added = {}
+                      current = None
+                      new_line = None
+                      for diff_line in (root / 'pr.diff').read_text().splitlines():
+                          if diff_line.startswith('+++ b/'):
+                              current = diff_line[6:]
+                              added.setdefault(current, set())
+                              new_line = None
+                              continue
+                          if diff_line.startswith('@@'):
+                              match = re.search(r'\+(\d+)(?:,(\d+))?', diff_line)
+                              new_line = int(match.group(1)) if match else None
+                              continue
+                          if current and new_line is not None:
+                              if diff_line.startswith('+') and not diff_line.startswith('+++'):
+                                  added[current].add(new_line)
+                                  new_line += 1
+                              elif diff_line.startswith('-') and not diff_line.startswith('---'):
+                                  pass
+                              else:
+                                  new_line += 1
+
+                      for i, comment in enumerate(review['comments']):
+                          if comment['line'] not in added.get(comment['path'], set()):
+                              summary['invalid_comments'].append({
+                                  'index': i,
+                                  'path': comment['path'],
+                                  'line': comment['line'],
+                              })
+                      summary['valid_targets'] = not summary['invalid_comments']
+                      (root / 'review.json').write_text(json.dumps(review, indent=2) + '\n')
+                  except Exception as exc:
+                      summary['error'] = str(exc)
+
+                  (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+                  print(json.dumps(summary, indent=2))
+                  print(f"event={summary['event'] or ''}")
+                  print(f"valid_json={str(summary['valid_json']).lower()}")
+                  print(f"valid_targets={str(summary['valid_targets']).lower()}")
+                  with open(pathlib.Path(__import__('os').environ['GITHUB_OUTPUT']), 'a') as out:
+                      print(f"event={summary['event'] or ''}", file=out)
+                      print(f"valid_json={str(summary['valid_json']).lower()}", file=out)
+                      print(f"valid_targets={str(summary['valid_targets']).lower()}", file=out)
+                      print(f"qwen_exit_code={summary['qwen_exit_code']}", file=out)
+                  PY
+
+            - name: Display Qwen review result
+              if: steps.secrets.outputs.skip != 'true' && always()
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  python3 <<'PY'
+                  import json
+                  import os
+                  import pathlib
+                  import re
+
+                  root = pathlib.Path('qwen-review')
+                  summary_path = root / 'summary.json'
+                  review_path = root / 'review.json'
+                  summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+                  review = json.loads(review_path.read_text()) if review_path.exists() else None
+
+                  def clipped(text: str, limit: int = 12000) -> str:
+                      if len(text) <= limit:
+                          return text
+                      return text[:limit] + f"\n\n... truncated {len(text) - limit} characters; download qwen-review artifact for full output ..."
+
+                  def redacted(text: str) -> str:
+                      patterns = [
+                          (r'(?i)(authorization:\s*bearer\s+)[^\s]+', r'\1***'),
+                          (r'(?i)((?:api[_-]?key|token|password|secret)=)[^\s&]+', r'\1***'),
+                          (r'github_pat_[A-Za-z0-9_]+', 'github_pat_***'),
+                          (r'gh[opsu]_[A-Za-z0-9_]+', 'gh*_***'),
+                          (r'sk-[A-Za-z0-9_-]{12,}', 'sk-***'),
+                          (r'(https?://)[^:/\s]+:[^@/\s]+@', r'\1***:***@'),
+                      ]
+                      for pattern, replacement in patterns:
+                          text = re.sub(pattern, replacement, text)
+                      return text
+
+                  lines = [
+                      '# Qwen review result',
+                      '',
+                      f"- Qwen exit code: `{summary.get('qwen_exit_code', '')}`",
+                      f"- Valid JSON: `{str(summary.get('valid_json', '')).lower()}`",
+                      f"- Valid targets: `{str(summary.get('valid_targets', '')).lower()}`",
+                      f"- Event: `{summary.get('event') or ''}`",
+                      f"- Comment count: `{summary.get('comment_count', 0)}`",
+                      f"- Chunk count: `{summary.get('chunk_count', 0)}`",
+                  ]
+                  if summary.get('error'):
+                      lines.extend(['', '## Normalization error', '', '```text', str(summary['error']), '```'])
+                  if summary.get('invalid_comments'):
+                      lines.extend(['', '## Invalid comment targets', '', '```json', json.dumps(summary['invalid_comments'], indent=2), '```'])
+                  stderr_files = sorted(root.glob('qwen-*.stderr'))
+                  if stderr_files:
+                      lines.extend(['', '## Qwen stderr', ''])
+                      for path in stderr_files:
+                          text = path.read_text(errors='replace').strip()
+                          if not text:
+                              continue
+                          lines.extend([f'### {path.name}', '', '```text', clipped(redacted(text)), '```'])
+                  if review:
+                      lines.extend(['', '## Review body', '', redacted((review.get('body') or '').strip() or '(empty)')])
+                      comments = review.get('comments') or []
+                      if comments:
+                          lines.extend(['', '## Review comments'])
+                          for comment in comments:
+                              lines.extend([
+                                  '',
+                                  f"- `{comment.get('path')}:{comment.get('line')}`",
+                                  '',
+                                  redacted((comment.get('body') or '').strip()),
+                              ])
+                  else:
+                      raw_files = sorted(root.glob('review-*.raw'))
+                      if raw_files:
+                          lines.extend(['', '## Raw Qwen output'])
+                          for path in raw_files:
+                              text = path.read_text(errors='replace').strip()
+                              if not text:
+                                  continue
+                              lines.extend([f'### {path.name}', '', '```text', clipped(redacted(text)), '```'])
+                  rendered = '\n'.join(lines) + '\n'
+                  print(rendered)
+                  summary_file = pathlib.Path(os.environ['GITHUB_STEP_SUMMARY'])
+                  with summary_file.open('a') as out:
+                      out.write(rendered)
+                  PY
+
+            - name: Upload review artifact
+              if: steps.secrets.outputs.skip != 'true' && always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: qwen-review-pr-${{ github.event.pull_request.number }}
+                  path: qwen-review/
+                  if-no-files-found: error
+                  retention-days: 14
+
+            - name: Gate on Qwen result
+              if: steps.secrets.outputs.skip != 'true'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  qwen_exit='${{ steps.normalize.outputs.qwen_exit_code }}'
+                  valid_json='${{ steps.normalize.outputs.valid_json }}'
+                  valid_targets='${{ steps.normalize.outputs.valid_targets }}'
+                  event='${{ steps.normalize.outputs.event }}'
+
+                  if [[ "${qwen_exit}" != "0" ]]; then
+                    echo "::error title=Qwen review failed::Qwen exited with ${qwen_exit}. See the Display Qwen review result step above."
+                    exit 1
+                  fi
+                  if [[ "${valid_json}" != "true" ]]; then
+                    echo "::error title=Qwen review invalid::Qwen did not return valid review JSON. See the Display Qwen review result step above."
+                    exit 1
+                  fi
+                  if [[ "${valid_targets}" != "true" ]]; then
+                    echo "::error title=Qwen review invalid targets::One or more comments do not target added PR lines. See the Display Qwen review result step above."
+                    exit 1
+                  fi
+                  if [[ "${event}" == "REQUEST_CHANGES" ]]; then
+                    echo "::error title=Qwen requested changes::Qwen returned REQUEST_CHANGES. See the Display Qwen review result step above."
+                    exit 1
+                  fi
+                  echo "Qwen returned ${event}; no blocking review requested."

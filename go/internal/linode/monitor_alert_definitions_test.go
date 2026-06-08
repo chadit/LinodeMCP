@@ -2,6 +2,8 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -24,12 +26,25 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		monitorCheckEqual(t, monitorAlertDefinitionsPath, r.URL.Path, "request path should match")
-		monitorCheckEqual(t, monitorAlertDefinitionsQuery, r.URL.RawQuery, "request query should include pagination")
-		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertDefinitionsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertDefinitionsPath)
+		}
+
+		if r.URL.RawQuery != monitorAlertDefinitionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, monitorAlertDefinitionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyID:          monitorAlertDefinitionID,
 				keyLabel:       monitorAlertDefinitionLabel,
@@ -42,49 +57,112 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 2, 25)
 
-	monitorRequireNoError(t, err)
-	monitorRequireNotNil(t, got)
-	monitorCheckEqual(t, 1, got.Page)
-	monitorCheckEqual(t, 1, got.Pages)
-	monitorCheckEqual(t, 1, got.Results)
-	monitorRequireLenOne(t, got.Data)
-	monitorCheckEqual(t, monitorAlertDefinitionID, got.Data[0].ID)
-	monitorCheckEqual(t, monitorAlertDefinitionLabel, got.Data[0].Label)
-	monitorCheckEqual(t, monitorAlertDefinitionType, got.Data[0].Type)
-	monitorCheckEqual(t, monitorAlertDefinitionServiceType, got.Data[0].ServiceType)
-	monitorCheckEqual(t, monitorAlertDefinitionDescription, got.Data[0].Description)
-	monitorCheckEqual(t, 2, got.Data[0].Severity)
-	monitorCheckNumericClose(t, 90, got.Data[0].Criteria[keyThreshold])
+	got, err := client.ListMonitorAlertDefinitions(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Page != 1 {
+		t.Errorf("got.Page = %v, want %v", got.Page, 1)
+	}
+
+	if got.Pages != 1 {
+		t.Errorf("got.Pages = %v, want %v", got.Pages, 1)
+	}
+
+	if got.Results != 1 {
+		t.Errorf("got.Results = %v, want %v", got.Results, 1)
+	}
+
+	if len(got.Data) != 1 {
+		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	}
+
+	if got.Data[0].ID != monitorAlertDefinitionID {
+		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertDefinitionID)
+	}
+
+	if got.Data[0].Label != monitorAlertDefinitionLabel {
+		t.Errorf("got.Data[0].Label = %v, want %v", got.Data[0].Label, monitorAlertDefinitionLabel)
+	}
+
+	if got.Data[0].Type != monitorAlertDefinitionType {
+		t.Errorf("got.Data[0].Type = %v, want %v", got.Data[0].Type, monitorAlertDefinitionType)
+	}
+
+	if got.Data[0].ServiceType != monitorAlertDefinitionServiceType {
+		t.Errorf("got.Data[0].ServiceType = %v, want %v", got.Data[0].ServiceType, monitorAlertDefinitionServiceType)
+	}
+
+	if got.Data[0].Description != monitorAlertDefinitionDescription {
+		t.Errorf("got.Data[0].Description = %v, want %v", got.Data[0].Description, monitorAlertDefinitionDescription)
+	}
+
+	if got.Data[0].Severity != 2 {
+		t.Errorf("got.Data[0].Severity = %v, want %v", got.Data[0].Severity, 2)
+	}
+
+	if numVal, numOK := got.Data[0].Criteria[keyThreshold].(float64); !numOK || math.Abs(numVal-float64(90)) > math.Abs(float64(90))*0.001 {
+		t.Errorf("got.Data[0].Criteria[keyThreshold] = %v, want ~%v", got.Data[0].Criteria[keyThreshold], 90)
+	}
 }
 
 func TestClientListMonitorAlertDefinitionsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		monitorCheckEqual(t, monitorAlertDefinitionsPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertDefinitionsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertDefinitionsPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	monitorRequireError(t, err)
-	monitorCheckNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := monitorRequireAPIError(t, err)
-	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	monitorCheckEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientListMonitorAlertDefinitionsRetriesTransientError(t *testing.T) {
@@ -93,8 +171,13 @@ func TestClientListMonitorAlertDefinitionsRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		monitorCheckEqual(t, monitorAlertDefinitionsPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertDefinitionsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertDefinitionsPath)
+		}
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -102,19 +185,36 @@ func TestClientListMonitorAlertDefinitionsRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{keyID: monitorAlertDefinitionID, keyLabel: monitorAlertDefinitionLabel}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
 
-	monitorRequireNoError(t, err)
-	monitorRequireNotNil(t, got)
-	monitorCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	monitorRequireLenOne(t, got.Data)
-	monitorCheckEqual(t, monitorAlertDefinitionID, got.Data[0].ID)
+	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
+
+	if len(got.Data) != 1 {
+		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	}
+
+	if got.Data[0].ID != monitorAlertDefinitionID {
+		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertDefinitionID)
+	}
 }

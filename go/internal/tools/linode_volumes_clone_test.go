@@ -4,39 +4,67 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeVolumeCloneTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeCloneToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeCloneTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_clone", tool.Name)
-		assert.NotEmpty(t, tool.Description)
-		require.NotNil(t, handler)
-		assert.Contains(t, tool.Description, "WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyVolumeID)
-		assert.Contains(t, props, keyLabel)
-		assert.Contains(t, props, keyConfirm)
-		assert.Contains(t, props, keyDryRun)
-	})
+	if tool.Name != "linode_volume_clone" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_clone")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyVolumeID]; !ok {
+		t.Errorf("props missing key %v", keyVolumeID)
+	}
+
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyDryRun]; !ok {
+		t.Errorf("props missing key %v", keyDryRun)
+	}
+}
+
+func TestLinodeVolumeCloneToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeCloneTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -58,56 +86,100 @@ func TestLinodeVolumeCloneTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError)
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful clone", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeVolumeCloneToolSuccessfulClone(t *testing.T) {
+	t.Parallel()
 
-		volume := linode.Volume{ID: 444, Label: labelDataVol, Region: regionUSEast, Status: imageUploadStatusFixture}
+	volume := linode.Volume{ID: 444, Label: labelDataVol, Region: regionUSEast, Status: imageUploadStatusFixture}
 
-		var requestCount atomic.Int32
+	var requestCount atomic.Int32
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			assert.Equal(t, "/volumes/333/clone", r.URL.Path)
-			assert.Equal(t, http.MethodPost, r.Method)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
 
-			var body map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			assert.Equal(t, labelDataVol, body[keyLabel])
+		if r.URL.Path != "/volumes/333/clone" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/333/clone")
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(volume))
-		}))
-		t.Cleanup(srv.Close)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeCloneTool(successCfg)
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		result, err := successHandler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyLabel:    labelDataVol,
-			keyConfirm:  true,
-		}))
+		if !reflect.DeepEqual(body[keyLabel], labelDataVol) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], labelDataVol)
+		}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError)
-		assert.Equal(t, int32(1), requestCount.Load())
+		w.Header().Set("Content-Type", "application/json")
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		assert.Contains(t, textContent.Text, "cloned successfully")
-		assert.Contains(t, textContent.Text, labelDataVol)
-	})
+		if err := json.NewEncoder(w).Encode(volume); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeCloneTool(successCfg)
+
+	result, err := successHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyLabel:    labelDataVol,
+		keyConfirm:  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "cloned successfully") {
+		t.Errorf("textContent.Text does not contain %v", "cloned successfully")
+	}
+
+	if !strings.Contains(textContent.Text, labelDataVol) {
+		t.Errorf("textContent.Text does not contain %v", labelDataVol)
+	}
 }
 
 func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
@@ -117,10 +189,19 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		methodsSeen = append(methodsSeen, r.Method)
-		assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
-		assert.Equal(t, "/volumes/333", r.URL.Path)
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcVolumes333 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcVolumes333)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: testVolumeLabel, Region: regionUSEast}))
+
+		if err := json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: testVolumeLabel, Region: regionUSEast}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -150,12 +231,25 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 			keyLabel:    "",
 			keyDryRun:   true,
 		}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, errLabelRequired)
-		assert.Equal(t, int32(0), requestCount.Load())
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errLabelRequired) {
+			t.Errorf("error text %q does not contain %q", text.Text, errLabelRequired)
+		}
+
+		if requestCount.Load() != int32(0) {
+			t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+		}
 	})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -163,18 +257,41 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 		keyLabel:    labelDataVol,
 		keyDryRun:   true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-	require.Equal(t, []string{http.MethodGet}, methodsSeen)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Fatalf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, true, body[keyDryRun])
-	assert.Equal(t, "linode_volume_clone", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_volume_clone") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_volume_clone")
+	}
 
 	would, _ := body["would_execute"].(map[string]any)
-	assert.Equal(t, "POST", would["method"])
-	assert.Equal(t, "/volumes/333/clone", would["path"])
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/volumes/333/clone") {
+		t.Errorf("got %v, want %v", would["path"], "/volumes/333/clone")
+	}
 }

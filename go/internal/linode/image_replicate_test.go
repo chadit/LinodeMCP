@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -16,68 +18,114 @@ func TestClientReplicateImageSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/images/private%2F123/regions", r.URL.EscapedPath(), "request path should escape image ID")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.EscapedPath() != "/images/private%2F123/regions" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F123/regions")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]any
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
 			return
 		}
 
-		checkEqual(t, []any{regionUSMiami, regionUSEast}, body["regions"])
+		if !reflect.DeepEqual(body["regions"], []any{regionUSMiami, regionUSEast}) {
+			t.Errorf("got %v, want %v", body["regions"], []any{regionUSMiami, regionUSEast})
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Image{ID: privateImage123Fixture, Label: "replicated-image"}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Image{ID: privateImage123Fixture, Label: "replicated-image"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	image, err := client.ReplicateImage(t.Context(), privateImage123Fixture, &linode.ReplicateImageRequest{Regions: []string{regionUSMiami, regionUSEast}})
 
-	requireNoError(t, err)
-	requireNotNil(t, image)
-	checkEqual(t, privateImage123Fixture, image.ID)
+	image, err := client.ReplicateImage(t.Context(), privateImage123Fixture, &linode.ReplicateImageRequest{Regions: []string{regionUSMiami, regionUSEast}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if image == nil {
+		t.Fatal("image is nil")
+	}
+
+	if image.ID != privateImage123Fixture {
+		t.Errorf("image.ID = %v, want %v", image.ID, privateImage123Fixture)
+	}
 }
 
 func TestClientReplicateImageEscapesImageID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/images/private%2F123%3Fbad/regions", r.URL.EscapedPath(), "request path should escape image ID")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Image{ID: "private/123?bad"}))
+		if r.URL.EscapedPath() != "/images/private%2F123%3Fbad/regions" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F123%3Fbad/regions")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Image{ID: "private/123?bad"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ReplicateImage(t.Context(), "private/123?bad", &linode.ReplicateImageRequest{Regions: []string{regionUSEast}})
-
-	requireNoError(t, err, "ReplicateImage should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientReplicateImageAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ReplicateImage(t.Context(), privateImage123Fixture, &linode.ReplicateImageRequest{Regions: []string{regionUSEast}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 
-	apiErr := requireAPIError(t, err, "expected APIError")
-	checkEqual(t, errTemporaryFailure, apiErr.Message)
+	if apiErr.Message != errTemporaryFailure {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errTemporaryFailure)
+	}
 }
 
 func TestClientReplicateImageNetworkError(t *testing.T) {
@@ -86,11 +134,18 @@ func TestClientReplicateImageNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ReplicateImage(t.Context(), privateImage123Fixture, &linode.ReplicateImageRequest{Regions: []string{regionUSEast}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err)
+	networkErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.NetworkError", err)
+	}
 
-	networkErr := requireNetworkError(t, err, "expected NetworkError")
-	checkEqual(t, "ReplicateImage", networkErr.Operation)
+	if networkErr.Operation != "ReplicateImage" {
+		t.Errorf("networkErr.Operation = %v, want %v", networkErr.Operation, "ReplicateImage")
+	}
 }
 
 func TestClientReplicateImageDoesNotRetry(t *testing.T) {
@@ -101,16 +156,23 @@ func TestClientReplicateImageDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.ReplicateImage(t.Context(), privateImage123Fixture, &linode.ReplicateImageRequest{Regions: []string{regionUSEast}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err)
-	checkEqual(t, int32(1), requestCount.Load(), "mutating replicate request must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

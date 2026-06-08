@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -24,9 +23,7 @@ const (
 	vlanInterfaceAddJSON           = `{"vlan":{"vlan_label":"backend","ipam_address":"10.0.0.1/24"}}`
 )
 
-func TestLinodeInstanceInterfaceAddTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceInterfaceAddToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -34,19 +31,51 @@ func TestLinodeInstanceInterfaceAddTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeInstanceInterfaceAddTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, toolLinodeInstanceInterfaceAdd, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "capability should be write")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "tool description should warn about mutation")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, props, keyInterface, "schema should include interface")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	})
+	if tool.Name != toolLinodeInstanceInterfaceAdd {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolLinodeInstanceInterfaceAdd)
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyLinodeID]; !ok {
+		t.Errorf("props missing key %v", keyLinodeID)
+	}
+
+	if _, ok := props[keyInterface]; !ok {
+		t.Errorf("props missing key %v", keyInterface)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeInstanceInterfaceAddToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceInterfaceAddTool(cfg)
 
 	validationTests := []instanceConfigCreateValidationCase{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyInterface: publicInterfaceAddJSON}, wantContains: errConfirmEqualsTrue},
@@ -71,83 +100,145 @@ func TestLinodeInstanceInterfaceAddTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful public interface creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceInterfaceAddToolSuccessfulPublicInterfaceCreation(t *testing.T) {
+	t.Parallel()
 
-		created := linode.InstanceInterface{ID: 1234, Public: &linode.InterfacePublicConfig{}}
+	created := linode.InstanceInterface{ID: 1234, Public: &linode.InterfacePublicConfig{}}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/linode/instances/123/interfaces", r.URL.Path, "request path should match")
-
-			var got linode.AddInstanceInterfaceRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
-
-			if assert.NotNil(t, got.Public, "public interface should be sent") && assert.NotNil(t, got.Public.IPv4, "public IPv4 should be sent") {
-				assert.Equal(t, "auto", got.Public.IPv4.Addresses[0].Address, "IPv4 address should match")
-			}
-
-			if assert.NotNil(t, got.DefaultRoute, "default route should be sent") && assert.NotNil(t, got.DefaultRoute.IPv4, "IPv4 default route should be sent") {
-				assert.True(t, *got.DefaultRoute.IPv4, "default route should match")
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(created), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceInterfaceAddTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterface: publicInterfaceAddJSON, keyConfirm: true})
+		if r.URL.Path != tcLinodeInstances123Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces)
+		}
+
+		var got linode.AddInstanceInterfaceRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		switch {
+		case got.Public == nil || got.Public.IPv4 == nil:
+			t.Error("public interface IPv4 should be sent")
+		case got.Public.IPv4.Addresses[0].Address != "auto":
+			t.Errorf("got.Public.IPv4.Addresses[0].Address = %v, want %v", got.Public.IPv4.Addresses[0].Address, "auto")
+		}
+
+		switch {
+		case got.DefaultRoute == nil || got.DefaultRoute.IPv4 == nil:
+			t.Error("IPv4 default route should be sent")
+		case !(*got.DefaultRoute.IPv4):
+			t.Error("*got.DefaultRoute.IPv4 = false, want true")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInstanceInterfaceAddTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterface: publicInterfaceAddJSON, keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "1234") {
+		t.Errorf("textContent.Text does not contain %v", "1234")
+	}
+
+	if !strings.Contains(textContent.Text, "Interface added to instance 123") {
+		t.Errorf("textContent.Text does not contain %v", "Interface added to instance 123")
+	}
+}
+
+func TestLinodeInstanceInterfaceAddToolAcceptsVpcAndVlanInterfaceBodies(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+
+		if r.URL.Path != tcLinodeInstances123Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceInterface{ID: int(calls.Load())}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeInstanceInterfaceAddTool(srvCfg)
+
+	for _, body := range []string{vpcInterfaceAddJSON, vlanInterfaceAddJSON} {
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterface: body, keyConfirm: true})
+
 		result, err := srvHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "1234", "response should contain interface ID")
-		assert.Contains(t, textContent.Text, "Interface added to instance 123", "response should contain message")
-	})
-
-	t.Run("accepts vpc and vlan interface bodies", func(t *testing.T) {
-		t.Parallel()
-
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			calls.Add(1)
-			assert.Equal(t, "/linode/instances/123/interfaces", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.InstanceInterface{ID: int(calls.Load())}), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeInstanceInterfaceAddTool(srvCfg)
-
-		for _, body := range []string{vpcInterfaceAddJSON, vlanInterfaceAddJSON} {
-			req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterface: body, keyConfirm: true})
-			result, err := srvHandler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.False(t, result.IsError, "result should not be a tool error")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 
-		assert.Equal(t, int32(2), calls.Load(), "both interface body shapes should call upstream")
-	})
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }

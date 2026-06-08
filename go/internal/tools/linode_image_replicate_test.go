@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -19,69 +22,123 @@ const imageReplicateToolName = "linode_image_replicate"
 
 const regionUSMiami = "us-mia"
 
-func TestLinodeImageReplicateTool(t *testing.T) {
+func TestLinodeImageReplicateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeImageReplicateTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeImageReplicateTool(&config.Config{})
+	if tool.Name != imageReplicateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, imageReplicateToolName)
+	}
 
-		assertEqual(t, imageReplicateToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapWrite, capability, "tool should be write capability")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		props := tool.InputSchema.Properties
-		assertContains(t, props, keyImageID, "schema should include image_id")
-		assertContains(t, props, keyRegions, "schema should include regions")
-		assertContains(t, props, keyConfirm, "mutating replicate tool must require confirm")
-		assertContains(t, tool.InputSchema.Required, keyImageID, "image_id must be marked required")
-		assertContains(t, tool.InputSchema.Required, keyRegions, "regions must be marked required")
-		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			assertEqual(t, "/images/private%2F123/regions", r.URL.EscapedPath(), "request path should escape image ID")
-			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyImageID]; !ok {
+		t.Errorf("props missing key %v", keyImageID)
+	}
 
-			var body map[string]any
-			if !assertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
+	if _, ok := props[keyRegions]; !ok {
+		t.Errorf("props missing key %v", keyRegions)
+	}
 
-			assertEqual(t, []any{regionUSMiami, regionUSEast}, body[keyRegions])
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyBetaID: privateImage123Fixture,
-				keyLabel:  "replicated-image",
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	for _, key := range []string{keyImageID, keyRegions, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 
-		_, _, handler := tools.NewLinodeImageReplicateTool(imageReplicateConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyImageID: privateImage123Fixture,
-			keyRegions: `["us-mia","us-east"]`,
-			keyConfirm: true,
-		}))
-
-		requireNoError(t, err)
-		requireNotNil(t, result)
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "replicated successfully")
-		assertContains(t, textContent.Text, privateImage123Fixture)
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodeImageReplicateToolValidation(t *testing.T) {
+func TestLinodeImageReplicateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.EscapedPath() != "/images/private%2F123/regions" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F123/regions")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body[keyRegions], []any{regionUSMiami, regionUSEast}) {
+			t.Errorf("body[keyRegions] = %v, want %v", body[keyRegions], []any{regionUSMiami, regionUSEast})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyBetaID: privateImage123Fixture,
+			keyLabel:  "replicated-image",
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeImageReplicateTool(imageReplicateConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyImageID: privateImage123Fixture,
+		keyRegions: `["us-mia","us-east"]`,
+		keyConfirm: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "replicated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "replicated successfully")
+	}
+
+	if !strings.Contains(textContent.Text, privateImage123Fixture) {
+		t.Errorf("textContent.Text does not contain %v", privateImage123Fixture)
+	}
+}
+
+func TestLinodeImageReplicateToolValidationClientErrorConfirm(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
@@ -104,13 +161,27 @@ func TestLinodeImageReplicateToolValidation(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			requireNoError(t, err)
-			requireNotNil(t, result)
-			assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
-			assertEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeImageReplicateToolValidationClientErrorTt(t *testing.T) {
+	t.Parallel()
 
 	for _, tt := range []struct {
 		name string
@@ -149,38 +220,64 @@ func TestLinodeImageReplicateToolValidation(t *testing.T) {
 			t.Cleanup(closeServer)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			requireNoError(t, err)
-			requireNotNil(t, result)
-			assertTrue(t, result.IsError, "invalid input should be an error result")
-			assertErrorContains(t, result, tt.want)
-			assertEqual(t, int32(0), calls.Load(), "validation must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.want)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeImageReplicateToolValidationClientErrorDirect(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
 
-		_, _, handler := tools.NewLinodeImageReplicateTool(imageReplicateConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyImageID: privateImage123Fixture,
-			keyRegions: singleRegionJSON,
-			keyConfirm: true,
-		}))
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	_, _, handler := tools.NewLinodeImageReplicateTool(imageReplicateConfig(srv.URL))
 
-		requireNoError(t, err)
-		requireNotNil(t, result)
-		assertTrue(t, result.IsError, "upstream API error should be an error result")
-		assertErrorContains(t, result, "Failed to replicate image")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyImageID: privateImage123Fixture,
+		keyRegions: singleRegionJSON,
+		keyConfirm: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to replicate image") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to replicate image")
+	}
 }
 
 func imageReplicateConfig(apiURL string) *config.Config {
@@ -203,7 +300,10 @@ func imageReplicateHandlerWithCallCounter(
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: privateImage123Fixture}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyBetaID: privateImage123Fixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 
 	_, _, handler := tools.NewLinodeImageReplicateTool(imageReplicateConfig(srv.URL))

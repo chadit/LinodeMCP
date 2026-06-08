@@ -3,9 +3,12 @@ package linode_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,7 +20,9 @@ func writeRawTestResponse(t *testing.T, w http.ResponseWriter, body string) {
 	t.Helper()
 
 	_, err := w.Write([]byte(body))
-	checkNoError(t, err, "writing response should not fail")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
 // dropConn hijacks the request's connection and closes it without writing a
@@ -25,12 +30,12 @@ func writeRawTestResponse(t *testing.T, w http.ResponseWriter, body string) {
 // the request, simulating the worst case for retries: the server may have
 // processed the call before the failure surfaced.
 func dropConn(w http.ResponseWriter) {
-	hj, ok := w.(http.Hijacker)
+	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		return
 	}
 
-	conn, _, err := hj.Hijack()
+	conn, _, err := hijacker.Hijack()
 	if err != nil {
 		return
 	}
@@ -49,517 +54,763 @@ func fastRetryOpts() []linode.Option {
 	}
 }
 
-func TestCreateImageRouteAndRetrySafety(t *testing.T) {
+func TestCreateImageRouteAndRetrySafetyHappyPathUsesExactPOSTImagesRouteAndBody(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path uses exact POST images route and body", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/images", r.URL.Path, "request path should be /images")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-			var body map[string]any
-			if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
+		if r.URL.Path != "/images" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images")
+		}
 
-			checkInEpsilon(t, 123, body["disk_id"], 0, "disk_id should be sent")
-			checkEqual(t, "custom-image", body["label"], "label should be sent")
-			checkEqual(t, "test image", body["description"], "description should be sent")
-			checkEqual(t, true, body["cloud_init"], "cloud_init should be sent")
-			tags, ok := body["tags"].([]any)
-			if !checkTrue(t, ok, "tags should decode as a JSON array") {
-				return
-			}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
 
-			mustLen(t, tags, 2, "tags should be sent")
-			checkEqual(t, "blue", tags[0], "first tag should be sent")
-			checkEqual(t, "green", tags[1], "second tag should be sent")
+			return
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:        "private/15",
-				keyLabel:     "custom-image",
-				keyStatus:    "creating",
-				"created_by": "tester",
-			}), "encoding image response should not fail")
-		}))
-		t.Cleanup(srv.Close)
+		if diskID, ok := body["disk_id"].(float64); !ok || diskID != 123 {
+			t.Errorf("body[disk_id] = %v, want %v", body["disk_id"], 123)
+		}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		image, err := client.CreateImage(t.Context(), &linode.CreateImageRequest{
-			DiskID:      123,
-			Label:       "custom-image",
-			Description: "test image",
-			CloudInit:   true,
-			Tags:        []string{"blue", "green"},
-		})
+		if !reflect.DeepEqual(body["label"], "custom-image") {
+			t.Errorf("got %v, want %v", body["label"], "custom-image")
+		}
 
-		mustNoError(t, err, "CreateImage should succeed")
-		mustNotNil(t, image, "created image should not be nil")
-		checkEqual(t, "private/15", image.ID, "image ID should match response")
-		checkEqual(t, int32(1), requestCount.Load(), "CreateImage should make one request")
+		if !reflect.DeepEqual(body["description"], "test image") {
+			t.Errorf("got %v, want %v", body["description"], "test image")
+		}
+
+		if !reflect.DeepEqual(body["cloud_init"], true) {
+			t.Errorf("got %v, want %v", body["cloud_init"], true)
+		}
+
+		tags, ok := body["tags"].([]any)
+		if !ok {
+			t.Error("tags should decode as a JSON array")
+
+			return
+		}
+
+		if len(tags) != 2 {
+			t.Fatalf("len(tags) = %d, want %d", len(tags), 2)
+		}
+
+		if !reflect.DeepEqual(tags[0], "blue") {
+			t.Errorf("tags[0] = %v, want %v", tags[0], "blue")
+		}
+
+		if !reflect.DeepEqual(tags[1], "green") {
+			t.Errorf("tags[1] = %v, want %v", tags[1], "green")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:        "private/15",
+			keyLabel:     "custom-image",
+			keyStatus:    "creating",
+			"created_by": "tester",
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	image, err := client.CreateImage(t.Context(), &linode.CreateImageRequest{
+		DiskID:      123,
+		Label:       "custom-image",
+		Description: "test image",
+		CloudInit:   true,
+		Tags:        []string{"blue", "green"},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("transient server error is not replayed", func(t *testing.T) {
-		t.Parallel()
+	if image == nil {
+		t.Fatal("image is nil")
+	}
 
-		var requestCount atomic.Int32
+	if image.ID != "private/15" {
+		t.Errorf("image.ID = %v, want %v", image.ID, "private/15")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		image, err := client.CreateImage(t.Context(), &linode.CreateImageRequest{DiskID: 123})
-
-		mustError(t, err, "CreateImage should return the first transient error")
-		checkNil(t, image, "image should be nil on error")
-		checkEqual(t, int32(1), requestCount.Load(), "non-idempotent image creation must not be retried")
-	})
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
-func TestCreateImageShareGroupTokenRouteAndRetrySafety(t *testing.T) {
+func TestCreateImageRouteAndRetrySafetyTransientServerErrorIsNotReplayed(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path uses exact POST image share group tokens route and body", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
+		_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-			var body map[string]any
-			if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-			checkEqual(t, "release-token", body["label"], "label should be sent")
-			checkEqual(t, shareGroupUUIDFixture, body["valid_for_sharegroup_uuid"], "share group UUID should be sent")
+	image, err := client.CreateImage(t.Context(), &linode.CreateImageRequest{DiskID: 123})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"token":                     "eyJhbGciOiJIUzI1NiJ9.test.signature",
-				"token_uuid":                shareGroupTokenUUIDFixture,
-				keyStatus:                   oauthClientStatus,
-				keyLabel:                    "release-token",
-				"created":                   imageShareGroupTokenCreated,
-				"updated":                   nil,
-				"expiry":                    nil,
-				"valid_for_sharegroup_uuid": shareGroupUUIDFixture,
-				"sharegroup_uuid":           shareGroupUUIDFixture,
-				"sharegroup_label":          shareGroupLabelFixture,
-			}), "encoding token response should not fail")
-		}))
-		t.Cleanup(srv.Close)
+	if image != nil {
+		t.Errorf("image = %v, want nil", image)
+	}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		token, err := client.CreateImageShareGroupToken(t.Context(), &linode.CreateImageShareGroupTokenRequest{
-			Label:                  "release-token",
-			ValidForShareGroupUUID: shareGroupUUIDFixture,
-		})
-
-		mustNoError(t, err, "CreateImageShareGroupToken should succeed")
-		mustNotNil(t, token, "created token should not be nil")
-		checkEqual(t, shareGroupTokenUUIDFixture, token.TokenUUID, "token UUID should match response")
-		checkEqual(t, "eyJhbGciOiJIUzI1NiJ9.test.signature", token.Token, "token material should match response")
-		checkEqual(t, int32(1), requestCount.Load(), "CreateImageShareGroupToken should make one request")
-	})
-
-	t.Run("transient server error is not replayed", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		token, err := client.CreateImageShareGroupToken(t.Context(), &linode.CreateImageShareGroupTokenRequest{ValidForShareGroupUUID: shareGroupUUIDFixture})
-
-		mustError(t, err, "CreateImageShareGroupToken should return the first transient error")
-		checkNil(t, token, "token should be nil on error")
-		checkEqual(t, int32(1), requestCount.Load(), "non-idempotent token creation must not be retried")
-	})
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
-func TestImportDomainRouteAndRetrySafety(t *testing.T) {
+func TestCreateImageShareGroupTokenRouteAndRetrySafetyHappyPathUsesExactPOSTImageShareGroupTokensRouteAndBody(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path uses exact POST domains import route and body", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/domains/import", r.URL.Path, "request path should be /domains/import")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-			var body map[string]any
-			if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
+		if r.URL.Path != "/images/sharegroups/tokens" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/tokens")
+		}
 
-			checkEqual(t, domainExample, body["domain"], "domain should be sent")
-			checkEqual(t, remoteNameserverExample, body["remote_nameserver"], "remote_nameserver should be sent")
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:     111,
-				keyDomain: domainExample,
-				keyType:   "master",
-				keyStatus: oauthClientStatus,
-			}), "encoding domain response should not fail")
-		}))
-		t.Cleanup(srv.Close)
+			return
+		}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		domain, err := client.ImportDomain(t.Context(), &linode.ImportDomainRequest{
-			Domain:           domainExample,
-			RemoteNameserver: remoteNameserverExample,
-		})
+		if !reflect.DeepEqual(body["label"], "release-token") {
+			t.Errorf("got %v, want %v", body["label"], "release-token")
+		}
 
-		mustNoError(t, err, "ImportDomain should succeed")
-		mustNotNil(t, domain, "imported domain should not be nil")
-		checkEqual(t, 111, domain.ID, "domain ID should match response")
-		checkEqual(t, int32(1), requestCount.Load(), "ImportDomain should make one request")
+		if !reflect.DeepEqual(body["valid_for_sharegroup_uuid"], shareGroupUUIDFixture) {
+			t.Errorf("got %v, want %v", body["valid_for_sharegroup_uuid"], shareGroupUUIDFixture)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"token":                     "eyJhbGciOiJIUzI1NiJ9.test.signature",
+			"token_uuid":                shareGroupTokenUUIDFixture,
+			keyStatus:                   oauthClientStatus,
+			keyLabel:                    "release-token",
+			"created":                   imageShareGroupTokenCreated,
+			"updated":                   nil,
+			"expiry":                    nil,
+			"valid_for_sharegroup_uuid": shareGroupUUIDFixture,
+			"sharegroup_uuid":           shareGroupUUIDFixture,
+			"sharegroup_label":          shareGroupLabelFixture,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	token, err := client.CreateImageShareGroupToken(t.Context(), &linode.CreateImageShareGroupTokenRequest{
+		Label:                  "release-token",
+		ValidForShareGroupUUID: shareGroupUUIDFixture,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("transient server error is not replayed", func(t *testing.T) {
-		t.Parallel()
+	if token == nil {
+		t.Fatal("token is nil")
+	}
 
-		var requestCount atomic.Int32
+	if token.TokenUUID != shareGroupTokenUUIDFixture {
+		t.Errorf("token.TokenUUID = %v, want %v", token.TokenUUID, shareGroupTokenUUIDFixture)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+	if token.Token != "eyJhbGciOiJIUzI1NiJ9.test.signature" {
+		t.Errorf("token.Token = %v, want %v", token.Token, "eyJhbGciOiJIUzI1NiJ9.test.signature")
+	}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		domain, err := client.ImportDomain(t.Context(), &linode.ImportDomainRequest{Domain: domainExample, RemoteNameserver: remoteNameserverExample})
-
-		mustError(t, err, "ImportDomain should return the first transient error")
-		checkNil(t, domain, "domain should be nil on error")
-		checkEqual(t, int32(1), requestCount.Load(), "non-idempotent domain import must not be retried")
-	})
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
-func TestCloneDomainRouteAndRetrySafety(t *testing.T) {
+func TestCreateImageShareGroupTokenRouteAndRetrySafetyTransientServerErrorIsNotReplayed(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path uses exact POST domains clone route and body", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/domains/111/clone", r.URL.Path, "request path should be /domains/111/clone")
+		_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-			var body map[string]any
-			if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
-			}
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-			checkEqual(t, domainExample, body["domain"], "domain should be sent")
+	token, err := client.CreateImageShareGroupToken(t.Context(), &linode.CreateImageShareGroupTokenRequest{ValidForShareGroupUUID: shareGroupUUIDFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:     222,
-				keyDomain: domainExample,
-				keyType:   "master",
-				keyStatus: oauthClientStatus,
-			}), "encoding domain response should not fail")
-		}))
-		t.Cleanup(srv.Close)
+	if token != nil {
+		t.Errorf("token = %v, want nil", token)
+	}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		domain, err := client.CloneDomain(t.Context(), 111, &linode.CloneDomainRequest{Domain: domainExample})
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
 
-		mustNoError(t, err, "CloneDomain should succeed")
-		mustNotNil(t, domain, "cloned domain should not be nil")
-		checkEqual(t, 222, domain.ID, "domain ID should match response")
-		checkEqual(t, int32(1), requestCount.Load(), "CloneDomain should make one request")
+func TestImportDomainRouteAndRetrySafetyHappyPathUsesExactPOSTDomainsImportRouteAndBody(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/domains/import" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/import")
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body["domain"], domainExample) {
+			t.Errorf("got %v, want %v", body["domain"], domainExample)
+		}
+
+		if !reflect.DeepEqual(body["remote_nameserver"], remoteNameserverExample) {
+			t.Errorf("got %v, want %v", body["remote_nameserver"], remoteNameserverExample)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:     111,
+			keyDomain: domainExample,
+			keyType:   "master",
+			keyStatus: oauthClientStatus,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	domain, err := client.ImportDomain(t.Context(), &linode.ImportDomainRequest{
+		Domain:           domainExample,
+		RemoteNameserver: remoteNameserverExample,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("transient server error is not replayed", func(t *testing.T) {
-		t.Parallel()
+	if domain == nil {
+		t.Fatal("domain is nil")
+	}
 
-		var requestCount atomic.Int32
+	if domain.ID != 111 {
+		t.Errorf("domain.ID = %v, want %v", domain.ID, 111)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-		domain, err := client.CloneDomain(t.Context(), 111, &linode.CloneDomainRequest{Domain: domainExample})
+func TestImportDomainRouteAndRetrySafetyTransientServerErrorIsNotReplayed(t *testing.T) {
+	t.Parallel()
 
-		mustError(t, err, "CloneDomain should return the first transient error")
-		checkNil(t, domain, "domain should be nil on error")
-		checkEqual(t, int32(1), requestCount.Load(), "non-idempotent domain clone must not be retried")
-	})
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	domain, err := client.ImportDomain(t.Context(), &linode.ImportDomainRequest{Domain: domainExample, RemoteNameserver: remoteNameserverExample})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if domain != nil {
+		t.Errorf("domain = %v, want nil", domain)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
+
+func TestCloneDomainRouteAndRetrySafetyHappyPathUsesExactPOSTDomainsCloneRouteAndBody(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/domains/111/clone" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111/clone")
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body["domain"], domainExample) {
+			t.Errorf("got %v, want %v", body["domain"], domainExample)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:     222,
+			keyDomain: domainExample,
+			keyType:   "master",
+			keyStatus: oauthClientStatus,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	domain, err := client.CloneDomain(t.Context(), 111, &linode.CloneDomainRequest{Domain: domainExample})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if domain == nil {
+		t.Fatal("domain is nil")
+	}
+
+	if domain.ID != 222 {
+		t.Errorf("domain.ID = %v, want %v", domain.ID, 222)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
+
+func TestCloneDomainRouteAndRetrySafetyTransientServerErrorIsNotReplayed(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	domain, err := client.CloneDomain(t.Context(), 111, &linode.CloneDomainRequest{Domain: domainExample})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if domain != nil {
+		t.Errorf("domain = %v, want nil", domain)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // Ensures the retry wrapper generator produces correct delegation for all method signatures used by the Linode client.
-func TestRetryWrappersDelegationPatterns(t *testing.T) {
+func TestRetryWrappersDelegationPatternsListRegionsReturnsSlice(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ListRegions returns slice", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-				checkNoError(t, err, "writing transient error response should succeed")
-
-				return
-			}
-
-			checkEqual(t, "/regions", r.URL.Path, "request path should be /regions")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    []map[string]string{{keyID: "us-east"}},
-				keyPage:    1,
-				keyPages:   1,
-				keyResults: 1,
-			}), "encoding regions response should not fail")
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		regions, err := client.ListRegions(t.Context())
-		mustNoError(t, err, "ListRegions should succeed after retry")
-		mustLen(t, regions, 1, "should return one region")
-		checkEqual(t, "us-east", regions[0].ID, "region ID should match the API response")
-		checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
-	})
-
-	t.Run("GetFirewall returns pointer", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-				checkNoError(t, err, "writing transient error response should succeed")
-
-				return
-			}
-
-			checkEqual(t, "/networking/firewalls/1", r.URL.Path, "request path should include firewall ID")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:     1,
-				keyLabel:  "my-fw",
-				keyStatus: statusEnabledFixture,
-			}), "encoding firewall response should not fail")
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		firewall, err := client.GetFirewall(t.Context(), 1)
-		mustNoError(t, err, "GetFirewall should succeed after retry")
-		mustNotNil(t, firewall, "firewall should not be nil")
-		checkEqual(t, 1, firewall.ID, "firewall ID should match the request")
-		checkEqual(t, "my-fw", firewall.Label, "firewall label should match the API response")
-		checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
-	})
-
-	t.Run("DeleteDomain returns error only", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
-
-				return
-			}
-
-			checkEqual(t, "/domains/1", r.URL.Path, "request path should include domain ID")
-
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		err := client.DeleteDomain(t.Context(), 1)
-		mustNoError(t, err, "DeleteDomain should succeed after retry")
-		checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
-	})
-
-	t.Run("CreateFirewall delegates and retries on 429", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusTooManyRequests)
-				writeRawTestResponse(t, w, `{"errors":[{"reason":"slow down"}]}`)
-
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:    1,
-				keyLabel: fwLabelNew,
-			}), "encoding created firewall response should not fail")
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		firewall, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
-		mustNoError(t, err, "CreateFirewall should succeed after a 429 retry")
-		mustNotNil(t, firewall, "created firewall should not be nil")
-		checkEqual(t, fwLabelNew, firewall.Label, "firewall label should match the create request")
-		checkEqual(t, int32(2), requestCount.Load(),
-			"a 429 is safe to replay because the request was rejected before processing")
-	})
-
-	t.Run("UpdateFirewall id and request returns pointer", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
-
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:    1,
-				keyLabel: "updated-fw",
-			}), "encoding updated firewall response should not fail")
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		firewall, err := client.UpdateFirewall(t.Context(), 1, linode.UpdateFirewallRequest{
-			Label: "updated-fw",
-		})
-		mustNoError(t, err, "UpdateFirewall should succeed after retry")
-		mustNotNil(t, firewall, "updated firewall should not be nil")
-		checkEqual(t, "updated-fw", firewall.Label, "firewall label should match the update request")
-		checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
-	})
-
-	t.Run("ListRegions exhausts retries on persistent 500", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.Header().Set("Content-Type", "application/json")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			writeRawTestResponse(t, w, `{"errors":[{"reason":"persistent failure"}]}`)
-		}))
-		defer srv.Close()
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		_, err := client.ListRegions(t.Context())
-		mustError(t, err, "ListRegions should fail after exhausting retries")
-		mustErrorContains(t, err, "persistent failure", "error should contain the server's reason")
-		// fastRetryOpts sets MaxRetries=3: 1 initial attempt + 3 retries = 4 total requests.
-		checkEqual(t, int32(4), requestCount.Load(), "should exhaust all retries (1 initial + 3 retries)")
-	})
-
-	t.Run("GetFirewall no retry on 401", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			writeRawTestResponse(t, w, `{"errors":[{"reason":"Invalid Token"}]}`)
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		_, err := client.GetFirewall(t.Context(), 1)
-		mustError(t, err, "GetFirewall should fail on 401")
-		mustErrorContains(t, err, "Invalid Token", "error should contain the auth failure reason")
-		checkEqual(t, int32(1), requestCount.Load(), "should not retry on 401 authentication error")
-	})
-
-	t.Run("DeleteDomainRecord two ids returns error", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
-
-				return
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+			return
+		}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		if r.URL.Path != "/regions" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/regions")
+		}
 
-		err := client.DeleteDomainRecord(t.Context(), 1, 2)
-		mustNoError(t, err, "DeleteDomainRecord should succeed after retry")
-		checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []map[string]string{{keyID: "us-east"}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	regions, err := client.ListRegions(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(regions) != 1 {
+		t.Fatalf("len(regions) = %d, want %d", len(regions), 1)
+	}
+
+	if regions[0].ID != managedServiceRegion {
+		t.Errorf("regions[0].ID = %v, want %v", regions[0].ID, managedServiceRegion)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsGetFirewallReturnsPointer(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			return
+		}
+
+		if r.URL.Path != "/networking/firewalls/1" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls/1")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:     1,
+			keyLabel:  "my-fw",
+			keyStatus: statusEnabledFixture,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	firewall, err := client.GetFirewall(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if firewall == nil {
+		t.Fatal("firewall is nil")
+	}
+
+	if firewall.ID != 1 {
+		t.Errorf("firewall.ID = %v, want %v", firewall.ID, 1)
+	}
+
+	if firewall.Label != "my-fw" {
+		t.Errorf("firewall.Label = %v, want %v", firewall.Label, "my-fw")
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsDeleteDomainReturnsErrorOnly(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
+
+			return
+		}
+
+		if r.URL.Path != "/domains/1" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/1")
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteDomain(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsCreateFirewallDelegatesAndRetriesOn429(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"slow down"}]}`)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:    1,
+			keyLabel: fwLabelNew,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	firewall, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if firewall == nil {
+		t.Fatal("firewall is nil")
+	}
+
+	if firewall.Label != fwLabelNew {
+		t.Errorf("firewall.Label = %v, want %v", firewall.Label, fwLabelNew)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsUpdateFirewallIdAndRequestReturnsPointer(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:    1,
+			keyLabel: "updated-fw",
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	firewall, err := client.UpdateFirewall(t.Context(), 1, linode.UpdateFirewallRequest{
+		Label: "updated-fw",
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if firewall == nil {
+		t.Fatal("firewall is nil")
+	}
+
+	if firewall.Label != tcUpdatedFw {
+		t.Errorf("firewall.Label = %v, want %v", firewall.Label, tcUpdatedFw)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsListRegionsExhaustsRetriesOnPersistent500(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.Header().Set("Content-Type", tcApplicationJSON)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeRawTestResponse(t, w, `{"errors":[{"reason":"persistent failure"}]}`)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	_, err := client.ListRegions(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok || !strings.Contains(apiErr.Message, "persistent failure") {
+		t.Errorf("error %v is not an APIError containing %q", err, "persistent failure")
+	}
+	// fastRetryOpts sets MaxRetries=3: 1 initial attempt + 3 retries = 4 total requests.
+	if requestCount.Load() != int32(4) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(4))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsGetFirewallNoRetryOn401(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.Header().Set("Content-Type", tcApplicationJSON)
+		w.WriteHeader(http.StatusUnauthorized)
+		writeRawTestResponse(t, w, `{"errors":[{"reason":"Invalid Token"}]}`)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	_, err := client.GetFirewall(t.Context(), 1)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok || !strings.Contains(apiErr.Message, "Invalid Token") {
+		t.Errorf("error %v is not an APIError containing %q", err, "Invalid Token")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
+
+func TestRetryWrappersDelegationPatternsDeleteDomainRecordTwoIdsReturnsError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
+
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteDomainRecord(t.Context(), 1, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestRetryNonIdempotentDoesNotReplay verifies that a POST create is not
@@ -577,17 +828,24 @@ func TestRetryNonIdempotentDoesNotReplay(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			requestCount.Add(1)
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, err, "writing error response should succeed")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}))
 		defer srv.Close()
 
 		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
 		_, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
-		mustError(t, err, "CreateFirewall should fail on 500")
-		checkEqual(t, int32(1), requestCount.Load(),
-			"a POST create must not retry a 5xx that may already have been applied")
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+
+		if requestCount.Load() != int32(1) {
+			t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+		}
 	})
 
 	t.Run("no retry on transport error", func(t *testing.T) {
@@ -607,9 +865,13 @@ func TestRetryNonIdempotentDoesNotReplay(t *testing.T) {
 		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
 		_, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
-		mustError(t, err, "CreateFirewall should fail on a transport error")
-		checkEqual(t, int32(1), requestCount.Load(),
-			"a POST create must not retry a transport error that may have been processed")
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+
+		if requestCount.Load() != int32(1) {
+			t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+		}
 	})
 
 	t.Run("idempotent GET still retries on transport error", func(t *testing.T) {
@@ -627,10 +889,13 @@ func TestRetryNonIdempotentDoesNotReplay(t *testing.T) {
 		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
 		_, err := client.ListRegions(t.Context())
-		mustError(t, err, "ListRegions should fail when every attempt drops the connection")
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
 		// fastRetryOpts sets MaxRetries=3: 1 initial + 3 retries = 4 attempts.
-		checkEqual(t, int32(4), requestCount.Load(),
-			"a GET is idempotent, so transport errors are still retried")
+		if requestCount.Load() != int32(4) {
+			t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(4))
+		}
 	})
 }
 
@@ -648,7 +913,7 @@ func TestRetryWrappersContextCancellationStopsRetry(t *testing.T) {
 		requestCount.Add(1)
 		cancel()
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
 		writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
 	}))
@@ -657,8 +922,9 @@ func TestRetryWrappersContextCancellationStopsRetry(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
 	_, err := client.ListRegions(ctx)
-	mustError(t, err, "ListRegions should fail when context is canceled")
-	checkErrorContains(t, err, "context canceled", "error should indicate context cancellation")
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want %v", err, context.Canceled)
+	}
 }
 
 // TestRetryWrappersBodyForwardedOnRetry verifies that request bodies are
@@ -685,11 +951,14 @@ func TestRetryWrappersBodyForwardedOnRetry(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		capturedBody = body
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyID:    1,
 			keyLabel: "test-fw",
-		}), "encoding firewall response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -698,258 +967,415 @@ func TestRetryWrappersBodyForwardedOnRetry(t *testing.T) {
 	firewall, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{
 		Label: "test-fw",
 	})
-	mustNoError(t, err, "CreateFirewall should succeed after retry")
-	mustNotNil(t, firewall, "created firewall should not be nil")
-	checkEqual(t, "test-fw", firewall.Label, "firewall label should match the create request")
-	checkContains(t, string(capturedBody), `"label"`, "retried request body should contain the label field")
-	checkContains(t, string(capturedBody), `"test-fw"`, "retried request body should contain the label value")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if firewall == nil {
+		t.Fatal("firewall is nil")
+	}
+
+	if firewall.Label != tcTestFw {
+		t.Errorf("firewall.Label = %v, want %v", firewall.Label, tcTestFw)
+	}
+
+	if !strings.Contains(string(capturedBody), `"label"`) {
+		t.Errorf("string(capturedBody) does not contain %v", `"label"`)
+	}
+
+	if !strings.Contains(string(capturedBody), `"test-fw"`) {
+		t.Errorf("string(capturedBody) does not contain %v", `"test-fw"`)
+	}
 }
 
-func TestGetSSHKeyRetries(t *testing.T) {
+func TestGetSSHKeyRetriesHappyPathRetriesOnTransientError(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path retries on transient error", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-				checkNoError(t, err, "writing error response should succeed")
-
-				return
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 
-			checkEqual(t, "/profile/sshkeys/42", r.URL.Path, "request path should include SSH key ID")
+			return
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:     42,
-				keyLabel:  "my-key",
-				keySSHKey: "ssh-rsa AAAA test@example.com",
-				"created": "2024-01-01T00:00:00Z",
-			}), "encoding SSH key response should not fail")
-		}))
-		defer srv.Close()
+		if r.URL.Path != "/profile/sshkeys/42" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/sshkeys/42")
+		}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		sshKey, err := client.GetSSHKey(t.Context(), 42)
-		mustNoError(t, err, "GetSSHKey should succeed after retry")
-		mustNotNil(t, sshKey, "sshKey should not be nil")
-		checkEqual(t, 42, sshKey.ID, "SSH key ID should match")
-		checkEqual(t, "my-key", sshKey.Label, "SSH key label should match")
-		checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
-	})
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:     42,
+			keyLabel:  "my-key",
+			keySSHKey: "ssh-rsa AAAA test@example.com",
+			"created": "2024-01-01T00:00:00Z",
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-	t.Run("no retry on 401", func(t *testing.T) {
-		t.Parallel()
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-		var requestCount atomic.Int32
+	sshKey, err := client.GetSSHKey(t.Context(), 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"Invalid Token"}]}`))
-			checkNoError(t, err, "writing error response should succeed")
-		}))
-		defer srv.Close()
+	if sshKey == nil {
+		t.Fatal("sshKey is nil")
+	}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+	if sshKey.ID != 42 {
+		t.Errorf("sshKey.ID = %v, want %v", sshKey.ID, 42)
+	}
 
-		_, err := client.GetSSHKey(t.Context(), 42)
-		mustError(t, err, "GetSSHKey should fail on 401")
-		mustErrorContains(t, err, "Invalid Token", "error should contain the auth failure reason")
-		checkEqual(t, int32(1), requestCount.Load(), "should not retry on 401")
-	})
+	if sshKey.Label != "my-key" {
+		t.Errorf("sshKey.Label = %v, want %v", sshKey.Label, "my-key")
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestGetSSHKeyRetriesNoRetryOn401(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.Header().Set("Content-Type", tcApplicationJSON)
+		w.WriteHeader(http.StatusUnauthorized)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"Invalid Token"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	_, err := client.GetSSHKey(t.Context(), 42)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok || !strings.Contains(apiErr.Message, "Invalid Token") {
+		t.Errorf("error %v is not an APIError containing %q", err, "Invalid Token")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 const domainZoneTTL = "$TTL 864000"
 
-func TestGetDomainZoneFileRoute(t *testing.T) {
+func TestGetDomainZoneFileRouteHappyPathUsesExactGETDomainZoneFileRoute(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path uses exact GET domain zone file route", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/domains/123/zone-file", r.URL.Path, "request path should include domain ID and zone-file suffix")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-			body, err := io.ReadAll(r.Body)
-			checkNoError(t, err, "request body should read")
-			checkEmpty(t, body, "GET request should not include a body")
+		if r.URL.Path != "/domains/123/zone-file" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/123/zone-file")
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"zone_file": []string{
-					"; example.com [123]",
-					domainZoneTTL,
-				},
-			}), "encoding domain zone file response should not fail")
-		}))
-		defer srv.Close()
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
-		mustNoError(t, err, "GetDomainZoneFile should succeed")
-		mustNotNil(t, zoneFile, "zoneFile should not be nil")
-		checkEqual(t, []string{"; example.com [123]", domainZoneTTL}, zoneFile.ZoneFile, "zone file lines should match response")
-		checkEqual(t, int32(1), requestCount.Load(), "GetDomainZoneFile should make one request")
-	})
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
 
-	t.Run("transient server error retries read-only request", func(t *testing.T) {
-		t.Parallel()
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		var requestCount atomic.Int32
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"zone_file": []string{
+				tcExampleCom123,
+				domainZoneTTL,
+			},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-				checkNoError(t, err, "writing transient error response should succeed")
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-				return
-			}
+	zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"zone_file": []string{domainZoneTTL},
-			}), "encoding domain zone file response should not fail")
-		}))
-		defer srv.Close()
+	if zoneFile == nil {
+		t.Fatal("zoneFile is nil")
+	}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+	if !reflect.DeepEqual(zoneFile.ZoneFile, []string{tcExampleCom123, domainZoneTTL}) {
+		t.Errorf("zoneFile.ZoneFile = %v, want %v", zoneFile.ZoneFile, []string{tcExampleCom123, domainZoneTTL})
+	}
 
-		zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
-		mustNoError(t, err, "GetDomainZoneFile should succeed after retry")
-		mustNotNil(t, zoneFile, "zoneFile should not be nil")
-		checkEqual(t, []string{"$TTL 864000"}, zoneFile.ZoneFile, "zone file lines should match response")
-		checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
-	})
-
-	t.Run("permanent API error is not retried", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusNotFound)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"domain not found"}]}`))
-			checkNoError(t, err, "writing not found response should succeed")
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
-		mustError(t, err, "GetDomainZoneFile should return permanent API errors")
-		checkNil(t, zoneFile, "zoneFile should be nil on error")
-		checkEqual(t, int32(1), requestCount.Load(), "permanent API errors should not be retried")
-	})
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
-func TestGetDomainRecordRoute(t *testing.T) {
+func TestGetDomainZoneFileRouteTransientServerErrorRetriesReadOnlyRequest(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path uses exact GET domain record route", func(t *testing.T) {
-		t.Parallel()
+	var requestCount atomic.Int32
 
-		var requestCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/domains/123/records/456", r.URL.Path, "request path should include domain and record IDs")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-
-			body, err := io.ReadAll(r.Body)
-			checkNoError(t, err, "request body should read")
-			checkEmpty(t, body, "GET request should not include a body")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:     456,
-				"type":    "A",
-				"name":    "www",
-				"target":  "192.0.2.10",
-				"ttl_sec": 300,
-			}), "encoding domain record response should not fail")
-		}))
-		defer srv.Close()
-
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-		record, err := client.GetDomainRecord(t.Context(), 123, 456)
-		mustNoError(t, err, "GetDomainRecord should succeed")
-		mustNotNil(t, record, "record should not be nil")
-		checkEqual(t, 456, record.ID, "record ID should match response")
-		checkEqual(t, "A", record.Type, "record type should match response")
-		checkEqual(t, "www", record.Name, "record name should match response")
-		checkEqual(t, "192.0.2.10", record.Target, "record target should match response")
-		checkEqual(t, int32(1), requestCount.Load(), "GetDomainRecord should make one request")
-	})
-
-	t.Run("transient server error retries read-only request", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			count := requestCount.Add(1)
-			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-				checkNoError(t, err, "writing transient error response should succeed")
-
-				return
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID: 456,
-			}), "encoding domain record response should not fail")
-		}))
-		defer srv.Close()
+			return
+		}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		record, err := client.GetDomainRecord(t.Context(), 123, 456)
-		mustNoError(t, err, "GetDomainRecord should succeed after retry")
-		mustNotNil(t, record, "record should not be nil")
-		checkEqual(t, 456, record.ID, "record ID should match response")
-		checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
-	})
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"zone_file": []string{domainZoneTTL},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-	t.Run("permanent API error is not retried", func(t *testing.T) {
-		t.Parallel()
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-		var requestCount atomic.Int32
+	zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusNotFound)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"record not found"}]}`))
-			checkNoError(t, err, "writing not found response should succeed")
-		}))
-		defer srv.Close()
+	if zoneFile == nil {
+		t.Fatal("zoneFile is nil")
+	}
 
-		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+	if !reflect.DeepEqual(zoneFile.ZoneFile, []string{"$TTL 864000"}) {
+		t.Errorf("zoneFile.ZoneFile = %v, want %v", zoneFile.ZoneFile, []string{"$TTL 864000"})
+	}
 
-		record, err := client.GetDomainRecord(t.Context(), 123, 456)
-		mustError(t, err, "GetDomainRecord should return permanent API errors")
-		checkNil(t, record, "record should be nil on error")
-		checkEqual(t, int32(1), requestCount.Load(), "permanent API errors should not be retried")
-	})
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestGetDomainZoneFileRoutePermanentAPIErrorIsNotRetried(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"domain not found"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if zoneFile != nil {
+		t.Errorf("zoneFile = %v, want nil", zoneFile)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
+
+func TestGetDomainRecordRouteHappyPathUsesExactGETDomainRecordRoute(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/domains/123/records/456" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/123/records/456")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:     456,
+			"type":    "A",
+			"name":    "www",
+			"target":  "192.0.2.10",
+			"ttl_sec": 300,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	record, err := client.GetDomainRecord(t.Context(), 123, 456)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if record == nil {
+		t.Fatal("record is nil")
+	}
+
+	if record.ID != 456 {
+		t.Errorf("record.ID = %v, want %v", record.ID, 456)
+	}
+
+	if record.Type != "A" {
+		t.Errorf("record.Type = %v, want %v", record.Type, "A")
+	}
+
+	if record.Name != "www" {
+		t.Errorf("record.Name = %v, want %v", record.Name, "www")
+	}
+
+	if record.Target != "192.0.2.10" {
+		t.Errorf("record.Target = %v, want %v", record.Target, "192.0.2.10")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
+
+func TestGetDomainRecordRouteTransientServerErrorRetriesReadOnlyRequest(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			return
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID: 456,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	record, err := client.GetDomainRecord(t.Context(), 123, 456)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if record == nil {
+		t.Fatal("record is nil")
+	}
+
+	if record.ID != 456 {
+		t.Errorf("record.ID = %v, want %v", record.ID, 456)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+}
+
+func TestGetDomainRecordRoutePermanentAPIErrorIsNotRetried(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"record not found"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+	record, err := client.GetDomainRecord(t.Context(), 123, 456)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if record != nil {
+		t.Errorf("record = %v, want nil", record)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

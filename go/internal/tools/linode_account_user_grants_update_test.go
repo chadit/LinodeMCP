@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -19,33 +22,56 @@ import (
 const accountUserGrantsUpdateToolName = "linode_account_user_grants_update"
 
 func TestLinodeAccountUserGrantsUpdateToolDefinition(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountUserGrantsUpdateTool(cfg)
 
-	assert.Equal(t, accountUserGrantsUpdateToolName, tool.Name, "tool name should match")
-	assert.Equal(t, profiles.CapAdmin, capability, "grants update should require admin capability")
-	assert.NotEmpty(t, tool.Description, "tool should have a description")
-	require.NotNil(t, handler, "handler should not be nil")
+	if tool.Name != accountUserGrantsUpdateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, accountUserGrantsUpdateToolName)
+	}
+
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
-	assert.Contains(t, props, keyUsername, "schema should include username")
-	assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	assert.Contains(t, props, keyGlobal, "schema should include global grants")
-	assert.Contains(t, props, keyGrantLinode, "schema should include resource grants")
-	assert.Contains(t, props, keyGrantLKECluster, "schema should include LKE cluster grants")
-	assert.Contains(t, tool.InputSchema.Required, keyUsername, "username must be marked required")
-	assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	if _, ok := props[keyUsername]; !ok {
+		t.Errorf("props missing key %v", keyUsername)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyGlobal]; !ok {
+		t.Errorf("props missing key %v", keyGlobal)
+	}
+
+	if _, ok := props[keyGrantLinode]; !ok {
+		t.Errorf("props missing key %v", keyGrantLinode)
+	}
+
+	if _, ok := props[keyGrantLKECluster]; !ok {
+		t.Errorf("props missing key %v", keyGrantLKECluster)
+	}
+
+	for _, key := range []string{keyUsername, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 }
 
 func TestLinodeAccountUserGrantsUpdateRequiresConfirm(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -68,20 +94,30 @@ func TestLinodeAccountUserGrantsUpdateRequiresConfirm(t *testing.T) {
 			defer cleanup()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "missing or invalid confirm should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			assert.Equal(t, int32(0), calls, "confirm validation must fail before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountUserGrantsUpdateRejectsInvalidRequest(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -120,44 +156,74 @@ func TestLinodeAccountUserGrantsUpdateRejectsInvalidRequest(t *testing.T) {
 			defer cleanup()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid request should be a tool error")
-			assertErrorContains(t, result, testCase.wantMessage)
-			assert.Equal(t, int32(0), calls, "request validation must fail before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountUserGrantsUpdateSuccess(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-
-		global, globalOK := body[keyGlobal].(map[string]any)
-		if assert.True(t, globalOK, "global grants should be an object") {
-			assert.Equal(t, map[string]any{keyAccountAccess: grantPermissionReadOnly}, global)
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
 
-		assert.Equal(t, []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}}, body[keyGrantLinode])
-		assert.Equal(t, []any{map[string]any{keyBetaID: float64(456), keyPermissions: grantPermissionReadOnly}}, body[keyGrantLKECluster])
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body[keyGlobal], map[string]any{keyAccountAccess: grantPermissionReadOnly}) {
+			t.Errorf("body[keyGlobal] = %v, want %v", body[keyGlobal], map[string]any{keyAccountAccess: grantPermissionReadOnly})
+		}
+
+		if !reflect.DeepEqual(body[keyGrantLinode], []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}}) {
+			t.Errorf("body[keyGrantLinode] = %v, want %v", body[keyGrantLinode], []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}})
+		}
+
+		if !reflect.DeepEqual(body[keyGrantLKECluster], []any{map[string]any{keyBetaID: float64(456), keyPermissions: grantPermissionReadOnly}}) {
+			t.Errorf("body[keyGrantLKECluster] = %v, want %v", body[keyGrantLKECluster], []any{map[string]any{keyBetaID: float64(456), keyPermissions: grantPermissionReadOnly}})
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{
+
+		if err := json.NewEncoder(w).Encode(linode.Grants{
 			Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission(grantPermissionReadOnly)},
 			Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission(grantPermissionReadWrite)}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -171,31 +237,52 @@ func TestLinodeAccountUserGrantsUpdateSuccess(t *testing.T) {
 		keyGrantLinode:     []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}},
 		keyGrantLKECluster: []any{map[string]any{keyBetaID: float64(456), keyPermissions: grantPermissionReadOnly}},
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "handler should not return an error")
-	require.NotNil(t, result, "result should not be nil")
-	assert.False(t, result.IsError, "should not be an error result")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
-	assert.Contains(t, textContent.Text, keyAccountAccess, "response should include global grant")
-	assert.Contains(t, textContent.Text, grantPermissionReadWrite, "response should include resource grant")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, keyAccountAccess) {
+		t.Errorf("textContent.Text does not contain %v", keyAccountAccess)
+	}
+
+	if !strings.Contains(textContent.Text, grantPermissionReadWrite) {
+		t.Errorf("textContent.Text does not contain %v", grantPermissionReadWrite)
+	}
 }
 
 func TestLinodeAccountUserGrantsUpdateAPIError(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -203,12 +290,25 @@ func TestLinodeAccountUserGrantsUpdateAPIError(t *testing.T) {
 	_, _, handler := tools.NewLinodeAccountUserGrantsUpdateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername, keyConfirm: true, keyGrantLinode: []any{}}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "handler should return API failures as tool errors")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.IsError, "API failure should be an error result")
-	assertErrorContains(t, result, "Failed to update linode_account_user_grants_update")
-	assertErrorContains(t, result, errForbidden)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_account_user_grants_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_account_user_grants_update")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func newAccountUserGrantsUpdateHandler(t *testing.T, calls *int32) (func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error), func()) {

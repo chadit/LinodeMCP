@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -22,25 +23,47 @@ import (
 const validTestSSHKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 user@example.com"
 
 // End-to-end verification of the SSH key creation workflow.
-func TestLinodeSSHKeyCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeSSHKeyCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeSSHKeyCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_sshkey_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "ssh_key", "schema should include ssh_key property")
-		assert.Contains(t, props, "environment", "schema should include environment property")
-	})
+	if tool.Name != "linode_sshkey_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_sshkey_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["ssh_key"]; !ok {
+		t.Errorf("props missing key %v", "ssh_key")
+	}
+
+	if _, ok := props[canRunKeyEnv]; !ok {
+		t.Errorf("props missing key %v", canRunKeyEnv)
+	}
+}
+
+func TestLinodeSSHKeyCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeSSHKeyCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -54,118 +77,191 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeSSHKeyCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		createdKey := linode.SSHKey{
-			ID:    123,
-			Label: keyNameTest,
+	createdKey := linode.SSHKey{
+		ID:    123,
+		Label: keyNameTest,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/profile/sshkeys" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/sshkeys")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/profile/sshkeys", r.URL.Path, "request path should match SSH key endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(createdKey), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeSSHKeyCreateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:   keyNameTest,
-			keySSHKey:  validTestSSHKey,
-			keyConfirm: true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(createdKey); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeSSHKeyCreateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, keyNameTest, "response should contain the key label")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:   keyNameTest,
+		keySSHKey:  validTestSSHKey,
+		keyConfirm: true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, keyNameTest) {
+		t.Errorf("textContent.Text does not contain %v", keyNameTest)
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
 }
 
 // End-to-end verification of the SSH key update workflow.
-func TestLinodeSSHKeyUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeSSHKeyUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeSSHKeyUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_sshkey_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keySSHKeyID, "schema should include sshkey_id property")
-		assert.Contains(t, props, keyLabel, "schema should include label property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-	})
+	if tool.Name != "linode_sshkey_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_sshkey_update")
+	}
 
-	t.Run("confirm must be literal true before client call", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		var callCount atomic.Int32
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			callCount.Add(1)
+	props := tool.InputSchema.Properties
+	if _, ok := props[keySSHKeyID]; !ok {
+		t.Errorf("props missing key %v", keySSHKeyID)
+	}
 
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		t.Cleanup(srv.Close)
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
 
-		tests := []struct {
-			name    string
-			confirm any
-			set     bool
-		}{
-			{name: "missing"},
-			{name: "false", confirm: false, set: true},
-			{name: caseStringConfirmRejected, confirm: boolStringTrue, set: true},
-			{name: caseNumericConfirmRejected, confirm: 1, set: true},
+func TestLinodeSSHKeyUpdateToolConfirmMustBeLiteralTrueBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount.Add(1)
+
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
+
+	tests := []struct {
+		name    string
+		confirm any
+		set     bool
+	}{
+		{name: "missing"},
+		{name: "false", confirm: false, set: true},
+		{name: caseStringConfirmRejected, confirm: boolStringTrue, set: true},
+		{name: caseNumericConfirmRejected, confirm: 1, set: true},
+	}
+
+	for _, tt := range tests {
+		args := map[string]any{keySSHKeyID: float64(123), keyLabel: keyNameTest}
+		if tt.set {
+			args[keyConfirm] = tt.confirm
 		}
 
-		for _, tt := range tests {
-			args := map[string]any{keySSHKeyID: float64(123), keyLabel: keyNameTest}
-			if tt.set {
-				args[keyConfirm] = tt.confirm
-			}
+		req := createRequestWithArgs(t, args)
 
-			req := createRequestWithArgs(t, args)
-			result, err := successHandler(t.Context(), req)
-
-			require.NoError(t, err, "handler should not return Go error for %s", tt.name)
-			require.NotNil(t, result, "handler should return a result for %s", tt.name)
-			assert.True(t, result.IsError, "result should be a tool error for %s", tt.name)
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			assert.Zero(t, callCount.Load(), "confirm failures should happen before the client call for %s", tt.name)
+		result, err := successHandler(t.Context(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-	})
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+			t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+		}
+
+		if callCount.Load() != 0 {
+			t.Errorf("callCount.Load() = %v, want zero", callCount.Load())
+		}
+	}
+}
+
+func TestLinodeSSHKeyUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeSSHKeyUpdateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -184,355 +280,638 @@ func TestLinodeSSHKeyUpdateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("api failure returns tool error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeSSHKeyUpdateToolApiFailureReturnsToolError(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/profile/sshkeys/123", r.URL.Path, "request path should match SSH key endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			http.Error(w, "bad request", http.StatusBadRequest)
-		}))
-		defer srv.Close()
-
-		failureCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, failureHandler := tools.NewLinodeSSHKeyUpdateTool(failureCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keySSHKeyID: float64(123),
-			keyLabel:    keyNameTest,
-			keyConfirm:  true,
-		})
-		result, err := failureHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "failed to change label")
-	})
-
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
-
-		updatedKey := linode.SSHKey{
-			ID:    123,
-			Label: keyNameTest,
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcProfileSshkeys123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSshkeys123)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/profile/sshkeys/123", r.URL.Path, "request path should match SSH key endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-			var req linode.UpdateSSHKeyRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&req), "request body should decode")
-			assert.Equal(t, keyNameTest, req.Label, "request body should include the new label")
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	defer srv.Close()
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(updatedKey), "encoding response should succeed")
-		}))
-		defer srv.Close()
+	failureCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, failureHandler := tools.NewLinodeSSHKeyUpdateTool(failureCfg)
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keySSHKeyID: float64(123),
-			keyLabel:    keyNameTest,
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
-		assert.Contains(t, textContent.Text, keyNameTest, "response should contain the key label")
+	req := createRequestWithArgs(t, map[string]any{
+		keySSHKeyID: float64(123),
+		keyLabel:    keyNameTest,
+		keyConfirm:  true,
 	})
+
+	result, err := failureHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "failed to change label") {
+		t.Errorf("error text %q does not contain %q", text.Text, "failed to change label")
+	}
+}
+
+func TestLinodeSSHKeyUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
+
+	updatedKey := linode.SSHKey{
+		ID:    123,
+		Label: keyNameTest,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcProfileSshkeys123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSshkeys123)
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		var req linode.UpdateSSHKeyRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if req.Label != keyNameTest {
+			t.Errorf("req.Label = %v, want %v", req.Label, keyNameTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(updatedKey); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keySSHKeyID: float64(123),
+		keyLabel:    keyNameTest,
+		keyConfirm:  true,
+	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
+
+	if !strings.Contains(textContent.Text, keyNameTest) {
+		t.Errorf("textContent.Text does not contain %v", keyNameTest)
+	}
 }
 
 // End-to-end verification of the SSH key deletion workflow.
-func TestLinodeSSHKeyDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeSSHKeyDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeSSHKeyDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_sshkey_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keySSHKeyID, "schema should include sshkey_id property")
-	})
+	if tool.Name != "linode_sshkey_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_sshkey_delete")
+	}
 
-	t.Run("missing sshkey id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "sshkey_id is required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/profile/sshkeys/123", r.URL.Path, "request path should match SSH key endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	props := tool.InputSchema.Properties
+	if _, ok := props[keySSHKeyID]; !ok {
+		t.Errorf("props missing key %v", keySSHKeyID)
+	}
+}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
+func TestLinodeSSHKeyDeleteToolMissingSshkeyId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeSSHKeyDeleteTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
-		result, err := successHandler(t.Context(), req)
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "sshkey_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "sshkey_id is required")
+	}
+}
+
+func TestLinodeSSHKeyDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcProfileSshkeys123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSshkeys123)
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
 }
 
 // End-to-end verification of the instance boot workflow.
-func TestLinodeInstanceBootTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceBootToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeInstanceBootTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_boot", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "instance_id", "schema should include instance_id property")
-		assert.Contains(t, props, "config_id", "schema should include config_id property")
-	})
+	if tool.Name != toolInstanceBoot {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolInstanceBoot)
+	}
 
-	t.Run("missing instance id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "instance_id is required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful boot", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/boot", r.URL.Path, "request path should match boot endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	props := tool.InputSchema.Properties
+	if _, ok := props["instance_id"]; !ok {
+		t.Errorf("props missing key %v", "instance_id")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceBootTool(successCfg)
+	if _, ok := props["config_id"]; !ok {
+		t.Errorf("props missing key %v", "config_id")
+	}
+}
 
-		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
-		result, err := successHandler(t.Context(), req)
+func TestLinodeInstanceBootToolMissingInstanceId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceBootTool(cfg)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "boot initiated successfully", "response should confirm boot")
-	})
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "instance_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "instance_id is required")
+	}
+}
+
+func TestLinodeInstanceBootToolSuccessfulBoot(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/boot" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/boot")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceBootTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "boot initiated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "boot initiated successfully")
+	}
 }
 
 // End-to-end verification of the instance reboot workflow.
-func TestLinodeInstanceRebootTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceRebootToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeInstanceRebootTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_reboot", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "instance_id", "schema should include instance_id property")
-		assert.Contains(t, props, "config_id", "schema should include config_id property")
-	})
+	if tool.Name != "linode_instance_reboot" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_reboot")
+	}
 
-	t.Run("missing instance id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "instance_id is required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful reboot", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/reboot", r.URL.Path, "request path should match reboot endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	props := tool.InputSchema.Properties
+	if _, ok := props["instance_id"]; !ok {
+		t.Errorf("props missing key %v", "instance_id")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceRebootTool(successCfg)
+	if _, ok := props["config_id"]; !ok {
+		t.Errorf("props missing key %v", "config_id")
+	}
+}
 
-		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
-		result, err := successHandler(t.Context(), req)
+func TestLinodeInstanceRebootToolMissingInstanceId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceRebootTool(cfg)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "reboot initiated successfully", "response should confirm reboot")
-	})
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "instance_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "instance_id is required")
+	}
+}
+
+func TestLinodeInstanceRebootToolSuccessfulReboot(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/reboot" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/reboot")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceRebootTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "reboot initiated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "reboot initiated successfully")
+	}
 }
 
 // End-to-end verification of the instance shutdown workflow.
-func TestLinodeInstanceShutdownTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceShutdownToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeInstanceShutdownTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_shutdown", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "instance_id", "schema should include instance_id property")
-	})
+	if tool.Name != tcLinodeInstanceShutdown {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, tcLinodeInstanceShutdown)
+	}
 
-	t.Run("missing instance id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "instance_id is required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful shutdown", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/shutdown", r.URL.Path, "request path should match shutdown endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	props := tool.InputSchema.Properties
+	if _, ok := props["instance_id"]; !ok {
+		t.Errorf("props missing key %v", "instance_id")
+	}
+}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceShutdownTool(successCfg)
+func TestLinodeInstanceShutdownToolMissingInstanceId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceShutdownTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
-		result, err := successHandler(t.Context(), req)
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "shutdown initiated successfully", "response should confirm shutdown")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "instance_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "instance_id is required")
+	}
+}
+
+func TestLinodeInstanceShutdownToolSuccessfulShutdown(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/shutdown" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/shutdown")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceShutdownTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "shutdown initiated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "shutdown initiated successfully")
+	}
 }
 
 // End-to-end verification of the instance creation workflow under the current
 // Linode Interfaces generation. The wire shape matches BIMHelperScripts
 // linode_add_network at api-common.sh:378 exactly.
-func TestLinodeInstanceCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "type", "schema should include type property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "image", "schema should include image property")
-		assert.Contains(t, props, keyFirewallID, "schema should include firewall_id property under current Interfaces generation")
-		assert.Contains(t, props, "route_ipv4", "schema should include route_ipv4 property")
-		assert.Contains(t, props, "route_ipv6", "schema should include route_ipv6 property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	if tool.Name != "linode_instance_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_create")
+	}
 
-		// private_ip is replaced by interface-level VPC routing in the current
-		// API and must not be a tool parameter.
-		assert.NotContains(t, props, "private_ip", "schema must not include legacy private_ip property")
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		// firewall_id is a hard requirement of the current API.
-		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "firewall_id must be marked required")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keySupportTicketRegion]; !ok {
+		t.Errorf("props missing key %v", keySupportTicketRegion)
+	}
+
+	if _, ok := props["type"]; !ok {
+		t.Errorf("props missing key %v", "type")
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["image"]; !ok {
+		t.Errorf("props missing key %v", "image")
+	}
+
+	if _, ok := props[keyFirewallID]; !ok {
+		t.Errorf("props missing key %v", keyFirewallID)
+	}
+
+	if _, ok := props["route_ipv4"]; !ok {
+		t.Errorf("props missing key %v", "route_ipv4")
+	}
+
+	if _, ok := props["route_ipv6"]; !ok {
+		t.Errorf("props missing key %v", "route_ipv6")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+
+	// private_ip is replaced by interface-level VPC routing in the current
+	// API and must not be a tool parameter.
+	if _, ok := props["private_ip"]; ok {
+		t.Errorf("props has unexpected key %v", "private_ip")
+	}
+
+	// firewall_id is a hard requirement of the current API.
+	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
+	}
+}
+
+func TestLinodeInstanceCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -564,121 +943,194 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("body shape matches BIMHelperScripts reference", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceCreateToolBodyShapeMatchesBIMHelperScriptsReference(t *testing.T) {
+	t.Parallel()
 
-		var capturedBody map[string]any
+	var capturedBody map[string]any
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances", r.URL.Path, "request path should match instance endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody), "request body should be valid JSON")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 456, Label: "web-server", Region: regionUSEast, Status: "provisioning"}))
-		}))
-		defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances")
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyRegion:     regionUSEast,
-			keyType:       typeG6Nanode1,
-			keyLabel:      "web-server",
-			keyFirewallID: 12345,
-			keyConfirm:    true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+		w.Header().Set("Content-Type", "application/json")
 
-		// Top-level wire fields per linode_add_network at api-common.sh:378.
-		assert.Equal(t, "linode", capturedBody["interface_generation"], "interface_generation must be 'linode'")
+		if err := json.NewEncoder(w).Encode(linode.Instance{ID: 456, Label: "web-server", Region: regionUSEast, Status: "provisioning"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		interfaces, interfacesOK := capturedBody["interfaces"].([]any)
-		require.True(t, interfacesOK, "interfaces must be present as an array")
-		require.Len(t, interfaces, 1, "exactly one interface must be sent")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
 
-		iface, ifaceOK := interfaces[0].(map[string]any)
-		require.True(t, ifaceOK, "interface element must be an object")
-
-		// public: {} is sent so the API uses defaults; no nested fields under it.
-		pub, pubOK := iface["public"].(map[string]any)
-		require.True(t, pubOK, "public must be an object")
-		assert.Empty(t, pub, "public must be an empty object so the API assigns defaults")
-
-		// default_route: both families default to true.
-		route, routeOK := iface["default_route"].(map[string]any)
-		require.True(t, routeOK, "default_route must be an object")
-		assert.Equal(t, true, route["ipv4"], "default_route.ipv4 should be true by default")
-		assert.Equal(t, true, route["ipv6"], "default_route.ipv6 should be true by default")
-
-		// firewall_id at interface level (not top-level).
-		assert.InEpsilon(t, float64(12345), iface["firewall_id"], 0.0001, "firewall_id must be at the interface level")
-		assert.NotContains(t, capturedBody, "firewall_id", "firewall_id must not appear at top level")
-
-		textContent, textOK := result.Content[0].(mcp.TextContent)
-		require.True(t, textOK, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "web-server", "response should contain the instance label")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyRegion:     regionUSEast,
+		keyType:       typeG6Nanode1,
+		keyLabel:      "web-server",
+		keyFirewallID: 12345,
+		keyConfirm:    true,
 	})
 
-	t.Run("route flags omit ipv4 key when false", func(t *testing.T) {
-		t.Parallel()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		var capturedBody map[string]any
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 789, Label: "v6-only", Region: regionUSEast}))
-		}))
-		defer srv.Close()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+	// Top-level wire fields per linode_add_network at api-common.sh:378.
+	if !reflect.DeepEqual(capturedBody["interface_generation"], monitorAlertDefinitionToolServiceType) {
+		t.Errorf("got %v, want %v", capturedBody["interface_generation"], monitorAlertDefinitionToolServiceType)
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyRegion:     regionUSEast,
-			keyType:       typeG6Nanode1,
-			keyFirewallID: 12345,
-			"route_ipv4":  false,
-			"route_ipv6":  true,
-			keyConfirm:    true,
-		})
-		_, err := successHandler(t.Context(), req)
-		require.NoError(t, err)
+	interfaces, interfacesOK := capturedBody["interfaces"].([]any)
+	if !interfacesOK {
+		t.Fatal("interfacesOK = false, want true")
+	}
 
-		interfaces, interfacesOK := capturedBody["interfaces"].([]any)
-		require.True(t, interfacesOK)
+	if len(interfaces) != 1 {
+		t.Fatalf("len(interfaces) = %d, want %d", len(interfaces), 1)
+	}
 
-		iface, ifaceOK := interfaces[0].(map[string]any)
-		require.True(t, ifaceOK, "interface element must be an object")
+	iface, ifaceOK := interfaces[0].(map[string]any)
+	if !ifaceOK {
+		t.Fatal("ifaceOK = false, want true")
+	}
 
-		route, routeOK := iface["default_route"].(map[string]any)
-		require.True(t, routeOK, "default_route must be present")
+	// public: {} is sent so the API uses defaults; no nested fields under it.
+	if !reflect.DeepEqual(iface["public"], map[string]any{}) {
+		t.Errorf("iface[public] = %v, want empty", iface["public"])
+	}
 
-		// The wire shape must omit the ipv4 key entirely when false, not send
-		// "ipv4": false. The API treats absence as "not the default route" for
-		// that family.
-		_, hasIPv4 := route["ipv4"]
-		assert.False(t, hasIPv4, "default_route.ipv4 key must be omitted when route_ipv4 is false")
-		assert.Equal(t, true, route["ipv6"], "default_route.ipv6 must be sent as true")
+	// default_route: both families default to true.
+	if !reflect.DeepEqual(iface["default_route"], map[string]any{"ipv4": true, tcIpv6: true}) {
+		t.Errorf("iface[default_route] = %v, want %v", iface["default_route"], map[string]any{"ipv4": true, tcIpv6: true})
+	}
+
+	// firewall_id at interface level (not top-level).
+	if iface["firewall_id"] != float64(12345) {
+		t.Errorf("value = %v, want %v", iface["firewall_id"], float64(12345))
+	}
+
+	if _, ok := capturedBody["firewall_id"]; ok {
+		t.Errorf("capturedBody has unexpected key %v", "firewall_id")
+	}
+
+	textContent, textOK := result.Content[0].(mcp.TextContent)
+	if !textOK {
+		t.Fatal("textOK = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "web-server") {
+		t.Errorf("textContent.Text does not contain %v", "web-server")
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
+}
+
+func TestLinodeInstanceCreateToolRouteFlagsOmitIpv4KeyWhenFalse(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.Instance{ID: 789, Label: "v6-only", Region: regionUSEast}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyRegion:     regionUSEast,
+		keyType:       typeG6Nanode1,
+		keyFirewallID: 12345,
+		"route_ipv4":  false,
+		"route_ipv6":  true,
+		keyConfirm:    true,
 	})
+
+	_, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	interfaces, interfacesOK := capturedBody["interfaces"].([]any)
+	if !interfacesOK {
+		t.Fatal("interfacesOK = false, want true")
+	}
+
+	iface, ifaceOK := interfaces[0].(map[string]any)
+	if !ifaceOK {
+		t.Fatal("ifaceOK = false, want true")
+	}
+
+	route, routeOK := iface["default_route"].(map[string]any)
+	if !routeOK {
+		t.Fatal("routeOK = false, want true")
+	}
+
+	// The wire shape must omit the ipv4 key entirely when false, not send
+	// "ipv4": false. The API treats absence as "not the default route" for
+	// that family.
+	_, hasIPv4 := route["ipv4"]
+	if hasIPv4 {
+		t.Error("hasIPv4 = true, want false")
+	}
+
+	if !reflect.DeepEqual(route[tcIpv6], true) {
+		t.Errorf("got %v, want %v", route[tcIpv6], true)
+	}
 }
 
 // Instance GET response parsing under the current Interfaces generation must
@@ -689,7 +1141,7 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	firewallID := 12345
 	respBody := linode.Instance{
 		ID:                  321,
-		Label:               "web-01",
+		Label:               firewallDeviceLabelFixture,
 		Status:              statusRunning,
 		Region:              regionUSEast,
 		InterfaceGeneration: "linode",
@@ -704,9 +1156,15 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/321", r.URL.Path)
+		if r.URL.Path != "/linode/instances/321" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/321")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(respBody))
+
+		if err := json.NewEncoder(w).Encode(respBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -716,47 +1174,97 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInstanceID: "321"})
+
 	result, err := handler(t.Context(), req)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, textOK := result.Content[0].(mcp.TextContent)
-	require.True(t, textOK)
+	if !textOK {
+		t.Fatal("textOK = false, want true")
+	}
 
 	// Parse the JSON response and assert structurally so the test does not
 	// depend on the marshaler's whitespace choices. The GET handler returns
 	// the Instance unwrapped at the top level.
 	var parsed linode.Instance
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &parsed), "tool result must be valid JSON")
-	assert.Equal(t, "linode", parsed.InterfaceGeneration, "interface_generation must be surfaced")
-	require.Len(t, parsed.Interfaces, 1, "interfaces array must be populated")
-	assert.Equal(t, 1, parsed.Interfaces[0].ID, "interface ID must be parsed")
-	require.NotNil(t, parsed.Interfaces[0].FirewallID, "firewall_id must be parsed")
-	assert.Equal(t, 12345, *parsed.Interfaces[0].FirewallID, "firewall_id value must match")
+	if err := json.Unmarshal([]byte(textContent.Text), &parsed); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if parsed.InterfaceGeneration != monitorAlertDefinitionToolServiceType {
+		t.Errorf("parsed.InterfaceGeneration = %v, want %v", parsed.InterfaceGeneration, monitorAlertDefinitionToolServiceType)
+	}
+
+	if len(parsed.Interfaces) != 1 {
+		t.Fatalf("len(parsed.Interfaces) = %d, want %d", len(parsed.Interfaces), 1)
+	}
+
+	if parsed.Interfaces[0].ID != 1 {
+		t.Errorf("parsed.Interfaces[0].ID = %v, want %v", parsed.Interfaces[0].ID, 1)
+	}
+
+	if parsed.Interfaces[0].FirewallID == nil {
+		t.Fatal("parsed.Interfaces[0].FirewallID is nil")
+	}
+
+	if *parsed.Interfaces[0].FirewallID != 12345 {
+		t.Errorf("*parsed.Interfaces[0].FirewallID = %v, want %v", *parsed.Interfaces[0].FirewallID, 12345)
+	}
 }
 
 // End-to-end verification of the instance deletion workflow.
-func TestLinodeInstanceDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "instance_id", "schema should include instance_id property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
-	})
+	if tool.Name != canRunDestroyTool {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, canRunDestroyTool)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["instance_id"]; !ok {
+		t.Errorf("props missing key %v", "instance_id")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeInstanceDeleteToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -778,186 +1286,312 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123", r.URL.Path, "request path should match instance endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != instanceGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, instanceGetPath)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceDeleteTool(successCfg)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyInstanceID: float64(123),
-			keyConfirm:    true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceDeleteTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
+	req := createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyConfirm:    true, keyConfirmedDryRun: true,
 	})
 
-	t.Run("dry_run schema property", func(t *testing.T) {
-		t.Parallel()
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
+}
+
+func TestLinodeInstanceDeleteToolDryRunSchemaProperty(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, _ := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	t.Parallel()
+
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
+
+func TestLinodeInstanceDeleteToolDryRunReturnsPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	instanceBody := `{"id":456,"label":"web-test","type":"g6-standard-1","region":"us-east","status":"running"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == "/linode/instances/456" {
+			_, _ = w.Write([]byte(instanceBody))
+
+			return
+		}
+
+		// The Tier A dependency walk also fetches volumes, IPs,
+		// firewalls, and the type. An empty body decodes to zero
+		// dependencies, keeping this subtest on the no-mutation and
+		// preview-shape contract; the rich walk has its own test.
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeInstanceDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(456),
+		keyDryRun:     true,
 	})
 
-	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		instanceBody := `{"id":456,"label":"web-test","type":"g6-standard-1","region":"us-east","status":"running"}`
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
 
-			if r.Method != http.MethodGet {
-				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-				w.WriteHeader(http.StatusInternalServerError)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
+	if !reflect.DeepEqual(body["tool"], canRunDestroyTool) {
+		t.Errorf("got %v, want %v", body["tool"], canRunDestroyTool)
+	}
 
-			if r.URL.Path == "/linode/instances/456" {
-				_, _ = w.Write([]byte(instanceBody))
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
 
-			// The Tier A dependency walk also fetches volumes, IPs,
-			// firewalls, and the type. An empty body decodes to zero
-			// dependencies, keeping this subtest on the no-mutation and
-			// preview-shape contract; the rich walk has its own test.
-			_, _ = w.Write([]byte(`{}`))
-		}))
-		defer srv.Close()
+	if !reflect.DeepEqual(would["path"], "/linode/instances/456") {
+		t.Errorf("got %v, want %v", would["path"], "/linode/instances/456")
+	}
 
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeInstanceDeleteTool(dryRunCfg)
+	state, stateIsObject := body["current_state"].(map[string]any)
+	if !stateIsObject {
+		t.Fatal("stateIsObject = false, want true")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyInstanceID: float64(456),
-			keyDryRun:     true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
+	if state[keyBetaID] != float64(456) {
+		t.Errorf("value = %v, want %v", state[keyBetaID], float64(456))
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+	if !reflect.DeepEqual(state[keyLabel], "web-test") {
+		t.Errorf("state[keyLabel] = %v, want %v", state[keyLabel], "web-test")
+	}
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+	if len(methodsSeen) == 0 {
+		t.Fatal("methodsSeen is empty")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_instance_delete", body["tool"])
+	if slices.Contains(methodsSeen, http.MethodDelete) {
+		t.Errorf("methodsSeen should not contain %v", http.MethodDelete)
+	}
+}
 
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject, "would_execute must be a JSON object")
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/linode/instances/456", would["path"])
+func TestLinodeInstanceDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
 
-		state, stateIsObject := body["current_state"].(map[string]any)
-		require.True(t, stateIsObject)
-		assert.InDelta(t, 456, state[keyBetaID], 0)
-		assert.Equal(t, "web-test", state[keyLabel])
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		require.NotEmpty(t, methodsSeen, "dry_run must read state")
-		assert.NotContains(t, methodsSeen, http.MethodDelete,
-			"dry_run must never issue a DELETE")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":789,"label":"no-confirm","status":"running"}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeInstanceDeleteTool(dryRunCfg)
+
+	// Intentionally omit confirm; the dry-run path must not gate on it.
+	req := createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(789),
+		keyDryRun:     true,
 	})
 
-	t.Run("dry_run does not require confirm", func(t *testing.T) {
-		t.Parallel()
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":789,"label":"no-confirm","status":"running"}`))
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeInstanceDeleteTool(dryRunCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
 
-		// Intentionally omit confirm; the dry-run path must not gate on it.
-		req := createRequestWithArgs(t, map[string]any{
-			keyInstanceID: float64(789),
-			keyDryRun:     true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
+func TestLinodeInstanceDeleteToolDryRunStillValidatesInstanceId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
+	t.Parallel()
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDryRun: true,
 	})
 
-	t.Run("dry_run still validates instance_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDryRun: true,
-		})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
-			"dry_run with missing instance_id must error out the same way the real call would")
-		assertErrorContains(t, result, "instance_id is required")
-	})
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "instance_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "instance_id is required")
+	}
 }
 
 // End-to-end verification of the instance resize workflow.
-func TestLinodeInstanceResizeTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceResizeToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_resize", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "instance_id", "schema should include instance_id property")
-		assert.Contains(t, props, "type", "schema should include type property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
-	})
+	if tool.Name != "linode_instance_resize" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_resize")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["instance_id"]; !ok {
+		t.Errorf("props missing key %v", "instance_id")
+	}
+
+	if _, ok := props["type"]; !ok {
+		t.Errorf("props missing key %v", "type")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeInstanceResizeToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -984,389 +1618,649 @@ func TestLinodeInstanceResizeTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful resize", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceResizeToolSuccessfulResize(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/resize", r.URL.Path, "request path should match resize endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/resize" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/resize")
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeInstanceResizeTool(successCfg)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyInstanceID: float64(123),
-			keyType:       typeG6Standard1,
-			keyConfirm:    true,
-		})
-		result, err := successHandler(t.Context(), req)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceResizeTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "resize", "response should mention resize")
-		assert.Contains(t, textContent.Text, typeG6Standard1, "response should contain the new plan type")
+	req := createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyType:       typeG6Standard1,
+		keyConfirm:    true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "resize") {
+		t.Errorf("textContent.Text does not contain %v", "resize")
+	}
+
+	if !strings.Contains(textContent.Text, typeG6Standard1) {
+		t.Errorf("textContent.Text does not contain %v", typeG6Standard1)
+	}
 }
 
 // End-to-end verification of the firewall creation workflow.
-func TestLinodeFirewallCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeFirewallCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeFirewallCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_firewall_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "inbound_policy", "schema should include inbound_policy property")
-		assert.Contains(t, props, "outbound_policy", "schema should include outbound_policy property")
-	})
+	if tool.Name != "linode_firewall_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_create")
+	}
 
-	t.Run(caseMissingLabel, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errLabelRequired)
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		firewall := linode.Firewall{
-			ID:     789,
-			Label:  labelWebFirewall,
-			Status: statusEnabled,
+	props := tool.InputSchema.Properties
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["inbound_policy"]; !ok {
+		t.Errorf("props missing key %v", "inbound_policy")
+	}
+
+	if _, ok := props["outbound_policy"]; !ok {
+		t.Errorf("props missing key %v", "outbound_policy")
+	}
+}
+
+func TestLinodeFirewallCreateToolCaseMissingLabel(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallCreateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errLabelRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errLabelRequired)
+	}
+}
+
+func TestLinodeFirewallCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
+
+	firewall := linode.Firewall{
+		ID:     789,
+		Label:  labelWebFirewall,
+		Status: statusEnabled,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/networking/firewalls" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/networking/firewalls", r.URL.Path, "request path should match firewall endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(firewall), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeFirewallCreateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:         labelWebFirewall,
-			"inbound_policy": "DROP",
-			keyConfirm:       true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(firewall); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeFirewallCreateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, labelWebFirewall, "response should contain the firewall label")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:         labelWebFirewall,
+		"inbound_policy": "DROP",
+		keyConfirm:       true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, labelWebFirewall) {
+		t.Errorf("textContent.Text does not contain %v", labelWebFirewall)
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
 }
 
 // End-to-end verification of the firewall update workflow.
-func TestLinodeFirewallUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeFirewallUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeFirewallUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_firewall_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "firewall_id", "schema should include firewall_id property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, keyStatus, "schema should include status property")
-	})
+	if tool.Name != "linode_firewall_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_update")
+	}
 
-	t.Run("missing firewall id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew, keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "firewall_id is required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		firewall := linode.Firewall{
-			ID:     789,
-			Label:  "updated-firewall",
-			Status: statusEnabled,
+	props := tool.InputSchema.Properties
+	if _, ok := props["firewall_id"]; !ok {
+		t.Errorf("props missing key %v", "firewall_id")
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props[keyStatus]; !ok {
+		t.Errorf("props missing key %v", keyStatus)
+	}
+}
+
+func TestLinodeFirewallUpdateToolMissingFirewallId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallUpdateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "firewall_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "firewall_id is required")
+	}
+}
+
+func TestLinodeFirewallUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
+
+	firewall := linode.Firewall{
+		ID:     789,
+		Label:  "updated-firewall",
+		Status: statusEnabled,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcNetworkingFirewalls789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls789)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/networking/firewalls/789", r.URL.Path, "request path should match firewall endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(firewall), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeFirewallUpdateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID: float64(789),
-			keyLabel:      "updated-firewall",
-			keyConfirm:    true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(firewall); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeFirewallUpdateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(789),
+		keyLabel:      "updated-firewall",
+		keyConfirm:    true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
 }
 
 // End-to-end verification of the firewall deletion workflow.
-func TestLinodeFirewallDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeFirewallDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_firewall_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "firewall_id", "schema should include firewall_id property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	if tool.Name != "linode_firewall_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["firewall_id"]; !ok {
+		t.Errorf("props missing key %v", "firewall_id")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeFirewallDeleteToolCaseRequiresConfirm(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(789)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeFirewallDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcNetworkingFirewalls789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls789)
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeFirewallDeleteTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(789),
+		keyConfirm:    true, keyConfirmedDryRun: true,
 	})
 
-	t.Run(caseRequiresConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(789)})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/networking/firewalls/789", r.URL.Path, "request path should match firewall endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeFirewallDeleteTool(successCfg)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID: float64(789),
-			keyConfirm:    true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
 }
 
 // Dry-run coverage for firewall delete. Kept in a sibling function so
 // the main test's subtest count stays under maintidx's threshold.
-func TestLinodeFirewallDeleteToolDryRun(t *testing.T) {
+func TestLinodeFirewallDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeFirewallDeleteTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
 
-		tool, _, _ := tools.NewLinodeFirewallDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
+func TestLinodeFirewallDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	firewallBody := `{"id":789,"label":"prod-fw","status":"enabled"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == tcNetworkingFirewalls789 {
+			_, _ = w.Write([]byte(firewallBody))
+
+			return
+		}
+
+		// The Tier A walk also lists firewall devices; an empty page
+		// keeps this subtest on the no-mutation and preview-shape contract.
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(789),
+		keyDryRun:     true,
 	})
 
-	t.Run("preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		firewallBody := `{"id":789,"label":"prod-fw","status":"enabled"}`
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
 
-			if r.Method != http.MethodGet {
-				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-				w.WriteHeader(http.StatusInternalServerError)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
+	if !reflect.DeepEqual(body["tool"], "linode_firewall_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_firewall_delete")
+	}
 
-			if r.URL.Path == "/networking/firewalls/789" {
-				_, _ = w.Write([]byte(firewallBody))
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
 
-			// The Tier A walk also lists firewall devices; an empty page
-			// keeps this subtest on the no-mutation and preview-shape contract.
-			_, _ = w.Write([]byte(`{}`))
-		}))
-		defer srv.Close()
+	if !reflect.DeepEqual(would["path"], tcNetworkingFirewalls789) {
+		t.Errorf("got %v, want %v", would["path"], tcNetworkingFirewalls789)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+	if len(methodsSeen) == 0 {
+		t.Fatal("methodsSeen is empty")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID: float64(789),
-			keyDryRun:     true,
-		})
-		result, err := handler(t.Context(), req)
+	if slices.Contains(methodsSeen, http.MethodDelete) {
+		t.Errorf("methodsSeen should not contain %v", http.MethodDelete)
+	}
+}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
+func TestLinodeFirewallDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_firewall_delete", body["tool"])
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":789,"label":"prod-fw"}`))
+	}))
+	defer srv.Close()
 
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/networking/firewalls/789", would["path"])
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
 
-		require.NotEmpty(t, methodsSeen, "dry_run must read state")
-		assert.NotContains(t, methodsSeen, http.MethodDelete,
-			"dry_run must never issue a DELETE")
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(789),
+		keyDryRun:     true,
 	})
 
-	t.Run("does not require confirm", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":789,"label":"prod-fw"}`))
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID: float64(789),
-			keyDryRun:     true,
-		})
-		result, err := handler(t.Context(), req)
+func TestLinodeFirewallDeleteToolDryRunStillValidatesFirewallId(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
-	})
+	_, _, handler := tools.NewLinodeFirewallDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 
-	t.Run("still validates firewall_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		_, _, handler := tools.NewLinodeFirewallDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "firewall_id is required")
-	})
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "firewall_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "firewall_id is required")
+	}
 }
 
 // End-to-end verification of the domain import workflow.
-func TestLinodeDomainImportTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainImportToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainImportTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_import", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain", "schema should include domain property")
-		assert.Contains(t, props, keyRemoteNameserver, "schema should include remote_nameserver property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
-	})
+	if tool.Name != "linode_domain_import" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_import")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain"]; !ok {
+		t.Errorf("props missing key %v", "domain")
+	}
+
+	if _, ok := props[keyRemoteNameserver]; !ok {
+		t.Errorf("props missing key %v", keyRemoteNameserver)
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeDomainImportToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainImportTool(cfg)
 
 	confirmTests := []struct {
 		name  string
@@ -1388,13 +2282,34 @@ func TestLinodeDomainImportTool(t *testing.T) {
 			}
 
 			req := createRequestWithArgs(t, args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
 		})
 	}
+}
+
+func TestLinodeDomainImportToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainImportTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1408,112 +2323,195 @@ func TestLinodeDomainImportTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful import", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeDomainImportToolSuccessfulImport(t *testing.T) {
+	t.Parallel()
 
-		domain := linode.Domain{
-			ID:     111,
-			Domain: domainExample,
-			Type:   keyMaster,
-			Status: statusActive,
+	domain := linode.Domain{
+		ID:     111,
+		Domain: domainExample,
+		Type:   keyMaster,
+		Status: statusActive,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/import" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/import")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/import", r.URL.Path, "request path should match domain import endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-			var body map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-			assert.Equal(t, domainExample, body["domain"], "domain should be sent")
-			assert.Equal(t, remoteNameserverExample, body[keyRemoteNameserver], "remote_nameserver should be sent")
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(domain), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if !reflect.DeepEqual(body["domain"], domainExample) {
+			t.Errorf("got %v, want %v", body["domain"], domainExample)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainImportTool(successCfg)
+		if !reflect.DeepEqual(body[keyRemoteNameserver], remoteNameserverExample) {
+			t.Errorf("body[keyRemoteNameserver] = %v, want %v", body[keyRemoteNameserver], remoteNameserverExample)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomain:           domainExample,
-			keyRemoteNameserver: remoteNameserverExample,
-			keyConfirm:          true,
-		})
-		result, err := successHandler(t.Context(), req)
+		w.Header().Set("Content-Type", "application/json")
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+		if err := json.NewEncoder(w).Encode(domain); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, domainExample, "response should contain the domain name")
-		assert.Contains(t, textContent.Text, "imported successfully", "response should confirm import")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainImportTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomain:           domainExample,
+		keyRemoteNameserver: remoteNameserverExample,
+		keyConfirm:          true,
 	})
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"invalid domain"}]}`))
-			assert.NoError(t, err, "writing API error should succeed")
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errorHandler := tools.NewLinodeDomainImportTool(errorCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomain:           domainExample,
-			keyRemoteNameserver: remoteNameserverExample,
-			keyConfirm:          true,
-		})
-		result, err := errorHandler(t.Context(), req)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to import domain")
+	if !strings.Contains(textContent.Text, domainExample) {
+		t.Errorf("textContent.Text does not contain %v", domainExample)
+	}
+
+	if !strings.Contains(textContent.Text, "imported successfully") {
+		t.Errorf("textContent.Text does not contain %v", "imported successfully")
+	}
+}
+
+func TestLinodeDomainImportToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"invalid domain"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errorHandler := tools.NewLinodeDomainImportTool(errorCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomain:           domainExample,
+		keyRemoteNameserver: remoteNameserverExample,
+		keyConfirm:          true,
 	})
+
+	result, err := errorHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to import domain") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to import domain")
+	}
 }
 
 // End-to-end verification of the domain clone workflow.
-func TestLinodeDomainCloneTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainCloneToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainCloneTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_clone", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyDomainID, "schema should include domain_id property")
-		assert.Contains(t, props, keyDomain, "schema should include domain property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-		assert.Contains(t, tool.InputSchema.Required, keyDomainID, "domain_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyDomain, "domain must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if tool.Name != "linode_domain_clone" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_clone")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyDomainID]; !ok {
+		t.Errorf("props missing key %v", keyDomainID)
+	}
+
+	if _, ok := props[keyDomain]; !ok {
+		t.Errorf("props missing key %v", keyDomain)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{keyDomainID, keyDomain, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeDomainCloneToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainCloneTool(cfg)
 
 	confirmTests := []struct {
 		name  string
@@ -1535,13 +2533,34 @@ func TestLinodeDomainCloneTool(t *testing.T) {
 			}
 
 			req := createRequestWithArgs(t, args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
 		})
 	}
+}
+
+func TestLinodeDomainCloneToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainCloneTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1557,95 +2576,172 @@ func TestLinodeDomainCloneTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful clone", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeDomainCloneToolSuccessfulClone(t *testing.T) {
+	t.Parallel()
 
-		domain := linode.Domain{ID: 222, Domain: domainExample, Type: keyMaster, Status: statusActive}
+	domain := linode.Domain{ID: 222, Domain: domainExample, Type: keyMaster, Status: statusActive}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/111/clone", r.URL.Path, "request path should match domain clone endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/111/clone" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111/clone")
+		}
 
-			var body map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-			assert.Equal(t, domainExample, body[keyDomain], "domain should be sent")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(domain), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainCloneTool(successCfg)
+		if !reflect.DeepEqual(body[keyDomain], domainExample) {
+			t.Errorf("body[keyDomain] = %v, want %v", body[keyDomain], domainExample)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{keyDomainID: float64(111), keyDomain: domainExample, keyConfirm: true})
-		result, err := successHandler(t.Context(), req)
+		w.Header().Set("Content-Type", "application/json")
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+		if err := json.NewEncoder(w).Encode(domain); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, domainExample, "response should contain the domain name")
-		assert.Contains(t, textContent.Text, "cloned", "response should confirm clone")
-	})
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainCloneTool(successCfg)
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyDomainID: float64(111), keyDomain: domainExample, keyConfirm: true})
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"invalid domain"}]}`))
-			assert.NoError(t, err, "writing API error should succeed")
-		}))
-		defer srv.Close()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errorHandler := tools.NewLinodeDomainCloneTool(errorCfg)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{keyDomainID: float64(111), keyDomain: domainExample, keyConfirm: true})
-		result, err := errorHandler(t.Context(), req)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to clone domain")
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, domainExample) {
+		t.Errorf("textContent.Text does not contain %v", domainExample)
+	}
+
+	if !strings.Contains(textContent.Text, "cloned") {
+		t.Errorf("textContent.Text does not contain %v", "cloned")
+	}
+}
+
+func TestLinodeDomainCloneToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"invalid domain"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errorHandler := tools.NewLinodeDomainCloneTool(errorCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyDomainID: float64(111), keyDomain: domainExample, keyConfirm: true})
+
+	result, err := errorHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to clone domain") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to clone domain")
+	}
 }
 
 // End-to-end verification of the domain creation workflow.
-func TestLinodeDomainCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain", "schema should include domain property")
-		assert.Contains(t, props, "type", "schema should include type property")
-		assert.Contains(t, props, "soa_email", "schema should include soa_email property")
-	})
+	if tool.Name != "linode_domain_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain"]; !ok {
+		t.Errorf("props missing key %v", "domain")
+	}
+
+	if _, ok := props["type"]; !ok {
+		t.Errorf("props missing key %v", "type")
+	}
+
+	if _, ok := props["soa_email"]; !ok {
+		t.Errorf("props missing key %v", "soa_email")
+	}
+}
+
+func TestLinodeDomainCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1659,441 +2755,733 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeDomainCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		domain := linode.Domain{
-			ID:     111,
-			Domain: domainExample,
-			Type:   keyMaster,
-			Status: statusActive,
+	domain := linode.Domain{
+		ID:     111,
+		Domain: domainExample,
+		Type:   keyMaster,
+		Status: statusActive,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains", r.URL.Path, "request path should match domain endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(domain), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainCreateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomain:   domainExample,
-			keyType:     keyMaster,
-			keySoaEmail: "admin@example.com",
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(domain); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainCreateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, domainExample, "response should contain the domain name")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomain:   domainExample,
+		keyType:     keyMaster,
+		keySoaEmail: "admin@example.com",
+		keyConfirm:  true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, domainExample) {
+		t.Errorf("textContent.Text does not contain %v", domainExample)
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
 }
 
 // End-to-end verification of the domain update workflow.
-func TestLinodeDomainUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain_id", "schema should include domain_id property")
-		assert.Contains(t, props, "soa_email", "schema should include soa_email property")
-		assert.Contains(t, props, keyStatus, "schema should include status property")
-	})
+	if tool.Name != "linode_domain_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_update")
+	}
 
-	t.Run(caseMissingDomainID, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keySoaEmail: "new@example.com", keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errDomainIDRequired)
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		domain := linode.Domain{
-			ID:     111,
-			Domain: domainExample,
-			Type:   keyMaster,
-			Status: statusActive,
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain_id"]; !ok {
+		t.Errorf("props missing key %v", "domain_id")
+	}
+
+	if _, ok := props["soa_email"]; !ok {
+		t.Errorf("props missing key %v", "soa_email")
+	}
+
+	if _, ok := props[keyStatus]; !ok {
+		t.Errorf("props missing key %v", keyStatus)
+	}
+}
+
+func TestLinodeDomainUpdateToolCaseMissingDomainID(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainUpdateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keySoaEmail: "new@example.com", keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errDomainIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errDomainIDRequired)
+	}
+}
+
+func TestLinodeDomainUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
+
+	domain := linode.Domain{
+		ID:     111,
+		Domain: domainExample,
+		Type:   keyMaster,
+		Status: statusActive,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/111" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/111", r.URL.Path, "request path should match domain endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(domain), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainUpdateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(111),
-			keySoaEmail: "new@example.com",
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(domain); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainUpdateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(111),
+		keySoaEmail: "new@example.com",
+		keyConfirm:  true,
 	})
 
-	t.Run("dry_run schema property", func(t *testing.T) {
-		t.Parallel()
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
+}
+
+func TestLinodeDomainUpdateToolDryRunSchemaProperty(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, _ := tools.NewLinodeDomainUpdateTool(cfg)
+
+	t.Parallel()
+
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
+
+func TestLinodeDomainUpdateToolDryRunReturnsPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	domainBody := `{"id":222,"domain":"dry.example.com","type":"master","status":"active","soa_email":"existing@example.com"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == "/domains/222" {
+			_, _ = w.Write([]byte(domainBody))
+
+			return
+		}
+
+		// The Tier A walk also lists DNS records; an empty page keeps
+		// this subtest on the no-mutation and preview-shape contract.
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeDomainUpdateTool(dryRunCfg)
+
+	// Intentionally omit optional args; dry_run path returns current
+	// state via GET regardless of what update fields would be sent.
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(222),
+		keyDryRun:   true,
 	})
 
-	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		domainBody := `{"id":222,"domain":"dry.example.com","type":"master","status":"active","soa_email":"existing@example.com"}`
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
 
-			if r.Method != http.MethodGet {
-				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-				w.WriteHeader(http.StatusInternalServerError)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
 
-			w.Header().Set("Content-Type", "application/json")
+	if !reflect.DeepEqual(body["tool"], "linode_domain_update") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_domain_update")
+	}
 
-			if r.URL.Path == "/domains/222" {
-				_, _ = w.Write([]byte(domainBody))
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
 
-				return
-			}
+	if !reflect.DeepEqual(would["method"], "PUT") {
+		t.Errorf("got %v, want %v", would["method"], "PUT")
+	}
 
-			// The Tier A walk also lists DNS records; an empty page keeps
-			// this subtest on the no-mutation and preview-shape contract.
-			_, _ = w.Write([]byte(`{}`))
-		}))
-		defer srv.Close()
+	if !reflect.DeepEqual(would["path"], "/domains/222") {
+		t.Errorf("got %v, want %v", would["path"], "/domains/222")
+	}
 
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeDomainUpdateTool(dryRunCfg)
+	state, stateIsObject := body["current_state"].(map[string]any)
+	if !stateIsObject {
+		t.Fatal("stateIsObject = false, want true")
+	}
 
-		// Intentionally omit optional args; dry_run path returns current
-		// state via GET regardless of what update fields would be sent.
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(222),
-			keyDryRun:   true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
+	if state[keyBetaID] != float64(222) {
+		t.Errorf("value = %v, want %v", state[keyBetaID], float64(222))
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+	if !reflect.DeepEqual(state["domain"], "dry.example.com") {
+		t.Errorf("got %v, want %v", state["domain"], "dry.example.com")
+	}
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_domain_update", body["tool"])
+func TestLinodeDomainUpdateToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
 
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/domains/222", would["path"])
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		state, stateIsObject := body["current_state"].(map[string]any)
-		require.True(t, stateIsObject)
-		assert.InDelta(t, 222, state[keyBetaID], 0)
-		assert.Equal(t, "dry.example.com", state["domain"])
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":333,"domain":"no-confirm.example.com","status":"active"}`))
+	}))
+	defer srv.Close()
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET request, never PUT")
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeDomainUpdateTool(dryRunCfg)
+
+	// Intentionally omit confirm; the dry-run path must not gate on it.
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(333),
+		keyDryRun:   true,
 	})
 
-	t.Run("dry_run does not require confirm", func(t *testing.T) {
-		t.Parallel()
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":333,"domain":"no-confirm.example.com","status":"active"}`))
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeDomainUpdateTool(dryRunCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
 
-		// Intentionally omit confirm; the dry-run path must not gate on it.
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(333),
-			keyDryRun:   true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
+func TestLinodeDomainUpdateToolDryRunStillValidatesDomainId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainUpdateTool(cfg)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
+	t.Parallel()
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDryRun: true,
 	})
 
-	t.Run("dry_run still validates domain_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDryRun: true,
-		})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
-			"dry_run with missing domain_id must error out the same way the real call would")
-		assertErrorContains(t, result, errDomainIDRequired)
-	})
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errDomainIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errDomainIDRequired)
+	}
 }
 
 // End-to-end verification of the domain deletion workflow.
-func TestLinodeDomainDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain_id", "schema should include domain_id property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	if tool.Name != "linode_domain_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain_id"]; !ok {
+		t.Errorf("props missing key %v", "domain_id")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeDomainDeleteToolCaseRequiresConfirm(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyDomainID: float64(111)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeDomainDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/111" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111")
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainDeleteTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(111),
+		keyConfirm:  true, keyConfirmedDryRun: true,
 	})
 
-	t.Run(caseRequiresConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyDomainID: float64(111)})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
+}
+
+func TestLinodeDomainDeleteToolDryRunSchemaProperty(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, _ := tools.NewLinodeDomainDeleteTool(cfg)
+
+	t.Parallel()
+
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
+
+func TestLinodeDomainDeleteToolDryRunReturnsPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	domainBody := `{"id":222,"domain":"dry-delete.example.com","type":"master","status":"active"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == "/domains/222" {
+			_, _ = w.Write([]byte(domainBody))
+
+			return
+		}
+
+		// The Tier A walk also lists DNS records; an empty page keeps
+		// this subtest on the no-mutation and preview-shape contract.
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeDomainDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(222),
+		keyDryRun:   true,
 	})
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/111", r.URL.Path, "request path should match domain endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainDeleteTool(successCfg)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(111),
-			keyConfirm:  true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_domain_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_domain_delete")
+	}
+
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/domains/222") {
+		t.Errorf("got %v, want %v", would["path"], "/domains/222")
+	}
+
+	if len(methodsSeen) == 0 {
+		t.Fatal("methodsSeen is empty")
+	}
+
+	if slices.Contains(methodsSeen, http.MethodDelete) {
+		t.Errorf("methodsSeen should not contain %v", http.MethodDelete)
+	}
+}
+
+func TestLinodeDomainDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":333,"domain":"no-confirm-delete.example.com","status":"active"}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeDomainDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(333),
+		keyDryRun:   true,
 	})
 
-	t.Run("dry_run schema property", func(t *testing.T) {
-		t.Parallel()
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeDomainDeleteToolDryRunStillValidatesDomainId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainDeleteTool(cfg)
+
+	t.Parallel()
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDryRun: true,
 	})
 
-	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		var methodsSeen []string
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		domainBody := `{"id":222,"domain":"dry-delete.example.com","type":"master","status":"active"}`
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-
-			if r.Method != http.MethodGet {
-				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-				w.WriteHeader(http.StatusInternalServerError)
-
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-
-			if r.URL.Path == "/domains/222" {
-				_, _ = w.Write([]byte(domainBody))
-
-				return
-			}
-
-			// The Tier A walk also lists DNS records; an empty page keeps
-			// this subtest on the no-mutation and preview-shape contract.
-			_, _ = w.Write([]byte(`{}`))
-		}))
-		defer srv.Close()
-
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeDomainDeleteTool(dryRunCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(222),
-			keyDryRun:   true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
-
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_domain_delete", body["tool"])
-
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/domains/222", would["path"])
-
-		require.NotEmpty(t, methodsSeen, "dry_run must read state")
-		assert.NotContains(t, methodsSeen, http.MethodDelete,
-			"dry_run must never issue a DELETE")
-	})
-
-	t.Run("dry_run does not require confirm", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":333,"domain":"no-confirm-delete.example.com","status":"active"}`))
-		}))
-		defer srv.Close()
-
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeDomainDeleteTool(dryRunCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(333),
-			keyDryRun:   true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
-	})
-
-	t.Run("dry_run still validates domain_id", func(t *testing.T) {
-		t.Parallel()
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyDryRun: true,
-		})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
-			"dry_run with missing domain_id must error out the same way the real call would")
-		assertErrorContains(t, result, errDomainIDRequired)
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errDomainIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errDomainIDRequired)
+	}
 }
 
 // End-to-end verification of the domain record creation workflow.
-func TestLinodeDomainRecordCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainRecordCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainRecordCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_record_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain_id", "schema should include domain_id property")
-		assert.Contains(t, props, "type", "schema should include type property")
-		assert.Contains(t, props, "target", "schema should include target property")
-		assert.Contains(t, props, "name", "schema should include name property")
-	})
+	if tool.Name != "linode_domain_record_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_record_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain_id"]; !ok {
+		t.Errorf("props missing key %v", "domain_id")
+	}
+
+	if _, ok := props["type"]; !ok {
+		t.Errorf("props missing key %v", "type")
+	}
+
+	if _, ok := props["target"]; !ok {
+		t.Errorf("props missing key %v", "target")
+	}
+
+	if _, ok := props["name"]; !ok {
+		t.Errorf("props missing key %v", "name")
+	}
+}
+
+func TestLinodeDomainRecordCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainRecordCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -2120,76 +3508,132 @@ func TestLinodeDomainRecordCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeDomainRecordCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		record := linode.DomainRecord{
-			ID:     222,
-			Type:   "A",
-			Name:   hostWWW,
-			Target: "203.0.113.50",
+	record := linode.DomainRecord{
+		ID:     222,
+		Type:   "A",
+		Name:   hostWWW,
+		Target: "203.0.113.50",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/111/records" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111/records")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/111/records", r.URL.Path, "request path should match record endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(record), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainRecordCreateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(111),
-			keyType:     "A",
-			keyName:     hostWWW,
-			keyTarget:   "203.0.113.50",
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(record); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainRecordCreateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(111),
+		keyType:     "A",
+		keyName:     hostWWW,
+		keyTarget:   "203.0.113.50",
+		keyConfirm:  true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
 }
 
 // End-to-end verification of the domain record update workflow.
-func TestLinodeDomainRecordUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainRecordUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainRecordUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_record_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain_id", "schema should include domain_id property")
-		assert.Contains(t, props, "record_id", "schema should include record_id property")
-		assert.Contains(t, props, "target", "schema should include target property")
-	})
+	if tool.Name != "linode_domain_record_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_record_update")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain_id"]; !ok {
+		t.Errorf("props missing key %v", "domain_id")
+	}
+
+	if _, ok := props["record_id"]; !ok {
+		t.Errorf("props missing key %v", "record_id")
+	}
+
+	if _, ok := props["target"]; !ok {
+		t.Errorf("props missing key %v", "target")
+	}
+}
+
+func TestLinodeDomainRecordUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainRecordUpdateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -2211,74 +3655,127 @@ func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeDomainRecordUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
 
-		record := linode.DomainRecord{
-			ID:     222,
-			Type:   "A",
-			Name:   hostWWW,
-			Target: ip192168_1_2,
+	record := linode.DomainRecord{
+		ID:     222,
+		Type:   "A",
+		Name:   hostWWW,
+		Target: ip192168_1_2,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/111/records/222" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111/records/222")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/111/records/222", r.URL.Path, "request path should match record endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(record), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainRecordUpdateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(111),
-			keyRecordID: float64(222),
-			keyTarget:   ip192168_1_2,
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(record); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainRecordUpdateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(111),
+		keyRecordID: float64(222),
+		keyTarget:   ip192168_1_2,
+		keyConfirm:  true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
 }
 
 // End-to-end verification of the domain record deletion workflow.
-func TestLinodeDomainRecordDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeDomainRecordDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeDomainRecordDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_domain_record_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "domain_id", "schema should include domain_id property")
-		assert.Contains(t, props, "record_id", "schema should include record_id property")
-	})
+	if tool.Name != "linode_domain_record_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_record_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["domain_id"]; !ok {
+		t.Errorf("props missing key %v", "domain_id")
+	}
+
+	if _, ok := props["record_id"]; !ok {
+		t.Errorf("props missing key %v", "record_id")
+	}
+}
+
+func TestLinodeDomainRecordDeleteToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainRecordDeleteTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -2300,191 +3797,324 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-		})
-	}
-
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/domains/111/records/222", r.URL.Path, "request path should match record endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeDomainRecordDeleteTool(successCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(111),
-			keyRecordID: float64(222),
-			keyConfirm:  true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
-
-	t.Run("dry_run schema property", func(t *testing.T) {
-		t.Parallel()
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
-	})
-
-	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
-		t.Parallel()
-
-		var methodsSeen []string
-
-		recordBody := `{"id":444,"type":"A","name":"www","target":"192.0.2.1","ttl_sec":3600}`
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/domains/333/records/444", r.URL.Path)
-
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(recordBody))
-
-				return
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeDomainRecordDeleteTool(dryRunCfg)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
+		})
+	}
+}
+
+func TestLinodeDomainRecordDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/domains/111/records/222" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111/records/222")
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeDomainRecordDeleteTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(111),
+		keyRecordID: float64(222),
+		keyConfirm:  true, keyConfirmedDryRun: true,
+	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
+}
+
+func TestLinodeDomainRecordDeleteToolDryRunSchemaProperty(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, _ := tools.NewLinodeDomainRecordDeleteTool(cfg)
+
+	t.Parallel()
+
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
+
+func TestLinodeDomainRecordDeleteToolDryRunReturnsPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	recordBody := `{"id":444,"type":"A","name":"www","target":"192.0.2.1","ttl_sec":3600}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+		if r.URL.Path != "/domains/333/records/444" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/333/records/444")
+		}
+
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(recordBody))
+
+			return
+		}
+
+		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeDomainRecordDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(333),
+		keyRecordID: float64(444),
+		keyDryRun:   true,
+	})
+
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_domain_record_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_domain_record_delete")
+	}
+
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/domains/333/records/444") {
+		t.Errorf("got %v, want %v", would["path"], "/domains/333/records/444")
+	}
+
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
+
+func TestLinodeDomainRecordDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":555,"type":"CNAME","name":"alias","target":"www.example.com"}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeDomainRecordDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(333),
+		keyRecordID: float64(555),
+		keyDryRun:   true,
+	})
+
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeDomainRecordDeleteToolDryRunStillValidatesBothIDs(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeDomainRecordDeleteTool(cfg)
+
+	t.Parallel()
+
+	t.Run("missing domain_id", func(t *testing.T) {
+		t.Parallel()
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(333),
 			keyRecordID: float64(444),
 			keyDryRun:   true,
 		})
-		result, err := dryRunHandler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+		result, err := handler(t.Context(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
+		if result == nil {
+			t.Fatal("result is nil")
+		}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_domain_record_delete", body["tool"])
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
 
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/domains/333/records/444", would["path"],
-			"path must include both parent domain ID and record ID")
-
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET request, never DELETE")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "domain_id is required")
+		}
 	})
 
-	t.Run("dry_run does not require confirm", func(t *testing.T) {
+	t.Run("missing record_id", func(t *testing.T) {
 		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":555,"type":"CNAME","name":"alias","target":"www.example.com"}`))
-		}))
-		defer srv.Close()
-
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeDomainRecordDeleteTool(dryRunCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(333),
-			keyRecordID: float64(555),
 			keyDryRun:   true,
 		})
-		result, err := dryRunHandler(t.Context(), req)
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
-	})
+		result, err := handler(t.Context(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-	t.Run("dry_run still validates both IDs", func(t *testing.T) {
-		t.Parallel()
+		if result == nil {
+			t.Fatal("result is nil")
+		}
 
-		t.Run("missing domain_id", func(t *testing.T) {
-			t.Parallel()
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
 
-			req := createRequestWithArgs(t, map[string]any{
-				keyRecordID: float64(444),
-				keyDryRun:   true,
-			})
-			result, err := handler(t.Context(), req)
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError)
-			assertErrorContains(t, result, "domain_id is required")
-		})
-
-		t.Run("missing record_id", func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, map[string]any{
-				keyDomainID: float64(333),
-				keyDryRun:   true,
-			})
-			result, err := handler(t.Context(), req)
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError)
-			assertErrorContains(t, result, "record_id is required")
-		})
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "record_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "record_id is required")
+		}
 	})
 }
 
 // End-to-end verification of the volume creation workflow.
-func TestLinodeVolumeCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "size", "schema should include size property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
-	})
+	if tool.Name != "linode_volume_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props[keySupportTicketRegion]; !ok {
+		t.Errorf("props missing key %v", keySupportTicketRegion)
+	}
+
+	if _, ok := props["size"]; !ok {
+		t.Errorf("props missing key %v", "size")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeVolumeCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -2511,77 +4141,136 @@ func TestLinodeVolumeCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeVolumeCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		volume := linode.Volume{
-			ID:     333,
-			Label:  labelDataVol,
-			Region: regionUSEast,
-			Size:   50,
-			Status: "creating",
+	volume := linode.Volume{
+		ID:     333,
+		Label:  labelDataVol,
+		Region: regionUSEast,
+		Size:   50,
+		Status: "creating",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/volumes" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes", r.URL.Path, "request path should match volume endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(volume), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeCreateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:   labelDataVol,
-			keyRegion:  regionUSEast,
-			keySize:    float64(50),
-			keyConfirm: true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(volume); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeCreateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, labelDataVol, "response should contain the volume label")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:   labelDataVol,
+		keyRegion:  regionUSEast,
+		keySize:    float64(50),
+		keyConfirm: true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, labelDataVol) {
+		t.Errorf("textContent.Text does not contain %v", labelDataVol)
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
 }
 
 // End-to-end verification of the volume attach workflow.
-func TestLinodeVolumeAttachTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeAttachToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeAttachTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_attach", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
-		assert.Contains(t, props, "linode_id", "schema should include linode_id property")
-		assert.Contains(t, props, "config_id", "schema should include config_id property")
-	})
+	if tool.Name != "linode_volume_attach" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_attach")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["volume_id"]; !ok {
+		t.Errorf("props missing key %v", "volume_id")
+	}
+
+	if _, ok := props["linode_id"]; !ok {
+		t.Errorf("props missing key %v", "linode_id")
+	}
+
+	if _, ok := props["config_id"]; !ok {
+		t.Errorf("props missing key %v", "config_id")
+	}
+}
+
+func TestLinodeVolumeAttachToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeAttachTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -2603,135 +4292,237 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful attachment", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeVolumeAttachToolSuccessfulAttachment(t *testing.T) {
+	t.Parallel()
 
-		linodeID := 123
-		volume := linode.Volume{
-			ID:       333,
-			Label:    labelDataVol,
-			Region:   regionUSEast,
-			LinodeID: &linodeID,
-			Status:   statusActive,
+	linodeID := 123
+	volume := linode.Volume{
+		ID:       333,
+		Label:    labelDataVol,
+		Region:   regionUSEast,
+		LinodeID: &linodeID,
+		Status:   statusActive,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/volumes/333/attach" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/333/attach")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes/333/attach", r.URL.Path, "request path should match attach endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(volume), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeAttachTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyLinodeID: float64(123),
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(volume); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeAttachTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "attached", "response should confirm attachment")
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyLinodeID: float64(123),
+		keyConfirm:  true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "attached") {
+		t.Errorf("textContent.Text does not contain %v", "attached")
+	}
 }
 
 // End-to-end verification of the volume detach workflow.
-func TestLinodeVolumeDetachTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeDetachToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_detach", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
-	})
+	if tool.Name != "linode_volume_detach" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_detach")
+	}
 
-	t.Run(caseMissingVolumeID, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errVolumeIDRequired)
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful detachment", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes/333/detach", r.URL.Path, "request path should match detach endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("{}"))
-		}))
-		defer srv.Close()
+	props := tool.InputSchema.Properties
+	if _, ok := props["volume_id"]; !ok {
+		t.Errorf("props missing key %v", "volume_id")
+	}
+}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeDetachTool(successCfg)
+func TestLinodeVolumeDetachToolCaseMissingVolumeID(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333), keyConfirm: true})
-		result, err := successHandler(t.Context(), req)
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "detached successfully", "response should confirm detachment")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errVolumeIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errVolumeIDRequired)
+	}
+}
+
+func TestLinodeVolumeDetachToolSuccessfulDetachment(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/volumes/333/detach" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/333/detach")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeDetachTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333), keyConfirm: true})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "detached successfully") {
+		t.Errorf("textContent.Text does not contain %v", "detached successfully")
+	}
 }
 
 // End-to-end verification of the volume resize workflow.
-func TestLinodeVolumeResizeTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeResizeToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeResizeTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_resize", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
-		assert.Contains(t, props, "size", "schema should include size property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
-	})
+	if tool.Name != "linode_volume_resize" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_resize")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["volume_id"]; !ok {
+		t.Errorf("props missing key %v", "volume_id")
+	}
+
+	if _, ok := props["size"]; !ok {
+		t.Errorf("props missing key %v", "size")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeVolumeResizeToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeResizeTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -2759,241 +4550,410 @@ func TestLinodeVolumeResizeTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful resize", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeVolumeResizeToolSuccessfulResize(t *testing.T) {
+	t.Parallel()
 
-		volume := linode.Volume{
-			ID:     333,
-			Label:  labelDataVol,
-			Region: regionUSEast,
-			Size:   100,
-			Status: "resizing",
+	volume := linode.Volume{
+		ID:     333,
+		Label:  labelDataVol,
+		Region: regionUSEast,
+		Size:   100,
+		Status: "resizing",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/volumes/333/resize" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/333/resize")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes/333/resize", r.URL.Path, "request path should match resize endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(volume), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeResizeTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keySize:     float64(100),
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(volume); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeResizeTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "resize", "response should mention resize")
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keySize:     float64(100),
+		keyConfirm:  true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "resize") {
+		t.Errorf("textContent.Text does not contain %v", "resize")
+	}
 }
 
 // End-to-end verification of the volume deletion workflow.
-func TestLinodeVolumeDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	if tool.Name != "linode_volume_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["volume_id"]; !ok {
+		t.Errorf("props missing key %v", "volume_id")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeVolumeDeleteToolCaseRequiresConfirm(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeVolumeDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcVolumes333 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcVolumes333)
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeDeleteTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyConfirm:  true, keyConfirmedDryRun: true,
 	})
 
-	t.Run(caseRequiresConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes/333", r.URL.Path, "request path should match volume endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeDeleteTool(successCfg)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyConfirm:  true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
+}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+func TestLinodeVolumeDeleteToolDryRunSchemaProperty(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, _ := tools.NewLinodeVolumeDeleteTool(cfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
+	t.Parallel()
 
-	t.Run("dry_run schema property", func(t *testing.T) {
-		t.Parallel()
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
-	})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
 
-	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeVolumeDeleteToolDryRunReturnsPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
 
-		var methodsSeen []string
+	var methodsSeen []string
 
-		volumeBody := `{"id":444,"label":"data-vol","size":50,"region":"us-east","status":"active"}`
+	volumeBody := `{"id":444,"label":"data-vol","size":50,"region":"us-east","status":"active"}`
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/volumes/444", r.URL.Path)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+		if r.URL.Path != "/volumes/444" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/444")
+		}
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(volumeBody))
-
-				return
-			}
-
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
-
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeVolumeDeleteTool(dryRunCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(444),
-			keyDryRun:   true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
-
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_volume_delete", body["tool"])
-
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/volumes/444", would["path"])
-
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET request, never DELETE")
-	})
-
-	t.Run("dry_run does not require confirm", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":555,"label":"unconfirmed","size":20,"region":"us-east"}`))
-		}))
-		defer srv.Close()
+			_, _ = w.Write([]byte(volumeBody))
 
-		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, dryRunHandler := tools.NewLinodeVolumeDeleteTool(dryRunCfg)
+			return
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(555),
-			keyDryRun:   true,
-		})
-		result, err := dryRunHandler(t.Context(), req)
+		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeVolumeDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(444),
+		keyDryRun:   true,
 	})
 
-	t.Run("dry_run still validates volume_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDryRun: true,
-		})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError,
-			"dry_run with missing volume_id must error out the same way the real call would")
-		assertErrorContains(t, result, errVolumeIDRequired)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_volume_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_volume_delete")
+	}
+
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/volumes/444") {
+		t.Errorf("got %v, want %v", would["path"], "/volumes/444")
+	}
+
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
+
+func TestLinodeVolumeDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":555,"label":"unconfirmed","size":20,"region":"us-east"}`))
+	}))
+	defer srv.Close()
+
+	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, dryRunHandler := tools.NewLinodeVolumeDeleteTool(dryRunCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(555),
+		keyDryRun:   true,
 	})
+
+	result, err := dryRunHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeVolumeDeleteToolDryRunStillValidatesVolumeId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+
+	t.Parallel()
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDryRun: true,
+	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errVolumeIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errVolumeIDRequired)
+	}
 }
 
 // End-to-end verification of the NodeBalancer creation workflow.
-func TestLinodeNodeBalancerCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeNodeBalancerCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "region", "schema should include region property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
-	})
+	if tool.Name != "linode_nodebalancer_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keySupportTicketRegion]; !ok {
+		t.Errorf("props missing key %v", keySupportTicketRegion)
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeNodeBalancerCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -3015,485 +4975,815 @@ func TestLinodeNodeBalancerCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeNodeBalancerCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		nodeBalancer := linode.NodeBalancer{
-			ID:     444,
-			Label:  "web-lb",
-			Region: regionUSEast,
+	nodeBalancer := linode.NodeBalancer{
+		ID:     444,
+		Label:  "web-lb",
+		Region: regionUSEast,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/nodebalancers" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/nodebalancers")
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/nodebalancers", r.URL.Path, "request path should match NodeBalancer endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(nodeBalancer), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeNodeBalancerCreateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyRegion:  regionUSEast,
-			keyLabel:   "web-lb",
-			keyConfirm: true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(nodeBalancer); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeNodeBalancerCreateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "web-lb", "response should contain the NodeBalancer label")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	req := createRequestWithArgs(t, map[string]any{
+		keyRegion:  regionUSEast,
+		keyLabel:   "web-lb",
+		keyConfirm: true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "web-lb") {
+		t.Errorf("textContent.Text does not contain %v", "web-lb")
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
 }
 
 // End-to-end verification of the NodeBalancer update workflow.
-func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeNodeBalancerUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeNodeBalancerUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "nodebalancer_id", "schema should include nodebalancer_id property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "client_conn_throttle", "schema should include client_conn_throttle property")
-	})
+	if tool.Name != "linode_nodebalancer_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_update")
+	}
 
-	t.Run("missing nodebalancer id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew, keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "nodebalancer_id is required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		nodeBalancer := linode.NodeBalancer{
-			ID:     444,
-			Label:  "updated-lb",
-			Region: regionUSEast,
+	props := tool.InputSchema.Properties
+	if _, ok := props["nodebalancer_id"]; !ok {
+		t.Errorf("props missing key %v", "nodebalancer_id")
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["client_conn_throttle"]; !ok {
+		t.Errorf("props missing key %v", "client_conn_throttle")
+	}
+}
+
+func TestLinodeNodeBalancerUpdateToolMissingNodebalancerId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerUpdateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "nodebalancer_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "nodebalancer_id is required")
+	}
+}
+
+func TestLinodeNodeBalancerUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
+
+	nodeBalancer := linode.NodeBalancer{
+		ID:     444,
+		Label:  "updated-lb",
+		Region: regionUSEast,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcNodebalancers444 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers444)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/nodebalancers/444", r.URL.Path, "request path should match NodeBalancer endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(nodeBalancer), "encoding response should succeed")
-		}))
-		defer srv.Close()
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeNodeBalancerUpdateTool(successCfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(444),
-			keyLabel:          "updated-lb",
-			keyConfirm:        true,
-		})
-		result, err := successHandler(t.Context(), req)
+		if err := json.NewEncoder(w).Encode(nodeBalancer); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeNodeBalancerUpdateTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
+	req := createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(444),
+		keyLabel:          "updated-lb",
+		keyConfirm:        true,
 	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "modified successfully") {
+		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
 }
 
 // End-to-end verification of the NodeBalancer deletion workflow.
-func TestLinodeNodeBalancerDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeNodeBalancerDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_nodebalancer_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "nodebalancer_id", "schema should include nodebalancer_id property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	if tool.Name != "linode_nodebalancer_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["nodebalancer_id"]; !ok {
+		t.Errorf("props missing key %v", "nodebalancer_id")
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeNodeBalancerDeleteToolCaseRequiresConfirm(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(444)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeNodeBalancerDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcNodebalancers444 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers444)
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeNodeBalancerDeleteTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(444),
+		keyConfirm:        true, keyConfirmedDryRun: true,
 	})
 
-	t.Run(caseRequiresConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(444)})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/nodebalancers/444", r.URL.Path, "request path should match NodeBalancer endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeNodeBalancerDeleteTool(successCfg)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(444),
-			keyConfirm:        true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
-	})
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
 }
 
 // Dry-run coverage for NodeBalancer delete. Kept in a sibling function
 // so the main test's subtest count stays under maintidx's threshold.
-func TestLinodeNodeBalancerDeleteToolDryRun(t *testing.T) {
+func TestLinodeNodeBalancerDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
-
-		tool, _, _ := tools.NewLinodeNodeBalancerDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
-	})
-
-	t.Run("preview without mutating", func(t *testing.T) {
-		t.Parallel()
-
-		var methodsSeen []string
-
-		nbBody := `{"id":444,"label":"prod-lb","region":"us-east"}`
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-
-			if r.Method != http.MethodGet {
-				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-				w.WriteHeader(http.StatusInternalServerError)
-
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-
-			if r.URL.Path == "/nodebalancers/444" {
-				_, _ = w.Write([]byte(nbBody))
-
-				return
-			}
-
-			// The Tier A walk also lists configs; an empty page keeps this
-			// subtest on the no-mutation and preview-shape contract.
-			_, _ = w.Write([]byte(`{}`))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(444),
-			keyDryRun:         true,
-		})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.False(t, result.IsError)
-
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		require.True(t, isText)
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		assert.Equal(t, true, body[keyDryRun])
-		assert.Equal(t, "linode_nodebalancer_delete", body["tool"])
-
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		require.True(t, isWouldObject)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, "/nodebalancers/444", would["path"])
-
-		require.NotEmpty(t, methodsSeen, "dry_run must read state")
-		assert.NotContains(t, methodsSeen, http.MethodDelete,
-			"dry_run must never issue a DELETE")
-	})
-
-	t.Run("does not require confirm", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":444,"label":"prod-lb"}`))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(444),
-			keyDryRun:         true,
-		})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.False(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
-	})
-
-	t.Run("still validates nodebalancer_id", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "nodebalancer_id is required")
-	})
+	tool, _, _ := tools.NewLinodeNodeBalancerDeleteTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
 }
 
-// assertErrorContains checks that the error result contains the expected substring.
-func assertErrorContains(t *testing.T, result *mcp.CallToolResult, expected string) {
-	t.Helper()
+func TestLinodeNodeBalancerDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
 
-	require.NotEmpty(t, result.Content, "expected content in error result")
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "expected TextContent type")
-	assert.Contains(t, textContent.Text, expected, "error text should contain expected substring")
+	var methodsSeen []string
+
+	nbBody := `{"id":444,"label":"prod-lb","region":"us-east"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == tcNodebalancers444 {
+			_, _ = w.Write([]byte(nbBody))
+
+			return
+		}
+
+		// The Tier A walk also lists configs; an empty page keeps this
+		// subtest on the no-mutation and preview-shape contract.
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(444),
+		keyDryRun:         true,
+	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_nodebalancer_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_nodebalancer_delete")
+	}
+
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Fatal("isWouldObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], tcNodebalancers444) {
+		t.Errorf("got %v, want %v", would["path"], tcNodebalancers444)
+	}
+
+	if len(methodsSeen) == 0 {
+		t.Fatal("methodsSeen is empty")
+	}
+
+	if slices.Contains(methodsSeen, http.MethodDelete) {
+		t.Errorf("methodsSeen should not contain %v", http.MethodDelete)
+	}
+}
+
+func TestLinodeNodeBalancerDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":444,"label":"prod-lb"}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(444),
+		keyDryRun:         true,
+	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeNodeBalancerDeleteToolDryRunStillValidatesNodebalancerId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "nodebalancer_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "nodebalancer_id is required")
+	}
 }
 
 // End-to-end verification of the volume update workflow.
-func TestLinodeVolumeUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeVolumeUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeVolumeUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_volume_update", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "tags", "schema should include tags property")
-		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	if tool.Name != "linode_volume_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_update")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["volume_id"]; !ok {
+		t.Errorf("props missing key %v", "volume_id")
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props[keyTags]; !ok {
+		t.Errorf("props missing key %v", keyTags)
+	}
+
+	if _, ok := props["confirm"]; !ok {
+		t.Errorf("props missing key %v", "confirm")
+	}
+}
+
+func TestLinodeVolumeUpdateToolCaseRequiresConfirm(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeUpdateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+		t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+	}
+}
+
+func TestLinodeVolumeUpdateToolMissingVolumeId(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeUpdateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errVolumeIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errVolumeIDRequired)
+	}
+}
+
+func TestLinodeVolumeUpdateToolMissingLabelAndTags(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeUpdateTool(cfg)
+
+	t.Parallel()
+	req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333), keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "at least one of label or tags is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "at least one of label or tags is required")
+	}
+}
+
+func TestLinodeVolumeUpdateToolSuccessfulUpdateWithLabel(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcVolumes333 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcVolumes333)
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: "updated-volume", Size: 20, Region: "us-east", Status: "active"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeUpdateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyLabel:    "updated-volume",
+		keyConfirm:  true,
 	})
 
-	t.Run(caseRequiresConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
+}
+
+func TestLinodeVolumeUpdateToolSuccessfulUpdateWithTags(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/volumes/444" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/444")
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.Volume{ID: 444, Label: "tagged-volume", Size: 50, Region: "us-west", Status: "active", Tags: []string{"production", "db"}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeVolumeUpdateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(444),
+		keyTags:     "production, db",
+		keyConfirm:  true,
 	})
 
-	t.Run("missing volume_id", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errVolumeIDRequired)
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
+}
+
+func TestLinodeVolumeUpdateToolUpdaterError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"errors": [{"reason": "internal server error"}]}`)) // errcheck: test mock; write failure is acceptable
+	}))
+	defer srv.Close()
+
+	errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errorHandler := tools.NewLinodeVolumeUpdateTool(errorCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(333),
+		keyLabel:    "new-label",
+		keyConfirm:  true,
 	})
 
-	t.Run("missing label and tags", func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333), keyConfirm: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "at least one of label or tags is required")
-	})
+	result, err := errorHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("successful update with label", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes/333", r.URL.Path, "request path should match volume endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: "updated-volume", Size: 20, Region: "us-east", Status: "active"}))
-		}))
-		defer srv.Close()
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeUpdateTool(successCfg)
+	tc, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyLabel:    "updated-volume",
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
-	})
-
-	t.Run("successful update with tags", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/volumes/444", r.URL.Path, "request path should match volume endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 444, Label: "tagged-volume", Size: 50, Region: "us-west", Status: "active", Tags: []string{"production", "db"}}))
-		}))
-		defer srv.Close()
-
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeVolumeUpdateTool(successCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(444),
-			"tags":      "production, db",
-			keyConfirm:  true,
-		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
-	})
-
-	t.Run("updater error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"errors": [{"reason": "internal server error"}]}`)) // errcheck: test mock; write failure is acceptable
-		}))
-		defer srv.Close()
-
-		errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errorHandler := tools.NewLinodeVolumeUpdateTool(errorCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyVolumeID: float64(333),
-			keyLabel:    "new-label",
-			keyConfirm:  true,
-		})
-		result, err := errorHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		tc, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, tc.Text, "update failed", "response should mention failure")
-	})
+	if !strings.Contains(tc.Text, "update failed") {
+		t.Errorf("tc.Text does not contain %v", "update failed")
+	}
 }
 
 // End-to-end verification of the image creation workflow.
-func TestLinodeImageCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeImageCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, capability, handler := tools.NewLinodeImageCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_image_create", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "create tool should be a write capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "disk_id", "schema should include disk_id property")
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "description", "schema should include description property")
-		assert.Contains(t, props, "cloud_init", "schema should include cloud_init property")
-		assert.Contains(t, props, "tags", "schema should include tags property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-	})
+	if tool.Name != "linode_image_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_create")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props["disk_id"]; !ok {
+		t.Errorf("props missing key %v", "disk_id")
+	}
+
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props[keyDescription]; !ok {
+		t.Errorf("props missing key %v", keyDescription)
+	}
+
+	if _, ok := props[tcCloudInit]; !ok {
+		t.Errorf("props missing key %v", tcCloudInit)
+	}
+
+	if _, ok := props[keyTags]; !ok {
+		t.Errorf("props missing key %v", keyTags)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeImageCreateToolValidation(t *testing.T) {
+	t.Parallel()
 
 	validationTests := []struct {
 		name         string
@@ -3525,115 +5815,203 @@ func TestLinodeImageCreateTool(t *testing.T) {
 			_, _, validationHandler := tools.NewLinodeImageCreateTool(validationCfg)
 
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := validationHandler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-			assert.Equal(t, int32(0), requestCount.Load(), "validation should reject before client call")
-		})
-	}
-
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
-
-		created := linode.Image{ID: "private/15", Label: "custom-image", Status: "creating", CreatedBy: "tester"}
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			assert.Equal(t, "/images", r.URL.Path, "request path should be /images")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-
-			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.InEpsilon(t, 123, body[keyDiskID], 0, "disk_id should be sent")
-			assert.Equal(t, "custom-image", body["label"], "label should be sent")
-			assert.Equal(t, "test image", body["description"], "description should be sent")
-			assert.Equal(t, true, body["cloud_init"], "cloud_init should be sent")
-			assert.Equal(t, []any{"blue", "green"}, body["tags"], "tags should be sent")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(created), "encoding response should succeed")
-		}))
-		defer srv.Close()
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeImageCreateTool(successCfg)
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyDiskID:     123,
-			keyLabel:      "custom-image",
-			"description": "test image",
-			"cloud_init":  true,
-			"tags":        "blue, green",
-			keyConfirm:    true,
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 		})
-		result, err := successHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-		assert.Equal(t, int32(1), requestCount.Load(), "handler should call the client once")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "private/15", "response should contain the image ID")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
-	})
-
-	t.Run("client error propagates", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"disk not found"}]}`))
-			assert.NoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
-
-		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errHandler := tools.NewLinodeImageCreateTool(errCfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyDiskID: 123, keyConfirm: true})
-		result, err := errHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to create image")
-	})
+	}
 }
 
-func TestLinodeImageShareGroupTokenCreateTool(t *testing.T) {
+func TestLinodeImageCreateToolSuccessfulCreation(t *testing.T) {
 	t.Parallel()
 
+	created := linode.Image{ID: "private/15", Label: imageUploadLabelFixture, Status: "creating", CreatedBy: "tester"}
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+
+		if r.URL.Path != "/images" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if body[keyDiskID] != float64(123) {
+			t.Errorf("value = %v, want %v", body[keyDiskID], float64(123))
+		}
+
+		for key, want := range map[string]any{
+			monitorAlertDefinitionLabelParam: imageUploadLabelFixture,
+			keyDescription:                   "test image",
+			tcCloudInit:                      true,
+			keyTags:                          []any{"blue", "green"},
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeImageCreateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyDiskID:      123,
+		keyLabel:       imageUploadLabelFixture,
+		keyDescription: "test image",
+		tcCloudInit:    true,
+		keyTags:        "blue, green",
+		keyConfirm:     true,
+	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "private/15") {
+		t.Errorf("textContent.Text does not contain %v", "private/15")
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
+}
+
+func TestLinodeImageCreateToolClientErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"disk not found"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errHandler := tools.NewLinodeImageCreateTool(errCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyDiskID: 123, keyConfirm: true})
+
+	result, err := errHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create image") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create image")
+	}
+}
+
+func TestLinodeImageShareGroupTokenCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, capability, handler := tools.NewLinodeImageShareGroupTokenCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_image_sharegroup_token_create", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "token creation should be admin capability because it returns token material")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyValidForShareGroupUUID, "schema should include valid_for_sharegroup_uuid property")
-		assert.Contains(t, props, keyLabel, "schema should include label property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-	})
+	if tool.Name != "linode_image_sharegroup_token_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_token_create")
+	}
+
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyValidForShareGroupUUID]; !ok {
+		t.Errorf("props missing key %v", keyValidForShareGroupUUID)
+	}
+
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeImageShareGroupTokenCreateToolValidation(t *testing.T) {
+	t.Parallel()
 
 	validationTests := []struct {
 		name         string
@@ -3664,120 +6042,212 @@ func TestLinodeImageShareGroupTokenCreateTool(t *testing.T) {
 			_, _, validationHandler := tools.NewLinodeImageShareGroupTokenCreateTool(validationCfg)
 
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := validationHandler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-			assert.Equal(t, int32(0), requestCount.Load(), "validation should reject before client call")
-		})
-	}
-
-	t.Run("successful token creation", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			assert.Equal(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-
-			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.Equal(t, "release-token", body[keyLabel], "label should be sent")
-			assert.Equal(t, shareGroupUUIDFixture, body[keyValidForShareGroupUUID], "share group UUID should be sent")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyToken:                  shareGroupTokenValueFixture,
-				keyTokenUUID:              shareGroupTokenUUIDFixture,
-				keyStatus:                 statusActive,
-				keyLabel:                  "release-token",
-				"created":                 imageShareGroupTokenCreated,
-				"updated":                 nil,
-				"expiry":                  nil,
-				keyValidForShareGroupUUID: shareGroupUUIDFixture,
-				"sharegroup_uuid":         shareGroupUUIDFixture,
-				"sharegroup_label":        shareGroupLabelFixture,
-			}), "encoding response should succeed")
-		}))
-		defer srv.Close()
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeImageShareGroupTokenCreateTool(successCfg)
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyValidForShareGroupUUID: shareGroupUUIDFixture,
-			keyLabel:                  "release-token",
-			keyConfirm:                true,
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 		})
-		result, err := successHandler(t.Context(), req)
+	}
+}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-		assert.Equal(t, int32(1), requestCount.Load(), "handler should call the client once")
+func TestLinodeImageShareGroupTokenCreateToolSuccessfulTokenCreation(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, shareGroupTokenUUIDFixture, "response should contain the token UUID")
-		assert.Contains(t, textContent.Text, shareGroupTokenValueFixture, "response should contain token material")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+
+		if r.URL.Path != "/images/sharegroups/tokens" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/tokens")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body[keyLabel], "release-token") {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], "release-token")
+		}
+
+		if !reflect.DeepEqual(body[keyValidForShareGroupUUID], shareGroupUUIDFixture) {
+			t.Errorf("body[keyValidForShareGroupUUID] = %v, want %v", body[keyValidForShareGroupUUID], shareGroupUUIDFixture)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyToken:                  shareGroupTokenValueFixture,
+			keyTokenUUID:              shareGroupTokenUUIDFixture,
+			keyStatus:                 statusActive,
+			keyLabel:                  "release-token",
+			"created":                 imageShareGroupTokenCreated,
+			"updated":                 nil,
+			"expiry":                  nil,
+			keyValidForShareGroupUUID: shareGroupUUIDFixture,
+			"sharegroup_uuid":         shareGroupUUIDFixture,
+			"sharegroup_label":        shareGroupLabelFixture,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeImageShareGroupTokenCreateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyValidForShareGroupUUID: shareGroupUUIDFixture,
+		keyLabel:                  "release-token",
+		keyConfirm:                true,
 	})
 
-	t.Run("client error propagates", func(t *testing.T) {
-		t.Parallel()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"share group not found"}]}`))
-			assert.NoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errHandler := tools.NewLinodeImageShareGroupTokenCreateTool(errCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: true})
-		result, err := errHandler(t.Context(), req)
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to create image share group token")
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, shareGroupTokenUUIDFixture) {
+		t.Errorf("textContent.Text does not contain %v", shareGroupTokenUUIDFixture)
+	}
+
+	if !strings.Contains(textContent.Text, shareGroupTokenValueFixture) {
+		t.Errorf("textContent.Text does not contain %v", shareGroupTokenValueFixture)
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
+}
+
+func TestLinodeImageShareGroupTokenCreateToolClientErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"share group not found"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errHandler := tools.NewLinodeImageShareGroupTokenCreateTool(errCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: true})
+
+	result, err := errHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create image share group token") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create image share group token")
+	}
 }
 
 // End-to-end verification of the StackScript creation workflow.
-func TestLinodeStackScriptCreateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeStackScriptCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, _, handler := tools.NewLinodeStackScriptCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_stackscript_create", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "script", "schema should include script property")
-		assert.Contains(t, props, "images", "schema should include images property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-	})
+	if tool.Name != "linode_stackscript_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_stackscript_create")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
+		t.Errorf("props missing key %v", managedServiceLabelParam)
+	}
+
+	if _, ok := props["script"]; !ok {
+		t.Errorf("props missing key %v", "script")
+	}
+
+	if _, ok := props["images"]; !ok {
+		t.Errorf("props missing key %v", "images")
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeStackScriptCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeStackScriptCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -3839,132 +6309,224 @@ func TestLinodeStackScriptCreateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-		})
-	}
-
-	t.Run("successful creation", func(t *testing.T) {
-		t.Parallel()
-
-		created := linode.StackScript{
-			ID:       456,
-			Label:    testStackScriptLabel,
-			Script:   testStackScriptWithWhitespace,
-			Images:   []string{testDebian12Image},
-			IsPublic: false,
-		}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/stackscripts", r.URL.Path, "request path should match stackscript endpoint")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-
-			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.Equal(t, testStackScriptWithWhitespace, body[keyScript], "script should preserve exact content")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(created), "encoding response should succeed")
-		}))
-		defer srv.Close()
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeStackScriptCreateTool(successCfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:   testStackScriptLabel,
-			keyScript:  testStackScriptWithWhitespace,
-			keyImages:  testDebian12Image,
-			keyConfirm: true,
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
-		result, err := successHandler(t.Context(), req)
+	}
+}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+func TestLinodeStackScriptCreateToolSuccessfulCreation(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, testStackScriptLabel, "response should contain the script label")
-		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	created := linode.StackScript{
+		ID:       456,
+		Label:    testStackScriptLabel,
+		Script:   testStackScriptWithWhitespace,
+		Images:   []string{testDebian12Image},
+		IsPublic: false,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/stackscripts" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/stackscripts")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body[keyScript], testStackScriptWithWhitespace) {
+			t.Errorf("body[keyScript] = %v, want %v", body[keyScript], testStackScriptWithWhitespace)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeStackScriptCreateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:   testStackScriptLabel,
+		keyScript:  testStackScriptWithWhitespace,
+		keyImages:  testDebian12Image,
+		keyConfirm: true,
 	})
 
-	t.Run("client error propagates", func(t *testing.T) {
-		t.Parallel()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"label is not unique"}]}`))
-			assert.NoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errHandler := tools.NewLinodeStackScriptCreateTool(errCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:   testStackScriptLabel,
-			keyScript:  testStackScript,
-			keyImages:  testDebian12Image,
-			keyConfirm: true,
-		})
-		result, err := errHandler(t.Context(), req)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+	if !strings.Contains(textContent.Text, testStackScriptLabel) {
+		t.Errorf("textContent.Text does not contain %v", testStackScriptLabel)
+	}
+
+	if !strings.Contains(textContent.Text, "created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
+}
+
+func TestLinodeStackScriptCreateToolClientErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"label is not unique"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errHandler := tools.NewLinodeStackScriptCreateTool(errCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:   testStackScriptLabel,
+		keyScript:  testStackScript,
+		keyImages:  testDebian12Image,
+		keyConfirm: true,
 	})
 
-	t.Run("empty images after trim rejected", func(t *testing.T) {
-		t.Parallel()
+	result, err := errHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:   testStackScriptLabel,
-			keyScript:  testStackScript,
-			keyImages:  " , ",
-			keyConfirm: true,
-		})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "images is required")
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+}
+
+func TestLinodeStackScriptCreateToolEmptyImagesAfterTrimRejected(t *testing.T) {
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeStackScriptCreateTool(cfg)
+
+	t.Parallel()
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:   testStackScriptLabel,
+		keyScript:  testStackScript,
+		keyImages:  " , ",
+		keyConfirm: true,
 	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "images is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "images is required")
+	}
 }
 
 // End-to-end verification of the StackScript deletion workflow.
-func TestLinodeStackScriptDeleteTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeStackScriptDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, capability, handler := tools.NewLinodeStackScriptDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_stackscript_delete", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "delete tool should be destroy capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyStackScriptID, "schema should include stackscript_id property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-	})
+	if tool.Name != "linode_stackscript_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_stackscript_delete")
+	}
+
+	if capability != profiles.CapDestroy {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyStackScriptID]; !ok {
+		t.Errorf("props missing key %v", keyStackScriptID)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeStackScriptDeleteToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeStackScriptDeleteTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -4021,68 +6583,110 @@ func TestLinodeStackScriptDeleteTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("successful deletion", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeStackScriptDeleteToolSuccessfulDeletion(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/stackscripts/456", r.URL.Path, "request path should match stackscript endpoint")
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/stackscripts/456" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/stackscripts/456")
+		}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeStackScriptDeleteTool(successCfg)
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyStackScriptID: testStackScriptID,
-			keyConfirm:       true, keyConfirmedDryRun: true,
-		})
-		result, err := successHandler(t.Context(), req)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeStackScriptDeleteTool(successCfg)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "deleted successfully", "response should confirm deletion")
+	req := createRequestWithArgs(t, map[string]any{
+		keyStackScriptID: testStackScriptID,
+		keyConfirm:       true, keyConfirmedDryRun: true,
 	})
 
-	t.Run("client error propagates", func(t *testing.T) {
-		t.Parallel()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
-			assert.NoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errHandler := tools.NewLinodeStackScriptDeleteTool(errCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyStackScriptID: testStackScriptID,
-			keyConfirm:       true, keyConfirmedDryRun: true,
-		})
-		result, err := errHandler(t.Context(), req)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
+	if !strings.Contains(textContent.Text, "deleted successfully") {
+		t.Errorf("textContent.Text does not contain %v", "deleted successfully")
+	}
+}
+
+func TestLinodeStackScriptDeleteToolClientErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errHandler := tools.NewLinodeStackScriptDeleteTool(errCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyStackScriptID: testStackScriptID,
+		keyConfirm:       true, keyConfirmedDryRun: true,
 	})
+
+	result, err := errHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 }

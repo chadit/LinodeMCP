@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -35,34 +38,60 @@ const (
 )
 
 func TestLinodeAccountUserUpdateToolDefinition(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountUserUpdateTool(cfg)
 
-	assert.Equal(t, accountUserUpdateToolName, tool.Name, "tool name should match")
-	assert.Equal(t, profiles.CapAdmin, capability, "user update should be CapAdmin")
-	assert.NotEmpty(t, tool.Description, "tool should have a description")
-	require.NotNil(t, handler, "handler should not be nil")
+	if tool.Name != accountUserUpdateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, accountUserUpdateToolName)
+	}
+
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
-	assert.Contains(t, props, keyUsername, "schema should include username")
-	assert.Contains(t, props, keyEmail, "schema should include email")
-	assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	assert.Contains(t, props, keyAccountUserRestricted, "schema should include restricted")
-	assert.Contains(t, props, keyAccountUserSSHKeys, "schema should include ssh_keys")
-	assert.Contains(t, props, keyAccountUserNewUsername, "schema should include new_username")
-	assert.Contains(t, tool.InputSchema.Required, keyUsername, "username must be marked required")
-	assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	if _, ok := props[keyUsername]; !ok {
+		t.Errorf("props missing key %v", keyUsername)
+	}
+
+	if _, ok := props[keyEmail]; !ok {
+		t.Errorf("props missing key %v", keyEmail)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyAccountUserRestricted]; !ok {
+		t.Errorf("props missing key %v", keyAccountUserRestricted)
+	}
+
+	if _, ok := props[keyAccountUserSSHKeys]; !ok {
+		t.Errorf("props missing key %v", keyAccountUserSSHKeys)
+	}
+
+	if _, ok := props[keyAccountUserNewUsername]; !ok {
+		t.Errorf("props missing key %v", keyAccountUserNewUsername)
+	}
+
+	for _, key := range []string{keyUsername, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 }
 
 func TestLinodeAccountUserUpdateRequiresConfirm(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -91,20 +120,30 @@ func TestLinodeAccountUserUpdateRequiresConfirm(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountUserUpdateRejectsInvalidRequest(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := accountUserUpdateInvalidCases()
@@ -119,110 +158,196 @@ func TestLinodeAccountUserUpdateRejectsInvalidRequest(t *testing.T) {
 			defer cleanup()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid request should be a tool error")
-			assertErrorContains(t, result, testCase.wantMessage)
-			assert.Equal(t, int32(0), calls, "request validation must fail before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountUserUpdateSuccess(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountUserUsername, r.URL.Path, "request path should include username")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUsername)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, accountUserUpdateEmail, body[keyEmail])
-		assert.Equal(t, true, body[keyAccountUserRestricted])
-		assert.Equal(t, accountUserUpdateNewUsername, body[keyUsername])
-		assert.Equal(t, []any{accountUserUpdateSSHKey}, body[keyAccountUserSSHKeys])
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		for key, want := range map[string]any{
+			keyEmail:                 accountUserUpdateEmail,
+			keyAccountUserRestricted: true,
+			keyUsername:              accountUserUpdateNewUsername,
+			keyAccountUserSSHKeys:    []any{accountUserUpdateSSHKey},
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{
 			Username:   accountUserUpdateNewUsername,
 			Email:      accountUserUpdateEmail,
 			Restricted: true,
 			SSHKeys:    []string{accountUserUpdateSSHKey},
 			UserType:   envKeyDefault,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeAccountUserUpdateTool(accountUserUpdateConfig(srv.URL))
-	result, err := handler(t.Context(), createRequestWithArgs(t, accountUserUpdateSuccessArgs()))
 
-	require.NoError(t, err, "handler should not return an error")
-	require.NotNil(t, result, "result should not be nil")
-	assert.False(t, result.IsError, "should not be an error result")
+	result, err := handler(t.Context(), createRequestWithArgs(t, accountUserUpdateSuccessArgs()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
-	assert.Contains(t, textContent.Text, accountUserUpdateNewUsername, "response should include username")
-	assert.Contains(t, textContent.Text, accountUserUpdateEmail, "response should include email")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, accountUserUpdateNewUsername) {
+		t.Errorf("textContent.Text does not contain %v", accountUserUpdateNewUsername)
+	}
+
+	if !strings.Contains(textContent.Text, accountUserUpdateEmail) {
+		t.Errorf("textContent.Text does not contain %v", accountUserUpdateEmail)
+	}
 }
 
 func TestLinodeAccountUserUpdateAllowsEmptySSHKeys(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Contains(t, body, keyAccountUserSSHKeys)
-		assert.Empty(t, body[keyAccountUserSSHKeys])
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if _, ok := body[keyAccountUserSSHKeys]; !ok {
+			t.Errorf("body missing key %v", keyAccountUserSSHKeys)
+		}
+
+		if v, ok := body[keyAccountUserSSHKeys].([]any); ok && len(v) != 0 {
+			t.Errorf("body[keyAccountUserSSHKeys] = %v, want empty", body[keyAccountUserSSHKeys])
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUsername, Email: accountUserUpdateEmail}))
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUsername, Email: accountUserUpdateEmail}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeAccountUserUpdateTool(accountUserUpdateConfig(srv.URL))
 	args := map[string]any{keyUsername: accountUserUsername, keyAccountUserSSHKeys: []any{}, keyConfirm: true}
-	result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-	require.NoError(t, err, "handler should not return an error")
-	require.NotNil(t, result, "result should not be nil")
-	assert.False(t, result.IsError, "empty ssh_keys should be sent as an explicit clear")
+	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 }
 
 func TestLinodeAccountUserUpdateAPIError(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/account/users/"+accountUserUsername, r.URL.Path, "request path should include username")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUsername)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeAccountUserUpdateTool(accountUserUpdateConfig(srv.URL))
 	args := map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserUpdateEmail, keyConfirm: true}
-	result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-	require.NoError(t, err, "handler should return API failures as tool errors")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.IsError, "API failure should be an error result")
-	assertErrorContains(t, result, "Failed to update linode_account_user_update")
-	assertErrorContains(t, result, errForbidden)
+	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_account_user_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_account_user_update")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func accountUserUpdateInvalidCases() []struct {

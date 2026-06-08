@@ -3,11 +3,10 @@ package tools_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -23,10 +22,15 @@ func TestDestroyBypassDryRunGate(t *testing.T) {
 
 	errText := func(t *testing.T, result *mcp.CallToolResult) string {
 		t.Helper()
-		require.True(t, result.IsError, "expected an error result")
+
+		if !result.IsError {
+			t.Fatal("result.IsError = false, want true")
+		}
 
 		content, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "result content must be TextContent")
+		if !ok {
+			t.Fatal("ok = false, want true")
+		}
 
 		return content.Text
 	}
@@ -35,42 +39,65 @@ func TestDestroyBypassDryRunGate(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(789),
 			keyConfirm:  true,
 		}))
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		text := errText(t, result)
-		assert.Contains(t, text, "is destructive")
-		assert.Contains(t, text, "confirmed_dry_run")
-		assert.Contains(t, text, "confirm_bypass_dry_run")
+		if !strings.Contains(text, "is destructive") {
+			t.Errorf("text does not contain %v", "is destructive")
+		}
+
+		if !strings.Contains(text, "confirmed_dry_run") {
+			t.Errorf("text does not contain %v", "confirmed_dry_run")
+		}
+
+		if !strings.Contains(text, "confirm_bypass_dry_run") {
+			t.Errorf("text does not contain %v", "confirm_bypass_dry_run")
+		}
 	})
 
 	t.Run("bypass without confirm is rejected", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID:            float64(789),
 			keyConfirmBypassDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.Contains(t, errText(t, result), "only takes effect with confirm: true")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(errText(t, result), "only takes effect with confirm: true") {
+			t.Errorf("errText(t, result) does not contain %v", "only takes effect with confirm: true")
+		}
 	})
 
 	t.Run("both bypass and confirmed flags is rejected", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID:            float64(789),
 			keyConfirm:             true,
 			keyConfirmedDryRun:     true,
 			keyConfirmBypassDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.Contains(t, errText(t, result), "not both")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(errText(t, result), "not both") {
+			t.Errorf("errText(t, result) does not contain %v", "not both")
+		}
 	})
 
 	// The happy paths (confirm + confirmed_dry_run, and confirm + bypass both
@@ -86,8 +113,14 @@ func TestDestroyYoloBypass(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/volumes/789", r.URL.Path)
-		assert.Equal(t, http.MethodDelete, r.Method)
+		if r.URL.Path != "/volumes/789" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/volumes/789")
+		}
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -99,7 +132,13 @@ func TestDestroyYoloBypass(t *testing.T) {
 
 	// No confirm, no confirmed_dry_run; only the yolo-marked context.
 	ctx := tools.WithYoloAllowed(t.Context())
+
 	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{keyVolumeID: float64(789)}))
-	require.NoError(t, err)
-	require.False(t, result.IsError, "yolo must bypass the gate and confirm, executing the delete")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 }

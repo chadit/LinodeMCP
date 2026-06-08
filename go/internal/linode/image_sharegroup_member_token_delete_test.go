@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -17,56 +18,105 @@ func TestClientDeleteImageShareGroupMemberTokenSuccess(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/images/sharegroups/123/members/"+imageShareGroupTokenUUID, r.URL.Path, "request path should include share group ID and token UUID")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "delete request should not include a body")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/images/sharegroups/123/members/"+imageShareGroupTokenUUID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/123/members/"+imageShareGroupTokenUUID)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, imageShareGroupTokenUUID)
 
-	requireNoError(t, err)
-	checkEqual(t, int32(1), requestCount.Load(), "delete should make one request")
+	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, imageShareGroupTokenUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteImageShareGroupMemberTokenEscapesTokenPathSeparators(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/images/sharegroups/123/members/token%2F..%3Fquery%23frag", r.URL.EscapedPath(), "token UUID should be one encoded path segment")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/images/sharegroups/123/members/token%2F..%3Fquery%23frag" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/sharegroups/123/members/token%2F..%3Fquery%23frag")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, "token/..?query#frag")
 
-	requireNoError(t, err)
+	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, tcTokenQueryFrag)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteImageShareGroupMemberTokenEscapesStandaloneTraversalMarker(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/images/sharegroups/123/members/%2E%2E", r.URL.EscapedPath(), "standalone traversal marker should be encoded")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/images/sharegroups/123/members/%2E%2E" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/sharegroups/123/members/%2E%2E")
+		}
+
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, "..")
 
-	requireNoError(t, err)
+	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, pathTraversalDotDot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteImageShareGroupMemberTokenError(t *testing.T) {
@@ -74,16 +124,21 @@ func TestClientDeleteImageShareGroupMemberTokenError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, imageShareGroupTokenUUID)
 
-	requireError(t, err)
+	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, imageShareGroupTokenUUID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 func TestClientDeleteImageShareGroupMemberTokenDoesNotRetry(t *testing.T) {
@@ -94,15 +149,23 @@ func TestClientDeleteImageShareGroupMemberTokenDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, imageShareGroupTokenUUID)
 
-	requireError(t, err)
-	checkEqual(t, int32(1), calls.Load(), "destructive DELETE route must not retry transient failures")
+	err := client.DeleteImageShareGroupMemberToken(t.Context(), 123, imageShareGroupTokenUUID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

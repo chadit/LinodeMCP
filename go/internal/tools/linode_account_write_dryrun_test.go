@@ -3,6 +3,7 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -17,16 +18,15 @@ const (
 )
 
 func TestLinodeAccountSettingsUpdateToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountSettingsUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads settings then would PUT", func(t *testing.T) {
@@ -36,34 +36,51 @@ func TestLinodeAccountSettingsUpdateToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			"managed": true,
+			tcManaged: true,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_settings_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_settings_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_settings_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, accountSettingsTestPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountSettingsTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountSettingsTestPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
 func TestLinodeAccountSettingsManagedEnableToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountSettingsManagedEnableTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without enabling", func(t *testing.T) {
@@ -75,31 +92,48 @@ func TestLinodeAccountSettingsManagedEnableToolDryRun(t *testing.T) {
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_settings_managed_enable", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_settings_managed_enable") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_settings_managed_enable")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountSettingsTestPath+"/managed-enable", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountSettingsTestPath+"/managed-enable") {
+			t.Errorf("got %v, want %v", would["path"], accountSettingsTestPath+"/managed-enable")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
 func TestLinodeAccountUserCreateToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountUserCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without creating", func(t *testing.T) {
@@ -112,31 +146,48 @@ func TestLinodeAccountUserCreateToolDryRun(t *testing.T) {
 			keyEmail:    "ops@example.com",
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_user_create", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_user_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_user_create")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountUsersTestPath, would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountUsersTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountUsersTestPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 }
 
 func TestLinodeAccountUserUpdateToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountUserUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads user then would PUT", func(t *testing.T) {
@@ -150,31 +201,48 @@ func TestLinodeAccountUserUpdateToolDryRun(t *testing.T) {
 			keyEmail:    "renamed@example.com",
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_user_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_user_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_user_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, accountUserGetTestPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountUserGetTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountUserGetTestPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
 func TestLinodeAccountUserDeleteToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountUserDeleteTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without deleting", func(t *testing.T) {
@@ -187,31 +255,48 @@ func TestLinodeAccountUserDeleteToolDryRun(t *testing.T) {
 			keyUsername: accountLoginUsername,
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_user_delete", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_user_delete") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_user_delete")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "DELETE", would["method"])
-		assert.Equal(t, accountUserGetTestPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "DELETE") {
+			t.Errorf("got %v, want %v", would["method"], "DELETE")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountUserGetTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountUserGetTestPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }
 
 func TestLinodeAccountUserGrantsUpdateToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountUserGrantsUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads grants then would PUT", func(t *testing.T) {
@@ -225,16 +310,34 @@ func TestLinodeAccountUserGrantsUpdateToolDryRun(t *testing.T) {
 			keyGrantLinode: []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}},
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_user_grants_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_user_grants_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_user_grants_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, accountUserGetTestPath+"/grants", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountUserGetTestPath+"/grants") {
+			t.Errorf("got %v, want %v", would["path"], accountUserGetTestPath+"/grants")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 }

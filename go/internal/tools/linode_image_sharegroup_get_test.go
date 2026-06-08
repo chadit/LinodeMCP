@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -15,154 +16,234 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeImageShareGroupGetTool(t *testing.T) {
+func TestLinodeImageShareGroupGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+	if tool.Name != "linode_image_sharegroup_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_get")
+	}
 
-		assertEqual(t, "linode_image_sharegroup_get", tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		assertContains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
-		assertNotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		description := shareGroupDescription
-		updated := shareGroupUpdated
-		shareGroup := linode.ImageShareGroup{
-			ID:           123,
-			UUID:         shareGroupUUIDFixture,
-			Label:        shareGroupLabelFixture,
-			Description:  &description,
-			IsSuspended:  false,
-			Created:      shareGroupCreated,
-			Updated:      &updated,
-			ImagesCount:  2,
-			MembersCount: 3,
+	if _, ok := tool.InputSchema.Properties[keyShareGroupID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyShareGroupID)
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeImageShareGroupGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	description := shareGroupDescription
+	updated := shareGroupUpdated
+	shareGroup := linode.ImageShareGroup{
+		ID:           123,
+		UUID:         shareGroupUUIDFixture,
+		Label:        shareGroupLabelFixture,
+		Description:  &description,
+		IsSuspended:  false,
+		Created:      shareGroupCreated,
+		Updated:      &updated,
+		ImagesCount:  2,
+		MembersCount: 3,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
-			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(shareGroup))
-		}))
-		defer srv.Close()
+		if r.URL.Path != "/images/sharegroups/123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/123")
+		}
 
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(shareGroup); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 			},
+		},
+	}
+	_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, shareGroupLabelFixture) {
+		t.Errorf("textContent.Text does not contain %v", shareGroupLabelFixture)
+	}
+
+	if !strings.Contains(textContent.Text, shareGroupUUIDFixture) {
+		t.Errorf("textContent.Text does not contain %v", shareGroupUUIDFixture)
+	}
+}
+
+func TestLinodeImageShareGroupGetToolClientFailureReturnsToolError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
-		_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
-		result, err := handler(t.Context(), req)
+		if r.URL.Path != "/images/sharegroups/123" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/123")
+		}
 
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
+		w.WriteHeader(http.StatusInternalServerError)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, shareGroupLabelFixture, "response should contain share group label")
-		assertContains(t, textContent.Text, shareGroupUUIDFixture, "response should contain share group UUID")
-	})
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-	t.Run("client failure returns tool error", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+			},
+		},
+	}
+	_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			assertEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
-			w.WriteHeader(http.StatusInternalServerError)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve image share group") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve image share group")
+	}
+
+	if !strings.Contains(textContent.Text, errTemporaryFailure) {
+		t.Errorf("textContent.Text does not contain %v", errTemporaryFailure)
+	}
+}
+
+func TestLinodeImageShareGroupGetToolRejectsInvalidSharegroupIdBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	invalidValues := map[string]any{
+		caseMissing:  nil,
+		caseZero:     0,
+		"negative":   -1,
+		"fractional": 1.5,
+		caseSlash:    "123/456",
+		caseQuery:    "1?foo=bar",
+		caseDotdot:   pathTraversalValue,
+	}
+
+	for name, value := range invalidValues {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				called.Store(true)
 			}))
-		}))
-		defer srv.Close()
+			defer srv.Close()
 
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
-			},
-		}
-		_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
-		result, err := handler(t.Context(), req)
-
-		requireNoError(t, err)
-		requireNotNil(t, result)
-		assertTrue(t, result.IsError, "client failure should return a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Failed to retrieve image share group")
-		assertContains(t, textContent.Text, errTemporaryFailure)
-	})
-
-	t.Run("rejects invalid sharegroup_id before client call", func(t *testing.T) {
-		t.Parallel()
-
-		invalidValues := map[string]any{
-			caseMissing:  nil,
-			caseZero:     0,
-			"negative":   -1,
-			"fractional": 1.5,
-			caseSlash:    "123/456",
-			caseQuery:    "1?foo=bar",
-			caseDotdot:   pathTraversalValue,
-		}
-
-		for name, value := range invalidValues {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-					called.Store(true)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{
-					Environments: map[string]config.EnvironmentConfig{
-						envKeyDefault: {
-							Label:  envLabelDefault,
-							Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-						},
+			cfg := &config.Config{
+				Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {
+						Label:  envLabelDefault,
+						Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 					},
-				}
-				_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+				},
+			}
+			_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
 
-				args := map[string]any{}
-				if name != caseMissing {
-					args[keyShareGroupID] = value
-				}
+			args := map[string]any{}
+			if name != caseMissing {
+				args[keyShareGroupID] = value
+			}
 
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-				requireNoError(t, err)
-				requireNotNil(t, result)
-				assertTrue(t, result.IsError, "invalid sharegroup_id should return a tool error")
-				assertFalse(t, called.Load(), "invalid sharegroup_id should be rejected before client call")
-			})
-		}
-	})
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
 }

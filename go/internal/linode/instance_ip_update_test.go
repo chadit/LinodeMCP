@@ -6,9 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
@@ -24,28 +21,50 @@ func TestClientUpdateInstanceIPUsesPutPathAndBody(t *testing.T) {
 	ipAddr := linode.IPAddress{Address: ipAddressFixture, RDNS: rdnsFixture, LinodeID: 123, Region: "us-east"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/ips/203.0.113.1", r.URL.Path, "request path should match")
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-
-		var body map[string]*string
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-
-		rdnsValue := body["rdns"]
-		if assert.NotNil(t, rdnsValue, "rdns should be present") {
-			assert.Equal(t, rdnsFixture, *rdnsValue, "rdns should match request")
+		if r.URL.Path != "/linode/instances/123/ips/203.0.113.1" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/ips/203.0.113.1")
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(ipAddr), "encoding response should not fail")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		var body map[string]*string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		rdnsValue := body["rdns"]
+		if rdnsValue == nil {
+			t.Fatal("rdns should be present")
+		}
+
+		if *rdnsValue != rdnsFixture {
+			t.Errorf("*rdnsValue = %v, want %v", *rdnsValue, rdnsFixture)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(ipAddr); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil)
 
 	got, err := client.UpdateInstanceIP(t.Context(), 123, ipAddressFixture, linode.UpdateIPRDNSRequest{RDNS: &rdns})
-	require.NoError(t, err, "UpdateInstanceIP should succeed")
-	require.NotNil(t, got, "updated IP should not be nil")
-	assert.Equal(t, rdnsFixture, got.RDNS, "response RDNS should match")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.RDNS != rdnsFixture {
+		t.Errorf("got.RDNS = %v, want %v", got.RDNS, rdnsFixture)
+	}
 }
 
 func TestClientUpdateInstanceIPEncodesAddressPathSegment(t *testing.T) {
@@ -54,15 +73,26 @@ func TestClientUpdateInstanceIPEncodesAddressPathSegment(t *testing.T) {
 	rdns := rdnsFixture
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/ips/203.0.113.1%2F..%3Fbad=1", r.URL.EscapedPath(), "address should be one encoded path segment")
-		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not start a query string")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: ipAddressFixture}), "encoding response should not fail")
+		if r.URL.EscapedPath() != "/linode/instances/123/ips/203.0.113.1%2F..%3Fbad=1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/linode/instances/123/ips/203.0.113.1%2F..%3Fbad=1")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.IPAddress{Address: ipAddressFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil)
 
 	_, err := client.UpdateInstanceIP(t.Context(), 123, "203.0.113.1/..?bad=1", linode.UpdateIPRDNSRequest{RDNS: &rdns})
-	require.NoError(t, err, "UpdateInstanceIP should encode unsafe path characters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }

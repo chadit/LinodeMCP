@@ -2,12 +2,11 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -29,35 +28,60 @@ func TestClientListIPv6RangesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPv6Ranges, r.URL.Path, "request path should match")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(ranges))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointNetworkingIPv6Ranges {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv6Ranges)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(ranges); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListIPv6Ranges(t.Context(), 2, 25)
 
-	require.NoError(t, err, "ListIPv6Ranges should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, ranges, *result, "response should decode IPv6 ranges")
+	result, err := client.ListIPv6Ranges(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !reflect.DeepEqual(*result, ranges) {
+		t.Errorf("*result = %v, want %v", *result, ranges)
+	}
 }
 
 func TestClientListIPv6RangesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, endpointNetworkingIPv6Ranges, r.URL.Path, "request path should match")
+		if r.URL.Path != endpointNetworkingIPv6Ranges {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv6Ranges)
+		}
+
 		http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.ListIPv6Ranges(t.Context(), 0, 0)
 
-	require.Error(t, err, "ListIPv6Ranges should fail on non-200 response")
+	_, err := client.ListIPv6Ranges(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 func TestClientCreateIPv6RangeSuccess(t *testing.T) {
@@ -72,24 +96,46 @@ func TestClientCreateIPv6RangeSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-		assert.Equal(t, endpointNetworkingIPv6Ranges, r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != endpointNetworkingIPv6Ranges {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv6Ranges)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body linode.CreateIPv6RangeRequest
-		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		if assert.NotNil(t, body.LinodeID, "linode_id should be encoded when provided") {
-			assert.Equal(t, linodeID, *body.LinodeID, "linode_id should match")
+		if body.LinodeID == nil {
+			t.Fatal("linode_id should be encoded when provided")
 		}
 
-		assert.Equal(t, 124, body.PrefixLength, "prefix_length should match")
-		assert.Equal(t, ipv6RouteTarget, body.RouteTarget, "route_target should match")
+		if *body.LinodeID != linodeID {
+			t.Errorf("*body.LinodeID = %v, want %v", *body.LinodeID, linodeID)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(createdRange))
+		if body.PrefixLength != 124 {
+			t.Errorf("body.PrefixLength = %v, want %v", body.PrefixLength, 124)
+		}
+
+		if body.RouteTarget != ipv6RouteTarget {
+			t.Errorf("body.RouteTarget = %v, want %v", body.RouteTarget, ipv6RouteTarget)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(createdRange); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -100,10 +146,17 @@ func TestClientCreateIPv6RangeSuccess(t *testing.T) {
 		PrefixLength: 124,
 		RouteTarget:  ipv6RouteTarget,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "CreateIPv6Range should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, createdRange, *result, "response should decode created IPv6 range")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !reflect.DeepEqual(*result, createdRange) {
+		t.Errorf("*result = %v, want %v", *result, createdRange)
+	}
 }
 
 func TestClientCreateIPv6RangeValidation(t *testing.T) {
@@ -112,18 +165,26 @@ func TestClientCreateIPv6RangeValidation(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "test-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.CreateIPv6Range(t.Context(), linode.CreateIPv6RangeRequest{})
-	require.ErrorIs(t, err, linode.ErrIPv6RangePrefixRange, "prefix_length is required")
+	if !errors.Is(err, linode.ErrIPv6RangePrefixRange) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPv6RangePrefixRange)
+	}
 
 	var invalidLinodeID int
 
 	_, err = client.CreateIPv6Range(t.Context(), linode.CreateIPv6RangeRequest{PrefixLength: 124, LinodeID: &invalidLinodeID})
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "linode_id must be positive when provided")
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 
 	_, err = client.CreateIPv6Range(t.Context(), linode.CreateIPv6RangeRequest{PrefixLength: 129})
-	require.ErrorIs(t, err, linode.ErrIPv6RangePrefixRange, "prefix_length must be in IPv6 range")
+	if !errors.Is(err, linode.ErrIPv6RangePrefixRange) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPv6RangePrefixRange)
+	}
 
 	_, err = client.CreateIPv6Range(t.Context(), linode.CreateIPv6RangeRequest{PrefixLength: 124, RouteTarget: "192.0.2.1"})
-	require.ErrorIs(t, err, linode.ErrIPv6RangeRouteTargetInvalid, "route_target must be IPv6 when provided")
+	if !errors.Is(err, linode.ErrIPv6RangeRouteTargetInvalid) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrIPv6RangeRouteTargetInvalid)
+	}
 }
 
 func TestClientCreateIPv6RangeDoesNotRetryPost(t *testing.T) {
@@ -134,7 +195,10 @@ func TestClientCreateIPv6RangeDoesNotRetryPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 
-		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
 		http.Error(w, `{"errors":[{"reason":"temporary"}]}`, http.StatusInternalServerError)
 	}))
 	t.Cleanup(srv.Close)
@@ -142,9 +206,13 @@ func TestClientCreateIPv6RangeDoesNotRetryPost(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 
 	_, err := client.CreateIPv6Range(t.Context(), linode.CreateIPv6RangeRequest{PrefixLength: 124})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "server error should propagate")
-	assert.Equal(t, 1, calls, "non-idempotent POST must not be replayed")
+	if calls != 1 {
+		t.Errorf("calls = %v, want %v", calls, 1)
+	}
 }
 
 func TestClientGetIPv6RangeSuccess(t *testing.T) {
@@ -158,20 +226,40 @@ func TestClientGetIPv6RangeSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should encode the IPv6 range slash")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(rangeResult))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(rangeResult); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetIPv6Range(t.Context(), ipv6RangeCIDR)
 
-	require.NoError(t, err, "GetIPv6Range should succeed on 200 response")
-	require.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, rangeResult, *result, "response should decode IPv6 range")
+	result, err := client.GetIPv6Range(t.Context(), ipv6RangeCIDR)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !reflect.DeepEqual(*result, rangeResult) {
+		t.Errorf("*result = %v, want %v", *result, rangeResult)
+	}
 }
 
 func TestClientGetIPv6RangeRejectsMalformedRange(t *testing.T) {
@@ -202,7 +290,9 @@ func TestClientGetIPv6RangeRejectsMalformedRange(t *testing.T) {
 
 			_, err := client.GetIPv6Range(t.Context(), testCase.ipv6Range)
 
-			require.ErrorIs(t, err, linode.ErrIPv6RangeInvalid, "malformed range should be rejected before request")
+			if !errors.Is(err, linode.ErrIPv6RangeInvalid) {
+				t.Fatalf("error = %v, want %v", err, linode.ErrIPv6RangeInvalid)
+			}
 		})
 	}
 }
@@ -211,18 +301,32 @@ func TestClientDeleteIPv6RangeSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should encode the IPv6 range slash")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
 
-	require.NoError(t, err, "DeleteIPv6Range should succeed on 200 response")
+	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteIPv6RangeRejectsMalformedRange(t *testing.T) {
@@ -241,7 +345,9 @@ func TestClientDeleteIPv6RangeRejectsMalformedRange(t *testing.T) {
 
 			err := client.DeleteIPv6Range(t.Context(), ipv6Range)
 
-			require.ErrorIs(t, err, linode.ErrIPv6RangeInvalid, "malformed range should be rejected before request")
+			if !errors.Is(err, linode.ErrIPv6RangeInvalid) {
+				t.Fatalf("error = %v, want %v", err, linode.ErrIPv6RangeInvalid)
+			}
 		})
 	}
 }
@@ -250,16 +356,24 @@ func TestClientDeleteIPv6RangeAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should match")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64")
+		}
+
 		http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
 
-	require.Error(t, err, "DeleteIPv6Range should fail on non-200 response")
+	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 func TestClientDeleteIPv6RangeDoesNotRetryDelete(t *testing.T) {
@@ -270,29 +384,42 @@ func TestClientDeleteIPv6RangeDoesNotRetryDelete(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
 		http.Error(w, `{"errors":[{"reason":"temporary"}]}`, http.StatusInternalServerError)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
 
-	require.Error(t, err, "server error should propagate")
-	assert.Equal(t, 1, calls, "destructive DELETE must not be replayed")
+	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls != 1 {
+		t.Errorf("calls = %v, want %v", calls, 1)
+	}
 }
 
 func TestClientGetIPv6RangeAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should match")
+		if r.URL.EscapedPath() != endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64")
+		}
+
 		http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.GetIPv6Range(t.Context(), ipv6RangeCIDR)
 
-	require.Error(t, err, "GetIPv6Range should fail on non-200 response")
+	_, err := client.GetIPv6Range(t.Context(), ipv6RangeCIDR)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }

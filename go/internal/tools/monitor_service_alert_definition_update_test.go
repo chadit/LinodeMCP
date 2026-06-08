@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -35,22 +38,34 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolPartialUpdate(t *testing.T
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		assertEqual(t, monitorServiceAlertDefinitionGetPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != monitorServiceAlertDefinitionGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceAlertDefinitionGetPath)
+		}
 
 		var body map[string]any
-		if !assertNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		assertEqual(t, map[string]any{keyLabel: monitorAlertDefinitionToolLabel + " Partial"}, body)
+		if !reflect.DeepEqual(body, map[string]any{keyLabel: monitorAlertDefinitionToolLabel + " Partial"}) {
+			t.Errorf("body = %v, want %v", body, map[string]any{keyLabel: monitorAlertDefinitionToolLabel + " Partial"})
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyID:          monitorAlertDefinitionToolID,
 			keyLabel:       monitorAlertDefinitionToolLabel + " Partial",
 			keyServiceType: monitorServiceToolTypeDatabase,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -63,100 +78,194 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolPartialUpdate(t *testing.T
 		monitorAlertDefinitionLabelParam: monitorAlertDefinitionToolLabel + " Partial",
 		keyConfirm:                       true,
 	}
-	result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
-	requireNoError(t, err, "handler should not return an error")
-	requireNotNil(t, result, "result should not be nil")
-	assertFalse(t, result.IsError, "should not be an error result")
+	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 }
 
-func TestLinodeMonitorServiceAlertDefinitionUpdateTool(t *testing.T) {
+func TestLinodeMonitorServiceAlertDefinitionUpdateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
 
-		cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
+	if tool.Name != monitorServiceAlertDefinitionUpdateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceAlertDefinitionUpdateToolName)
+	}
 
-		tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
-		assertEqual(t, monitorServiceAlertDefinitionUpdateToolName, tool.Name, "tool name should match")
-		assertEqual(t, profiles.CapWrite, capability, "tool should be write-capable")
-		assertNotEmpty(t, tool.Description, "tool should have a description")
-		assertContains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
-		assertContains(t, tool.InputSchema.Required, monitorAlertIDParam, "alert ID should be required")
-		assertContains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
-		requireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			assertEqual(t, monitorServiceAlertDefinitionGetPath, r.URL.Path, "request path should match")
-			assertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			assertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	for _, key := range []string{monitorServiceTypeParam, monitorAlertIDParam, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 
-			var body map[string]any
-			if !assertNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
-				return
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeMonitorServiceAlertDefinitionUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != monitorServiceAlertDefinitionGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceAlertDefinitionGetPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
+			return
+		}
+
+		if !reflect.DeepEqual(body[keyLabel], monitorAlertDefinitionToolLabel+" Updated") {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], monitorAlertDefinitionToolLabel+" Updated")
+		}
+
+		if body[monitorAlertDefinitionSeverityParam] != float64(1) {
+			t.Errorf("value = %v, want %v", body[monitorAlertDefinitionSeverityParam], float64(1))
+		}
+
+		for key, want := range map[string]any{
+			keyStatus:      statusEnabled,
+			"channel_ids":  []any{float64(546), float64(392)},
+			keyDescription: "Updated alert when CPU usage is high",
+			keyEntityIDs:   []any{"13116"},
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
 			}
+		}
 
-			assertEqual(t, monitorAlertDefinitionToolLabel+" Updated", body[keyLabel])
-			expectNumericEqual(t, float64(1), body["severity"])
-			assertEqual(t, statusEnabled, body[keyStatus])
-			assertEqual(t, []any{float64(546), float64(392)}, body["channel_ids"])
-			assertEqual(t, "Updated alert when CPU usage is high", body[keyDescription])
-			assertEqual(t, []any{"13116"}, body[keyEntityIDs])
+		w.Header().Set("Content-Type", "application/json")
 
-			w.Header().Set("Content-Type", "application/json")
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:          monitorAlertDefinitionToolID,
-				keyLabel:       monitorAlertDefinitionToolLabel + " Updated",
-				keyServiceType: monitorServiceToolTypeDatabase,
-				keyStatus:      statusEnabled,
-			}))
-		}))
-		t.Cleanup(srv.Close)
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID:          monitorAlertDefinitionToolID,
+			keyLabel:       monitorAlertDefinitionToolLabel + " Updated",
+			keyServiceType: monitorServiceToolTypeDatabase,
+			keyStatus:      statusEnabled,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
 
-		req := createRequestWithArgs(t, monitorAlertDefinitionUpdateArgs())
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should not return an error")
-		requireNotNil(t, result, "result should not be nil")
-		assertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, monitorAlertDefinitionToolLabel+" Updated", "response should contain alert label")
-		assertContains(t, textContent.Text, monitorServiceToolTypeDatabase, "response should contain service type")
-		assertContains(t, textContent.Text, statusEnabled, "response should contain status")
-	})
+	req := createRequestWithArgs(t, monitorAlertDefinitionUpdateArgs())
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assertEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			assertEqual(t, monitorServiceAlertDefinitionGetPath, r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assertNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, monitorAlertDefinitionUpdateArgs())
-		result, err := handler(t.Context(), req)
-		requireNoError(t, err, "handler should return API failures as tool errors")
-		requireNotNil(t, result, "result should not be nil")
-		assertTrue(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		requireTrue(t, ok, "content should be TextContent")
-		assertContains(t, textContent.Text, "Failed to update "+monitorServiceAlertDefinitionUpdateToolName, "response should identify failed tool")
-		assertContains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, monitorAlertDefinitionToolLabel+" Updated") {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertDefinitionToolLabel+" Updated")
+	}
+
+	if !strings.Contains(textContent.Text, monitorServiceToolTypeDatabase) {
+		t.Errorf("textContent.Text does not contain %v", monitorServiceToolTypeDatabase)
+	}
+
+	if !strings.Contains(textContent.Text, statusEnabled) {
+		t.Errorf("textContent.Text does not contain %v", statusEnabled)
+	}
+}
+
+func TestLinodeMonitorServiceAlertDefinitionUpdateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != monitorServiceAlertDefinitionGetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceAlertDefinitionGetPath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, monitorAlertDefinitionUpdateArgs())
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to update "+monitorServiceAlertDefinitionUpdateToolName) {
+		t.Errorf("textContent.Text does not contain %v", "Failed to update "+monitorServiceAlertDefinitionUpdateToolName)
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
 }

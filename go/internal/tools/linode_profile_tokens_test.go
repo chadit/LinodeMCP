@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -26,124 +29,191 @@ const (
 	profileTokenInvalidIDValue = "abc"
 )
 
-func TestLinodeProfileTokensTool(t *testing.T) {
+func TestLinodeProfileTokensToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeProfileTokensTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeProfileTokensTool(cfg)
+	if tool.Name != "linode_profile_tokens" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_tokens")
+	}
 
-		checkEqual(t, "linode_profile_tokens", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		checkEqual(t, profiles.CapRead, capability, "profile tokens should be read-only")
-		expectNotNil(t, handler, "handler should not be nil")
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, keyPage, "schema should expose optional page")
-		expectContainsWithMode(t, false, props, keyPageSize, "schema should expose optional page_size")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-			checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
-				Data: []linode.ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
-				Page: 1, Pages: 1, Results: 1,
-			}))
-		}))
-		defer srv.Close()
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyPage]; !ok {
+		t.Errorf("props missing key %v", keyPage)
+	}
 
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
+	if _, ok := props[keyPageSize]; !ok {
+		t.Errorf("props missing key %v", keyPageSize)
+	}
+}
+
+func TestLinodeProfileTokensToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileTokens {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsToolQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
+			Data: []linode.ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
+			Page: 1, Pages: 1, Results: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 			},
+		},
+	}
+	_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2.0, keyPageSize: 25.0}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenLabel) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenLabel)
+	}
+}
+
+func TestLinodeProfileTokensToolInvalidPagination(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageFractional, args: map[string]any{keyPage: 1.5}, wantMessage: errPageInteger},
+		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeFractional, args: map[string]any{keyPageSize: 25.5}, wantMessage: errPageSizeInteger},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Error("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodeProfileTokensToolUpstreamError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
+	}))
+	defer srv.Close()
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2.0, keyPageSize: 25.0}))
-
-		expectNoError(t, err, "handler should not return a Go error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "success should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, profileTokenLabel, "response should include token label")
-	})
-
-	t.Run("invalid pagination", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-		_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageFractional, args: map[string]any{keyPage: 1.5}, wantMessage: errPageInteger},
-			{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeFractional, args: map[string]any{keyPageSize: 25.5}, wantMessage: errPageSizeInteger},
-		}
-
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-
-				expectNoError(t, err, "validation failures are returned as error results")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "invalid pagination should be rejected before client call")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				expectTrue(t, ok, "content should be TextContent")
-				expectContainsWithMode(t, false, textContent.Text, testCase.wantMessage, "response should describe pagination validation")
-			})
-		}
-	})
-
-	t.Run("upstream error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 			},
-		}
-		_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
+		},
+	}
+	_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		expectNoError(t, err, "upstream failures are returned as error results")
-		expectNotNil(t, result, "result should not be nil")
-		checkTrueWithMode(t, false, result.IsError, "upstream API error should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "Failed to retrieve linode_profile_tokens")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_tokens") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_tokens")
+	}
 }
 
 func TestLinodeProfileTokenUpdateToolDefinition(t *testing.T) {
@@ -152,21 +222,39 @@ func TestLinodeProfileTokenUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeProfileTokenUpdateTool(cfg)
 
-	checkEqual(t, "linode_profile_token_update", tool.Name, "tool name should match")
-	checkEqual(t, profiles.CapAdmin, capability, "profile token update should be admin-capable")
-	expectNotNil(t, handler, "handler should not be nil")
+	if tool.Name != "linode_profile_token_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_token_update")
+	}
+
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
 
-	expectContainsWithMode(t, false, props, profileTokenIDParam, "schema should include token_id")
-	expectContainsWithMode(t, false, props, keyConfirm, "schema should include confirm")
-
-	for _, field := range []string{keyExpiry, keyLabel, profileTokenScopesField} {
-		expectContainsWithMode(t, false, props, field, "schema should include documented body field")
+	if _, ok := props[profileTokenIDParam]; !ok {
+		t.Errorf("props missing key %v", profileTokenIDParam)
 	}
 
-	expectContainsWithMode(t, false, tool.InputSchema.Required, profileTokenIDParam, "token_id must be required")
-	expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, field := range []string{keyExpiry, keyLabel, profileTokenScopesField} {
+		if _, ok := props[field]; !ok {
+			t.Errorf("props missing key %v", field)
+		}
+	}
+
+	for _, key := range []string{profileTokenIDParam, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 }
 
 func TestLinodeProfileTokenUpdateRequiresConfirm(t *testing.T) {
@@ -203,12 +291,25 @@ func TestLinodeProfileTokenUpdateRequiresConfirm(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-			expectNoError(t, err, "confirm failures are returned as tool errors")
-			expectNotNil(t, result, "result should not be nil")
-			checkTrueWithMode(t, false, result.IsError, "confirm failure should be an error result")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			checkEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
 }
@@ -237,12 +338,23 @@ func TestLinodeProfileTokenUpdateValidation(t *testing.T) {
 			t.Parallel()
 
 			_, _, handler := tools.NewLinodeProfileTokenUpdateTool(&config.Config{})
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
-			expectNoError(t, err, "validation failures are returned as tool errors")
-			expectNotNil(t, result, "result should not be nil")
-			checkTrueWithMode(t, false, result.IsError, "invalid input should be rejected")
-			assertErrorContains(t, result, testCase.want)
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
+			}
 		})
 	}
 }
@@ -251,71 +363,153 @@ func TestLinodeProfileTokenUpdateToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcProfileTokens12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens12345)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
 		var body map[string]any
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should be JSON: %v", err)
+
 			return
 		}
 
-		checkEqual(t, profileTokenLabel, body[keyLabel])
-		checkEqual(t, profileTokenUpdatedScopes, body[profileTokenScopesField])
+		if !reflect.DeepEqual(body[keyLabel], profileTokenLabel) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], profileTokenLabel)
+		}
+
+		if !reflect.DeepEqual(body[profileTokenScopesField], profileTokenUpdatedScopes) {
+			t.Errorf("body[profileTokenScopesField] = %v, want %v", body[profileTokenScopesField], profileTokenUpdatedScopes)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes}))
+
+		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(profileTokenUpdateConfig(srv.URL))
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes, keyConfirm: true}))
 
-	expectNoError(t, err, "handler should not return a Go error")
-	expectNotNil(t, result, "result should not be nil")
-	checkFalseWithMode(t, false, result.IsError, "success should not be an error result")
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok, "content should be TextContent")
-	expectContainsWithMode(t, false, textContent.Text, profileTokenLabel, "response should include token label")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenLabel) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenLabel)
+	}
 }
 
 func TestLinodeProfileTokenUpdateToolDryRun(t *testing.T) {
 	t.Parallel()
 
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(&config.Config{})
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: false, keyDryRun: true}))
 
-	expectNoError(t, err, "dry-run should not return a Go error")
-	expectNotNil(t, result, "result should not be nil")
-	checkFalseWithMode(t, false, result.IsError, "dry-run should not require confirm")
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: false, keyDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok, "content should be TextContent")
-	expectContainsWithMode(t, false, textContent.Text, "PUT", "dry-run should show method")
-	expectContainsWithMode(t, false, textContent.Text, "/profile/tokens/12345", "dry-run should show path")
-	expectContainsWithMode(t, false, textContent.Text, profileTokenLabel, "dry-run should show body")
-	expectContainsWithMode(t, false, textContent.Text, "side_effects", "dry-run should surface side effects")
-	expectContainsWithMode(t, false, textContent.Text, "label is set to", "side effect should describe the label change")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "PUT") {
+		t.Errorf("textContent.Text does not contain %v", "PUT")
+	}
+
+	if !strings.Contains(textContent.Text, tcProfileTokens12345) {
+		t.Errorf("textContent.Text does not contain %v", tcProfileTokens12345)
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenLabel) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenLabel)
+	}
+
+	if !strings.Contains(textContent.Text, "side_effects") {
+		t.Errorf("textContent.Text does not contain %v", "side_effects")
+	}
+
+	if !strings.Contains(textContent.Text, "label is set to") {
+		t.Errorf("textContent.Text does not contain %v", "label is set to")
+	}
 }
 
 func TestLinodeProfileTokenUpdateAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/profile/tokens/12345", r.URL.Path, "request path should include token ID")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcProfileTokens12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens12345)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(profileTokenUpdateConfig(srv.URL))
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: true}))
 
-	expectNoError(t, err, "API failures are returned as tool errors")
-	expectNotNil(t, result, "result should not be nil")
-	checkTrueWithMode(t, false, result.IsError, "upstream API error should be an error result")
-	assertErrorContains(t, result, "Failed to update linode_profile_token_update")
-	assertErrorContains(t, result, errForbidden)
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_profile_token_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_profile_token_update")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func profileTokenUpdateConfig(apiURL string) *config.Config {

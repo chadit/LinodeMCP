@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -30,8 +31,13 @@ func newCapabilityTestServer(t *testing.T) *server.Server {
 	}
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err, "server should construct cleanly")
-	requireNotNil(t, srv, "server must not be nil")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
 
 	return srv
 }
@@ -70,8 +76,11 @@ func TestNoCapabilityUnknownInRegistry(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+
 	tools := srv.ToolInfos()
-	requireNotEmpty(t, tools, "server must register at least one tool")
+	if len(tools) == 0 {
+		t.Fatal("tools is empty")
+	}
 
 	var untagged []string
 
@@ -81,28 +90,31 @@ func TestNoCapabilityUnknownInRegistry(t *testing.T) {
 		}
 	}
 
-	assertEmptyf(
-		t, untagged,
-		"tools registered with CapUnknown (tag them with profiles.CapRead/Write/Destroy/Admin/Meta): %v",
-		untagged,
-	)
+	if len(untagged) != 0 {
+		t.Errorf("untagged = %v, want empty", untagged)
+	}
 }
 
 func TestDeprecatedAccountEntityTransferDeleteToolRemoved(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err, "full-access server should construct cleanly")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	names := make([]string, 0, len(srv.Tools()))
 	for _, tool := range srv.Tools() {
 		names = append(names, tool.Name())
 	}
 
-	assertNotContains(t, names, "linode_account_entity_transfer_delete",
-		"deprecated account entity-transfer delete tool should not be registered")
-	assertContains(t, names, "linode_account_service_transfer_delete",
-		"replacement account service-transfer delete tool should remain registered")
+	if slices.Contains(names, "linode_account_entity_transfer_delete") {
+		t.Errorf("names should not contain %v", "linode_account_entity_transfer_delete")
+	}
+
+	if !slices.Contains(names, "linode_account_service_transfer_delete") {
+		t.Errorf("names does not contain %v", "linode_account_service_transfer_delete")
+	}
 }
 
 // TestCapabilityAndConfirmInvariants enforces the relationship between a
@@ -121,25 +133,24 @@ func TestCapabilityAndConfirmInvariants(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+
 	tools := srv.ToolInfos()
-	requireNotEmpty(t, tools, "server must register at least one tool")
+	if len(tools) == 0 {
+		t.Fatal("tools is empty")
+	}
 
 	for _, info := range tools {
 		hasConfirm := schemaHasBooleanProp(info.InputSchema.Properties, "confirm")
 
 		switch info.Capability {
 		case profiles.CapRead:
-			assertFalsef(
-				t, hasConfirm,
-				"tool %q is CapRead but declares the confirm parameter; remove confirm or fix capability",
-				info.Name,
-			)
+			if hasConfirm {
+				t.Error("hasConfirm = true, want false")
+			}
 		case profiles.CapWrite, profiles.CapDestroy, profiles.CapAdmin:
-			assertTruef(
-				t, hasConfirm,
-				"tool %q is %s but does not declare the confirm parameter; mutators must require explicit confirmation",
-				info.Name, info.Capability,
-			)
+			if !hasConfirm {
+				t.Error("hasConfirm = false, want true")
+			}
 		case profiles.CapMeta, profiles.CapUnknown:
 			// CapMeta tools may either have or omit confirm (some edit state,
 			// some are pure reads). CapUnknown is gated by the allowlist test
@@ -173,8 +184,11 @@ func TestCapabilityAndDryRunInvariants(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+
 	infos := srv.AllToolInfos()
-	requireNotEmpty(t, infos, "server must expose its full tool catalog")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	pending := dryRunPendingTools()
 	registered := make(map[string]struct{}, len(infos))
@@ -187,22 +201,18 @@ func TestCapabilityAndDryRunInvariants(t *testing.T) {
 			hasDryRun := schemaHasBooleanProp(info.InputSchema.Properties, "dry_run")
 			_, isPending := pending[info.Name]
 
-			assertEqualf(
-				t, !isPending, hasDryRun,
-				"tool %q (%s): advertises dry_run=%v, on pending allowlist=%v. Mutators must advertise dry_run unless explicitly pending; remove it from dryRunPendingTools once wired",
-				info.Name, info.Capability, hasDryRun, isPending,
-			)
+			if hasDryRun != !isPending {
+				t.Errorf("hasDryRun = %v, want %v", hasDryRun, !isPending)
+			}
 		case profiles.CapRead, profiles.CapMeta, profiles.CapUnknown:
 		}
 	}
 
 	for name := range pending {
 		_, exists := registered[name]
-		assertTruef(
-			t, exists,
-			"dryRunPendingTools lists %q but no such tool is registered; remove the stale allowlist entry",
-			name,
-		)
+		if !exists {
+			t.Error("exists = false, want true")
+		}
 	}
 }
 
@@ -217,13 +227,23 @@ func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
 		if info.Name == "linode_instance_stats_get" {
 			found = true
 
-			assertEqual(t, profiles.CapRead, info.Capability, "stats tool should be read-only")
-			assertContains(t, info.InputSchema.Properties, "linode_id", "stats tool should declare linode_id")
-			assertContains(t, info.InputSchema.Required, "linode_id", "stats tool should require linode_id")
+			if info.Capability != profiles.CapRead {
+				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+			}
+
+			if _, ok := info.InputSchema.Properties["linode_id"]; !ok {
+				t.Errorf("info.InputSchema.Properties missing key %v", "linode_id")
+			}
+
+			if !slices.Contains(info.InputSchema.Required, "linode_id") {
+				t.Errorf("info.InputSchema.Required does not contain %v", "linode_id")
+			}
 		}
 	}
 
-	assertTrue(t, found, "server should register the instance stats tool")
+	if !found {
+		t.Error("found = false, want true")
+	}
 }
 
 func TestLinodeNodeBalancerStatsToolRegistered(t *testing.T) {
@@ -237,13 +257,23 @@ func TestLinodeNodeBalancerStatsToolRegistered(t *testing.T) {
 		if info.Name == "linode_nodebalancer_stats_get" {
 			found = true
 
-			assertEqual(t, profiles.CapRead, info.Capability, "NodeBalancer stats tool should be read-only")
-			assertContains(t, info.InputSchema.Properties, "nodebalancer_id", "stats tool should declare nodebalancer_id")
-			assertContains(t, info.InputSchema.Required, "nodebalancer_id", "stats tool should require nodebalancer_id")
+			if info.Capability != profiles.CapRead {
+				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+			}
+
+			if _, ok := info.InputSchema.Properties["nodebalancer_id"]; !ok {
+				t.Errorf("info.InputSchema.Properties missing key %v", "nodebalancer_id")
+			}
+
+			if !slices.Contains(info.InputSchema.Required, "nodebalancer_id") {
+				t.Errorf("info.InputSchema.Required does not contain %v", "nodebalancer_id")
+			}
 		}
 	}
 
-	assertTrue(t, found, "server should register the NodeBalancer stats tool")
+	if !found {
+		t.Error("found = false, want true")
+	}
 }
 
 func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
@@ -258,18 +288,33 @@ func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 		case "linode_networking_ips_list":
 			found[info.Name] = true
 
-			assertEqual(t, profiles.CapRead, info.Capability, "networking IPs list tool should be read-only")
-			assertContains(t, info.InputSchema.Properties, "skip_ipv6_rdns", "networking IPs list tool should declare skip_ipv6_rdns")
+			if info.Capability != profiles.CapRead {
+				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+			}
+
+			if _, ok := info.InputSchema.Properties["skip_ipv6_rdns"]; !ok {
+				t.Errorf("info.InputSchema.Properties missing key %v", "skip_ipv6_rdns")
+			}
 		case "linode_networking_ip_get":
 			found[info.Name] = true
 
-			assertEqual(t, profiles.CapRead, info.Capability, "networking IP get tool should be read-only")
-			assertContains(t, info.InputSchema.Properties, "address", "networking IP get tool should declare address")
+			if info.Capability != profiles.CapRead {
+				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+			}
+
+			if _, ok := info.InputSchema.Properties["address"]; !ok {
+				t.Errorf("info.InputSchema.Properties missing key %v", "address")
+			}
 		}
 	}
 
-	assertTrue(t, found["linode_networking_ips_list"], "server should register the networking IPs list tool")
-	assertTrue(t, found["linode_networking_ip_get"], "server should register the networking IP get tool")
+	if !found["linode_networking_ips_list"] {
+		t.Error("expected condition to be true")
+	}
+
+	if !found["linode_networking_ip_get"] {
+		t.Error("expected condition to be true")
+	}
 }
 
 func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
@@ -277,31 +322,69 @@ func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
 
 	srv := newCapabilityTestServer(t)
 
-	var (
-		foundList bool
-		foundGet  bool
-	)
+	var foundList bool
 
 	for _, info := range srv.ToolInfos() {
-		if info.Name == "linode_firewall_templates_list" {
-			foundList = true
-
-			assertEqual(t, profiles.CapRead, info.Capability, "firewall templates tool should be read-only")
-			assertContains(t, info.InputSchema.Properties, "page", "firewall templates tool should declare page")
-			assertContains(t, info.InputSchema.Properties, "page_size", "firewall templates tool should declare page_size")
+		if info.Name != "linode_firewall_templates_list" {
+			continue
 		}
 
-		if info.Name == "linode_firewall_template_get" {
-			foundGet = true
+		foundList = true
 
-			assertEqual(t, profiles.CapRead, info.Capability, "firewall template get tool should be read-only")
-			assertContains(t, info.InputSchema.Properties, "slug", "firewall template get tool should declare slug")
-			assertContains(t, info.InputSchema.Required, "slug", "firewall template get tool should require slug")
-			assertContains(t, info.InputSchema.Properties, "page", "firewall template get tool should declare page")
-			assertContains(t, info.InputSchema.Properties, "page_size", "firewall template get tool should declare page_size")
+		if info.Capability != profiles.CapRead {
+			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+		}
+
+		if _, ok := info.InputSchema.Properties["page"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "page")
+		}
+
+		if _, ok := info.InputSchema.Properties["page_size"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "page_size")
 		}
 	}
 
-	assertTrue(t, foundList, "server should register the firewall templates list tool")
-	assertTrue(t, foundGet, "server should register the firewall template get tool")
+	if !foundList {
+		t.Error("foundList = false, want true")
+	}
+}
+
+func TestLinodeFirewallTemplateGetToolRegistered(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+
+	var foundGet bool
+
+	for _, info := range srv.ToolInfos() {
+		if info.Name != "linode_firewall_template_get" {
+			continue
+		}
+
+		foundGet = true
+
+		if info.Capability != profiles.CapRead {
+			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+		}
+
+		if _, ok := info.InputSchema.Properties["slug"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "slug")
+		}
+
+		if !slices.Contains(info.InputSchema.Required, "slug") {
+			t.Errorf("info.InputSchema.Required does not contain %v", "slug")
+		}
+
+		if _, ok := info.InputSchema.Properties["page"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "page")
+		}
+
+		if _, ok := info.InputSchema.Properties["page_size"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "page_size")
+		}
+	}
+
+	if !foundGet {
+		t.Error("foundGet = false, want true")
+	}
 }

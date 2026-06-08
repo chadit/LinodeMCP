@@ -1,6 +1,8 @@
 package profiles_test
 
 import (
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -22,9 +24,17 @@ const (
 func TestParsePATScopesEmpty(t *testing.T) {
 	t.Parallel()
 
-	assertNil(t, profiles.ParsePATScopes(""))
-	assertNil(t, profiles.ParsePATScopes("   "))
-	assertNil(t, profiles.ParsePATScopes("\t\n"))
+	if profiles.ParsePATScopes("") != nil {
+		t.Errorf("value = %v, want nil", profiles.ParsePATScopes(""))
+	}
+
+	if profiles.ParsePATScopes("   ") != nil {
+		t.Errorf("value = %v, want nil", profiles.ParsePATScopes("   "))
+	}
+
+	if profiles.ParsePATScopes("\t\n") != nil {
+		t.Errorf("value = %v, want nil", profiles.ParsePATScopes("\t\n"))
+	}
 }
 
 // TestParsePATScopesSplits the canonical PAT format: space-delimited
@@ -34,15 +44,25 @@ func TestParsePATScopesSplits(t *testing.T) {
 
 	got := profiles.ParsePATScopes("linodes:read_write volumes:read_only domains:read_write")
 
-	assertElementsMatch(
-		t,
-		[]profiles.Scope{
+	{
+		gotEls := slices.Clone(got)
+		wantEls := slices.Clone([]profiles.Scope{
 			profiles.ScopeLinodesReadWrite,
 			profiles.ScopeVolumesReadOnly,
 			profiles.ScopeDomainsReadWrite,
-		},
-		got,
-	)
+		})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
+				profiles.ScopeLinodesReadWrite,
+				profiles.ScopeVolumesReadOnly,
+				profiles.ScopeDomainsReadWrite,
+			})
+		}
+	}
 }
 
 // TestParsePATScopesDedupes verifies that a malformed PAT response with
@@ -58,9 +78,17 @@ func TestParsePATScopesDedupes(t *testing.T) {
 	input := scope + " " + scope + " volumes:read_only"
 
 	got := profiles.ParsePATScopes(input)
-	assertLen(t, got, 2)
-	assertContains(t, got, profiles.ScopeLinodesReadWrite)
-	assertContains(t, got, profiles.ScopeVolumesReadOnly)
+	if len(got) != 2 {
+		t.Errorf("len(got) = %d, want %d", len(got), 2)
+	}
+
+	if !slices.Contains(got, profiles.ScopeLinodesReadWrite) {
+		t.Errorf("got does not contain %v", profiles.ScopeLinodesReadWrite)
+	}
+
+	if !slices.Contains(got, profiles.ScopeVolumesReadOnly) {
+		t.Errorf("got does not contain %v", profiles.ScopeVolumesReadOnly)
+	}
 }
 
 // TestParsePATScopesPreservesWildcard locks in that "*" (the all-access
@@ -70,7 +98,9 @@ func TestParsePATScopesPreservesWildcard(t *testing.T) {
 	t.Parallel()
 
 	got := profiles.ParsePATScopes("*")
-	assertEqual(t, []profiles.Scope{profiles.ScopeWildcard}, got)
+	if !reflect.DeepEqual(got, []profiles.Scope{profiles.ScopeWildcard}) {
+		t.Errorf("got = %v, want %v", got, []profiles.Scope{profiles.ScopeWildcard})
+	}
 }
 
 // TestFlattenGrantsNil verifies the nil-grants safety contract. A token
@@ -79,7 +109,9 @@ func TestParsePATScopesPreservesWildcard(t *testing.T) {
 func TestFlattenGrantsNil(t *testing.T) {
 	t.Parallel()
 
-	assertNil(t, profiles.FlattenGrants(nil))
+	if profiles.FlattenGrants(nil) != nil {
+		t.Errorf("profiles.FlattenGrants(nil) = %v, want nil", profiles.FlattenGrants(nil))
+	}
 }
 
 // TestFlattenGrantsEmpty covers the PAT path: PATs return a 200 with
@@ -88,7 +120,9 @@ func TestFlattenGrantsNil(t *testing.T) {
 func TestFlattenGrantsEmpty(t *testing.T) {
 	t.Parallel()
 
-	assertEmpty(t, profiles.FlattenGrants(&linode.Grants{}))
+	if len(profiles.FlattenGrants(&linode.Grants{})) != 0 {
+		t.Errorf("value = %v, want empty", profiles.FlattenGrants(&linode.Grants{}))
+	}
 }
 
 // TestFlattenGrantsGlobalAccess walks the GlobalGrants AccountAccess
@@ -97,18 +131,27 @@ func TestFlattenGrantsEmpty(t *testing.T) {
 func TestFlattenGrantsGlobalAccess(t *testing.T) {
 	t.Parallel()
 
-	rw := profiles.FlattenGrants(&linode.Grants{
+	readWriteScopes := profiles.FlattenGrants(&linode.Grants{
 		Global: linode.GlobalGrants{AccountAccess: permReadWrite},
 	})
-	assertContains(t, rw, profiles.ScopeAccountReadOnly)
-	assertContains(t, rw, profiles.ScopeAccountReadWrite)
+	if !slices.Contains(readWriteScopes, profiles.ScopeAccountReadOnly) {
+		t.Errorf("readWriteScopes does not contain %v", profiles.ScopeAccountReadOnly)
+	}
 
-	ro := profiles.FlattenGrants(&linode.Grants{
+	if !slices.Contains(readWriteScopes, profiles.ScopeAccountReadWrite) {
+		t.Errorf("readWriteScopes does not contain %v", profiles.ScopeAccountReadWrite)
+	}
+
+	readOnlyScopes := profiles.FlattenGrants(&linode.Grants{
 		Global: linode.GlobalGrants{AccountAccess: permReadOnly},
 	})
-	assertContains(t, ro, profiles.ScopeAccountReadOnly)
-	assertNotContains(t, ro, profiles.ScopeAccountReadWrite,
-		"read_only must not imply write")
+	if !slices.Contains(readOnlyScopes, profiles.ScopeAccountReadOnly) {
+		t.Errorf("readOnlyScopes does not contain %v", profiles.ScopeAccountReadOnly)
+	}
+
+	if slices.Contains(readOnlyScopes, profiles.ScopeAccountReadWrite) {
+		t.Errorf("readOnlyScopes should not contain %v", profiles.ScopeAccountReadWrite)
+	}
 }
 
 // TestFlattenGrantsAddFlags covers the per-resource Add* booleans. An
@@ -140,7 +183,9 @@ func TestFlattenGrantsAddFlags(t *testing.T) {
 		profiles.ScopeVolumesReadWrite,
 		profiles.ScopeVPCReadWrite,
 	} {
-		assertContains(t, got, want)
+		if !slices.Contains(got, want) {
+			t.Errorf("got does not contain %v", want)
+		}
 	}
 }
 
@@ -163,13 +208,25 @@ func TestFlattenGrantsPerResource(t *testing.T) {
 		},
 	})
 
-	assertContains(t, got, profiles.ScopeLinodesReadWrite)
-	assertContains(t, got, profiles.ScopeLinodesReadOnly)
-	assertContains(t, got, profiles.ScopeDomainsReadOnly)
-	assertNotContains(t, got, profiles.ScopeDomainsReadWrite,
-		"read_only domain grant must not imply :read_write")
-	assertNotContains(t, got, profiles.ScopeVolumesReadOnly,
-		"empty permissions grant must contribute nothing")
+	if !slices.Contains(got, profiles.ScopeLinodesReadWrite) {
+		t.Errorf("got does not contain %v", profiles.ScopeLinodesReadWrite)
+	}
+
+	if !slices.Contains(got, profiles.ScopeLinodesReadOnly) {
+		t.Errorf("got does not contain %v", profiles.ScopeLinodesReadOnly)
+	}
+
+	if !slices.Contains(got, profiles.ScopeDomainsReadOnly) {
+		t.Errorf("got does not contain %v", profiles.ScopeDomainsReadOnly)
+	}
+
+	if slices.Contains(got, profiles.ScopeDomainsReadWrite) {
+		t.Errorf("got should not contain %v", profiles.ScopeDomainsReadWrite)
+	}
+
+	if slices.Contains(got, profiles.ScopeVolumesReadOnly) {
+		t.Errorf("got should not contain %v", profiles.ScopeVolumesReadOnly)
+	}
 }
 
 // TestFlattenGrantsSortedDeduplicated guards against an upstream API
@@ -194,7 +251,9 @@ func TestFlattenGrantsSortedDeduplicated(t *testing.T) {
 		}
 	}
 
-	assertEqual(t, 2, count, "should produce exactly two linode scopes (no duplicates)")
+	if count != 2 {
+		t.Errorf("count = %v, want %v", count, 2)
+	}
 }
 
 // TestCompareScopesAllPresent covers the happy path: every required
@@ -207,8 +266,13 @@ func TestCompareScopesAllPresent(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadOnly, profiles.ScopeVolumesReadOnly},
 	)
 
-	assertFalse(t, got.HasMissing())
-	assertFalse(t, got.HasExcess())
+	if got.HasMissing() {
+		t.Error("got.HasMissing() = true, want false")
+	}
+
+	if got.HasExcess() {
+		t.Error("got.HasExcess() = true, want false")
+	}
 }
 
 // TestCompareScopesMissingReportsGap verifies the missing-set path:
@@ -226,15 +290,19 @@ func TestCompareScopesMissingReportsGap(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadWrite},
 	)
 
-	assertTrue(t, got.HasMissing())
-	assertEqual(
-		t,
-		[]profiles.Scope{
+	if !got.HasMissing() {
+		t.Error("got.HasMissing() = false, want true")
+	}
+
+	if !reflect.DeepEqual(got.Missing, []profiles.Scope{
+		profiles.ScopeDomainsReadWrite,
+		profiles.ScopeVolumesReadOnly,
+	}) {
+		t.Errorf("got.Missing = %v, want %v", got.Missing, []profiles.Scope{
 			profiles.ScopeDomainsReadWrite,
 			profiles.ScopeVolumesReadOnly,
-		},
-		got.Missing,
-	)
+		})
+	}
 }
 
 // TestCompareScopesExcessIsLeastPrivilegeSignal covers the excess case:
@@ -252,9 +320,17 @@ func TestCompareScopesExcessIsLeastPrivilegeSignal(t *testing.T) {
 		},
 	)
 
-	assertFalse(t, got.HasMissing())
-	assertTrue(t, got.HasExcess())
-	assertEqual(t, []profiles.Scope{profiles.ScopeVolumesReadWrite}, got.Excess)
+	if got.HasMissing() {
+		t.Error("got.HasMissing() = true, want false")
+	}
+
+	if !got.HasExcess() {
+		t.Error("got.HasExcess() = false, want true")
+	}
+
+	if !reflect.DeepEqual(got.Excess, []profiles.Scope{profiles.ScopeVolumesReadWrite}) {
+		t.Errorf("got.Excess = %v, want %v", got.Excess, []profiles.Scope{profiles.ScopeVolumesReadWrite})
+	}
 }
 
 // TestCompareScopesWildcardMatchesEverything verifies that a token
@@ -272,10 +348,13 @@ func TestCompareScopesWildcardMatchesEverything(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeWildcard},
 	)
 
-	assertFalse(t, got.HasMissing(),
-		"wildcard token must satisfy every required scope")
-	assertFalse(t, got.HasExcess(),
-		"wildcard alone is not 'excess' since it is the literal grant")
+	if got.HasMissing() {
+		t.Error("got.HasMissing() = true, want false")
+	}
+
+	if got.HasExcess() {
+		t.Error("got.HasExcess() = true, want false")
+	}
 }
 
 // TestCompareScopesRequiredWildcardIsNoOp confirms a profile with "*"
@@ -290,8 +369,9 @@ func TestCompareScopesRequiredWildcardIsNoOp(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadOnly},
 	)
 
-	assertFalse(t, got.HasMissing(),
-		"wildcard in required list must not produce a missing entry")
+	if got.HasMissing() {
+		t.Error("got.HasMissing() = true, want false")
+	}
 }
 
 // TestCompareScopesEmptyRequiredAlwaysPasses pins the no-op case: a
@@ -305,7 +385,11 @@ func TestCompareScopesEmptyRequiredAlwaysPasses(t *testing.T) {
 		[]profiles.Scope{profiles.ScopeLinodesReadWrite},
 	)
 
-	assertFalse(t, got.HasMissing())
-	assertTrue(t, got.HasExcess(),
-		"a token with scope vs empty required is still 'excess' (least privilege violated)")
+	if got.HasMissing() {
+		t.Error("got.HasMissing() = true, want false")
+	}
+
+	if !got.HasExcess() {
+		t.Error("got.HasExcess() = false, want true")
+	}
 }

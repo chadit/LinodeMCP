@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -10,8 +11,11 @@ func TestRegionAvailabilityToolsRegisteredAsRead(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+
 	infos := srv.ToolInfos()
-	requireNotEmpty(t, infos, "server must expose registered tools")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	wantTools := map[string]struct {
 		wantRegionID bool
@@ -28,19 +32,34 @@ func TestRegionAvailabilityToolsRegisteredAsRead(t *testing.T) {
 			continue
 		}
 
-		assertEqual(t, profiles.CapRead, info.Capability, "region availability tools are read-only routes")
-		assertContains(t, info.InputSchema.Properties, "environment", "environment parameter should be exported")
-		assertNotContains(t, info.InputSchema.Properties, "confirm", "read-only route should not require confirm")
+		if info.Capability != profiles.CapRead {
+			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+		}
+
+		if _, ok := info.InputSchema.Properties["environment"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "environment")
+		}
+
+		if _, ok := info.InputSchema.Properties["confirm"]; ok {
+			t.Errorf("info.InputSchema.Properties has unexpected key %v", "confirm")
+		}
 
 		if want.wantRegionID {
-			assertContains(t, info.InputSchema.Properties, "region_id", "region_id parameter should be exported")
-			assertContains(t, info.InputSchema.Required, "region_id", "region_id should be required")
+			if _, ok := info.InputSchema.Properties["region_id"]; !ok {
+				t.Errorf("info.InputSchema.Properties missing key %v", "region_id")
+			}
+
+			if !slices.Contains(info.InputSchema.Required, "region_id") {
+				t.Errorf("info.InputSchema.Required does not contain %v", "region_id")
+			}
 		}
 
 		found[info.Name] = true
 	}
 
 	for name := range wantTools {
-		assertTruef(t, found[name], "%s should be registered", name)
+		if !found[name] {
+			t.Error("found[name] = false, want true")
+		}
 	}
 }

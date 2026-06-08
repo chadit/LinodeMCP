@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -27,14 +28,33 @@ func TestAuditDefaults(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith(""))
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkNotNil(t, cfg.Audit.RetentionDays, "retention_days must be defaulted to a non-nil pointer")
-	checkEqual(t, config.DefaultAuditRetentionDays, *cfg.Audit.RetentionDays, "omitted retention_days defaults to 14")
-	checkNotNil(t, cfg.Audit.RedactPII, "redact_pii must be defaulted to a non-nil pointer")
-	checkTrue(t, *cfg.Audit.RedactPII, "omitted redact_pii defaults to true (PII redaction on)")
-	checkFalse(t, cfg.Audit.SQLite.Enabled, "SQLite sink is off by default")
-	checkEqual(t, config.DefaultAuditSQLiteBusyTimeoutMS, cfg.Audit.SQLite.BusyTimeoutMS, "omitted busy_timeout_ms defaults to 5000")
+	if cfg.Audit.RetentionDays == nil {
+		t.Error("cfg.Audit.RetentionDays is nil")
+	}
+
+	if *cfg.Audit.RetentionDays != config.DefaultAuditRetentionDays {
+		t.Errorf("*cfg.Audit.RetentionDays = %v, want %v", *cfg.Audit.RetentionDays, config.DefaultAuditRetentionDays)
+	}
+
+	if cfg.Audit.RedactPII == nil {
+		t.Error("cfg.Audit.RedactPII is nil")
+	}
+
+	if !(*cfg.Audit.RedactPII) {
+		t.Error("*cfg.Audit.RedactPII = false, want true")
+	}
+
+	if cfg.Audit.SQLite.Enabled {
+		t.Error("cfg.Audit.SQLite.Enabled = true, want false")
+	}
+
+	if cfg.Audit.SQLite.BusyTimeoutMS != config.DefaultAuditSQLiteBusyTimeoutMS {
+		t.Errorf("cfg.Audit.SQLite.BusyTimeoutMS = %v, want %v", cfg.Audit.SQLite.BusyTimeoutMS, config.DefaultAuditSQLiteBusyTimeoutMS)
+	}
 }
 
 // TestAuditRedactPIIExplicitFalsePreserved verifies an explicit
@@ -49,10 +69,17 @@ func TestAuditRedactPIIExplicitFalsePreserved(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  redact_pii: false\n"))
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkNotNil(t, cfg.Audit.RedactPII)
-	checkFalse(t, *cfg.Audit.RedactPII, "explicit redact_pii: false must be preserved as opt-out")
+	if cfg.Audit.RedactPII == nil {
+		t.Error("cfg.Audit.RedactPII is nil")
+	}
+
+	if *cfg.Audit.RedactPII {
+		t.Error("*cfg.Audit.RedactPII = true, want false")
+	}
 }
 
 // TestAuditRetentionExplicitZeroPreserved verifies an explicit 0
@@ -65,10 +92,17 @@ func TestAuditRetentionExplicitZeroPreserved(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  retention_days: 0\n"))
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkNotNil(t, cfg.Audit.RetentionDays)
-	checkEqual(t, 0, *cfg.Audit.RetentionDays, "explicit retention_days: 0 must be preserved as never-delete")
+	if cfg.Audit.RetentionDays == nil {
+		t.Error("cfg.Audit.RetentionDays is nil")
+	}
+
+	if *cfg.Audit.RetentionDays != 0 {
+		t.Errorf("*cfg.Audit.RetentionDays = %v, want %v", *cfg.Audit.RetentionDays, 0)
+	}
 }
 
 // TestAuditRetentionExplicitValue verifies a non-default value passes
@@ -80,10 +114,17 @@ func TestAuditRetentionExplicitValue(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  retention_days: 30\n"))
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkNotNil(t, cfg.Audit.RetentionDays)
-	checkEqual(t, 30, *cfg.Audit.RetentionDays)
+	if cfg.Audit.RetentionDays == nil {
+		t.Error("cfg.Audit.RetentionDays is nil")
+	}
+
+	if *cfg.Audit.RetentionDays != 30 {
+		t.Errorf("*cfg.Audit.RetentionDays = %v, want %v", *cfg.Audit.RetentionDays, 30)
+	}
 }
 
 // TestAuditRetentionNegativeRejected verifies a negative retention is
@@ -95,8 +136,9 @@ func TestAuditRetentionNegativeRejected(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  retention_days: -1\n"))
 
 	_, err := config.Load(path)
-	checkError(t, err, "negative retention_days must fail to load")
-	checkErrorIs(t, err, config.ErrConfigInvalid, "error must wrap the invalid-config sentinel")
+	if !errors.Is(err, config.ErrConfigInvalid) {
+		t.Errorf("error = %v, want %v", err, config.ErrConfigInvalid)
+	}
 }
 
 // TestAuditSQLiteBlockParses verifies the SQLite sub-block fields load.
@@ -108,11 +150,21 @@ func TestAuditSQLiteBlockParses(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith(block))
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkTrue(t, cfg.Audit.SQLite.Enabled, "enabled flag must parse")
-	checkEqual(t, "/tmp/audit.db", cfg.Audit.SQLite.Path, "path must parse")
-	checkEqual(t, 1234, cfg.Audit.SQLite.BusyTimeoutMS, "busy_timeout_ms must parse")
+	if !cfg.Audit.SQLite.Enabled {
+		t.Error("cfg.Audit.SQLite.Enabled = false, want true")
+	}
+
+	if cfg.Audit.SQLite.Path != "/tmp/audit.db" {
+		t.Errorf("cfg.Audit.SQLite.Path = %v, want %v", cfg.Audit.SQLite.Path, "/tmp/audit.db")
+	}
+
+	if cfg.Audit.SQLite.BusyTimeoutMS != 1234 {
+		t.Errorf("cfg.Audit.SQLite.BusyTimeoutMS = %v, want %v", cfg.Audit.SQLite.BusyTimeoutMS, 1234)
+	}
 }
 
 // TestAuditEnvOverrides verifies the LINODEMCP_AUDIT_* env overrides
@@ -129,15 +181,37 @@ func TestAuditEnvOverrides(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  retention_days: 30\n  redact_pii: true\n"))
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkNotNil(t, cfg.Audit.RetentionDays)
-	checkEqual(t, 7, *cfg.Audit.RetentionDays, "env override beats the file value")
-	checkNotNil(t, cfg.Audit.RedactPII)
-	checkFalse(t, *cfg.Audit.RedactPII, "env override beats the file value for redact_pii")
-	checkTrue(t, cfg.Audit.SQLite.Enabled)
-	checkEqual(t, "/var/audit.db", cfg.Audit.SQLite.Path)
-	checkEqual(t, 999, cfg.Audit.SQLite.BusyTimeoutMS)
+	if cfg.Audit.RetentionDays == nil {
+		t.Error("cfg.Audit.RetentionDays is nil")
+	}
+
+	if *cfg.Audit.RetentionDays != 7 {
+		t.Errorf("*cfg.Audit.RetentionDays = %v, want %v", *cfg.Audit.RetentionDays, 7)
+	}
+
+	if cfg.Audit.RedactPII == nil {
+		t.Error("cfg.Audit.RedactPII is nil")
+	}
+
+	if *cfg.Audit.RedactPII {
+		t.Error("*cfg.Audit.RedactPII = true, want false")
+	}
+
+	if !cfg.Audit.SQLite.Enabled {
+		t.Error("cfg.Audit.SQLite.Enabled = false, want true")
+	}
+
+	if cfg.Audit.SQLite.Path != "/var/audit.db" {
+		t.Errorf("cfg.Audit.SQLite.Path = %v, want %v", cfg.Audit.SQLite.Path, "/var/audit.db")
+	}
+
+	if cfg.Audit.SQLite.BusyTimeoutMS != 999 {
+		t.Errorf("cfg.Audit.SQLite.BusyTimeoutMS = %v, want %v", cfg.Audit.SQLite.BusyTimeoutMS, 999)
+	}
 }
 
 // TestAuditRetentionDefaultMatchesAuditPackage guards against drift
@@ -146,5 +220,7 @@ func TestAuditEnvOverrides(t *testing.T) {
 func TestAuditRetentionDefaultMatchesAuditPackage(t *testing.T) {
 	t.Parallel()
 
-	checkEqual(t, 14, config.DefaultAuditRetentionDays, "config default must stay in sync with audit.DefaultAuditRetentionDays")
+	if config.DefaultAuditRetentionDays != 14 {
+		t.Errorf("config.DefaultAuditRetentionDays = %v, want %v", config.DefaultAuditRetentionDays, 14)
+	}
 }

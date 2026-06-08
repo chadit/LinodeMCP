@@ -2,11 +2,10 @@ package tools_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
@@ -23,7 +22,9 @@ func TestIsDryRunTrue(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 
-	assert.True(t, tools.IsDryRun(&req))
+	if !tools.IsDryRun(&req) {
+		t.Error("expected condition to be true")
+	}
 }
 
 // TestIsDryRunFalse covers explicit opt-out.
@@ -32,7 +33,9 @@ func TestIsDryRunFalse(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{keyDryRun: false})
 
-	assert.False(t, tools.IsDryRun(&req))
+	if tools.IsDryRun(&req) {
+		t.Error("expected condition to be false")
+	}
 }
 
 // TestIsDryRunMissing locks the default-false rule: a request that
@@ -43,8 +46,9 @@ func TestIsDryRunMissing(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{})
 
-	assert.False(t, tools.IsDryRun(&req),
-		"omitted dry_run must default to false (execute the call)")
+	if tools.IsDryRun(&req) {
+		t.Error("expected condition to be false")
+	}
 }
 
 // TestIsDryRunWrongType locks the strict-bool rule: only the literal
@@ -70,8 +74,9 @@ func TestIsDryRunWrongType(t *testing.T) {
 
 			req := createRequestWithArgs(t, map[string]any{keyDryRun: value})
 
-			assert.False(t, tools.IsDryRun(&req),
-				"non-bool %v must not satisfy dry_run", name)
+			if tools.IsDryRun(&req) {
+				t.Error("expected condition to be false")
+			}
 		})
 	}
 }
@@ -85,44 +90,74 @@ func TestBuildDryRunResponseShape(t *testing.T) {
 
 	currentState := map[string]any{
 		keyBetaID: 12345,
-		keyLabel:  "web-01",
-		keyStatus: "running",
+		keyLabel:  firewallDeviceLabelFixture,
+		keyStatus: statusRunning,
 	}
 
 	result, err := tools.BuildDryRunResponse(
 		"linode_instance_delete",
-		"prod",
+		canRunEnvProd,
 		"DELETE",
 		"/linode/instances/12345",
 		currentState,
 	)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
 	body := dryRunResultText(t, result)
 
 	var got map[string]any
-	require.NoError(t, json.Unmarshal([]byte(body), &got))
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assert.Equal(t, true, got[keyDryRun])
-	assert.Equal(t, "linode_instance_delete", got["tool"])
-	assert.Equal(t, "prod", got["environment"])
+	for key, want := range map[string]any{
+		keyDryRun:    true,
+		"tool":       "linode_instance_delete",
+		canRunKeyEnv: canRunEnvProd,
+	} {
+		if !reflect.DeepEqual(got[key], want) {
+			t.Errorf("got[%v] = %v, want %v", key, got[key], want)
+		}
+	}
 
 	would, isObject := got["would_execute"].(map[string]any)
-	require.True(t, isObject, "would_execute must be a JSON object")
-	assert.Equal(t, "DELETE", would["method"])
-	assert.Equal(t, "/linode/instances/12345", would["path"])
+	if !isObject {
+		t.Fatal("isObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/linode/instances/12345") {
+		t.Errorf("got %v, want %v", would["path"], "/linode/instances/12345")
+	}
 
 	state, stateIsObject := got["current_state"].(map[string]any)
-	require.True(t, stateIsObject, "current_state must round-trip as an object")
-	assert.InDelta(t, 12345, state[keyBetaID], 0)
-	assert.Equal(t, "web-01", state[keyLabel])
-	assert.Equal(t, "running", state[keyStatus])
+	if !stateIsObject {
+		t.Fatal("stateIsObject = false, want true")
+	}
+
+	for key, want := range map[string]any{
+		keyBetaID: float64(12345),
+		keyLabel:  firewallDeviceLabelFixture,
+		keyStatus: statusRunning,
+	} {
+		if !reflect.DeepEqual(state[key], want) {
+			t.Errorf("state[%v] = %v, want %v", key, state[key], want)
+		}
+	}
 }
 
 // TestBuildDryRunResponseOmitsEmptyEnvironment guards the omitempty
 // JSON tag on Environment. A tool that didn't accept an environment
-// argument should produce a response without the "environment" key,
+// argument should produce a response without the canRunKeyEnv key,
 // not with an empty string. Models reading the wire shape can then
 // distinguish absent from present-but-empty.
 func TestBuildDryRunResponseOmitsEmptyEnvironment(t *testing.T) {
@@ -135,16 +170,21 @@ func TestBuildDryRunResponseOmitsEmptyEnvironment(t *testing.T) {
 		"/linode/audit/health",
 		nil,
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	body := dryRunResultText(t, result)
 
 	var got map[string]any
-	require.NoError(t, json.Unmarshal([]byte(body), &got))
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	_, hasEnv := got["environment"]
-	assert.False(t, hasEnv,
-		"environment must be omitted when empty, not serialized as empty string")
+	_, hasEnv := got[canRunKeyEnv]
+	if hasEnv {
+		t.Error("hasEnv = true, want false")
+	}
 }
 
 // dryRunResultText pulls the first text-content body off an MCP tool
@@ -154,10 +194,14 @@ func TestBuildDryRunResponseOmitsEmptyEnvironment(t *testing.T) {
 func dryRunResultText(t *testing.T, result *mcp.CallToolResult) string {
 	t.Helper()
 
-	require.NotEmpty(t, result.Content, "result must carry at least one content block")
+	if len(result.Content) == 0 {
+		t.Fatal("result.Content is empty")
+	}
 
 	text, isText := result.Content[0].(mcp.TextContent)
-	require.True(t, isText, "first content block must be TextContent, got %T", result.Content[0])
+	if !isText {
+		t.Fatal("isText = false, want true")
+	}
 
 	return text.Text
 }

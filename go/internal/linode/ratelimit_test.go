@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -25,8 +26,13 @@ func TestRateLimiterDisabledWhenRateZero(t *testing.T) {
 	t.Parallel()
 
 	limiter := linode.NewRateLimiter(0)
-	mustNil(t, limiter, "non-positive rate yields nil (disabled)")
-	mustNoError(t, limiter.Wait(t.Context()), "nil receiver allows immediately")
+	if limiter != nil {
+		t.Fatalf("limiter = %v, want nil", limiter)
+	}
+
+	if err := limiter.Wait(t.Context()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestRateLimiterAllowsBurstUpToCapacity(t *testing.T) {
@@ -36,7 +42,9 @@ func TestRateLimiterAllowsBurstUpToCapacity(t *testing.T) {
 	ctx := t.Context()
 
 	for range rateLimitBurstTest {
-		mustNoError(t, limiter.Wait(ctx), "burst within capacity should not block")
+		if err := limiter.Wait(ctx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 }
 
@@ -50,18 +58,24 @@ func TestRateLimiterBlocksBeyondBurst(t *testing.T) {
 		ctx := t.Context()
 
 		for range 60 {
-			mustNoError(t, limiter.Wait(ctx))
+			if err := limiter.Wait(ctx); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 		}
 
 		start := time.Now()
 
-		mustNoError(t, limiter.Wait(ctx), "after refill the next token should be granted")
+		if err := limiter.Wait(ctx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		elapsed := time.Since(start)
 
 		// Refill is 1 token/sec at 60/min; first post-burst token arrives
 		// after ~1s of synthetic time.
-		mustGreaterOrEqual(t, elapsed, 900*time.Millisecond, "limiter should have blocked for ~1s of synthetic time")
+		if elapsed < 900*time.Millisecond {
+			t.Fatalf("elapsed = %v, want >= %v", elapsed, 900*time.Millisecond)
+		}
 	})
 }
 
@@ -73,16 +87,22 @@ func TestRateLimiterCanceledByContext(t *testing.T) {
 		// short-deadline context.
 		limiter := linode.NewRateLimiter(6)
 		for range 6 {
-			mustNoError(t, limiter.Wait(t.Context()))
+			if err := limiter.Wait(t.Context()); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 		defer cancel()
 
 		err := limiter.Wait(ctx)
-		mustError(t, err)
-		mustErrorIs(t, err, linode.ErrRateLimitWaitCanceled, "ctx cancel surfaces as ErrRateLimitWaitCanceled")
-		mustErrorIs(t, err, context.DeadlineExceeded, "wraps the underlying ctx error")
+		if !errors.Is(err, linode.ErrRateLimitWaitCanceled) {
+			t.Fatalf("error = %v, want %v", err, linode.ErrRateLimitWaitCanceled)
+		}
+
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("error = %v, want %v", err, context.DeadlineExceeded)
+		}
 	})
 }
 
@@ -98,7 +118,9 @@ func TestRateLimiterRefillCapsAtCapacity(t *testing.T) {
 
 		ctx := t.Context()
 		for range 60 {
-			mustNoError(t, limiter.Wait(ctx), "capped capacity should still allow 60 in burst")
+			if err := limiter.Wait(ctx); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 		}
 
 		// 61st call must block; ensure it does by using a tight deadline.
@@ -106,7 +128,9 @@ func TestRateLimiterRefillCapsAtCapacity(t *testing.T) {
 		defer cancel()
 
 		err := limiter.Wait(short)
-		mustError(t, err, "bucket must not over-fill past capacity")
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
 	})
 }
 
@@ -140,8 +164,13 @@ func TestClientHonorsRateLimit(t *testing.T) {
 
 	// First call drains the single-token bucket.
 	_, err := client.GetProfile(t.Context())
-	mustNoError(t, err)
-	checkEqual(t, int32(1), calls.Load(), "first call should hit upstream")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 
 	// Second call: bucket empty, refill is 1/60 token per second so the next
 	// token is ~60s away. Tight ctx deadline ensures the limiter cancels
@@ -156,6 +185,11 @@ func TestClientHonorsRateLimit(t *testing.T) {
 	defer cancel()
 
 	_, err = client.GetProfile(ctx)
-	mustError(t, err, "second call must fail (ctx expires before refill)")
-	checkEqual(t, int32(1), calls.Load(), "limiter must block the second call from reaching upstream")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

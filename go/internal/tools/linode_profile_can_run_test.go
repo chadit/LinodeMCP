@@ -2,6 +2,8 @@ package tools_test
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -37,7 +39,7 @@ func canRunFixtureCatalog() []profiles.ToolDescriptor {
 }
 
 // canRunFixtureProfile permits only the read tool and restricts environments
-// to "prod", so the four refusal categories are all reachable.
+// to canRunEnvProd, so the four refusal categories are all reachable.
 func canRunFixtureProfile() profiles.Profile {
 	return profiles.Profile{
 		Name:                "compute-readonly",
@@ -67,15 +69,27 @@ func callCanRun(t *testing.T, profile func() profiles.Profile, calls []any) map[
 	req.Params.Arguments = map[string]any{"calls": calls}
 
 	result, err := handler(t.Context(), req)
-	expectNoError(t, err)
-	expectNotNil(t, result)
-	expectFalse(t, result.IsError)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok, "result content must be TextContent")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
 	var out map[string]any
-	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &out))
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	return out
 }
@@ -85,13 +99,17 @@ func canRunResults(t *testing.T, body map[string]any) []map[string]any {
 	t.Helper()
 
 	raw, ok := body["results"].([]any)
-	expectTrue(t, ok, "results must be an array")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
 	out := make([]map[string]any, 0, len(raw))
 
 	for _, entry := range raw {
 		row, isMap := entry.(map[string]any)
-		expectTrue(t, isMap, "each result must be an object")
+		if !isMap {
+			t.Error("isMap = false, want true")
+		}
 
 		out = append(out, row)
 	}
@@ -99,9 +117,32 @@ func canRunResults(t *testing.T, body map[string]any) []map[string]any {
 	return out
 }
 
-func TestLinodeProfileCanRunTool(t *testing.T) {
+func TestLinodeProfileCanRunToolSchemaAndCapability(t *testing.T) {
+	_ = []any{
+		canRunCall(canRunReadTool, ""),
+		canRunCall(canRunReadTool, canRunEnvDev),
+		canRunCall(canRunWriteTool, ""),
+		canRunCall(canRunDestroyTool, ""),
+		canRunCall(canRunUnknownTool, ""),
+	}
+
 	t.Parallel()
 
+	tool, capability, _ := tools.NewLinodeProfileCanRunTool(canRunFixtureCatalog, canRunFixtureProfile)
+	if tool.Name != canRunToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, canRunToolName)
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if _, ok := tool.InputSchema.Properties["calls"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "calls")
+	}
+}
+
+func TestLinodeProfileCanRunToolClassifiesEveryRefusalCategoryAndTheAllowPath(t *testing.T) {
 	allFiveCalls := []any{
 		canRunCall(canRunReadTool, ""),
 		canRunCall(canRunReadTool, canRunEnvDev),
@@ -110,101 +151,174 @@ func TestLinodeProfileCanRunTool(t *testing.T) {
 		canRunCall(canRunUnknownTool, ""),
 	}
 
-	t.Run("schema and capability", func(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 
-		tool, capability, _ := tools.NewLinodeProfileCanRunTool(canRunFixtureCatalog, canRunFixtureProfile)
-		checkEqual(t, canRunToolName, tool.Name)
-		checkEqual(t, profiles.CapMeta, capability)
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, "calls")
-	})
+	body := callCanRun(t, canRunFixtureProfile, allFiveCalls)
+	if !reflect.DeepEqual(body["active_profile"], "compute-readonly") {
+		t.Errorf("got %v, want %v", body["active_profile"], "compute-readonly")
+	}
 
-	t.Run("classifies every refusal category and the allow path", func(t *testing.T) {
-		t.Parallel()
+	results := canRunResults(t, body)
+	if len(results) != 5 {
+		t.Errorf("len(results) = %d, want %d", len(results), 5)
+	}
 
-		body := callCanRun(t, canRunFixtureProfile, allFiveCalls)
-		checkEqual(t, "compute-readonly", body["active_profile"])
+	if !reflect.DeepEqual(results[0]["allowed"], true) {
+		t.Errorf("got %v, want %v", results[0]["allowed"], true)
+	}
 
-		results := canRunResults(t, body)
-		expectLen(t, results, 5)
+	if !reflect.DeepEqual(results[1]["allowed"], false) {
+		t.Errorf("got %v, want %v", results[1]["allowed"], false)
+	}
 
-		checkEqual(t, true, results[0]["allowed"])
+	if !reflect.DeepEqual(results[1]["reason"], "environment not permitted by profile") {
+		t.Errorf("got %v, want %v", results[1]["reason"], "environment not permitted by profile")
+	}
 
-		checkEqual(t, false, results[1]["allowed"])
-		checkEqual(t, "environment not permitted by profile", results[1]["reason"])
+	if !reflect.DeepEqual(results[2]["allowed"], false) {
+		t.Errorf("got %v, want %v", results[2]["allowed"], false)
+	}
 
-		checkEqual(t, false, results[2]["allowed"])
-		checkEqual(t, "tool not in profile's allowed_tools", results[2]["reason"])
+	if !reflect.DeepEqual(results[2]["reason"], "tool not in profile's allowed_tools") {
+		t.Errorf("got %v, want %v", results[2]["reason"], "tool not in profile's allowed_tools")
+	}
 
-		checkEqual(t, false, results[3]["allowed"])
-		expectContainsWithMode(t, false, results[3]["reason"], "(CapDestroy)")
+	if !reflect.DeepEqual(results[3]["allowed"], false) {
+		t.Errorf("got %v, want %v", results[3]["allowed"], false)
+	}
 
-		checkEqual(t, false, results[4]["allowed"])
-		checkEqual(t, "tool name not registered", results[4]["reason"])
-	})
+	if reason, ok := results[3]["reason"].(string); !ok || !strings.Contains(reason, "(CapDestroy)") {
+		t.Errorf("reason %v does not contain %q", results[3]["reason"], "(CapDestroy)")
+	}
 
-	t.Run("summary buckets and invariant", func(t *testing.T) {
-		t.Parallel()
+	if !reflect.DeepEqual(results[4]["allowed"], false) {
+		t.Errorf("got %v, want %v", results[4]["allowed"], false)
+	}
 
-		body := callCanRun(t, canRunFixtureProfile, allFiveCalls)
+	if !reflect.DeepEqual(results[4]["reason"], "tool name not registered") {
+		t.Errorf("got %v, want %v", results[4]["reason"], "tool name not registered")
+	}
+}
 
-		summary, summaryIsMap := body["summary"].(map[string]any)
-		expectTrue(t, summaryIsMap)
-		expectNumericEqual(t, float64(5), summary["total"])
-		expectNumericEqual(t, float64(1), summary["allowed"])
+func TestLinodeProfileCanRunToolSummaryBucketsAndInvariant(t *testing.T) {
+	allFiveCalls := []any{
+		canRunCall(canRunReadTool, ""),
+		canRunCall(canRunReadTool, canRunEnvDev),
+		canRunCall(canRunWriteTool, ""),
+		canRunCall(canRunDestroyTool, ""),
+		canRunCall(canRunUnknownTool, ""),
+	}
 
-		blocked, blockedIsFloat := summary["blocked"].(float64)
-		expectTrue(t, blockedIsFloat)
-		expectNumericEqual(t, float64(4), blocked)
+	t.Parallel()
 
-		buckets, bucketsIsMap := summary["blocked_by_reason"].(map[string]any)
-		expectTrue(t, bucketsIsMap)
-		expectNumericEqual(t, float64(1), buckets["unregistered"])
-		expectNumericEqual(t, float64(1), buckets["profile_block"])
-		expectNumericEqual(t, float64(1), buckets["environment_block"])
-		expectNumericEqual(t, float64(1), buckets["capability_block"])
+	body := callCanRun(t, canRunFixtureProfile, allFiveCalls)
 
-		var bucketSum float64
+	summary, summaryIsMap := body["summary"].(map[string]any)
+	if !summaryIsMap {
+		t.Error("summaryIsMap = false, want true")
+	}
 
-		for _, value := range buckets {
-			count, isFloat := value.(float64)
-			expectTrue(t, isFloat)
+	if summary["total"] != float64(5) {
+		t.Errorf("value = %v, want %v", summary["total"], float64(5))
+	}
 
-			bucketSum += count
+	if summary["allowed"] != float64(1) {
+		t.Errorf("value = %v, want %v", summary["allowed"], float64(1))
+	}
+
+	blocked, blockedIsFloat := summary["blocked"].(float64)
+	if !blockedIsFloat {
+		t.Error("blockedIsFloat = false, want true")
+	}
+
+	if blocked != float64(4) {
+		t.Errorf("value = %v, want %v", blocked, float64(4))
+	}
+
+	buckets, bucketsIsMap := summary["blocked_by_reason"].(map[string]any)
+	if !bucketsIsMap {
+		t.Error("bucketsIsMap = false, want true")
+	}
+
+	for key, want := range map[string]any{
+		"unregistered":      float64(1),
+		"profile_block":     float64(1),
+		"environment_block": float64(1),
+		"capability_block":  float64(1),
+	} {
+		if !reflect.DeepEqual(buckets[key], want) {
+			t.Errorf("buckets[%v] = %v, want %v", key, buckets[key], want)
+		}
+	}
+
+	var bucketSum float64
+
+	for _, value := range buckets {
+		count, isFloat := value.(float64)
+		if !isFloat {
+			t.Error("isFloat = false, want true")
 		}
 
-		if bucketSum > blocked {
-			t.Errorf("expected %v <= %v%s", bucketSum, blocked, expectationMessage([]string{"sum(blocked_by_reason) must be <= blocked"}))
-		}
-	})
+		bucketSum += count
+	}
 
-	t.Run("empty allowed_environments permits any environment", func(t *testing.T) {
-		t.Parallel()
+	if bucketSum > blocked {
+		t.Errorf("sum(blocked_by_reason) must be <= blocked: %v > %v", bucketSum, blocked)
+	}
+}
 
-		provider := func() profiles.Profile {
-			profile := canRunFixtureProfile()
-			profile.AllowedEnvironments = nil
+func TestLinodeProfileCanRunToolEmptyAllowedEnvironmentsPermitsAnyEnvironment(t *testing.T) {
+	_ = []any{
+		canRunCall(canRunReadTool, ""),
+		canRunCall(canRunReadTool, canRunEnvDev),
+		canRunCall(canRunWriteTool, ""),
+		canRunCall(canRunDestroyTool, ""),
+		canRunCall(canRunUnknownTool, ""),
+	}
 
-			return profile
-		}
+	t.Parallel()
 
-		results := canRunResults(t, callCanRun(t, provider, []any{canRunCall(canRunReadTool, canRunEnvDev)}))
-		expectLen(t, results, 1)
-		checkEqual(t, true, results[0]["allowed"], "unrestricted env profile allows any environment")
-	})
+	provider := func() profiles.Profile {
+		profile := canRunFixtureProfile()
+		profile.AllowedEnvironments = nil
 
-	t.Run("wildcard allowed_environments permits any environment", func(t *testing.T) {
-		t.Parallel()
+		return profile
+	}
 
-		provider := func() profiles.Profile {
-			profile := canRunFixtureProfile()
-			profile.AllowedEnvironments = []string{"*"}
+	results := canRunResults(t, callCanRun(t, provider, []any{canRunCall(canRunReadTool, canRunEnvDev)}))
+	if len(results) != 1 {
+		t.Errorf("len(results) = %d, want %d", len(results), 1)
+	}
 
-			return profile
-		}
+	if !reflect.DeepEqual(results[0]["allowed"], true) {
+		t.Errorf("got %v, want %v", results[0]["allowed"], true)
+	}
+}
 
-		results := canRunResults(t, callCanRun(t, provider, []any{canRunCall(canRunReadTool, canRunEnvDev)}))
-		expectLen(t, results, 1)
-		checkEqual(t, true, results[0]["allowed"])
-	})
+func TestLinodeProfileCanRunToolWildcardAllowedEnvironmentsPermitsAnyEnvironment(t *testing.T) {
+	_ = []any{
+		canRunCall(canRunReadTool, ""),
+		canRunCall(canRunReadTool, canRunEnvDev),
+		canRunCall(canRunWriteTool, ""),
+		canRunCall(canRunDestroyTool, ""),
+		canRunCall(canRunUnknownTool, ""),
+	}
+
+	t.Parallel()
+
+	provider := func() profiles.Profile {
+		profile := canRunFixtureProfile()
+		profile.AllowedEnvironments = []string{"*"}
+
+		return profile
+	}
+
+	results := canRunResults(t, callCanRun(t, provider, []any{canRunCall(canRunReadTool, canRunEnvDev)}))
+	if len(results) != 1 {
+		t.Errorf("len(results) = %d, want %d", len(results), 1)
+	}
+
+	if !reflect.DeepEqual(results[0]["allowed"], true) {
+		t.Errorf("got %v, want %v", results[0]["allowed"], true)
+	}
 }

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -30,18 +33,40 @@ func TestLinodeImageShareGroupTokenUpdateToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeImageShareGroupTokenUpdateTool(&config.Config{})
 
-	shareGroupAssertEqual(t, imageShareGroupTokenUpdateToolName, tool.Name, "tool name should match")
-	shareGroupAssertEqual(t, profiles.CapAdmin, capability, "token update should be admin capability")
-	shareGroupAssertNotEmpty(t, tool.Description, "tool should have a description")
-	shareGroupRequireNotNil(t, handler, "handler should not be nil")
+	if tool.Name != imageShareGroupTokenUpdateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, imageShareGroupTokenUpdateToolName)
+	}
+
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
-	shareGroupAssertContains(t, props, keyTokenUUID, "schema should include token_uuid")
-	shareGroupAssertContains(t, props, keyLabel, "schema should include label")
-	shareGroupAssertContains(t, props, keyConfirm, "schema should include confirm")
-	shareGroupAssertContains(t, tool.InputSchema.Required, keyTokenUUID, "token_uuid must be required")
-	shareGroupAssertContains(t, tool.InputSchema.Required, keyLabel, "label must be required")
-	shareGroupAssertContains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+	if _, ok := props[keyTokenUUID]; !ok {
+		t.Errorf("props missing key %v", keyTokenUUID)
+	}
+
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{keyTokenUUID, keyLabel, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 }
 
 func TestLinodeImageShareGroupTokenUpdateRequiresConfirm(t *testing.T) {
@@ -73,12 +98,25 @@ func TestLinodeImageShareGroupTokenUpdateRequiresConfirm(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			shareGroupRequireNoError(t, err, "handler should not return Go error")
-			shareGroupRequireNotNil(t, result, "handler should return a result")
-			shareGroupAssertTrue(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			shareGroupAssertEqual(t, int32(0), requestCount.Load(), "confirm failure must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 		})
 	}
 }
@@ -114,12 +152,25 @@ func TestLinodeImageShareGroupTokenUpdateRejectsInvalidRequest(t *testing.T) {
 			t.Cleanup(cleanup)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			shareGroupRequireNoError(t, err, "handler should not return Go error")
-			shareGroupRequireNotNil(t, result, "handler should return a result")
-			shareGroupAssertTrue(t, result.IsError, "invalid request should be a tool error")
-			assertErrorContains(t, result, testCase.wantContains)
-			shareGroupAssertEqual(t, int32(0), requestCount.Load(), "validation must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantContains)
+			}
+
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 		})
 	}
 }
@@ -128,17 +179,34 @@ func TestLinodeImageShareGroupTokenUpdateSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		shareGroupAssertEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		shareGroupAssertEqual(t, "/images/sharegroups/tokens/"+shareGroupUUIDFixture, r.URL.Path, "request path should include token UUID")
-		shareGroupAssertEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		shareGroupAssertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/images/sharegroups/tokens/"+shareGroupUUIDFixture {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/tokens/"+shareGroupUUIDFixture)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
 		var body map[string]any
-		shareGroupAssertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-		shareGroupAssertEqual(t, updatedShareGroupTokenLabel, body[keyLabel], "label should be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body[keyLabel], updatedShareGroupTokenLabel) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], updatedShareGroupTokenLabel)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		shareGroupAssertNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupToken{
+
+		if err := json.NewEncoder(w).Encode(linode.ImageShareGroupToken{
 			TokenUUID:              shareGroupUUIDFixture,
 			Status:                 statusActive,
 			Label:                  updatedShareGroupTokenLabel,
@@ -146,26 +214,47 @@ func TestLinodeImageShareGroupTokenUpdateSuccess(t *testing.T) {
 			ValidForShareGroupUUID: shareGroupUUIDFixture,
 			ShareGroupUUID:         shareGroupUUIDFixture,
 			ShareGroupLabel:        shareGroupLabelFixture,
-		}), "encoding response should succeed")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageShareGroupTokenUpdateTool(imageShareGroupTokenUpdateConfig(srv.URL))
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyTokenUUID: shareGroupUUIDFixture,
 		keyLabel:     updatedShareGroupTokenLabel,
 		keyConfirm:   true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	shareGroupRequireNoError(t, err, "handler should not return Go error")
-	shareGroupRequireNotNil(t, result, "handler should return a result")
-	shareGroupAssertFalse(t, result.IsError, "result should not be a tool error")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	shareGroupRequireTrue(t, ok, "content should be TextContent")
-	shareGroupAssertContains(t, textContent.Text, shareGroupUUIDFixture, "response should include token UUID")
-	shareGroupAssertContains(t, textContent.Text, updatedShareGroupTokenLabel, "response should include updated label")
-	shareGroupAssertContains(t, textContent.Text, "updated successfully", "response should confirm update")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, shareGroupUUIDFixture) {
+		t.Errorf("textContent.Text does not contain %v", shareGroupUUIDFixture)
+	}
+
+	if !strings.Contains(textContent.Text, updatedShareGroupTokenLabel) {
+		t.Errorf("textContent.Text does not contain %v", updatedShareGroupTokenLabel)
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
 }
 
 func TestLinodeImageShareGroupTokenUpdateClientError(t *testing.T) {
@@ -174,22 +263,36 @@ func TestLinodeImageShareGroupTokenUpdateClientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"token not found"}]}`))
-		shareGroupAssertNoError(t, err, "writing error response should succeed")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	_, _, handler := tools.NewLinodeImageShareGroupTokenUpdateTool(imageShareGroupTokenUpdateConfig(srv.URL))
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyTokenUUID: shareGroupUUIDFixture,
 		keyLabel:     updatedShareGroupTokenLabel,
 		keyConfirm:   true,
 	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	shareGroupRequireNoError(t, err, "handler should not return Go error")
-	shareGroupRequireNotNil(t, result, "handler should return a result")
-	shareGroupAssertTrue(t, result.IsError, "result should be a tool error")
-	assertErrorContains(t, result, "Failed to update image share group token")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update image share group token") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update image share group token")
+	}
 }
 
 func newImageShareGroupTokenUpdateHandler(t *testing.T, requestCount *atomic.Int32) (func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error), func()) {

@@ -1,6 +1,8 @@
 package config_test
 
 import (
+	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -39,15 +41,34 @@ func TestLoadReportsParse(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", yaml)
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	report, ok := cfg.Audit.Reports["daily-destroys"]
-	checkTrue(t, ok, "report must be parsed")
-	checkEqual(t, "Destructive ops in the last 24h", report.Description)
-	checkEqual(t, "destroy", report.Filter.Capability)
-	checkEqual(t, "24h", report.Filter.SinceOffset)
-	checkDeepEqual(t, []string{"tool", "environment"}, report.GroupBy)
-	checkEqual(t, config.ReportOutputSummary, report.Output)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if report.Description != "Destructive ops in the last 24h" {
+		t.Errorf("report.Description = %v, want %v", report.Description, "Destructive ops in the last 24h")
+	}
+
+	if report.Filter.Capability != "destroy" {
+		t.Errorf("report.Filter.Capability = %v, want %v", report.Filter.Capability, "destroy")
+	}
+
+	if report.Filter.SinceOffset != "24h" {
+		t.Errorf("report.Filter.SinceOffset = %v, want %v", report.Filter.SinceOffset, "24h")
+	}
+
+	if !reflect.DeepEqual(report.GroupBy, []string{"tool", "environment"}) {
+		t.Errorf("report.GroupBy = %v, want %v", report.GroupBy, []string{"tool", "environment"})
+	}
+
+	if report.Output != config.ReportOutputSummary {
+		t.Errorf("report.Output = %v, want %v", report.Output, config.ReportOutputSummary)
+	}
 }
 
 // TestLoadReportsDefaultOutput confirms an omitted output defaults to
@@ -64,8 +85,13 @@ func TestLoadReportsDefaultOutput(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", yaml)
 
 	cfg, err := config.Load(path)
-	checkNoError(t, err)
-	checkEqual(t, config.ReportOutputSummary, cfg.Audit.Reports["no-output"].Output)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if cfg.Audit.Reports["no-output"].Output != config.ReportOutputSummary {
+		t.Errorf("got %v, want %v", cfg.Audit.Reports["no-output"].Output, config.ReportOutputSummary)
+	}
 }
 
 // TestLoadReportsValidation rejects malformed report grammar with the
@@ -118,9 +144,13 @@ func TestLoadReportsValidation(t *testing.T) {
 			path := writeConfigFile(t, dir, "config.yml", reportBaseYAML(tcase.reportsBlock))
 
 			_, err := config.Load(path)
-			checkError(t, err)
-			checkErrorIs(t, err, config.ErrConfigInvalid)
-			checkErrorIs(t, err, tcase.wantErr)
+			if !errors.Is(err, config.ErrConfigInvalid) {
+				t.Fatalf("error = %v, want %v", err, config.ErrConfigInvalid)
+			}
+
+			if !errors.Is(err, tcase.wantErr) {
+				t.Errorf("error = %v, want %v", err, tcase.wantErr)
+			}
 		})
 	}
 }

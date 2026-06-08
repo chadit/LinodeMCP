@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -15,210 +17,352 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeFirewallTemplatesListTool(t *testing.T) {
+func TestLinodeFirewallTemplatesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeFirewallTemplatesListTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeFirewallTemplatesListTool(&config.Config{})
+	if tool.Name != "linode_firewall_templates_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_templates_list")
+	}
 
-		expectEqual(t, "linode_firewall_templates_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyPage, "schema should include page property")
-		expectContains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size property")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		templates := linode.PaginatedResponse[linode.FirewallTemplate]{
-			Data: []linode.FirewallTemplate{{
-				Slug: purposeVPC,
-				Rules: linode.FirewallRules{
-					InboundPolicy:  policyDrop,
-					OutboundPolicy: policyAccept,
-				},
-			}},
-			Page:    2,
-			Pages:   3,
-			Results: 5,
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
 		}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/templates", r.URL.Path, "request path should match")
-			checkEqual(t, "2", r.URL.Query().Get(keyPage), "page query should match")
-			checkEqual(t, "50", r.URL.Query().Get(keyPageSize), "page_size query should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(templates))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallTemplatesListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyPage: float64(2), keyPageSize: float64(50)})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, purposeVPC, "response should include template slug")
-		expectContains(t, textContent.Text, "inbound_policy", "response should include template rules")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/templates", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallTemplatesListTool(cfg)
-
-		result, err := handler(t.Context(), mcp.CallToolRequest{})
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve linode_firewall_templates_list")
-	})
+	}
 }
 
-func TestLinodeFirewallTemplateGetTool(t *testing.T) {
+func TestLinodeFirewallTemplatesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	templates := linode.PaginatedResponse[linode.FirewallTemplate]{
+		Data: []linode.FirewallTemplate{{
+			Slug: purposeVPC,
+			Rules: linode.FirewallRules{
+				InboundPolicy:  policyDrop,
+				OutboundPolicy: policyAccept,
+			},
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 5,
+	}
 
-		tool, capability, handler := tools.NewLinodeFirewallTemplateGetTool(&config.Config{})
-
-		expectEqual(t, "linode_firewall_template_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keySlug, "schema should include slug property")
-		expectContains(t, tool.InputSchema.Required, keySlug, "schema should require slug")
-		expectContains(t, tool.InputSchema.Properties, keyPage, "schema should include page property")
-		expectContains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size property")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		templates := linode.PaginatedResponse[linode.FirewallTemplate]{
-			Data: []linode.FirewallTemplate{{
-				Slug: purposePublic,
-				Rules: linode.FirewallRules{
-					InboundPolicy:  policyDrop,
-					OutboundPolicy: policyAccept,
-				},
-			}},
-			Page:    1,
-			Pages:   1,
-			Results: 1,
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/templates/public", r.URL.Path, "request path should match")
-			checkEqual(t, "1", r.URL.Query().Get(keyPage), "page query should match")
-			checkEqual(t, "25", r.URL.Query().Get(keyPageSize), "page_size query should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(templates))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keySlug: purposePublic, keyPage: float64(1), keyPageSize: float64(25)})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, purposePublic, "response should include template slug")
-		expectContains(t, textContent.Text, "inbound_policy", "response should include template rules")
-	})
-
-	t.Run("rejects invalid slug before client call", func(t *testing.T) {
-		t.Parallel()
-
-		invalidSlugs := []string{"", "public/vpc", "public?x=1", pathTraversalValue, " public", "PUBLIC", "internal"}
-		for _, slug := range invalidSlugs {
-			t.Run(slug, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySlug: slug}))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid slug should be rejected")
-				assertErrorContains(t, result, "slug")
-				expectFalse(t, called.Load(), "client should not be called for invalid slug")
-			})
+		if r.URL.Path != "/networking/firewalls/templates" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls/templates")
 		}
-	})
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/templates/vpc", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		defer srv.Close()
+		if r.URL.Query().Get(keyPage) != "2" {
+			t.Errorf("r.URL.Query().Get(keyPage) = %v, want %v", r.URL.Query().Get(keyPage), "2")
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+		if r.URL.Query().Get(keyPageSize) != "50" {
+			t.Errorf("r.URL.Query().Get(keyPageSize) = %v, want %v", r.URL.Query().Get(keyPageSize), "50")
+		}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySlug: purposeVPC}))
+		w.Header().Set("Content-Type", "application/json")
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve linode_firewall_template_get")
-	})
+		if err := json.NewEncoder(w).Encode(templates); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallTemplatesListTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyPage: float64(2), keyPageSize: float64(50)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, purposeVPC) {
+		t.Errorf("textContent.Text does not contain %v", purposeVPC)
+	}
+
+	if !strings.Contains(textContent.Text, "inbound_policy") {
+		t.Errorf("textContent.Text does not contain %v", "inbound_policy")
+	}
+}
+
+func TestLinodeFirewallTemplatesListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/networking/firewalls/templates" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls/templates")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallTemplatesListTool(cfg)
+
+	result, err := handler(t.Context(), mcp.CallToolRequest{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_templates_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_templates_list")
+	}
+}
+
+func TestLinodeFirewallTemplateGetToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeFirewallTemplateGetTool(&config.Config{})
+
+	if tool.Name != "linode_firewall_template_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_template_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keySlug]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keySlug)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keySlug) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keySlug)
+	}
+
+	for _, key := range []string{keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+}
+
+func TestLinodeFirewallTemplateGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	templates := linode.PaginatedResponse[linode.FirewallTemplate]{
+		Data: []linode.FirewallTemplate{{
+			Slug: purposePublic,
+			Rules: linode.FirewallRules{
+				InboundPolicy:  policyDrop,
+				OutboundPolicy: policyAccept,
+			},
+		}},
+		Page:    1,
+		Pages:   1,
+		Results: 1,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/networking/firewalls/templates/public" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls/templates/public")
+		}
+
+		if r.URL.Query().Get(keyPage) != "1" {
+			t.Errorf("r.URL.Query().Get(keyPage) = %v, want %v", r.URL.Query().Get(keyPage), "1")
+		}
+
+		if r.URL.Query().Get(keyPageSize) != "25" {
+			t.Errorf("r.URL.Query().Get(keyPageSize) = %v, want %v", r.URL.Query().Get(keyPageSize), "25")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(templates); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keySlug: purposePublic, keyPage: float64(1), keyPageSize: float64(25)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, purposePublic) {
+		t.Errorf("textContent.Text does not contain %v", purposePublic)
+	}
+
+	if !strings.Contains(textContent.Text, "inbound_policy") {
+		t.Errorf("textContent.Text does not contain %v", "inbound_policy")
+	}
+}
+
+func TestLinodeFirewallTemplateGetToolRejectsInvalidSlugBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	invalidSlugs := []string{"", "public/vpc", "public?x=1", pathTraversalValue, " public", "PUBLIC", "internal"}
+	for _, slug := range invalidSlugs {
+		t.Run(slug, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySlug: slug}))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "slug") {
+				t.Errorf("error text %q does not contain %q", text.Text, "slug")
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallTemplateGetToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/networking/firewalls/templates/vpc" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls/templates/vpc")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySlug: purposeVPC}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_template_get") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_template_get")
+	}
 }

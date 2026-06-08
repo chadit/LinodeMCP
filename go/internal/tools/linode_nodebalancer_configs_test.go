@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -32,9 +35,7 @@ const (
 
 // expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
 
-func TestLinodeNodeBalancerFirewallListTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeNodeBalancerFirewallListToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -42,15 +43,42 @@ func TestLinodeNodeBalancerFirewallListTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerFirewallListTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_firewall_list", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_firewall_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_firewall_list")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyNodeBalancerID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyNodeBalancerID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerFirewallListToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerFirewallListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -66,79 +94,135 @@ func TestLinodeNodeBalancerFirewallListTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/123/firewalls", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
-				keyPage: 1, keyPages: 1, keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallListTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "firewalls", "response should contain firewall list")
-		expectContainsWithMode(t, false, textContent.Text, nodeBalancerFirewallLabel, "response should contain firewall label")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallListTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to list firewalls for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerConfigListTool(t *testing.T) {
+func TestLinodeNodeBalancerFirewallListToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Firewalls {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Firewalls)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
+			keyPage: 1, keyPages: 1, keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallListTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "firewalls") {
+		t.Errorf("textContent.Text does not contain %v", "firewalls")
+	}
+
+	if !strings.Contains(textContent.Text, nodeBalancerFirewallLabel) {
+		t.Errorf("textContent.Text does not contain %v", nodeBalancerFirewallLabel)
+	}
+}
+
+func TestLinodeNodeBalancerFirewallListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallListTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list firewalls for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list firewalls for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerConfigListToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -146,15 +230,42 @@ func TestLinodeNodeBalancerConfigListTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigListTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_list", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_list")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyNodeBalancerID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyNodeBalancerID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigListToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -171,81 +282,141 @@ func TestLinodeNodeBalancerConfigListTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/123/configs", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}},
-				keyPage: 1, keyPages: 1, keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigListTool(srvCfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)})
-		result, err := srvHandler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "configs", "response should contain config list")
-		expectContainsWithMode(t, false, textContent.Text, protocolHTTPS, "response should contain protocol")
-		expectContainsWithMode(t, false, textContent.Text, "443", "response should contain port")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigListTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to list configs for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerConfigNodesListTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigListToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}},
+			keyPage: 1, keyPages: 1, keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigListTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "configs") {
+		t.Errorf("textContent.Text does not contain %v", "configs")
+	}
+
+	if !strings.Contains(textContent.Text, protocolHTTPS) {
+		t.Errorf("textContent.Text does not contain %v", protocolHTTPS)
+	}
+
+	if !strings.Contains(textContent.Text, "443") {
+		t.Errorf("textContent.Text does not contain %v", "443")
+	}
+}
+
+func TestLinodeNodeBalancerConfigListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigListTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list configs for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list configs for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerConfigNodesListToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -253,19 +424,46 @@ func TestLinodeNodeBalancerConfigNodesListTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigNodesListTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_nodes_list", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPage, "schema should include page")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_nodes_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_nodes_list")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigNodesListToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigNodesListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -289,80 +487,139 @@ func TestLinodeNodeBalancerConfigNodesListTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/123/configs/456/nodes", r.URL.Path, "request path should match")
-			checkEqual(t, "2", r.URL.Query().Get(keyPage), "page query should match")
-			checkEqual(t, "25", r.URL.Query().Get(keyPageSize), "page_size query should match")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeBalancerNodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP, keyNodeBalancerID: 123, keyConfigID: 456}},
-				keyPage: 2, keyPages: 3, keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodesListTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPage: float64(2), keyPageSize: float64(25)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, nodeBalancerNodeLabelWeb1, "response should contain node label")
-		expectContainsWithMode(t, false, textContent.Text, "192.0.2.10:80", "response should contain node address")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodesListTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to list nodes for NodeBalancer 123 config 456")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigNodesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456Nodes {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes)
+		}
+
+		if r.URL.Query().Get(keyPage) != "2" {
+			t.Errorf("r.URL.Query().Get(keyPage) = %v, want %v", r.URL.Query().Get(keyPage), "2")
+		}
+
+		if r.URL.Query().Get(keyPageSize) != "25" {
+			t.Errorf("r.URL.Query().Get(keyPageSize) = %v, want %v", r.URL.Query().Get(keyPageSize), "25")
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeBalancerNodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP, keyNodeBalancerID: 123, keyConfigID: 456}},
+			keyPage: 2, keyPages: 3, keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodesListTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPage: float64(2), keyPageSize: float64(25)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, nodeBalancerNodeLabelWeb1) {
+		t.Errorf("textContent.Text does not contain %v", nodeBalancerNodeLabelWeb1)
+	}
+
+	if !strings.Contains(textContent.Text, "192.0.2.10:80") {
+		t.Errorf("textContent.Text does not contain %v", "192.0.2.10:80")
+	}
+}
+
+func TestLinodeNodeBalancerConfigNodesListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodesListTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list nodes for NodeBalancer 123 config 456") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list nodes for NodeBalancer 123 config 456")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerConfigNodeGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -370,19 +627,46 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigNodeGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_node_get", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeID, "schema should include node_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeID, "schema should require node_id")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_node_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_node_get")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigNodeGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigNodeGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -408,80 +692,139 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeBalancerNodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP,
-				keyWeight: 100, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodeGetTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "192.0.2.10:80", "response should contain node address")
-		expectContainsWithMode(t, false, textContent.Text, "web-1", "response should contain node label")
-		expectContainsWithMode(t, false, textContent.Text, "789", "response should contain node ID")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodeGetTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve node 789 for NodeBalancer 123 config 456")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigNodeGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeBalancerNodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP,
+			keyWeight: 100, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodeGetTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "192.0.2.10:80") {
+		t.Errorf("textContent.Text does not contain %v", "192.0.2.10:80")
+	}
+
+	if !strings.Contains(textContent.Text, "web-1") {
+		t.Errorf("textContent.Text does not contain %v", "web-1")
+	}
+
+	if !strings.Contains(textContent.Text, "789") {
+		t.Errorf("textContent.Text does not contain %v", "789")
+	}
+}
+
+func TestLinodeNodeBalancerConfigNodeGetToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigNodeGetTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve node 789 for NodeBalancer 123 config 456") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve node 789 for NodeBalancer 123 config 456")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerConfigCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -489,22 +832,46 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_create", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should require write capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPort, "schema should include port")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySSLCert, "schema should include ssl_cert")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySSLKey, "schema should include ssl_key")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyPort, "schema should require port")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_create")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyPort, keySSLCert, keySSLKey, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyPort, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigCreateToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigCreateTool(cfg)
 
 	confirmTests := []struct {
 		name string
@@ -518,13 +885,36 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 	for _, tt := range confirmTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, "confirm=true")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
 		})
 	}
+}
+
+func TestLinodeNodeBalancerConfigCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -552,92 +942,155 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/nodebalancers/123/configs", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			var body map[string]any
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-			port, portOK := body[keyPort].(float64)
-			checkTrueWithMode(t, false, portOK, "request body port should be numeric")
-			checkEqual(t, 80, int(port), "request body should include port")
-			checkEqual(t, protocolHTTP, body[keyProtocol], "request body should include protocol")
-			checkEqual(t, valueRoundRobin, body[keyAlgorithm], "request body should include algorithm")
-			checkEqual(t, valueNone, body[keyStickiness], "request body should include stickiness")
-			checkEqual(t, protocolHTTP, body[keyCheck], "request body should include check")
-			checkInterval, ok := body[keyCheckInterval].(float64)
-			checkTrueWithMode(t, false, ok, "request body check_interval should be numeric")
-			checkEqual(t, 10, int(checkInterval), "request body should include check_interval")
-			checkEqual(t, "/health", body[keyCheckPath], "request body should include check_path")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: "/health", keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "config", "response should contain created config")
-		expectContainsWithMode(t, false, textContent.Text, "456", "response should contain config ID")
-		expectContainsWithMode(t, false, textContent.Text, "NodeBalancer 123", "response should include parent NodeBalancer")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: "/health", keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to create config for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerConfigGetTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigCreateToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		for key, want := range map[string]any{
+			keyProtocol:      protocolHTTP,
+			keyAlgorithm:     valueRoundRobin,
+			keyStickiness:    valueNone,
+			keyCheck:         protocolHTTP,
+			keyPort:          float64(80),
+			keyCheckInterval: float64(10),
+			keyCheckPath:     tcHealth,
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: tcHealth, keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "config") {
+		t.Errorf("textContent.Text does not contain %v", "config")
+	}
+
+	if !strings.Contains(textContent.Text, "456") {
+		t.Errorf("textContent.Text does not contain %v", "456")
+	}
+
+	if !strings.Contains(textContent.Text, "NodeBalancer 123") {
+		t.Errorf("textContent.Text does not contain %v", "NodeBalancer 123")
+	}
+}
+
+func TestLinodeNodeBalancerConfigCreateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: tcHealth, keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create config for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create config for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerConfigGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -645,17 +1098,46 @@ func TestLinodeNodeBalancerConfigGetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_get", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_get")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -677,78 +1159,138 @@ func TestLinodeNodeBalancerConfigGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/123/configs/456", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigGetTool(srvCfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)})
-		result, err := srvHandler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, protocolHTTPS, "response should contain protocol")
-		expectContainsWithMode(t, false, textContent.Text, "443", "response should contain port")
-		expectContainsWithMode(t, false, textContent.Text, "456", "response should contain config id")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigGetTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve config 456 for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigGetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, protocolHTTPS) {
+		t.Errorf("textContent.Text does not contain %v", protocolHTTPS)
+	}
+
+	if !strings.Contains(textContent.Text, "443") {
+		t.Errorf("textContent.Text does not contain %v", "443")
+	}
+
+	if !strings.Contains(textContent.Text, "456") {
+		t.Errorf("textContent.Text does not contain %v", "456")
+	}
+}
+
+func TestLinodeNodeBalancerConfigGetToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigGetTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve config 456 for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve config 456 for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerNodeCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -756,24 +1298,46 @@ func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerNodeCreateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_node_create", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should require write capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyLabel, "schema should include label")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyAddress, "schema should include address")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyLabel, "schema should require label")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyAddress, "schema should require address")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_node_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_node_create")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyLabel, keyAddress, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyLabel, keyAddress, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerNodeCreateToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerNodeCreateTool(cfg)
 
 	confirmTests := []struct {
 		name string
@@ -787,13 +1351,36 @@ func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
 	for _, tt := range confirmTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, "confirm=true")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
 		})
 	}
+}
+
+func TestLinodeNodeBalancerNodeCreateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerNodeCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -817,113 +1404,198 @@ func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/nodebalancers/123/configs/456/nodes", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			var body map[string]any
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-			checkEqual(t, nodeBalancerNodeLabelWeb1, body[keyLabel], "request body should include label")
-			checkEqual(t, nodeBalancerNodeAddress, body[keyAddress], "request body should include address")
-			checkEqual(t, nodeBalancerNodeModeAccept, body[nodeBalancerNodeKeyMode], "request body should include mode")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyStatus: nodeBalancerNodeStatusUP, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeCreateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "node", "response should contain created node")
-		expectContainsWithMode(t, false, textContent.Text, "789", "response should contain node ID")
-		expectContainsWithMode(t, false, textContent.Text, "NodeBalancer 123", "response should include parent NodeBalancer")
-	})
-
-	t.Run("dry_run preview does not call client", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			t.Error("dry_run should not call the Linode API")
-			w.WriteHeader(http.StatusTeapot)
-		}))
-		t.Cleanup(srv.Close)
-
-		dryRunCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, dryRunHandler := tools.NewLinodeNodeBalancerNodeCreateTool(dryRunCfg)
-
-		result, err := dryRunHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "dry_run should return a preview")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "linode_nodebalancer_node_create", "preview should include tool name")
-		expectContainsWithMode(t, false, textContent.Text, "POST", "preview should include method")
-		expectContainsWithMode(t, false, textContent.Text, "/nodebalancers/123/configs/456/nodes", "preview should include path")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeCreateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to create node for NodeBalancer 123 config 456")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerNodeDeleteTool(t *testing.T) {
+func TestLinodeNodeBalancerNodeCreateToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456Nodes {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		for key, want := range map[string]any{
+			keyLabel:                nodeBalancerNodeLabelWeb1,
+			keyAddress:              nodeBalancerNodeAddress,
+			nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept,
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyStatus: nodeBalancerNodeStatusUP, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeCreateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "node") {
+		t.Errorf("textContent.Text does not contain %v", "node")
+	}
+
+	if !strings.Contains(textContent.Text, "789") {
+		t.Errorf("textContent.Text does not contain %v", "789")
+	}
+
+	if !strings.Contains(textContent.Text, "NodeBalancer 123") {
+		t.Errorf("textContent.Text does not contain %v", "NodeBalancer 123")
+	}
+}
+
+func TestLinodeNodeBalancerNodeCreateToolDryRunPreviewDoesNotCallClient(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("dry_run should not call the Linode API")
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	dryRunCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, dryRunHandler := tools.NewLinodeNodeBalancerNodeCreateTool(dryRunCfg)
+
+	result, err := dryRunHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode_nodebalancer_node_create") {
+		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_node_create")
+	}
+
+	if !strings.Contains(textContent.Text, "POST") {
+		t.Errorf("textContent.Text does not contain %v", "POST")
+	}
+
+	if !strings.Contains(textContent.Text, tcNodebalancers123Configs456Nodes) {
+		t.Errorf("textContent.Text does not contain %v", tcNodebalancers123Configs456Nodes)
+	}
+}
+
+func TestLinodeNodeBalancerNodeCreateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeCreateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create node for NodeBalancer 123 config 456") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create node for NodeBalancer 123 config 456")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerNodeDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -931,21 +1603,46 @@ func TestLinodeNodeBalancerNodeDeleteTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerNodeDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_node_delete", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapDestroy, capability, "tool should require destroy capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeID, "schema should include node_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeID, "schema should require node_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_node_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_node_delete")
+	}
+
+	if capability != profiles.CapDestroy {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerNodeDeleteToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerNodeDeleteTool(cfg)
 
 	confirmTests := []struct {
 		name string
@@ -959,13 +1656,36 @@ func TestLinodeNodeBalancerNodeDeleteTool(t *testing.T) {
 	for _, tt := range confirmTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, "confirm=true")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
 		})
 	}
+}
+
+func TestLinodeNodeBalancerNodeDeleteToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerNodeDeleteTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -990,117 +1710,217 @@ func TestLinodeNodeBalancerNodeDeleteTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("dry_run returns preview without deleting", func(t *testing.T) {
-		t.Parallel()
-
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			calls.Add(1)
-			checkEqual(t, http.MethodGet, r.Method, "dry_run must only issue GET")
-			checkEqual(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path)
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "dry_run should not require confirm")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, `"dry_run": true`)
-		expectContainsWithMode(t, false, textContent.Text, `"method": "DELETE"`)
-		expectContainsWithMode(t, false, textContent.Text, `"path": "/nodebalancers/123/configs/456/nodes/789"`)
-		checkEqual(t, int32(1), calls.Load(), "dry_run must issue exactly one GET and no DELETE")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			checkEqual(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "removed successfully", "response should confirm deletion")
-		expectContainsWithMode(t, false, textContent.Text, "789", "response should contain node ID")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to delete node 789 from NodeBalancer 123 config 456")
-		assertErrorContains(t, result, errForbidden)
-	})
-
-	t.Run("transient error is not replayed", func(t *testing.T) {
-		t.Parallel()
-
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			calls.Add(1)
-			http.Error(w, "temporary", http.StatusServiceUnavailable)
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}},
-			Resilience:   config.ResilienceConfig{MaxRetries: 2},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		checkEqual(t, int32(1), calls.Load(), "destructive delete should not be retried")
-	})
 }
 
-func TestLinodeNodeBalancerNodeUpdateTool(t *testing.T) {
+func TestLinodeNodeBalancerNodeDeleteToolDryRunReturnsPreviewWithoutDeleting(t *testing.T) {
 	t.Parallel()
 
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, `"dry_run": true`) {
+		t.Errorf("textContent.Text does not contain %v", `"dry_run": true`)
+	}
+
+	if !strings.Contains(textContent.Text, `"method": "DELETE"`) {
+		t.Errorf("textContent.Text does not contain %v", `"method": "DELETE"`)
+	}
+
+	if !strings.Contains(textContent.Text, `"path": "/nodebalancers/123/configs/456/nodes/789"`) {
+		t.Errorf("textContent.Text does not contain %v", `"path": "/nodebalancers/123/configs/456/nodes/789"`)
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
+}
+
+func TestLinodeNodeBalancerNodeDeleteToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "removed successfully")
+	}
+
+	if !strings.Contains(textContent.Text, "789") {
+		t.Errorf("textContent.Text does not contain %v", "789")
+	}
+}
+
+func TestLinodeNodeBalancerNodeDeleteToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete node 789 from NodeBalancer 123 config 456") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete node 789 from NodeBalancer 123 config 456")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerNodeDeleteToolTransientErrorIsNotReplayed(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		http.Error(w, "temporary", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}},
+		Resilience:   config.ResilienceConfig{MaxRetries: 2},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
+}
+
+func TestLinodeNodeBalancerNodeUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -1108,23 +1928,46 @@ func TestLinodeNodeBalancerNodeUpdateTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerNodeUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_node_update", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should require write capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeID, "schema should include node_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyLabel, "schema should include label")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyAddress, "schema should include address")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeID, "schema should require node_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_node_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_node_update")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyLabel, keyAddress, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerNodeUpdateToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerNodeUpdateTool(cfg)
 
 	confirmTests := []struct {
 		name string
@@ -1138,13 +1981,36 @@ func TestLinodeNodeBalancerNodeUpdateTool(t *testing.T) {
 	for _, tt := range confirmTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, "confirm=true")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
 		})
 	}
+}
+
+func TestLinodeNodeBalancerNodeUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerNodeUpdateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1172,137 +2038,232 @@ func TestLinodeNodeBalancerNodeUpdateTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			var body map[string]any
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-			checkEqual(t, nodeBalancerNodeLabelWeb1, body[keyLabel], "request body should include label")
-			checkEqual(t, nodeBalancerNodeAddress, body[keyAddress], "request body should include address")
-			expectNumericEqual(t, 50, body[keyWeight], "request body should include weight")
-			checkEqual(t, nodeBalancerNodeModeAccept, body[nodeBalancerNodeKeyMode], "request body should include mode")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyStatus: nodeBalancerNodeStatusUP, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "updated successfully", "response should confirm update")
-		expectContainsWithMode(t, false, textContent.Text, "789", "response should contain node ID")
-	})
-
-	t.Run("dry_run preview does not call client", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			t.Error("dry_run should not call the Linode API")
-			w.WriteHeader(http.StatusTeapot)
-		}))
-		t.Cleanup(srv.Close)
-
-		dryRunCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, dryRunHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(dryRunCfg)
-
-		result, err := dryRunHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "dry_run should return a preview")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "linode_nodebalancer_node_update", "preview should include tool name")
-		expectContainsWithMode(t, false, textContent.Text, "PUT", "preview should include method")
-		expectContainsWithMode(t, false, textContent.Text, "/nodebalancers/123/configs/456/nodes/789", "preview should include path")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update node 789 for NodeBalancer 123 config 456")
-		assertErrorContains(t, result, errForbidden)
-	})
-
-	t.Run("empty response", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "empty response")
-	})
 }
 
-func TestLinodeNodeBalancerConfigRebuildTool(t *testing.T) {
+func TestLinodeNodeBalancerNodeUpdateToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		for key, want := range map[string]any{
+			keyLabel:                nodeBalancerNodeLabelWeb1,
+			keyAddress:              nodeBalancerNodeAddress,
+			keyWeight:               float64(50),
+			nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept,
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyStatus: nodeBalancerNodeStatusUP, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
+
+	if !strings.Contains(textContent.Text, "789") {
+		t.Errorf("textContent.Text does not contain %v", "789")
+	}
+}
+
+func TestLinodeNodeBalancerNodeUpdateToolDryRunPreviewDoesNotCallClient(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("dry_run should not call the Linode API")
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	dryRunCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, dryRunHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(dryRunCfg)
+
+	result, err := dryRunHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode_nodebalancer_node_update") {
+		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_node_update")
+	}
+
+	if !strings.Contains(textContent.Text, "PUT") {
+		t.Errorf("textContent.Text does not contain %v", "PUT")
+	}
+
+	if !strings.Contains(textContent.Text, tcNodebalancers123Configs456Nodes789) {
+		t.Errorf("textContent.Text does not contain %v", tcNodebalancers123Configs456Nodes789)
+	}
+}
+
+func TestLinodeNodeBalancerNodeUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update node 789 for NodeBalancer 123 config 456") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update node 789 for NodeBalancer 123 config 456")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerNodeUpdateToolEmptyResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "empty response") {
+		t.Errorf("error text %q does not contain %q", text.Text, "empty response")
+	}
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -1310,19 +2271,46 @@ func TestLinodeNodeBalancerConfigRebuildTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigRebuildTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_rebuild", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should require write capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_rebuild" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_rebuild")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigRebuildTool(cfg)
 
 	confirmTests := []struct {
 		name string
@@ -1336,13 +2324,36 @@ func TestLinodeNodeBalancerConfigRebuildTool(t *testing.T) {
 	for _, tt := range confirmTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, "confirm=true")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
 		})
 	}
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigRebuildTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1362,93 +2373,173 @@ func TestLinodeNodeBalancerConfigRebuildTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("dry run", func(t *testing.T) {
-		t.Parallel()
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "linode_nodebalancer_config_rebuild", "dry-run response should name the tool")
-		expectContainsWithMode(t, false, textContent.Text, "POST", "dry-run response should include method")
-		expectContainsWithMode(t, false, textContent.Text, "/nodebalancers/123/configs/456/rebuild", "dry-run response should include rebuild path")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/nodebalancers/123/configs/456/rebuild", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "Rebuilt config 456", "response should confirm rebuild")
-		expectContainsWithMode(t, false, textContent.Text, "NodeBalancer 123", "response should include parent NodeBalancer")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to rebuild config 456 for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerConfigUpdateTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigRebuildToolDryRun(t *testing.T) {
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigRebuildTool(cfg)
+
 	t.Parallel()
 
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode_nodebalancer_config_rebuild") {
+		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_config_rebuild")
+	}
+
+	if !strings.Contains(textContent.Text, "POST") {
+		t.Errorf("textContent.Text does not contain %v", "POST")
+	}
+
+	if !strings.Contains(textContent.Text, "/nodebalancers/123/configs/456/rebuild") {
+		t.Errorf("textContent.Text does not contain %v", "/nodebalancers/123/configs/456/rebuild")
+	}
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/nodebalancers/123/configs/456/rebuild" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/nodebalancers/123/configs/456/rebuild")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Rebuilt config 456") {
+		t.Errorf("textContent.Text does not contain %v", "Rebuilt config 456")
+	}
+
+	if !strings.Contains(textContent.Text, "NodeBalancer 123") {
+		t.Errorf("textContent.Text does not contain %v", "NodeBalancer 123")
+	}
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to rebuild config 456 for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to rebuild config 456 for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerConfigUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
@@ -1456,23 +2547,46 @@ func TestLinodeNodeBalancerConfigUpdateTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerConfigUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_config_update", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should require write capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPort, "schema should include port")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySSLCert, "schema should include ssl_cert")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySSLKey, "schema should include ssl_key")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_config_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_update")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyPort, keySSLCert, keySSLKey, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerConfigUpdateToolConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigUpdateTool(cfg)
 
 	confirmTests := []struct {
 		name string
@@ -1486,13 +2600,36 @@ func TestLinodeNodeBalancerConfigUpdateTool(t *testing.T) {
 	for _, tt := range confirmTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, "confirm=true")
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
 		})
 	}
+}
+
+func TestLinodeNodeBalancerConfigUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigUpdateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1524,119 +2661,215 @@ func TestLinodeNodeBalancerConfigUpdateTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("dry run", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "dry-run should use GET for preview")
-			checkEqual(t, "/nodebalancers/123/configs", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}},
-				keyPage: 1, keyPages: 1, keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigUpdateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyDryRun: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "linode_nodebalancer_config_update", "dry-run response should name the tool")
-		expectContainsWithMode(t, false, textContent.Text, "PUT", "dry-run response should include method")
-		expectContainsWithMode(t, false, textContent.Text, "/nodebalancers/123/configs/456", "dry-run response should include update path")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/nodebalancers/123/configs/456", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			var body map[string]any
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-			port, portOK := body[keyPort].(float64)
-			checkTrueWithMode(t, false, portOK, "request body port should be numeric")
-			checkEqual(t, 443, int(port), "request body should include port")
-			checkEqual(t, protocolHTTPS, body[keyProtocol], "request body should include protocol")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigUpdateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyProtocol: protocolHTTPS, keySSLCert: testCertPEM, keySSLKey: testKeyPEM, keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "config", "response should contain updated config")
-		expectContainsWithMode(t, false, textContent.Text, "456", "response should contain config ID")
-		expectContainsWithMode(t, false, textContent.Text, "NodeBalancer 123", "response should include parent NodeBalancer")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigUpdateTool(srvCfg)
-
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyConfirm: true}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update config 456 for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
 }
 
-func TestLinodeNodeBalancerFirewallUpdateTool(t *testing.T) {
+func TestLinodeNodeBalancerConfigUpdateToolDryRun(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}},
+			keyPage: 1, keyPages: 1, keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode_nodebalancer_config_update") {
+		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_config_update")
+	}
+
+	if !strings.Contains(textContent.Text, "PUT") {
+		t.Errorf("textContent.Text does not contain %v", "PUT")
+	}
+
+	if !strings.Contains(textContent.Text, tcNodebalancers123Configs456) {
+		t.Errorf("textContent.Text does not contain %v", tcNodebalancers123Configs456)
+	}
+}
+
+func TestLinodeNodeBalancerConfigUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		port, portOK := body[keyPort].(float64)
+		if !portOK {
+			t.Error("portOK = false, want true")
+		}
+
+		if int(port) != 443 {
+			t.Errorf("int(port) = %v, want %v", int(port), 443)
+		}
+
+		if !reflect.DeepEqual(body[keyProtocol], protocolHTTPS) {
+			t.Errorf("body[keyProtocol] = %v, want %v", body[keyProtocol], protocolHTTPS)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyProtocol: protocolHTTPS, keySSLCert: testCertPEM, keySSLKey: testKeyPEM, keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "config") {
+		t.Errorf("textContent.Text does not contain %v", "config")
+	}
+
+	if !strings.Contains(textContent.Text, "456") {
+		t.Errorf("textContent.Text does not contain %v", "456")
+	}
+
+	if !strings.Contains(textContent.Text, "NodeBalancer 123") {
+		t.Errorf("textContent.Text does not contain %v", "NodeBalancer 123")
+	}
+}
+
+func TestLinodeNodeBalancerConfigUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyConfirm: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update config 456 for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update config 456 for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeNodeBalancerFirewallUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -1644,19 +2877,46 @@ func TestLinodeNodeBalancerFirewallUpdateTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerFirewallUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		checkEqual(t, "linode_nodebalancer_firewall_update", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should be write capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyFirewallIDs, "schema should include firewall_ids")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyFirewallIDs, "schema should require firewall_ids")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-		expectNotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_nodebalancer_firewall_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_firewall_update")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyFirewallIDs, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyNodeBalancerID, keyFirewallIDs, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeNodeBalancerFirewallUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerFirewallUpdateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -1678,113 +2938,195 @@ func TestLinodeNodeBalancerFirewallUpdateTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeNodeBalancerFirewallUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/nodebalancers/123/firewalls", r.URL.Path, "request path should match")
-			checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			var body map[string][]int
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-			checkEqual(t, []int{456, 789}, body[keyFirewallIDs], "request body should include firewall IDs")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
-				keyPage: 2, keyPages: 3, keyResults: 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456), float64(789)}, "page": float64(2), "page_size": float64(25), keyConfirm: true,
-		}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "firewalls", "response should contain firewall list")
-		expectContainsWithMode(t, false, textContent.Text, nodeBalancerFirewallLabel, "response should contain firewall label")
-	})
-
-	t.Run("empty assignments", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/nodebalancers/123/firewalls", r.URL.Path, "request path should match")
-
-			var body map[string][]int
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-			checkEmpty(t, body[keyFirewallIDs], "empty firewall_ids should be forwarded")
-
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{}, keyPage: 1, keyPages: 1, keyResults: 0}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.Path != tcNodebalancers123Firewalls {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Firewalls)
 		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(123), keyFirewallIDs: []any{}, keyConfirm: true,
-		}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "result should not be a tool error")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.RawQuery != longviewSubscriptionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsToolQuery)
 		}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}, keyConfirm: true,
-		}))
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update firewall assignments for NodeBalancer 123")
-		assertErrorContains(t, result, errForbidden)
-	})
+		var body map[string][]int
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body[keyFirewallIDs], []int{456, 789}) {
+			t.Errorf("body[keyFirewallIDs] = %v, want %v", body[keyFirewallIDs], []int{456, 789})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
+			keyPage: 2, keyPages: 3, keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456), float64(789)}, "page": float64(2), "page_size": float64(25), keyConfirm: true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "firewalls") {
+		t.Errorf("textContent.Text does not contain %v", "firewalls")
+	}
+
+	if !strings.Contains(textContent.Text, nodeBalancerFirewallLabel) {
+		t.Errorf("textContent.Text does not contain %v", nodeBalancerFirewallLabel)
+	}
+}
+
+func TestLinodeNodeBalancerFirewallUpdateToolEmptyAssignments(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcNodebalancers123Firewalls {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Firewalls)
+		}
+
+		var body map[string][]int
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if len(body[keyFirewallIDs]) != 0 {
+			t.Errorf("body[keyFirewallIDs] = %v, want empty", body[keyFirewallIDs])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{}, keyPage: 1, keyPages: 1, keyResults: 0}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(123), keyFirewallIDs: []any{}, keyConfirm: true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeNodeBalancerFirewallUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}, keyConfirm: true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update firewall assignments for NodeBalancer 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update firewall assignments for NodeBalancer 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

@@ -2,15 +2,15 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -49,28 +49,64 @@ func TestClientListManagedLinodeSettingsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedLinodeSettingsListPath, r.URL.Path, "request path should match managed Linode settings endpoint")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		if r.URL.Path != managedLinodeSettingsListPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsListPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListManagedLinodeSettings(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "ListManagedLinodeSettings should succeed")
-	require.NotNil(t, result, "settings should be returned")
-	require.Len(t, result.Data, 1, "one setting should be returned")
-	assert.Equal(t, 123, result.Data[0].ID)
-	assert.Equal(t, managedLinodeSettingsLabel, result.Data[0].Label)
-	assert.Equal(t, managedLinodeSettingsIP, result.Data[0].SSH.IP)
-	require.NotNil(t, result.Data[0].SSH.Port)
-	assert.Equal(t, port, *result.Data[0].SSH.Port)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if result.Data[0].Label != managedLinodeSettingsLabel {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, managedLinodeSettingsLabel)
+	}
+
+	if result.Data[0].SSH.IP != managedLinodeSettingsIP {
+		t.Errorf("result.Data[0].SSH.IP = %v, want %v", result.Data[0].SSH.IP, managedLinodeSettingsIP)
+	}
+
+	if result.Data[0].SSH.Port == nil {
+		t.Fatal("result.Data[0].SSH.Port is nil")
+	}
+
+	if *result.Data[0].SSH.Port != port {
+		t.Errorf("*result.Data[0].SSH.Port = %v, want %v", *result.Data[0].SSH.Port, port)
+	}
 }
 
 func TestClientListManagedLinodeSettingsRetriesTransientFailure(t *testing.T) {
@@ -79,8 +115,13 @@ func TestClientListManagedLinodeSettingsRetriesTransientFailure(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedLinodeSettingsListPath, r.URL.Path, "request path should match managed Linode settings endpoint")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedLinodeSettingsListPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsListPath)
+		}
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -88,44 +129,71 @@ func TestClientListManagedLinodeSettingsRetriesTransientFailure(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedLinodeSettings]{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ManagedLinodeSettings]{
 			Data:    []linode.ManagedLinodeSettings{{ID: 123, Label: managedLinodeSettingsLabel}},
 			Page:    1,
 			Pages:   1,
 			Results: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(1))
 
 	result, err := client.ListManagedLinodeSettings(t.Context(), 1, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, err, "read-only list should retry transient failures")
-	require.NotNil(t, result, "settings should be returned after retry")
-	assert.Equal(t, int32(2), calls.Load(), "request should retry once")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }
 
 func TestClientListManagedLinodeSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedLinodeSettingsListPath, r.URL.Path, "request path should match managed Linode settings endpoint")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedLinodeSettingsListPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsListPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListManagedLinodeSettings(t.Context(), 1, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "ListManagedLinodeSettings should fail on API error")
-	assert.Nil(t, result, "settings should not be returned")
-	assert.ErrorContains(t, err, errForbidden)
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok || !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("error %v is not an APIError containing %q", err, errForbidden)
+	}
 }
 
 func TestClientGetManagedLinodeSettingsSuccess(t *testing.T) {
@@ -146,34 +214,85 @@ func TestClientGetManagedLinodeSettingsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedLinodeSettingsPath, r.URL.EscapedPath(), "request path should include encoded Linode ID")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != managedLinodeSettingsPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), managedLinodeSettingsPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err, "reading request body should not fail")
-		assert.Empty(t, body, "request body should be empty")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetManagedLinodeSettings(t.Context(), managedLinodeSettingsID)
 
-	require.NoError(t, err, "GetManagedLinodeSettings should succeed")
-	require.NotNil(t, result, "settings should be returned")
-	assert.Equal(t, managedLinodeSettingsID, result.ID)
-	assert.Equal(t, managedLinodeSettingsLabel, result.Label)
-	assert.Equal(t, managedLinodeSettingsGroup, result.Group)
-	assert.True(t, result.SSH.Access)
-	assert.Equal(t, managedLinodeSettingsIP, result.SSH.IP)
-	require.NotNil(t, result.SSH.Port)
-	assert.Equal(t, managedLinodeSettingsSSHPort, *result.SSH.Port)
-	require.NotNil(t, result.SSH.User)
-	assert.Equal(t, managedLinodeSettingsSSHUser, *result.SSH.User)
+	result, err := client.GetManagedLinodeSettings(t.Context(), managedLinodeSettingsID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != managedLinodeSettingsID {
+		t.Errorf("result.ID = %v, want %v", result.ID, managedLinodeSettingsID)
+	}
+
+	if result.Label != managedLinodeSettingsLabel {
+		t.Errorf("result.Label = %v, want %v", result.Label, managedLinodeSettingsLabel)
+	}
+
+	if result.Group != managedLinodeSettingsGroup {
+		t.Errorf("result.Group = %v, want %v", result.Group, managedLinodeSettingsGroup)
+	}
+
+	if !result.SSH.Access {
+		t.Error("result.SSH.Access = false, want true")
+	}
+
+	if result.SSH.IP != managedLinodeSettingsIP {
+		t.Errorf("result.SSH.IP = %v, want %v", result.SSH.IP, managedLinodeSettingsIP)
+	}
+
+	if result.SSH.Port == nil {
+		t.Fatal("result.SSH.Port is nil")
+	}
+
+	if *result.SSH.Port != managedLinodeSettingsSSHPort {
+		t.Errorf("*result.SSH.Port = %v, want %v", *result.SSH.Port, managedLinodeSettingsSSHPort)
+	}
+
+	if result.SSH.User == nil {
+		t.Fatal("result.SSH.User is nil")
+	}
+
+	if *result.SSH.User != managedLinodeSettingsSSHUser {
+		t.Errorf("*result.SSH.User = %v, want %v", *result.SSH.User, managedLinodeSettingsSSHUser)
+	}
 }
 
 func TestClientGetManagedLinodeSettingsRetriesTransientFailure(t *testing.T) {
@@ -184,21 +303,32 @@ func TestClientGetManagedLinodeSettingsRetriesTransientFailure(t *testing.T) {
 	settings := linode.ManagedLinodeSettings{ID: managedLinodeSettingsID, Label: managedLinodeSettingsLabel}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedLinodeSettingsPath, r.URL.EscapedPath(), "request path should include encoded Linode ID")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != managedLinodeSettingsPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), managedLinodeSettingsPath)
+		}
 
 		if calls.Add(1) == 1 {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", tcApplicationJSON)
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: "temporary failure"}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
@@ -210,34 +340,63 @@ func TestClientGetManagedLinodeSettingsRetriesTransientFailure(t *testing.T) {
 		linode.WithBaseDelay(time.Millisecond),
 		linode.WithJitter(false),
 	)
-	result, err := client.GetManagedLinodeSettings(t.Context(), managedLinodeSettingsID)
 
-	require.NoError(t, err, "GetManagedLinodeSettings should retry transient failures")
-	require.NotNil(t, result, "settings should be returned after retry")
-	assert.Equal(t, int32(2), calls.Load(), "one retry should be attempted")
-	assert.Equal(t, managedLinodeSettingsID, result.ID)
+	result, err := client.GetManagedLinodeSettings(t.Context(), managedLinodeSettingsID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
+
+	if result.ID != managedLinodeSettingsID {
+		t.Errorf("result.ID = %v, want %v", result.ID, managedLinodeSettingsID)
+	}
 }
 
 func TestClientGetManagedLinodeSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedLinodeSettingsPath, r.URL.EscapedPath(), "request path should include encoded Linode ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != managedLinodeSettingsPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), managedLinodeSettingsPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusNotFound)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetManagedLinodeSettings(t.Context(), managedLinodeSettingsID)
 
-	require.Error(t, err, "API error should be returned")
-	assert.Nil(t, result, "settings should be nil on API error")
-	assert.ErrorContains(t, err, "not found")
+	result, err := client.GetManagedLinodeSettings(t.Context(), managedLinodeSettingsID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok || !strings.Contains(apiErr.Message, "not found") {
+		t.Errorf("error %v is not an APIError containing %q", err, "not found")
+	}
 }
 
 func TestClientUpdateManagedLinodeSettingsSuccess(t *testing.T) {
@@ -256,69 +415,98 @@ func TestClientUpdateManagedLinodeSettingsSuccess(t *testing.T) {
 			User:   &user,
 		},
 	}
+	wantReq := linode.UpdateManagedLinodeSettingsRequest{
+		SSH: &linode.UpdateManagedLinodeSettingsSSH{
+			Access: &settings.SSH.Access,
+			IP:     &settings.SSH.IP,
+			Port:   settings.SSH.Port,
+			User:   settings.SSH.User,
+		},
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedLinodeSettingsPath, r.URL.EscapedPath(), "request path should include encoded Linode ID")
-		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
-
-		var got linode.UpdateManagedLinodeSettingsRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
-
-		if assert.NotNil(t, got.SSH, "ssh update should be sent") {
-			if assert.NotNil(t, got.SSH.Access, "ssh access should be sent") {
-				assert.True(t, *got.SSH.Access)
-			}
-
-			if assert.NotNil(t, got.SSH.IP, "ssh ip should be sent") {
-				assert.Equal(t, managedLinodeSettingsIP, *got.SSH.IP)
-			}
-
-			if assert.NotNil(t, got.SSH.Port, "ssh port should be sent") {
-				assert.Equal(t, port, *got.SSH.Port)
-			}
-
-			if assert.NotNil(t, got.SSH.User, "ssh user should be sent") {
-				assert.Equal(t, user, *got.SSH.User)
-			}
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		if r.URL.EscapedPath() != managedLinodeSettingsPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), managedLinodeSettingsPath)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		var got linode.UpdateManagedLinodeSettingsRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(got, wantReq) {
+			t.Errorf("got = %+v, want %+v", got, wantReq)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.UpdateManagedLinodeSettings(t.Context(), managedLinodeSettingsID, linode.UpdateManagedLinodeSettingsRequest{
-		SSH: &linode.UpdateManagedLinodeSettingsSSH{Access: &settings.SSH.Access, IP: &settings.SSH.IP, Port: settings.SSH.Port, User: settings.SSH.User},
-	})
 
-	require.NoError(t, err, "UpdateManagedLinodeSettings should succeed on 200 response")
-	require.NotNil(t, result)
-	assert.Equal(t, managedLinodeSettingsID, result.ID)
-	assert.Equal(t, managedLinodeSettingsLabel, result.Label)
-	assert.Equal(t, managedLinodeSettingsIP, result.SSH.IP)
+	result, err := client.UpdateManagedLinodeSettings(t.Context(), managedLinodeSettingsID, wantReq)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !reflect.DeepEqual(*result, settings) {
+		t.Errorf("result = %+v, want %+v", *result, settings)
+	}
 }
 
 func TestClientUpdateManagedLinodeSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, managedLinodeSettingsPath, r.URL.EscapedPath(), "request path should include encoded Linode ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.EscapedPath() != managedLinodeSettingsPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), managedLinodeSettingsPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	access := true
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.UpdateManagedLinodeSettings(t.Context(), managedLinodeSettingsID, linode.UpdateManagedLinodeSettingsRequest{SSH: &linode.UpdateManagedLinodeSettingsSSH{Access: &access}})
 
-	require.Error(t, err, "UpdateManagedLinodeSettings should fail on API error")
-	assert.Nil(t, result, "settings should not be returned")
-	assert.ErrorContains(t, err, errForbidden)
+	result, err := client.UpdateManagedLinodeSettings(t.Context(), managedLinodeSettingsID, linode.UpdateManagedLinodeSettingsRequest{SSH: &linode.UpdateManagedLinodeSettingsSSH{Access: &access}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok || !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("error %v is not an APIError containing %q", err, errForbidden)
+	}
 }
 
 func TestClientUpdateManagedLinodeSettingsDoesNotRetry(t *testing.T) {
@@ -328,16 +516,28 @@ func TestClientUpdateManagedLinodeSettingsDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		assert.Equal(t, managedLinodeSettingsPath, r.URL.EscapedPath(), "request path should include encoded Linode ID")
+
+		if r.URL.EscapedPath() != managedLinodeSettingsPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), managedLinodeSettingsPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	access := true
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
-	_, err := client.UpdateManagedLinodeSettings(t.Context(), managedLinodeSettingsID, linode.UpdateManagedLinodeSettingsRequest{SSH: &linode.UpdateManagedLinodeSettingsSSH{Access: &access}})
 
-	require.Error(t, err, "mutating Managed Linode settings update should not retry transient failures")
-	assert.Equal(t, int32(1), calls.Load(), "client should call update exactly once")
+	_, err := client.UpdateManagedLinodeSettings(t.Context(), managedLinodeSettingsID, linode.UpdateManagedLinodeSettingsRequest{SSH: &linode.UpdateManagedLinodeSettingsSSH{Access: &access}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

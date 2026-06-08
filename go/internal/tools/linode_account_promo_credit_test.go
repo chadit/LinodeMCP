@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -19,164 +22,264 @@ const (
 	promoCodeFixture                 = "PROMO123"
 )
 
-func TestLinodeAccountPromoCreditTool(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
+func TestLinodeAccountPromoCreditToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+	if tool.Name != "linode_account_promo_credit" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_promo_credit")
+	}
 
-		assert.Equal(t, "linode_account_promo_credit", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "tool should require admin capability")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyPromoCode, "schema should include promo_code")
-		assert.Contains(t, props, keyConfirm, "mutating promo credit tool must require confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyPromoCode, "promo_code must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyPromoCode]; !ok {
+		t.Errorf("props missing key %v", keyPromoCode)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
 
-			var body map[string]any
+	for _, key := range []string{keyPromoCode, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
 
-			decodeErr := json.NewDecoder(r.Body).Decode(&body)
-			assert.NoError(t, decodeErr)
+func TestLinodeAccountPromoCreditToolSuccess(t *testing.T) {
+	t.Parallel()
 
-			if decodeErr != nil {
-				return
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/promo-codes" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/promo-codes")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+
+		decodeErr := json.NewDecoder(r.Body).Decode(&body)
+		if decodeErr != nil {
+			t.Errorf("unexpected error: %v", decodeErr)
+		}
+
+		if decodeErr != nil {
+			return
+		}
+
+		if !reflect.DeepEqual(body[keyPromoCode], promoCodeFixture) {
+			t.Errorf("body[keyPromoCode] = %v, want %v", body[keyPromoCode], promoCodeFixture)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyPromoCode: promoCodeFixture, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, accountPromoCreditAppliedMessage) {
+		t.Errorf("textContent.Text does not contain %v", accountPromoCreditAppliedMessage)
+	}
+
+	if !strings.Contains(textContent.Text, promoCodeFixture) {
+		t.Errorf("textContent.Text does not contain %v", promoCodeFixture)
+	}
+}
+
+func TestLinodeAccountPromoCreditToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/promo-codes" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/promo-codes")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyPromoCode: promoCodeFixture, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to apply linode_account_promo_credit") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to apply linode_account_promo_credit")
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeAccountPromoCreditToolConfirmRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		confirm any
+	}{
+		{name: caseMissing},
+		{name: caseFalse, confirm: false},
+		{name: caseString, confirm: boolStringTrue},
+		{name: caseNumeric, confirm: 1},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+
+			args := map[string]any{keyPromoCode: promoCodeFixture}
+			if testCase.name != caseMissing {
+				args[keyConfirm] = testCase.confirm
 			}
 
-			assert.Equal(t, promoCodeFixture, body[keyPromoCode])
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
-		}))
-		defer srv.Close()
+			req := createRequestWithArgs(t, args)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-		req := createRequestWithArgs(t, map[string]any{keyPromoCode: promoCodeFixture, keyConfirm: true})
-		result, err := handler(t.Context(), req)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, accountPromoCreditAppliedMessage)
-		assert.Contains(t, textContent.Text, promoCodeFixture)
-	})
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/account/promo-codes", r.URL.Path, "request path should be /account/promo-codes")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+			if !strings.Contains(textContent.Text, errConfirmEqualsTrue) {
+				t.Errorf("textContent.Text does not contain %v", errConfirmEqualsTrue)
+			}
+		})
+	}
+}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+func TestLinodeAccountPromoCreditToolInvalidInputsRejectBeforeClient(t *testing.T) {
+	t.Parallel()
 
-		req := createRequestWithArgs(t, map[string]any{keyPromoCode: promoCodeFixture, keyConfirm: true})
-		result, err := handler(t.Context(), req)
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: "missing promo code", args: map[string]any{keyConfirm: true}, want: "promo_code is required"},
+		{name: "empty promo code", args: map[string]any{keyPromoCode: "", keyConfirm: true}, want: "promo_code must be a non-empty string"},
+		{name: "numeric promo code", args: map[string]any{keyPromoCode: 123, keyConfirm: true}, want: "promo_code must be a non-empty string"},
+		{name: "leading whitespace promo code", args: map[string]any{keyPromoCode: " PROMO123", keyConfirm: true}, want: "promo_code must not include leading or trailing whitespace"},
+		{name: "trailing whitespace promo code", args: map[string]any{keyPromoCode: "PROMO123 ", keyConfirm: true}, want: "promo_code must not include leading or trailing whitespace"},
+	}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to apply linode_account_promo_credit", "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("confirm rejects before client", func(t *testing.T) {
-		t.Parallel()
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+			req := createRequestWithArgs(t, testCase.args)
 
-		cases := []struct {
-			name    string
-			confirm any
-		}{
-			{name: caseMissing},
-			{name: caseFalse, confirm: false},
-			{name: caseString, confirm: boolStringTrue},
-			{name: caseNumeric, confirm: 1},
-		}
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-				args := map[string]any{keyPromoCode: promoCodeFixture}
-				if testCase.name != caseMissing {
-					args[keyConfirm] = testCase.confirm
-				}
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
 
-				req := createRequestWithArgs(t, args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid confirm should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, errConfirmEqualsTrue, "response should require confirmation")
-			})
-		}
-	})
-
-	t.Run("invalid inputs reject before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			args map[string]any
-			want string
-		}{
-			{name: "missing promo code", args: map[string]any{keyConfirm: true}, want: "promo_code is required"},
-			{name: "empty promo code", args: map[string]any{keyPromoCode: "", keyConfirm: true}, want: "promo_code must be a non-empty string"},
-			{name: "numeric promo code", args: map[string]any{keyPromoCode: 123, keyConfirm: true}, want: "promo_code must be a non-empty string"},
-			{name: "leading whitespace promo code", args: map[string]any{keyPromoCode: " PROMO123", keyConfirm: true}, want: "promo_code must not include leading or trailing whitespace"},
-			{name: "trailing whitespace promo code", args: map[string]any{keyPromoCode: "PROMO123 ", keyConfirm: true}, want: "promo_code must not include leading or trailing whitespace"},
-		}
-
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid input should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.want, "response should describe validation error")
-			})
-		}
-	})
+			if !strings.Contains(textContent.Text, testCase.want) {
+				t.Errorf("textContent.Text does not contain %v", testCase.want)
+			}
+		})
+	}
 }

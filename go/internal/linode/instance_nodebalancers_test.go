@@ -2,12 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -18,23 +16,46 @@ func TestListInstanceNodeBalancers(t *testing.T) {
 	nodeBalancers := []linode.NodeBalancer{{ID: 456, Label: "app-lb", Region: regionUSEast}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/linode/instances/123/nodebalancers", r.URL.Path, "request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query params")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/linode/instances/123/nodebalancers" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/nodebalancers")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: nodeBalancers, keyPage: 1, keyPages: 1, keyResults: 1,
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListInstanceNodeBalancers(t.Context(), 123)
 
-	require.NoError(t, err, "ListInstanceNodeBalancers should not fail")
-	require.Len(t, result, 1, "result should include one NodeBalancer")
-	assert.Equal(t, 456, result[0].ID, "NodeBalancer ID should match")
-	assert.Equal(t, "app-lb", result[0].Label, "NodeBalancer label should match")
+	result, err := client.ListInstanceNodeBalancers(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
+	}
+
+	if result[0].ID != 456 {
+		t.Errorf("result[0].ID = %v, want %v", result[0].ID, 456)
+	}
+
+	if result[0].Label != "app-lb" {
+		t.Errorf("result[0].Label = %v, want %v", result[0].Label, "app-lb")
+	}
 }
 
 func TestListInstanceNodeBalancersRejectsInvalidLinodeID(t *testing.T) {
@@ -53,11 +74,19 @@ func TestListInstanceNodeBalancersRejectsInvalidLinodeID(t *testing.T) {
 			t.Parallel()
 
 			client := linode.NewClient("https://api.example.test/v4", "test-token", nil, linode.WithMaxRetries(0))
-			result, err := client.ListInstanceNodeBalancers(t.Context(), tt.linodeID)
 
-			require.Error(t, err, "invalid linode ID should fail")
-			assert.Nil(t, result, "result should be nil on validation failure")
-			assert.ErrorIs(t, err, linode.ErrLinodeIDPositive, "error should require a positive linode ID")
+			result, err := client.ListInstanceNodeBalancers(t.Context(), tt.linodeID)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+
+			if result != nil {
+				t.Errorf("result = %v, want nil", result)
+			}
+
+			if !errors.Is(err, linode.ErrLinodeIDPositive) {
+				t.Errorf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+			}
 		})
 	}
 }

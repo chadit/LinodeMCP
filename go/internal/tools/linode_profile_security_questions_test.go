@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -21,222 +23,355 @@ const (
 	profileSecurityQuestionsPayload    = "answer payload"
 )
 
-func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
+func TestLinodeProfileSecurityQuestionsAnswerToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+	if tool.Name != toolProfileSecurityQuestionsAnswer {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolProfileSecurityQuestionsAnswer)
+	}
 
-		checkEqual(t, toolProfileSecurityQuestionsAnswer, tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		checkEqual(t, profiles.CapAdmin, capability, "security question answers should be CapAdmin")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keySecurityQuestions, "schema should include security_questions")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("security questions validation before client call", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		cases := []struct {
-			name    string
-			args    map[string]any
-			message string
-		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}, message: "security_questions is required"},
-			{name: "empty", args: map[string]any{keySecurityQuestions: "", keyConfirm: true}, message: "security_questions must not be empty"},
-			{name: caseString, args: map[string]any{keySecurityQuestions: []any{"unexpected"}, keyConfirm: true}, message: "security_questions must be a string"},
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keySecurityQuestions, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
 		}
+	}
+}
 
-		for _, tt := range cases {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
+func TestLinodeProfileSecurityQuestionsAnswerToolSecurityQuestionsValidationBeforeClientCall(t *testing.T) {
+	t.Parallel()
 
-				var calls atomic.Int32
+	cases := []struct {
+		name    string
+		args    map[string]any
+		message string
+	}{
+		{name: caseMissing, args: map[string]any{keyConfirm: true}, message: "security_questions is required"},
+		{name: "empty", args: map[string]any{keySecurityQuestions: "", keyConfirm: true}, message: "security_questions must not be empty"},
+		{name: caseString, args: map[string]any{keySecurityQuestions: []any{"unexpected"}, keyConfirm: true}, message: "security_questions must be a string"},
+	}
 
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+			var calls atomic.Int32
 
-				req := createRequestWithArgs(t, tt.args)
-				result, err := handler(t.Context(), req)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
 
-				expectNoError(t, err, "handler should not return transport error")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, tt.message)
-				checkEqual(t, int32(0), calls.Load(), "validation failure must happen before client call")
-			})
-		}
-	})
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-	t.Run("confirm required before client call", func(t *testing.T) {
-		t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissing, set: false},
-			{name: caseConfirmFalse, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
-		}
-
-		for _, tt := range cases {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
-
-				args := map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload}
-				if tt.set {
-					args[keyConfirm] = tt.value
-				}
-
-				req := createRequestWithArgs(t, args)
-				result, err := handler(t.Context(), req)
-
-				expectNoError(t, err, "handler should not return transport error")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				checkEqual(t, int32(0), calls.Load(), "confirm failure must happen before client call")
-			})
-		}
-	})
-
-	t.Run("dry run previews without client call", func(t *testing.T) {
-		t.Parallel()
-
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			calls.Add(1)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyDryRun: true})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return transport error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "dry-run should not be an error")
-		checkEqual(t, int32(0), calls.Load(), "dry-run must not call the API")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-
-		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		checkEqual(t, toolProfileSecurityQuestionsAnswer, body["tool"])
-		would, isObject := body["would_execute"].(map[string]any)
-		expectTrue(t, isObject, "would_execute should be an object")
-		checkEqual(t, http.MethodPost, would["method"])
-		checkEqual(t, "/profile/security-questions", would["path"])
-		bodyValue, hasBody := would["body"].(map[string]any)
-		expectTrue(t, hasBody, "would_execute body should be an object")
-		checkEqual(t, "[redacted]", bodyValue[keySecurityQuestions])
-
-		if contains(textContent.Text, profileSecurityQuestionsPayload) {
-			t.Errorf("expected %v not to contain %v%s", textContent.Text, profileSecurityQuestionsPayload, expectationMessage([]string{"dry-run output must not expose answers"}))
-		}
-
-		expectContainsWithMode(t, false, textContent.Text, "side_effects", "dry-run should surface a side effect")
-		expectContainsWithMode(t, false, textContent.Text, "answers are saved", "side effect should describe the action")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-
-			body, err := io.ReadAll(r.Body)
-			checkNoError(t, err)
-			{
-				expectedJSON := `{"security_questions":"answer payload"}`
-				actualJSON := string(body)
-
-				var (
-					expectedBody any
-					actualBody   any
-				)
-
-				expectNoError(t, json.Unmarshal([]byte(expectedJSON), &expectedBody))
-				expectNoError(t, json.Unmarshal([]byte(actualJSON), &actualBody))
-				checkEqual(t, expectedBody, actualBody)
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
-		}))
-		defer srv.Close()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
-		result, err := handler(t.Context(), req)
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.message) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.message)
+			}
 
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "Profile security questions answered successfully", "response should contain success message")
-	})
+func TestLinodeProfileSecurityQuestionsAnswerToolConfirmRequiredBeforeClientCall(t *testing.T) {
+	t.Parallel()
 
-	t.Run("api error produces tool error", func(t *testing.T) {
-		t.Parallel()
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissing, set: false},
+		{name: caseConfirmFalse, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: "security questions rejected"}},
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
 			}))
-		}))
-		defer srv.Close()
+			defer srv.Close()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
-		result, err := handler(t.Context(), req)
+			args := map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload}
+			if tt.set {
+				args[keyConfirm] = tt.value
+			}
 
-		expectNoError(t, err, "handler should not return transport error")
-		expectNotNil(t, result, "result should not be nil")
-		checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to answer profile security questions")
-		assertErrorContains(t, result, "security questions rejected")
-	})
+			req := createRequestWithArgs(t, args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeProfileSecurityQuestionsAnswerToolDryRunPreviewsWithoutClientCall(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyDryRun: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	if calls.Load() != int32(0) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], toolProfileSecurityQuestionsAnswer) {
+		t.Errorf("got %v, want %v", body["tool"], toolProfileSecurityQuestionsAnswer)
+	}
+
+	would, isObject := body["would_execute"].(map[string]any)
+	if !isObject {
+		t.Error("isObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], http.MethodPost) {
+		t.Errorf("got %v, want %v", would["method"], http.MethodPost)
+	}
+
+	if !reflect.DeepEqual(would["path"], tcProfileSecurityQuestions) {
+		t.Errorf("got %v, want %v", would["path"], tcProfileSecurityQuestions)
+	}
+
+	bodyValue, hasBody := would["body"].(map[string]any)
+	if !hasBody {
+		t.Error("hasBody = false, want true")
+	}
+
+	if !reflect.DeepEqual(bodyValue[keySecurityQuestions], "[redacted]") {
+		t.Errorf("bodyValue[keySecurityQuestions] = %v, want %v", bodyValue[keySecurityQuestions], "[redacted]")
+	}
+
+	if strings.Contains(textContent.Text, profileSecurityQuestionsPayload) {
+		t.Errorf("dry-run output must not expose answers: %q unexpectedly contains %q", textContent.Text, profileSecurityQuestionsPayload)
+	}
+
+	if !strings.Contains(textContent.Text, "side_effects") {
+		t.Errorf("textContent.Text does not contain %v", "side_effects")
+	}
+
+	if !strings.Contains(textContent.Text, "answers are saved") {
+		t.Errorf("textContent.Text does not contain %v", "answers are saved")
+	}
+}
+
+func TestLinodeProfileSecurityQuestionsAnswerToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileSecurityQuestions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSecurityQuestions)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		{
+			expectedJSON := `{"security_questions":"answer payload"}`
+			actualJSON := string(body)
+
+			var (
+				expectedBody any
+				actualBody   any
+			)
+
+			if err := json.Unmarshal([]byte(expectedJSON), &expectedBody); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if err := json.Unmarshal([]byte(actualJSON), &actualBody); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if !reflect.DeepEqual(actualBody, expectedBody) {
+				t.Errorf("actualBody = %v, want %v", actualBody, expectedBody)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Profile security questions answered successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Profile security questions answered successfully")
+	}
+}
+
+func TestLinodeProfileSecurityQuestionsAnswerToolApiErrorProducesToolError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileSecurityQuestions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSecurityQuestions)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "security questions rejected"}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to answer profile security questions") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to answer profile security questions")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "security questions rejected") {
+		t.Errorf("error text %q does not contain %q", text.Text, "security questions rejected")
+	}
 }

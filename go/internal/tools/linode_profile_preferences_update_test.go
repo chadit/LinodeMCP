@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -15,217 +17,341 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
+func TestLinodeProfilePreferencesUpdateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
+	if tool.Name != "linode_profile_preferences_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_preferences_update")
+	}
 
-		checkEqual(t, "linode_profile_preferences_update", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapWrite, capability, "tool should be a write tool")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyPreferences, "schema should include preferences body")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyConfirm, "write tool must require confirm")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyDryRun, "write tool should expose dry_run")
-	})
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-			body, readErr := io.ReadAll(r.Body)
-			if !checkNoError(t, readErr, "request body should be readable") {
-				return
+	for _, key := range []string{keyPreferences, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+}
+
+func TestLinodeProfilePreferencesUpdateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcProfilePreferences {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("request body should be readable: %v", readErr)
+
+			return
+		}
+
+		{
+			expectedJSON := `{"theme":"dark"}`
+			actualJSON := string(body)
+
+			var (
+				expectedBody any
+				actualBody   any
+			)
+
+			if err := json.Unmarshal([]byte(expectedJSON), &expectedBody); err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 
-			{
-				expectedJSON := `{"theme":"dark"}`
-				actualJSON := string(body)
-
-				var (
-					expectedBody any
-					actualBody   any
-				)
-
-				expectNoError(t, json.Unmarshal([]byte(expectedJSON), &expectedBody))
-				expectNoError(t, json.Unmarshal([]byte(actualJSON), &actualBody))
-				checkEqual(t, expectedBody, actualBody, "request body should match tool input")
+			if err := json.Unmarshal([]byte(actualJSON), &actualBody); err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}, keyConfirm: true})
-
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "dark", "response should include returned preferences")
-	})
-
-	t.Run("dry run previews without put", func(t *testing.T) {
-		t.Parallel()
-
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			calls.Add(1)
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}, keyDryRun: true})
-
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "dry run should not be an error result")
-
-		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		would, wouldOK := body["would_execute"].(map[string]any)
-		expectTrue(t, wouldOK, "dry run response should include would_execute")
-		checkEqual(t, "PUT", would["method"])
-		checkEqual(t, "/profile/preferences", would["path"])
-		previewBody, previewBodyOK := would["body"].(map[string]any)
-		expectTrue(t, previewBodyOK, "dry run response should include the request body")
-		checkEqual(t, profilePreferenceValueDark, previewBody[profilePreferenceKeyTheme], "dry run body should include preference fields")
-		checkEqual(t, int32(0), calls.Load(), "dry run should not call the PUT endpoint")
-
-		sideEffects, _ := body["side_effects"].([]any)
-		expectLen(t, sideEffects, 1, "preferences update surfaces a side effect")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-			checkEqual(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}, keyConfirm: true})
-
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should return API failures as tool errors")
-		expectNotNil(t, result, "result should not be nil")
-		checkTrueWithMode(t, false, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to update linode_profile_preferences_update")
-		assertErrorContains(t, result, errForbidden)
-	})
-
-	t.Run("confirm required before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name    string
-			confirm any
-		}{
-			{name: caseMissing},
-			{name: caseFalse, confirm: false},
-			{name: caseString, confirm: boolStringTrue},
-			{name: caseNumericConfirm, confirm: 1},
+			if !reflect.DeepEqual(actualBody, expectedBody) {
+				t.Errorf("actualBody = %v, want %v", actualBody, expectedBody)
+			}
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+		w.Header().Set("Content-Type", "application/json")
 
-				var calls atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
-
-				args := map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}}
-				if testCase.name != caseMissing {
-					args[keyConfirm] = testCase.confirm
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should return validation as a tool error")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "missing or non-true confirm should be an error result")
-				assertErrorContains(t, result, "Set confirm=true to proceed")
-				checkEqual(t, int32(0), calls.Load(), "confirm rejection should not call the client")
-			})
+		if err := json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-	})
+	}))
+	defer srv.Close()
 
-	t.Run("preferences body required before client", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}, keyConfirm: true})
 
-		cases := []struct {
-			name        string
-			preferences any
-		}{
-			{name: caseMissing},
-			{name: "empty object", preferences: map[string]any{}},
-			{name: caseString, preferences: "theme=dark"},
-			{name: caseNumericConfirm, preferences: 1},
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "dark") {
+		t.Errorf("textContent.Text does not contain %v", "dark")
+	}
+}
+
+func TestLinodeProfilePreferencesUpdateToolDryRunPreviewsWithoutPut(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}, keyDryRun: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	would, wouldOK := body["would_execute"].(map[string]any)
+	if !wouldOK {
+		t.Error("wouldOK = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "PUT") {
+		t.Errorf("got %v, want %v", would["method"], "PUT")
+	}
+
+	if !reflect.DeepEqual(would["path"], tcProfilePreferences) {
+		t.Errorf("got %v, want %v", would["path"], tcProfilePreferences)
+	}
+
+	previewBody, previewBodyOK := would["body"].(map[string]any)
+	if !previewBodyOK {
+		t.Error("previewBodyOK = false, want true")
+	}
+
+	if !reflect.DeepEqual(previewBody[profilePreferenceKeyTheme], profilePreferenceValueDark) {
+		t.Errorf("previewBody[profilePreferenceKeyTheme] = %v, want %v", previewBody[profilePreferenceKeyTheme], profilePreferenceValueDark)
+	}
+
+	if calls.Load() != int32(0) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+	}
+
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Errorf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+}
+
+func TestLinodeProfilePreferencesUpdateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					calls.Add(1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
-
-				args := map[string]any{keyConfirm: true}
-				if testCase.name != caseMissing {
-					args[keyPreferences] = testCase.preferences
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should return validation as a tool error")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "invalid preferences should be an error result")
-				assertErrorContains(t, result, "preferences must be a non-empty object")
-				checkEqual(t, int32(0), calls.Load(), "validation rejection should not call the client")
-			})
+		if r.URL.Path != tcProfilePreferences {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
 		}
-	})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}, keyConfirm: true})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_profile_preferences_update") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_profile_preferences_update")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeProfilePreferencesUpdateToolConfirmRequiredBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		confirm any
+	}{
+		{name: caseMissing},
+		{name: caseFalse, confirm: false},
+		{name: caseString, confirm: boolStringTrue},
+		{name: caseNumericConfirm, confirm: 1},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
+
+			args := map[string]any{keyPreferences: map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}}
+			if testCase.name != caseMissing {
+				args[keyConfirm] = testCase.confirm
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Set confirm=true to proceed") {
+				t.Errorf("error text %q does not contain %q", text.Text, "Set confirm=true to proceed")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeProfilePreferencesUpdateToolPreferencesBodyRequiredBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		preferences any
+	}{
+		{name: caseMissing},
+		{name: "empty object", preferences: map[string]any{}},
+		{name: caseString, preferences: "theme=dark"},
+		{name: caseNumericConfirm, preferences: 1},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeProfilePreferencesUpdateTool(cfg)
+
+			args := map[string]any{keyConfirm: true}
+			if testCase.name != caseMissing {
+				args[keyPreferences] = testCase.preferences
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "preferences must be a non-empty object") {
+				t.Errorf("error text %q does not contain %q", text.Text, "preferences must be a non-empty object")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
 }

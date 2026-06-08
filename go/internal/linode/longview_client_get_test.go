@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -14,12 +15,25 @@ func TestClientGetLongviewClientSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, "/longview/clients/789", r.URL.Path, "request path should include Longview client ID")
-		longviewCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
-		longviewCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcLongviewClients789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLongviewClients789)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyID:          789,
 			keyLabel:       longviewClientLabel,
 			"api_key":      "secret-api-key",
@@ -31,62 +45,112 @@ func TestClientGetLongviewClientSuccess(t *testing.T) {
 			},
 			keyCreated: longviewClientCreated,
 			keyUpdated: longviewClientUpdated,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetLongviewClient(t.Context(), "789")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	longviewRequireNoError(t, err, "GetLongviewClient should succeed on 200 response")
-	longviewRequireNotNil(t, result, "result should not be nil")
-	longviewCheckEqual(t, 789, result.ID)
-	longviewCheckEqual(t, longviewClientLabel, result.Label)
-	longviewCheckTrue(t, result.Apps.Apache)
-	longviewCheckTrue(t, result.Apps.MySQL)
-	longviewCheckFalse(t, result.Apps.Nginx)
-	longviewCheckEqual(t, longviewClientCreated, result.Created)
-	longviewCheckEqual(t, longviewClientUpdated, result.Updated)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 789 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 789)
+	}
+
+	if result.Label != longviewClientLabel {
+		t.Errorf("result.Label = %v, want %v", result.Label, longviewClientLabel)
+	}
+
+	if !result.Apps.Apache {
+		t.Error("result.Apps.Apache = false, want true")
+	}
+
+	if !result.Apps.MySQL {
+		t.Error("result.Apps.MySQL = false, want true")
+	}
+
+	if result.Apps.Nginx {
+		t.Error("result.Apps.Nginx = true, want false")
+	}
+
+	if result.Created != longviewClientCreated {
+		t.Errorf("result.Created = %v, want %v", result.Created, longviewClientCreated)
+	}
+
+	if result.Updated != longviewClientUpdated {
+		t.Errorf("result.Updated = %v, want %v", result.Updated, longviewClientUpdated)
+	}
 }
 
 func TestClientGetLongviewClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, "/longview/clients/789", r.URL.Path, "request path should include Longview client ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcLongviewClients789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLongviewClients789)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetLongviewClient(t.Context(), "789")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	longviewRequireError(t, err, "GetLongviewClient should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 
-	apiErr := longviewRequireAPIError(t, err, "error should wrap APIError")
-	longviewCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetLongviewClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, "/longview/clients/123%2F..", r.URL.EscapedPath(), "client ID should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(linode.LongviewClient{ID: 123, Label: "client123"}))
+		if r.URL.EscapedPath() != "/longview/clients/123%2F.." {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/longview/clients/123%2F..")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.LongviewClient{ID: 123, Label: "client123"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetLongviewClient(t.Context(), "123/..")
-
-	longviewRequireNoError(t, err, "client should escape path separators before sending request")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetLongviewClientRetriesTransientError(t *testing.T) {
@@ -95,27 +159,48 @@ func TestClientGetLongviewClientRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, "/longview/clients/789", r.URL.Path, "request path should include Longview client ID")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcLongviewClients789 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLongviewClients789)
+		}
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(linode.LongviewClient{ID: 789, Label: longviewClientLabel}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.LongviewClient{ID: 789, Label: longviewClientLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
 	result, err := client.GetLongviewClient(t.Context(), "789")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	longviewRequireNoError(t, err, "GetLongviewClient should retry transient failures")
-	longviewRequireNotNil(t, result, "result should not be nil")
-	longviewCheckEqual(t, int32(2), calls.Load(), "transient error should be retried once")
-	longviewCheckEqual(t, 789, result.ID)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
+
+	if result.ID != 789 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 789)
+	}
 }

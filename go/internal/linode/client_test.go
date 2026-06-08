@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -80,31 +79,78 @@ func TestClientCreateProfileTokenSuccess(t *testing.T) {
 	profileToken := linode.ProfileToken{keyCreated: "2024-05-01T00:01:01", keyTFAConfirmExpiry: profileTokenExpiryFixture, keyID: float64(321), keyLabel: profileTokenLabelFixture, profileTokenScopesKey: profileTokenScopesFixture, keyToken: profileTokenSecretFixture}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileTokens {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var got linode.CreateProfileTokenRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
-		checkEqual(t, profileTokenExpiryFixture, got.Expiry)
-		checkEqual(t, profileTokenLabelFixture, got.Label)
-		checkEqual(t, profileTokenScopesFixture, got.Scopes)
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(profileToken))
+		if got.Expiry != profileTokenExpiryFixture {
+			t.Errorf("got.Expiry = %v, want %v", got.Expiry, profileTokenExpiryFixture)
+		}
+
+		if got.Label != profileTokenLabelFixture {
+			t.Errorf("got.Label = %v, want %v", got.Label, profileTokenLabelFixture)
+		}
+
+		if got.Scopes != profileTokenScopesFixture {
+			t.Errorf("got.Scopes = %v, want %v", got.Scopes, profileTokenScopesFixture)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(profileToken); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Expiry: profileTokenExpiryFixture, Label: profileTokenLabelFixture, Scopes: profileTokenScopesFixture})
 
-	mustNoError(t, err, "CreateProfileToken should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkInEpsilon(t, float64(321), (*result)[keyID], 0.001)
-	checkEqual(t, profileTokenLabelFixture, (*result)[keyLabel])
-	checkEqual(t, profileTokenScopesFixture, (*result)[profileTokenScopesKey])
-	checkEqual(t, profileTokenSecretFixture, (*result)[keyToken])
+	result, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Expiry: profileTokenExpiryFixture, Label: profileTokenLabelFixture, Scopes: profileTokenScopesFixture})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	gotID, ok := (*result)[keyID].(float64)
+	if !ok {
+		t.Fatalf("(*result)[keyID] = %v, want a float64", (*result)[keyID])
+	}
+
+	if gotID != 321 {
+		t.Errorf("(*result)[keyID] = %v, want %v", gotID, float64(321))
+	}
+
+	if !reflect.DeepEqual((*result)[keyLabel], profileTokenLabelFixture) {
+		t.Errorf("(*result)[keyLabel] = %v, want %v", (*result)[keyLabel], profileTokenLabelFixture)
+	}
+
+	if !reflect.DeepEqual((*result)[profileTokenScopesKey], profileTokenScopesFixture) {
+		t.Errorf("(*result)[profileTokenScopesKey] = %v, want %v", (*result)[profileTokenScopesKey], profileTokenScopesFixture)
+	}
+
+	if !reflect.DeepEqual((*result)[keyToken], profileTokenSecretFixture) {
+		t.Errorf("(*result)[keyToken] = %v, want %v", (*result)[keyToken], profileTokenSecretFixture)
+	}
 }
 
 // TestClientCreateProfileTokenAPIError verifies API errors propagate.
@@ -112,25 +158,47 @@ func TestClientCreateProfileTokenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileTokens {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateProfileToken should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientCreateProfileTokenDoesNotRetryTransientError verifies token
@@ -143,16 +211,24 @@ func TestClientCreateProfileTokenDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
-	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
 
-	mustError(t, err, "CreateProfileToken should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "personal access token creation must not be retried")
+	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -167,19 +243,36 @@ func TestClientGetProfileSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile", r.URL.Path, "request path should be /profile")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(profile), "encoding profile response should not fail")
+		if r.URL.Path != "/profile" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile")
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(profile); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetProfile(t.Context())
 
-	mustNoError(t, err, "GetProfile should succeed on 200 response")
-	checkEqual(t, "testuser", result.Username, "username should match the API response")
-	checkEqual(t, "test@example.com", result.Email, "email should match the API response")
+	result, err := client.GetProfile(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Username != tcTestuser {
+		t.Errorf("result.Username = %v, want %v", result.Username, tcTestuser)
+	}
+
+	if result.Email != "test@example.com" {
+		t.Errorf("result.Email = %v, want %v", result.Email, "test@example.com")
+	}
 }
 
 // TestClientGetProfileWithScopes verifies that a personal access token
@@ -196,17 +289,24 @@ func TestClientGetProfileWithScopes(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(profile))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(profile); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "tok", nil, linode.WithMaxRetries(0))
-	result, err := client.GetProfile(t.Context())
 
-	mustNoError(t, err)
-	checkEqual(t, "linodes:read_write domains:read_only", result.Scopes,
-		"PAT scopes from /profile must round-trip into Profile.Scopes")
+	result, err := client.GetProfile(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Scopes != "linodes:read_write domains:read_only" {
+		t.Errorf("result.Scopes = %v, want %v", result.Scopes, "linodes:read_write domains:read_only")
+	}
 }
 
 // TestClientGetProfileGrantsSuccess covers the OAuth path: /profile/grants
@@ -231,28 +331,60 @@ func TestClientGetProfileGrantsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/grants", r.URL.Path,
-			"request path should be /profile/grants")
-		checkEqual(t, "Bearer oauth-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if r.URL.Path != "/profile/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/grants")
+		}
+
+		if r.Header.Get("Authorization") != "Bearer oauth-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer oauth-token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "oauth-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetProfileGrants(t.Context())
 
-	mustNoError(t, err, "GetProfileGrants should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, linode.GrantPermission("read_write"), got.Global.AccountAccess,
-		"global account_access must round-trip")
-	checkTrue(t, got.Global.AddLinodes,
-		"global add_linodes must round-trip")
-	mustLen(t, got.Linode, 1)
-	checkEqual(t, "web-1", got.Linode[0].Label)
-	checkEqual(t, linode.GrantPermission("read_write"), got.Linode[0].Permissions)
-	mustLen(t, got.Domain, 1)
-	checkEqual(t, linode.GrantPermission("read_only"), got.Domain[0].Permissions)
+	got, err := client.GetProfileGrants(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Global.AccountAccess != linode.GrantPermission("read_write") {
+		t.Errorf("got.Global.AccountAccess = %v, want %v", got.Global.AccountAccess, linode.GrantPermission("read_write"))
+	}
+
+	if !got.Global.AddLinodes {
+		t.Error("got.Global.AddLinodes = false, want true")
+	}
+
+	if len(got.Linode) != 1 {
+		t.Fatalf("len(got.Linode) = %d, want %d", len(got.Linode), 1)
+	}
+
+	if got.Linode[0].Label != nodeLabelWeb1 {
+		t.Errorf("got.Linode[0].Label = %v, want %v", got.Linode[0].Label, nodeLabelWeb1)
+	}
+
+	if got.Linode[0].Permissions != linode.GrantPermission("read_write") {
+		t.Errorf("got.Linode[0].Permissions = %v, want %v", got.Linode[0].Permissions, linode.GrantPermission("read_write"))
+	}
+
+	if len(got.Domain) != 1 {
+		t.Fatalf("len(got.Domain) = %d, want %d", len(got.Domain), 1)
+	}
+
+	if got.Domain[0].Permissions != linode.GrantPermission("read_only") {
+		t.Errorf("got.Domain[0].Permissions = %v, want %v", got.Domain[0].Permissions, linode.GrantPermission("read_only"))
+	}
 }
 
 func TestClientGetProfilePreferencesSuccess(t *testing.T) {
@@ -264,42 +396,78 @@ func TestClientGetProfilePreferencesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, int64(0), r.ContentLength, "GET request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(preferences), "encoding preferences response should not fail")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfilePreferences {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.ContentLength != int64(0) {
+			t.Errorf("r.ContentLength = %v, want %v", r.ContentLength, int64(0))
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(preferences); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetProfilePreferences(t.Context())
 
-	mustNoError(t, err, "GetProfilePreferences should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, preferences, *got)
+	got, err := client.GetProfilePreferences(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, preferences) {
+		t.Errorf("*got = %v, want %v", *got, preferences)
+	}
 }
 
 func TestClientGetProfilePreferencesUnauthorized(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
+		if r.URL.Path != tcProfilePreferences {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
+		}
+
 		w.WriteHeader(http.StatusUnauthorized)
+
 		_, err := w.Write([]byte(`{}`))
-		checkNoError(t, err, "writing error response should not fail")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfilePreferences(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfilePreferences should fail on 401 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "GetProfilePreferences must return APIError on 401")
-	checkEqual(t, http.StatusUnauthorized, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusUnauthorized)
+	}
 }
 
 // TestClientGetProfileGrantsPATEmpty verifies that a PAT (which doesn't use
@@ -311,18 +479,32 @@ func TestClientGetProfileGrantsPATEmpty(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Grants{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "pat-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetProfileGrants(t.Context())
 
-	mustNoError(t, err, "empty grants response must parse cleanly")
-	mustNotNil(t, got)
-	checkEmpty(t, got.Linode, "no Linode grants expected on PAT path")
-	checkEmpty(t, got.Global.AccountAccess, "no global permission expected")
+	got, err := client.GetProfileGrants(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if len(got.Linode) != 0 {
+		t.Errorf("got.Linode = %v, want empty", got.Linode)
+	}
+
+	if got.Global.AccountAccess != "" {
+		t.Errorf("got.Global.AccountAccess = %v, want empty", got.Global.AccountAccess)
+	}
 }
 
 // TestClientGetProfileGrantsUnauthorized confirms 401 propagates as an
@@ -333,21 +515,30 @@ func TestClientGetProfileGrantsUnauthorized(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"errors": []map[string]string{{"reason": "Invalid Token"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfileGrants(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr,
-		"GetProfileGrants must return APIError on 401")
-	checkEqual(t, http.StatusUnauthorized, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusUnauthorized)
+	}
 }
 
 // TestClientGetProfileUnauthorized verifies that GetProfile returns an
@@ -357,21 +548,30 @@ func TestClientGetProfileUnauthorized(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"errors": []map[string]string{{"reason": "Invalid Token"}},
-		}), "encoding error response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfile should fail on 401 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, 401, apiErr.StatusCode, "status code should be 401 unauthorized")
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, 401)
+	}
 }
 
 func TestClientGetProfileAppSuccess(t *testing.T) {
@@ -380,63 +580,110 @@ func TestClientGetProfileAppSuccess(t *testing.T) {
 	want := linode.ProfileApp{ID: 12345, Label: "Example OAuth App", Scopes: profileAppScopesReadOnly, Website: "https://example.com"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileApps12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.GetProfileApp(t.Context(), want.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetProfileApp should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientGetProfileAppBuildsNumericPath(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/apps/12345", r.URL.EscapedPath(), "request path should include the numeric app id segment")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345}))
+		if r.URL.EscapedPath() != tcProfileApps12345 {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), tcProfileApps12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetProfileApp(t.Context(), 12345)
-
-	mustNoError(t, err, "GetProfileApp should build the numeric app path")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetProfileAppAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileApps12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetProfileApp(t.Context(), 12345)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfileApp should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientGetProfileDeviceSuccess(t *testing.T) {
@@ -445,65 +692,106 @@ func TestClientGetProfileDeviceSuccess(t *testing.T) {
 	want := linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent, keyLastRemoteAddr: profileDeviceRemoteAddr, keyLastAuthenticated: accountUserPasswordCreated}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "method should be GET")
-		checkEqual(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
-		checkEmpty(t, r.URL.RawQuery, "query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileDevices12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices12345)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.GetProfileDevice(t.Context(), 12345)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetProfileDevice should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientGetProfileDeviceBuildsNumericPath(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/devices/12345", r.URL.Path, "path should include escaped device id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345)}))
+		if r.URL.Path != tcProfileDevices12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345)}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetProfileDevice(t.Context(), 12345)
-
-	mustNoError(t, err, "GetProfileDevice should build the numeric device path")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetProfileDeviceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "method should be GET")
-		checkEqual(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileDevices12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetProfileDevice(t.Context(), 12345)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfileDevice should fail on 403 response")
-
-	var apiErr *linode.APIError
-	if !errorAsValue(err, &apiErr) {
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
 		t.Fatalf("error should wrap APIError: %v", err)
 	}
 
-	checkContains(t, apiErr.Message, errForbidden)
+	if !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("apiErr.Message does not contain %v", errForbidden)
+	}
 }
 
 func TestClientGetProfileDeviceRetriesTransientError(t *testing.T) {
@@ -513,26 +801,47 @@ func TestClientGetProfileDeviceRetriesTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if requestCount.Add(1) == 1 {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", tcApplicationJSON)
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	got, err := client.GetProfileDevice(t.Context(), 12345)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetProfileDevice should succeed after retry")
-	mustNotNil(t, got, "result should not be nil")
-	checkInEpsilon(t, float64(12345), (*got)[keyID], 0)
-	checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	gotID, ok := (*got)[keyID].(float64)
+	if !ok {
+		t.Fatalf("(*got)[keyID] = %v, want a float64", (*got)[keyID])
+	}
+
+	if gotID != 12345 {
+		t.Errorf("(*got)[keyID] = %v, want %v", gotID, float64(12345))
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
@@ -543,29 +852,51 @@ func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", tcApplicationJSON)
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345, Label: "Example OAuth App"}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileApps12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345, Label: "Example OAuth App"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	got, err := client.GetProfileApp(t.Context(), 12345)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetProfileApp should succeed after retry")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, 12345, got.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != 12345 {
+		t.Errorf("got.ID = %v, want %v", got.ID, 12345)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientEnableProfileTFASuccess(t *testing.T) {
@@ -577,29 +908,55 @@ func TestClientEnableProfileTFASuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/profile/tfa-enable" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/tfa-enable")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		body, readErr := io.ReadAll(r.Body)
-		if !checkNoError(t, readErr, "request body should be readable") {
+		if readErr != nil {
+			t.Errorf("request body should be readable: %v", readErr)
+
 			return
 		}
 
-		checkEmpty(t, string(body), "request body should be empty")
+		if len(body) != 0 {
+			t.Errorf("string(body) = %v, want empty", string(body))
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(response))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.EnableProfileTFA(t.Context())
 
-	mustNoError(t, err, "EnableProfileTFA should succeed on 200 response")
-	checkEqual(t, "JBSWY3DPEHPK3PXP", result["secret"], "secret should match the API response")
-	checkEqual(t, "2026-01-01T00:00:00", result["expiry"], "expiry should match the API response")
+	result, err := client.EnableProfileTFA(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(result["secret"], "JBSWY3DPEHPK3PXP") {
+		t.Errorf("got %v, want %v", result["secret"], "JBSWY3DPEHPK3PXP")
+	}
+
+	if !reflect.DeepEqual(result["expiry"], "2026-01-01T00:00:00") {
+		t.Errorf("got %v, want %v", result["expiry"], "2026-01-01T00:00:00")
+	}
 }
 
 func TestClientEnableProfileTFANoRetryOnTransientFailure(t *testing.T) {
@@ -609,40 +966,79 @@ func TestClientEnableProfileTFANoRetryOnTransientFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/profile/tfa-enable" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/tfa-enable")
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
-	result, err := client.EnableProfileTFA(t.Context())
 
-	mustError(t, err, "EnableProfileTFA should surface the transient API error")
-	checkNil(t, result, "result should be nil on failure")
-	checkEqual(t, int32(1), calls.Load(), "non-idempotent TFA secret generation must not be retried")
+	result, err := client.EnableProfileTFA(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 func TestClientSendProfilePhoneNumberVerificationCodeSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfilePhoneNumber {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePhoneNumber)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]string
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should be JSON: %v", err)
+
 			return
 		}
 
-		checkEqual(t, profilePhoneISOCode, body["iso_code"])
-		checkEqual(t, profilePhoneNumber, body["phone_number"])
+		if body["iso_code"] != profilePhoneISOCode {
+			t.Errorf("got %v, want %v", body["iso_code"], profilePhoneISOCode)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if body["phone_number"] != profilePhoneNumber {
+			t.Errorf("got %v, want %v", body["phone_number"], profilePhoneNumber)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -652,8 +1048,9 @@ func TestClientSendProfilePhoneNumberVerificationCodeSuccess(t *testing.T) {
 		ISOCode:     profilePhoneISOCode,
 		PhoneNumber: profilePhoneNumber,
 	})
-
-	mustNoError(t, err, "SendProfilePhoneNumberVerificationCode should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *testing.T) {
@@ -663,11 +1060,21 @@ func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *tes
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfilePhoneNumber {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePhoneNumber)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -677,29 +1084,49 @@ func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *tes
 		ISOCode:     profilePhoneISOCode,
 		PhoneNumber: profilePhoneNumber,
 	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "SendProfilePhoneNumberVerificationCode should fail on server error")
-	checkEqual(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteProfilePhoneNumberSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcProfilePhoneNumber {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePhoneNumber)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteProfilePhoneNumber(t.Context())
-
-	mustNoError(t, err, "DeleteProfilePhoneNumber should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
@@ -709,48 +1136,81 @@ func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcProfilePhoneNumber {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePhoneNumber)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteProfilePhoneNumber(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteProfilePhoneNumber should fail on server error")
-	checkEqual(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientVerifyProfilePhoneNumberSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/profile/phone-number/verify" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/phone-number/verify")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]string
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should be JSON: %v", err)
+
 			return
 		}
 
-		checkEqual(t, profilePhoneOTPCode, body["otp_code"])
+		if body["otp_code"] != profilePhoneOTPCode {
+			t.Errorf("got %v, want %v", body["otp_code"], profilePhoneOTPCode)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.VerifyProfilePhoneNumber(t.Context(), &linode.ProfilePhoneNumberVerifyRequest{OTPCode: profilePhoneOTPCode})
-
-	mustNoError(t, err, "VerifyProfilePhoneNumber should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientVerifyProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
@@ -760,40 +1220,70 @@ func TestClientVerifyProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/profile/phone-number/verify" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/phone-number/verify")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.VerifyProfilePhoneNumber(t.Context(), &linode.ProfilePhoneNumberVerifyRequest{OTPCode: profilePhoneOTPCode})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "VerifyProfilePhoneNumber should fail on server error")
-	checkEqual(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteProfileAppSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcProfileApps12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteProfileApp(t.Context(), 12345)
-
-	mustNoError(t, err, "DeleteProfileApp should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteProfileAppAPIErrorDoesNotRetry(t *testing.T) {
@@ -803,40 +1293,70 @@ func TestClientDeleteProfileAppAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcProfileApps12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteProfileApp(t.Context(), 12345)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteProfileApp should fail on server error")
-	checkEqual(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteProfileDeviceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/profile/devices/67890", r.URL.Path, "request path should include device id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/profile/devices/67890" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/devices/67890")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteProfileDevice(t.Context(), 67890)
-
-	mustNoError(t, err, "DeleteProfileDevice should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteProfileDeviceAPIErrorDoesNotRetry(t *testing.T) {
@@ -846,20 +1366,34 @@ func TestClientDeleteProfileDeviceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/profile/devices/67890", r.URL.Path, "request path should include device id")
-		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/profile/devices/67890" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/devices/67890")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteProfileDevice(t.Context(), 67890)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteProfileDevice should fail on server error")
-	checkEqual(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientListAccountMaintenanceSuccess(t *testing.T) {
@@ -879,23 +1413,52 @@ func TestClientListAccountMaintenanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(maintenance))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != accountMaintenancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountMaintenancePath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedIssueAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedIssueAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(maintenance); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListAccountMaintenance(t.Context(), 2, 25)
 
-	mustNoError(t, err, "ListAccountMaintenance should succeed on 200 response")
-	mustNotNil(t, result)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, accountMaintenanceLabel, result.Data[0].Entity.Label)
-	checkEqual(t, "reboot", result.Data[0].Type)
+	result, err := client.ListAccountMaintenance(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Entity.Label != accountMaintenanceLabel {
+		t.Errorf("result.Data[0].Entity.Label = %v, want %v", result.Data[0].Entity.Label, accountMaintenanceLabel)
+	}
+
+	if result.Data[0].Type != "reboot" {
+		t.Errorf("result.Data[0].Type = %v, want %v", result.Data[0].Type, "reboot")
+	}
 }
 
 func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
@@ -904,52 +1467,84 @@ func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		if r.URL.Path != accountMaintenancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountMaintenancePath)
+		}
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountMaintenance]{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountMaintenance]{
 			Data:    []linode.AccountMaintenance{{Status: statusPending}},
 			Page:    1,
 			Pages:   1,
 			Results: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
-	result, err := client.ListAccountMaintenance(t.Context(), 0, 0)
 
-	mustNoError(t, err, "read-only maintenance list should retry transient failures")
-	mustNotNil(t, result)
-	checkEqual(t, int32(2), calls.Load(), "client should retry once")
+	result, err := client.ListAccountMaintenance(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }
 
 func TestClientListAccountMaintenanceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != accountMaintenancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountMaintenancePath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListAccountMaintenance(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountMaintenance should fail on API errors")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListMaintenancePoliciesSuccess(t *testing.T) {
@@ -970,25 +1565,60 @@ func TestClientListMaintenancePoliciesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, http.NoBody, r.Body, "request body should be empty")
-		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(policies))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != maintenancePoliciesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, maintenancePoliciesPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		if r.Header.Get("Authorization") != managedIssueAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedIssueAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(policies); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListMaintenancePolicies(t.Context(), 2, 25)
 
-	mustNoError(t, err, "ListMaintenancePolicies should succeed on 200 response")
-	mustNotNil(t, result)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, maintenancePolicySlug, result.Data[0].Slug)
-	checkEqual(t, maintenancePolicyLabel, result.Data[0].Label)
-	checkTrue(t, result.Data[0].IsDefault)
+	result, err := client.ListMaintenancePolicies(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Slug != maintenancePolicySlug {
+		t.Errorf("result.Data[0].Slug = %v, want %v", result.Data[0].Slug, maintenancePolicySlug)
+	}
+
+	if result.Data[0].Label != maintenancePolicyLabel {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, maintenancePolicyLabel)
+	}
+
+	if !result.Data[0].IsDefault {
+		t.Error("result.Data[0].IsDefault = false, want true")
+	}
 }
 
 func TestClientListMaintenancePoliciesRetriesTransientError(t *testing.T) {
@@ -997,52 +1627,84 @@ func TestClientListMaintenancePoliciesRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		if r.URL.Path != maintenancePoliciesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, maintenancePoliciesPath)
+		}
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.MaintenancePolicy]{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.MaintenancePolicy]{
 			Data:    []linode.MaintenancePolicy{{Slug: maintenancePolicySlug}},
 			Page:    1,
 			Pages:   1,
 			Results: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
-	result, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
 
-	mustNoError(t, err, "read-only maintenance policies list should retry transient failures")
-	mustNotNil(t, result)
-	checkEqual(t, int32(2), calls.Load(), "client should retry once")
+	result, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }
 
 func TestClientListMaintenancePoliciesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != maintenancePoliciesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, maintenancePoliciesPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListMaintenancePolicies should fail on API errors")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 // TestClientListInstancesSuccess verifies that ListInstances returns the
@@ -1056,23 +1718,37 @@ func TestClientListInstancesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances", r.URL.Path, "request path should be /linode/instances")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.URL.Path != "/linode/instances" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    instances,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 2,
-		}), "encoding instances response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListInstances(t.Context())
 
-	mustNoError(t, err, "ListInstances should succeed on 200 response")
-	checkLen(t, result, 2, "should return both instances")
-	checkEqual(t, "web-1", result[0].Label, "first instance label should match")
+	result, err := client.ListInstances(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 2 {
+		t.Errorf("len(result) = %d, want %d", len(result), 2)
+	}
+
+	if result[0].Label != nodeLabelWeb1 {
+		t.Errorf("result[0].Label = %v, want %v", result[0].Label, nodeLabelWeb1)
+	}
 }
 
 // TestClientGetInstanceSuccess verifies that GetInstance returns the correct
@@ -1083,18 +1759,32 @@ func TestClientGetInstanceSuccess(t *testing.T) {
 	instance := linode.Instance{ID: 42, Label: "my-instance", Status: "running"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/linode/instances/42", r.URL.Path, "request path should include the instance ID")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(instance), "encoding instance response should not fail")
+		if r.URL.Path != "/linode/instances/42" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/42")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(instance); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetInstance(t.Context(), 42)
 
-	mustNoError(t, err, "GetInstance should succeed on 200 response")
-	checkEqual(t, 42, result.ID, "instance ID should match the request")
-	checkEqual(t, "my-instance", result.Label, "instance label should match the API response")
+	result, err := client.GetInstance(t.Context(), 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.ID != 42 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 42)
+	}
+
+	if result.Label != "my-instance" {
+		t.Errorf("result.Label = %v, want %v", result.Label, "my-instance")
+	}
 }
 
 // TestClientGetInstanceServerError verifies that GetInstance returns an
@@ -1109,14 +1799,20 @@ func TestClientGetInstanceServerError(t *testing.T) {
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetInstance(t.Context(), 1)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetInstance should fail on 500 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, 500, apiErr.StatusCode, "status code should be 500 internal server error")
+	if apiErr.StatusCode != http.StatusInternalServerError {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, 500)
+	}
 }
 
 // TestClientListProfileSecurityQuestionsSuccess verifies ListProfileSecurityQuestions sends a GET request to /profile/security-questions.
@@ -1128,27 +1824,58 @@ func TestClientListProfileSecurityQuestionsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(questions), "encoding profile security questions response should not fail")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileSecurityQuestions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSecurityQuestions)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(questions); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListProfileSecurityQuestions(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListProfileSecurityQuestions should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	items, ok := (*result)["security_questions"].([]any)
-	mustTrue(t, ok, "security_questions should decode as a JSON array")
-	mustLen(t, items, 1)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	items, isList := (*result)["security_questions"].([]any)
+	if !isList {
+		t.Fatal("ok = false, want true")
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want %d", len(items), 1)
+	}
+
 	item, ok := items[0].(map[string]any)
-	mustTrue(t, ok, "security question entry should decode as an object")
-	checkEqual(t, "What is your favorite color?", item["question"])
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !reflect.DeepEqual(item["question"], "What is your favorite color?") {
+		t.Errorf("got %v, want %v", item["question"], "What is your favorite color?")
+	}
 }
 
 // TestClientListProfileSecurityQuestionsAPIError verifies ListProfileSecurityQuestions propagates API errors.
@@ -1156,23 +1883,38 @@ func TestClientListProfileSecurityQuestionsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != tcProfileSecurityQuestions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSecurityQuestions)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListProfileSecurityQuestions(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListProfileSecurityQuestions should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListProfileSecurityQuestionsRetriesTransientError verifies the read-only list retries transient failures.
@@ -1182,27 +1924,42 @@ func TestClientListProfileSecurityQuestionsRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+		if r.URL.Path != tcProfileSecurityQuestions {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileSecurityQuestions)
+		}
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProfileSecurityQuestions{"security_questions": []map[string]any{{keyID: float64(1)}}}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ProfileSecurityQuestions{"security_questions": []map[string]any{{keyID: float64(1)}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListProfileSecurityQuestions(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListProfileSecurityQuestions should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 // TestClientListProfileDevicesSuccess verifies ListProfileDevices sends a GET request to /profile/devices.
@@ -1215,25 +1972,56 @@ func TestClientListProfileDevicesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(devices), "encoding profile devices response should not fail")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileDevices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(devices); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListProfileDevices(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListProfileDevices should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "Mozilla/5.0", result.Data[0]["user_agent"])
-	checkEqual(t, "192.0.2.1", result.Data[0]["last_remote_addr"])
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if !reflect.DeepEqual(result.Data[0]["user_agent"], "Mozilla/5.0") {
+		t.Errorf("got %v, want %v", result.Data[0]["user_agent"], "Mozilla/5.0")
+	}
+
+	if !reflect.DeepEqual(result.Data[0]["last_remote_addr"], "192.0.2.1") {
+		t.Errorf("got %v, want %v", result.Data[0]["last_remote_addr"], "192.0.2.1")
+	}
 }
 
 // TestClientListProfileDevicesAPIError verifies ListProfileDevices propagates API errors.
@@ -1241,23 +2029,38 @@ func TestClientListProfileDevicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != tcProfileDevices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListProfileDevices(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListProfileDevices should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListProfileDevicesRetriesTransientError verifies the read-only list retries transient failures.
@@ -1267,28 +2070,46 @@ func TestClientListProfileDevicesRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+		if r.URL.Path != tcProfileDevices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices)
+		}
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileDevice]{Data: []linode.ProfileDevice{{keyID: float64(123)}}, Page: 1, Pages: 1, Results: 1}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileDevice]{Data: []linode.ProfileDevice{{keyID: float64(123)}}, Page: 1, Pages: 1, Results: 1}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListProfileDevices(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListProfileDevices should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 // TestClientGetProfileNetworkError verifies that GetProfile returns a
@@ -1297,13 +2118,16 @@ func TestClientGetProfileNetworkError(t *testing.T) {
 	t.Parallel()
 
 	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfile should fail when server is unreachable")
-
-	var netErr *linode.NetworkError
-
-	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &netErr)
+	}
 }
 
 // TestClientHandleResponseRateLimitWithRetryAfter verifies that the client
@@ -1320,16 +2144,28 @@ func TestClientHandleResponseRateLimitWithRetryAfter(t *testing.T) {
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfile should fail on 429 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
+	if apiErr.StatusCode != http.StatusTooManyRequests {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, 429)
+	}
 
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, 429, apiErr.StatusCode, "status code should be 429 too many requests")
-	checkContains(t, apiErr.Message, "retry after", "error message should include the retry-after value")
-	checkEqual(t, 30*time.Second, apiErr.RetryAfter, "RetryAfter field should carry the parsed hint")
+	if !strings.Contains(apiErr.Message, "retry after") {
+		t.Errorf("apiErr.Message does not contain %v", "retry after")
+	}
+
+	if apiErr.RetryAfter != 30*time.Second {
+		t.Errorf("apiErr.RetryAfter = %v, want %v", apiErr.RetryAfter, 30*time.Second)
+	}
 }
 
 // TestClientHandleResponseForbiddenNoBody verifies that the client returns
@@ -1345,14 +2181,20 @@ func TestClientHandleResponseForbiddenNoBody(t *testing.T) {
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfile should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, 403, apiErr.StatusCode, "status code should be 403 forbidden")
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, 403)
+	}
 }
 
 // TestClientContextCancelled verifies that GetProfile returns an error
@@ -1362,7 +2204,10 @@ func TestClientContextCancelled(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "test"}), "encoding profile response should not fail")
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{Username: "test"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -1370,8 +2215,11 @@ func TestClientContextCancelled(t *testing.T) {
 	cancel()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfile(ctx)
-	mustError(t, err, "GetProfile should fail when context is already canceled")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 // TestNewClientConfigOverridesDefaults verifies that NewClient applies
@@ -1401,10 +2249,15 @@ func TestNewClientConfigOverridesDefaults(t *testing.T) {
 	}
 
 	client := linode.NewClient(srv.URL, "token", cfg, linode.WithJitter(false))
-	_, err := client.GetProfile(t.Context())
 
-	mustError(t, err)
-	checkEqual(t, 6, attempts, "should attempt 1 initial + 5 retries from config")
+	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts != 6 {
+		t.Errorf("attempts = %v, want %v", attempts, 6)
+	}
 }
 
 // TestNewClientOptionsOverrideConfig verifies that caller-supplied options
@@ -1436,10 +2289,15 @@ func TestNewClientOptionsOverrideConfig(t *testing.T) {
 		linode.WithMaxRetries(1),
 		linode.WithJitter(false),
 	)
-	_, err := client.GetProfile(t.Context())
 
-	mustError(t, err)
-	checkEqual(t, 2, attempts, "should attempt 1 initial + 1 retry from option override")
+	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts != 2 {
+		t.Errorf("attempts = %v, want %v", attempts, 2)
+	}
 }
 
 // TestNewClientNilConfigUsesDefaults verifies that passing nil config
@@ -1463,10 +2321,15 @@ func TestNewClientNilConfigUsesDefaults(t *testing.T) {
 		linode.WithMaxDelay(5*time.Millisecond),
 		linode.WithJitter(false),
 	)
-	_, err := client.GetProfile(t.Context())
 
-	mustError(t, err)
-	checkEqual(t, 4, attempts, "should attempt 1 initial + 3 default retries")
+	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts != 4 {
+		t.Errorf("attempts = %v, want %v", attempts, 4)
+	}
 }
 
 // TestClientMalformedJSONResponse verifies that the client returns an error
@@ -1475,20 +2338,26 @@ func TestClientMalformedJSONResponse(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, err := w.Write([]byte(`not json at all`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetProfile(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfile should fail when response body is not valid JSON")
-
-	var syntaxErr *json.SyntaxError
-
-	checkErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
+	syntaxErr, ok := errors.AsType[*json.SyntaxError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &syntaxErr)
+	}
 }
 
 // TestClientUpdateProfileSuccess verifies that UpdateProfile sends a PUT
@@ -1505,30 +2374,57 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/profile", r.URL.Path, "request path should be /profile")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/profile" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile")
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, updateAccountEmail, body["email"])
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(updatedProfile))
+		if !reflect.DeepEqual(body["email"], updateAccountEmail) {
+			t.Errorf("got %v, want %v", body["email"], updateAccountEmail)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(updatedProfile); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	email := updateAccountEmail
+
 	result, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{
 		Email: &email,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "UpdateProfile should succeed on 200 response")
-	checkEqual(t, updateAccountEmail, result.Email)
-	checkEqual(t, "US/Eastern", result.Timezone)
+	if result.Email != updateAccountEmail {
+		t.Errorf("result.Email = %v, want %v", result.Email, updateAccountEmail)
+	}
+
+	if result.Timezone != "US/Eastern" {
+		t.Errorf("result.Timezone = %v, want %v", result.Timezone, "US/Eastern")
+	}
 }
 
 // TestClientUpdateProfilePreferencesSuccess verifies that UpdateProfilePreferences
@@ -1537,26 +2433,53 @@ func TestClientUpdateProfilePreferencesSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcProfilePreferences {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEmpty(t, body, "request body should be an empty JSON object")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.UpdateProfilePreferences(t.Context(), nil)
 
-	mustNoError(t, err, "UpdateProfilePreferences should succeed on 200 response")
-	checkEqual(t, profilePreferenceValueDark, result[profilePreferenceKeyTheme])
+	result, err := client.UpdateProfilePreferences(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(result[profilePreferenceKeyTheme], profilePreferenceValueDark) {
+		t.Errorf("result[profilePreferenceKeyTheme] = %v, want %v", result[profilePreferenceKeyTheme], profilePreferenceValueDark)
+	}
 }
 
 // TestClientUpdateProfileNetworkError verifies that UpdateProfile returns a
@@ -1565,23 +2488,31 @@ func TestClientUpdateProfilePreferencesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"field":"theme","reason":"invalid preference"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateProfilePreferences should fail on 400 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, 400, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, 400)
+	}
 }
 
 func TestClientUpdateProfilePreferencesNetworkError(t *testing.T) {
@@ -1590,32 +2521,40 @@ func TestClientUpdateProfilePreferencesNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateProfilePreferences should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-
-	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &netErr)
+	}
 }
 
 func TestClientUpdateProfilePreferencesMalformedJSON(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, err := w.Write([]byte(`not json at all`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateProfilePreferences should fail when response body is not valid JSON")
-
-	var syntaxErr *json.SyntaxError
-
-	checkErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
+	syntaxErr, ok := errors.AsType[*json.SyntaxError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &syntaxErr)
+	}
 }
 
 func TestClientUpdateProfileNetworkError(t *testing.T) {
@@ -1624,12 +2563,14 @@ func TestClientUpdateProfileNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateProfile should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-
-	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &netErr)
+	}
 }
 
 // TestClientUpdateProfileAPIError verifies that UpdateProfile propagates
@@ -1639,21 +2580,29 @@ func TestClientUpdateProfileAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateProfile should fail on 400 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, 400, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, 400)
+	}
 }
 
 func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
@@ -1664,48 +2613,82 @@ func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/object-storage/buckets/us-east-1", r.URL.Path, "request path should match regional buckets endpoint")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query params")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/object-storage/buckets/us-east-1" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/buckets/us-east-1")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    buckets,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us-east-1")
 
-	mustNoError(t, err, "ListObjectStorageBucketsByRegion should succeed on 200 response")
-	mustLen(t, result, 1, "response should include one bucket")
-	checkEqual(t, "my-bucket", result[0].Label)
+	result, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us-east-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
+	}
+
+	if result[0].Label != "my-bucket" {
+		t.Errorf("result[0].Label = %v, want %v", result[0].Label, "my-bucket")
+	}
 }
 
 func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/object-storage/buckets/us%2Feast%3F1", r.URL.EscapedPath(), "path params should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "path params must not become query params")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.URL.EscapedPath() != "/object-storage/buckets/us%2Feast%3F1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/object-storage/buckets/us%2Feast%3F1")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.ObjectStorageBucket{},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 0,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	_, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us/east?1")
 
-	mustNoError(t, err, "escaped path param should round-trip through the client")
+	_, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us/east?1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientListObjectStorageClustersRemoved(t *testing.T) {
@@ -1713,45 +2696,75 @@ func TestClientListObjectStorageClustersRemoved(t *testing.T) {
 
 	_, ok := reflect.TypeFor[*linode.Client]().MethodByName("ListObjectStorageClusters")
 
-	checkFalse(t, ok, "deprecated Object Storage clusters route must not be exposed by the Go client")
+	if ok {
+		t.Error("ok = true, want false")
+	}
 }
 
 func TestClientCancelObjectStorageSuccess(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/object-storage/cancel", r.URL.Path)
-		checkEqual(t, http.MethodPost, r.Method)
-		checkEmpty(t, r.URL.RawQuery)
+		if r.URL.Path != tcObjectStorageCancel {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageCancel)
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(0))
+
 	err := client.CancelObjectStorage(t.Context())
-	mustNoError(t, err, "CancelObjectStorage should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientCancelObjectStorageAPIError(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/object-storage/cancel", r.URL.Path)
-		checkEqual(t, http.MethodPost, r.Method)
+		if r.URL.Path != tcObjectStorageCancel {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageCancel)
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"object storage cannot be canceled"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(0))
+
 	err := client.CancelObjectStorage(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CancelObjectStorage should fail on API error")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusBadRequest)
+	}
 }
 
 func TestClientCancelObjectStorageDoesNotRetry(t *testing.T) {
@@ -1761,16 +2774,29 @@ func TestClientCancelObjectStorageDoesNotRetry(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		checkEqual(t, "/object-storage/cancel", r.URL.Path)
-		checkEqual(t, http.MethodPost, r.Method)
+
+		if r.URL.Path != tcObjectStorageCancel {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageCancel)
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
 	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(3))
+
 	err := client.CancelObjectStorage(t.Context())
-	mustError(t, err, "CancelObjectStorage should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "CancelObjectStorage must not retry and replay a state-changing request")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
@@ -1779,43 +2805,72 @@ func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
 	corsEnabled := true
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/object-storage/buckets/us-east-1/my-bucket/access" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/buckets/us-east-1/my-bucket/access")
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, "public-read", body["acl"])
-		checkEqual(t, true, body["cors_enabled"])
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["acl"], "public-read") {
+			t.Errorf("got %v, want %v", body["acl"], "public-read")
+		}
+
+		if !reflect.DeepEqual(body["cors_enabled"], true) {
+			t.Errorf("got %v, want %v", body["cors_enabled"], true)
+		}
 
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
 	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{
 		ACL:         "public-read",
 		CORSEnabled: &corsEnabled,
 	})
-
-	mustNoError(t, err, "AllowObjectStorageBucketAccess should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientAllowObjectStorageBucketAccessEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/object-storage/buckets/us%2Feast%3F1/..%2Fbucket/access", r.URL.EscapedPath(), "path params should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "path params must not become query params")
+		if r.URL.EscapedPath() != "/object-storage/buckets/us%2Feast%3F1/..%2Fbucket/access" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/object-storage/buckets/us%2Feast%3F1/..%2Fbucket/access")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	err := client.AllowObjectStorageBucketAccess(t.Context(), "us/east?1", "../bucket", linode.AllowObjectStorageBucketAccessRequest{})
 
-	mustNoError(t, err, "escaped path params should round-trip through the client")
+	err := client.AllowObjectStorageBucketAccess(t.Context(), "us/east?1", "../bucket", linode.AllowObjectStorageBucketAccessRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
@@ -1825,19 +2880,34 @@ func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/object-storage/buckets/us-east-1/my-bucket/access" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/buckets/us-east-1/my-bucket/access")
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
-	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{})
 
-	mustError(t, err, "AllowObjectStorageBucketAccess should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
+	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientGetAccountTransferSuccess verifies GetAccountTransfer sends a GET
@@ -1858,28 +2928,64 @@ func TestClientGetAccountTransferSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(transfer))
+		if r.URL.Path != tcAccountTransfer {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountTransfer)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(transfer); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountTransfer(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountTransfer should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 10, result.Billable)
-	checkEqual(t, 4000, result.Quota)
-	checkEqual(t, 123, result.Used)
-	mustLen(t, result.RegionTransfers, 1)
-	checkEqual(t, accountTransferRegion, result.RegionTransfers[0].ID)
-	checkEqual(t, 50, result.RegionTransfers[0].Used)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Billable != 10 {
+		t.Errorf("result.Billable = %v, want %v", result.Billable, 10)
+	}
+
+	if result.Quota != 4000 {
+		t.Errorf("result.Quota = %v, want %v", result.Quota, 4000)
+	}
+
+	if result.Used != 123 {
+		t.Errorf("result.Used = %v, want %v", result.Used, 123)
+	}
+
+	if len(result.RegionTransfers) != 1 {
+		t.Fatalf("len(result.RegionTransfers) = %d, want %d", len(result.RegionTransfers), 1)
+	}
+
+	if result.RegionTransfers[0].ID != accountTransferRegion {
+		t.Errorf("result.RegionTransfers[0].ID = %v, want %v", result.RegionTransfers[0].ID, accountTransferRegion)
+	}
+
+	if result.RegionTransfers[0].Used != 50 {
+		t.Errorf("result.RegionTransfers[0].Used = %v, want %v", result.RegionTransfers[0].Used, 50)
+	}
 }
 
 // TestClientGetAccountTransferAPIError verifies GetAccountTransfer propagates
@@ -1888,26 +2994,47 @@ func TestClientGetAccountTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountTransfer {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountTransfer)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountTransfer(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountTransfer should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountTransferRetriesTransientError verifies read-only transfer retries.
@@ -1924,21 +3051,40 @@ func TestClientGetAccountTransferRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountTransfer{Used: 123}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountTransfer {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountTransfer)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountTransfer{Used: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountTransfer(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountTransfer should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 123, result.Used)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Used != 123 {
+		t.Errorf("result.Used = %v, want %v", result.Used, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountSettingsSuccess verifies GetAccountSettings sends a GET
@@ -1959,31 +3105,76 @@ func TestClientGetAccountSettingsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(settings))
+		if r.URL.Path != tcAccountSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettings)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountSettings(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountSettings should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkTrue(t, result.BackupsEnabled)
-	checkFalse(t, result.Managed)
-	checkTrue(t, result.NetworkHelper)
-	mustNotNil(t, result.LongviewSubscription)
-	checkEqual(t, longviewSubscription, *result.LongviewSubscription)
-	mustNotNil(t, result.ObjectStorage)
-	checkEqual(t, objectStorage, *result.ObjectStorage)
-	checkEqual(t, "linode_default_but_legacy_config_allowed", result.InterfacesForNewLinodes)
-	checkEqual(t, maintenancePolicyMigrate, result.MaintenancePolicy)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.BackupsEnabled {
+		t.Error("result.BackupsEnabled = false, want true")
+	}
+
+	if result.Managed {
+		t.Error("result.Managed = true, want false")
+	}
+
+	if !result.NetworkHelper {
+		t.Error("result.NetworkHelper = false, want true")
+	}
+
+	if result.LongviewSubscription == nil {
+		t.Fatal("result.LongviewSubscription is nil")
+	}
+
+	if *result.LongviewSubscription != longviewSubscription {
+		t.Errorf("*result.LongviewSubscription = %v, want %v", *result.LongviewSubscription, longviewSubscription)
+	}
+
+	if result.ObjectStorage == nil {
+		t.Fatal("result.ObjectStorage is nil")
+	}
+
+	if *result.ObjectStorage != objectStorage {
+		t.Errorf("*result.ObjectStorage = %v, want %v", *result.ObjectStorage, objectStorage)
+	}
+
+	if result.InterfacesForNewLinodes != "linode_default_but_legacy_config_allowed" {
+		t.Errorf("result.InterfacesForNewLinodes = %v, want %v", result.InterfacesForNewLinodes, "linode_default_but_legacy_config_allowed")
+	}
+
+	if result.MaintenancePolicy != maintenancePolicyMigrate {
+		t.Errorf("result.MaintenancePolicy = %v, want %v", result.MaintenancePolicy, maintenancePolicyMigrate)
+	}
 }
 
 // TestClientGetAccountSettingsAPIError verifies GetAccountSettings propagates
@@ -1992,26 +3183,47 @@ func TestClientGetAccountSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettings)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountSettings(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountSettings should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountAgreementsSuccess verifies GetAccountAgreements sends a GET
@@ -2027,26 +3239,56 @@ func TestClientGetAccountAgreementsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(agreements))
+		if r.URL.Path != tcAccountAgreements {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountAgreements)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(agreements); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountAgreements(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountAgreements should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkTrue(t, result.BillingAgreement)
-	checkFalse(t, result.EUModel)
-	checkTrue(t, result.MasterServiceAgreement)
-	checkTrue(t, result.PrivacyPolicy)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.BillingAgreement {
+		t.Error("result.BillingAgreement = false, want true")
+	}
+
+	if result.EUModel {
+		t.Error("result.EUModel = true, want false")
+	}
+
+	if !result.MasterServiceAgreement {
+		t.Error("result.MasterServiceAgreement = false, want true")
+	}
+
+	if !result.PrivacyPolicy {
+		t.Error("result.PrivacyPolicy = false, want true")
+	}
 }
 
 // TestClientGetAccountAgreementsAPIError verifies GetAccountAgreements propagates
@@ -2055,26 +3297,47 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountAgreements {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountAgreements)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountAgreements(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountAgreements should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountNotificationsSuccess verifies ListAccountNotifications sends
@@ -2103,28 +3366,64 @@ func TestClientListAccountNotificationsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(notifications))
+		if r.URL.Path != tcAccountNotifications {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountNotifications)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(notifications); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountNotifications(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountNotifications should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "Scheduled maintenance", result.Data[0].Label)
-	checkEqual(t, "major", result.Data[0].Severity)
-	mustNotNil(t, result.Data[0].Entity)
-	checkEqual(t, "example-linode", result.Data[0].Entity.Label)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Label != tcScheduledMaintenance {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, tcScheduledMaintenance)
+	}
+
+	if result.Data[0].Severity != "major" {
+		t.Errorf("result.Data[0].Severity = %v, want %v", result.Data[0].Severity, "major")
+	}
+
+	if result.Data[0].Entity == nil {
+		t.Fatal("result.Data[0].Entity is nil")
+	}
+
+	if result.Data[0].Entity.Label != "example-linode" {
+		t.Errorf("result.Data[0].Entity.Label = %v, want %v", result.Data[0].Entity.Label, "example-linode")
+	}
 }
 
 // TestClientListAccountNotificationsAPIError verifies ListAccountNotifications propagates API errors.
@@ -2132,27 +3431,51 @@ func TestClientListAccountNotificationsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountNotifications {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountNotifications)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountNotifications(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountNotifications should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountNotificationsRetriesTransientError verifies the read-only notifications lookup retries transient failures.
@@ -2165,28 +3488,47 @@ func TestClientListAccountNotificationsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountNotification]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountNotifications {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountNotifications)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountNotification]{
 			Data: []linode.AccountNotification{{Label: "Scheduled maintenance"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountNotifications(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountNotifications should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountAvailabilitySuccess verifies GetAccountAvailability sends
@@ -2201,24 +3543,48 @@ func TestClientGetAccountAvailabilitySuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(availability))
+		if r.URL.Path != "/account/availability/"+regionUSEast {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/availability/"+regionUSEast)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(availability); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountAvailability(t.Context(), regionUSEast)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountAvailability should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, regionUSEast, result.Region)
-	checkEqual(t, []string{serviceLinodes, serviceNodeBalancers}, result.Available)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Region != regionUSEast {
+		t.Errorf("result.Region = %v, want %v", result.Region, regionUSEast)
+	}
+
+	if !reflect.DeepEqual(result.Available, []string{serviceLinodes, serviceNodeBalancers}) {
+		t.Errorf("result.Available = %v, want %v", result.Available, []string{serviceLinodes, serviceNodeBalancers})
+	}
 }
 
 // TestClientGetAccountAvailabilityEscapesRegion verifies the client encodes path separators.
@@ -2226,18 +3592,28 @@ func TestClientGetAccountAvailabilityEscapesRegion(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/availability/us%2Feast%3Fzone", r.URL.EscapedPath(), "request path should escape region")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: "us/east?zone"}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != "/account/availability/us%2Feast%3Fzone" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/availability/us%2Feast%3Fzone")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountAvailability{Region: "us/east?zone"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountAvailability(t.Context(), "us/east?zone")
-
-	mustNoError(t, err, "GetAccountAvailability should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetAccountAvailabilityAPIError verifies GetAccountAvailability propagates API errors.
@@ -2245,26 +3621,47 @@ func TestClientGetAccountAvailabilityAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/availability/"+regionUSEast {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/availability/"+regionUSEast)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountAvailability(t.Context(), regionUSEast)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountAvailability should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountAvailabilityRetriesTransientError verifies the read-only regional lookup retries transient failures.
@@ -2277,27 +3674,49 @@ func TestClientGetAccountAvailabilityRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: regionUSEast}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/availability/"+regionUSEast {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/availability/"+regionUSEast)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountAvailability{Region: regionUSEast}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountAvailability(t.Context(), regionUSEast)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountAvailability should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, regionUSEast, result.Region)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Region != regionUSEast {
+		t.Errorf("result.Region = %v, want %v", result.Region, regionUSEast)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountAvailabilitySuccess verifies ListAccountAvailability sends
@@ -2307,7 +3726,7 @@ func TestClientListAccountAvailabilitySuccess(t *testing.T) {
 
 	availability := linode.PaginatedResponse[linode.AccountAvailability]{
 		Data: []linode.AccountAvailability{{
-			Available:   []string{"Linodes", serviceNodeBalancers},
+			Available:   []string{serviceLinodes, serviceNodeBalancers},
 			Region:      regionUSEast,
 			Unavailable: []string{"Kubernetes", "Block Storage"},
 		}},
@@ -2317,26 +3736,56 @@ func TestClientListAccountAvailabilitySuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(availability))
+		if r.URL.Path != "/account/availability" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/availability")
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(availability); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountAvailability(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountAvailability should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, regionUSEast, result.Data[0].Region)
-	checkEqual(t, []string{"Linodes", serviceNodeBalancers}, result.Data[0].Available)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Region != regionUSEast {
+		t.Errorf("result.Data[0].Region = %v, want %v", result.Data[0].Region, regionUSEast)
+	}
+
+	if !reflect.DeepEqual(result.Data[0].Available, []string{serviceLinodes, serviceNodeBalancers}) {
+		t.Errorf("result.Data[0].Available = %v, want %v", result.Data[0].Available, []string{serviceLinodes, serviceNodeBalancers})
+	}
 }
 
 // TestClientListAccountAvailabilityAPIError verifies ListAccountAvailability propagates API errors.
@@ -2344,27 +3793,51 @@ func TestClientListAccountAvailabilityAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/availability" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/availability")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountAvailability(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountAvailability should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListProfileAppsSuccess verifies ListProfileApps sends a GET
@@ -2380,28 +3853,68 @@ func TestClientListProfileAppsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(apps), "encoding profile apps response should not fail")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileApps {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(apps); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListProfileApps(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListProfileApps should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "example-app", result.Data[0].Label)
-	checkEqual(t, profileAppScopesReadOnly, result.Data[0].Scopes)
-	checkEqual(t, "example.org", result.Data[0].Website)
-	mustNotNil(t, result.Data[0].ThumbnailURL)
-	checkEqual(t, thumbnailURL, *result.Data[0].ThumbnailURL)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Label != tcExampleApp {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, tcExampleApp)
+	}
+
+	if result.Data[0].Scopes != profileAppScopesReadOnly {
+		t.Errorf("result.Data[0].Scopes = %v, want %v", result.Data[0].Scopes, profileAppScopesReadOnly)
+	}
+
+	if result.Data[0].Website != "example.org" {
+		t.Errorf("result.Data[0].Website = %v, want %v", result.Data[0].Website, "example.org")
+	}
+
+	if result.Data[0].ThumbnailURL == nil {
+		t.Fatal("result.Data[0].ThumbnailURL is nil")
+	}
+
+	if *result.Data[0].ThumbnailURL != thumbnailURL {
+		t.Errorf("*result.Data[0].ThumbnailURL = %v, want %v", *result.Data[0].ThumbnailURL, thumbnailURL)
+	}
 }
 
 // TestClientListProfileAppsAPIError verifies ListProfileApps propagates API errors.
@@ -2409,23 +3922,38 @@ func TestClientListProfileAppsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != tcProfileApps {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListProfileApps(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListProfileApps should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListProfileAppsRetriesTransientError verifies the read-only list retries transient failures.
@@ -2435,28 +3963,46 @@ func TestClientListProfileAppsRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+		if r.URL.Path != tcProfileApps {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps)
+		}
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AuthorizedApp]{Data: []linode.AuthorizedApp{{ID: 123, Label: "example-app", Scopes: profileAppScopesReadOnly}}, Page: 1, Pages: 1, Results: 1}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AuthorizedApp]{Data: []linode.AuthorizedApp{{ID: 123, Label: "example-app", Scopes: profileAppScopesReadOnly}}, Page: 1, Pages: 1, Results: 1}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListProfileApps(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListProfileApps should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountOAuthClientsSuccess verifies ListAccountOAuthClients sends a GET
@@ -2470,25 +4016,56 @@ func TestClientListAccountOAuthClientsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(clients), "encoding oauth clients response should not fail")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountOauthClients {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClients)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(clients); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountOAuthClients(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountOAuthClients should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "example-client", result.Data[0].Label)
-	checkEqual(t, "https://example.com/oauth/callback", result.Data[0].RedirectURI)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Label != tcExampleClient {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, tcExampleClient)
+	}
+
+	if result.Data[0].RedirectURI != "https://example.com/oauth/callback" {
+		t.Errorf("result.Data[0].RedirectURI = %v, want %v", result.Data[0].RedirectURI, "https://example.com/oauth/callback")
+	}
 }
 
 // TestClientListAccountOAuthClientsAPIError verifies ListAccountOAuthClients propagates API errors.
@@ -2496,23 +4073,38 @@ func TestClientListAccountOAuthClientsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != tcAccountOauthClients {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClients)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountOAuthClients(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountOAuthClients should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountOAuthClientsRetriesTransientError verifies the read-only list retries transient failures.
@@ -2522,28 +4114,46 @@ func TestClientListAccountOAuthClientsRetriesTransientError(t *testing.T) {
 	var attempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+		if r.URL.Path != tcAccountOauthClients {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClients)
+		}
 
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.OAuthClient]{Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client"}}, Page: 1, Pages: 1, Results: 1}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.OAuthClient]{Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client"}}, Page: 1, Pages: 1, Results: 1}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountOAuthClients(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountOAuthClients should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 // TestClientListBetasSuccess verifies ListBetas sends a GET request to /betas with pagination query parameters.
@@ -2568,28 +4178,68 @@ func TestClientListBetasSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/betas", r.URL.Path, "request path should be /betas")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(betas))
+		if r.URL.Path != tcBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcBetas)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(betas); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListBetas(t.Context(), 2, 25)
 
-	mustNoError(t, err, "ListBetas should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "example_open", result.Data[0].ID)
-	checkEqual(t, "open", result.Data[0].BetaClass)
-	checkFalse(t, result.Data[0].GreenlightOnly)
-	checkEqual(t, "https://example.com/beta", result.Data[0].MoreInfo)
-	checkNil(t, result.Data[0].Ended)
+	result, err := client.ListBetas(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != betaExampleOpen {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, betaExampleOpen)
+	}
+
+	if result.Data[0].BetaClass != supportTicketStatusOpen {
+		t.Errorf("result.Data[0].BetaClass = %v, want %v", result.Data[0].BetaClass, supportTicketStatusOpen)
+	}
+
+	if result.Data[0].GreenlightOnly {
+		t.Error("result.Data[0].GreenlightOnly = true, want false")
+	}
+
+	if result.Data[0].MoreInfo != tcHTTPSExampleComBeta {
+		t.Errorf("result.Data[0].MoreInfo = %v, want %v", result.Data[0].MoreInfo, tcHTTPSExampleComBeta)
+	}
+
+	if result.Data[0].Ended != nil {
+		t.Errorf("result.Data[0].Ended = %v, want nil", result.Data[0].Ended)
+	}
 }
 
 // TestClientListBetasAPIError verifies ListBetas propagates API errors.
@@ -2597,26 +4247,44 @@ func TestClientListBetasAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/betas", r.URL.Path, "request path should be /betas")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcBetas)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListBetas(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListBetas should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListBetasRetriesTransientError verifies the read-only list retries transient failures.
@@ -2630,8 +4298,13 @@ func TestClientListBetasRetriesTransientError(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/betas", r.URL.Path, "request path should be /betas")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcBetas)
+		}
 
 		if requestCount.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -2639,20 +4312,36 @@ func TestClientListBetasRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(betas))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(betas); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListBetas(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListBetas should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "example_open", result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "read-only list should retry one transient failure")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != betaExampleOpen {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, betaExampleOpen)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetBetaSuccess verifies GetBeta sends a GET request to
@@ -2673,28 +4362,64 @@ func TestClientGetBetaSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(beta))
+		if r.URL.Path != "/betas/"+betaExampleOpen {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/betas/"+betaExampleOpen)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(beta); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetBeta(t.Context(), betaExampleOpen)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetBeta should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, betaExampleOpen, result.ID)
-	checkEqual(t, labelExampleOpenBeta, result.Label)
-	mustNotNil(t, result.Description)
-	checkEqual(t, description, *result.Description)
-	checkEqual(t, "open", result.BetaClass)
-	checkFalse(t, result.GreenlightOnly)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != betaExampleOpen {
+		t.Errorf("result.ID = %v, want %v", result.ID, betaExampleOpen)
+	}
+
+	if result.Label != labelExampleOpenBeta {
+		t.Errorf("result.Label = %v, want %v", result.Label, labelExampleOpenBeta)
+	}
+
+	if result.Description == nil {
+		t.Fatal("result.Description is nil")
+	}
+
+	if *result.Description != description {
+		t.Errorf("*result.Description = %v, want %v", *result.Description, description)
+	}
+
+	if result.BetaClass != supportTicketStatusOpen {
+		t.Errorf("result.BetaClass = %v, want %v", result.BetaClass, supportTicketStatusOpen)
+	}
+
+	if result.GreenlightOnly {
+		t.Error("result.GreenlightOnly = true, want false")
+	}
 }
 
 // TestClientGetBetaEscapesID verifies the client encodes path separators.
@@ -2702,17 +4427,24 @@ func TestClientGetBetaEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.BetaProgram{ID: "example/open?query"}))
+		if r.URL.EscapedPath() != "/betas/example%2Fopen%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/betas/example%2Fopen%3Fquery")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.BetaProgram{ID: "example/open?query"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetBeta(t.Context(), "example/open?query")
-
-	mustNoError(t, err, "GetBeta should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetBetaAPIError verifies GetBeta propagates API errors.
@@ -2720,27 +4452,48 @@ func TestClientGetBetaAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/betas/"+betaExampleOpen {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/betas/"+betaExampleOpen)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetBeta(t.Context(), betaExampleOpen)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetBeta should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetBetaRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -2753,27 +4506,49 @@ func TestClientGetBetaRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.BetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/betas/"+betaExampleOpen {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/betas/"+betaExampleOpen)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.BetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetBeta(t.Context(), betaExampleOpen)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetBeta should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, betaExampleOpen, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != betaExampleOpen {
+		t.Errorf("result.ID = %v, want %v", result.ID, betaExampleOpen)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountBetasSuccess verifies ListAccountBetas sends a GET
@@ -2797,29 +4572,68 @@ func TestClientListAccountBetasSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(betas))
+		if r.URL.Path != tcAccountBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountBetas)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(betas); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountBetas(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountBetas should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, betaExampleOpen, result.Data[0].ID)
-	checkEqual(t, labelExampleOpenBeta, result.Data[0].Label)
-	mustNotNil(t, result.Data[0].Description)
-	checkEqual(t, description, *result.Data[0].Description)
-	checkNil(t, result.Data[0].Ended)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != betaExampleOpen {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, betaExampleOpen)
+	}
+
+	if result.Data[0].Label != labelExampleOpenBeta {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, labelExampleOpenBeta)
+	}
+
+	if result.Data[0].Description == nil {
+		t.Fatal("result.Data[0].Description is nil")
+	}
+
+	if *result.Data[0].Description != description {
+		t.Errorf("*result.Data[0].Description = %v, want %v", *result.Data[0].Description, description)
+	}
+
+	if result.Data[0].Ended != nil {
+		t.Errorf("result.Data[0].Ended = %v, want nil", result.Data[0].Ended)
+	}
 }
 
 // TestClientListAccountBetasAPIError verifies ListAccountBetas propagates API errors.
@@ -2827,27 +4641,51 @@ func TestClientListAccountBetasAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountBetas)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountBetas(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountBetas should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountBetasRetriesTransientError verifies the read-only list retries transient failures.
@@ -2860,30 +4698,55 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountBetaProgram]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountBetas)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountBetaProgram]{
 			Data: []linode.AccountBetaProgram{{ID: betaExampleOpen, Label: labelExampleOpenBeta}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountBetas(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountBetas should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, betaExampleOpen, result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != betaExampleOpen {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, betaExampleOpen)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountOAuthClientSuccess verifies GetAccountOAuthClient sends the exact GET request.
@@ -2893,65 +4756,112 @@ func TestClientGetAccountOAuthClientSuccess(t *testing.T) {
 	want := linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyStatus: oauthClientStatus, keyThumbnailURL: oauthClientThumbnailURL, "secret": "server-secret",
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountOAuthClient should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientGetAccountOAuthClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+		if r.URL.EscapedPath() != tcAccountOauthClientsClient2F1233Fquery {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), tcAccountOauthClientsClient2F1233Fquery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountOAuthClient(t.Context(), oauthClientIDWithSeparators)
-
-	mustNoError(t, err, "GetAccountOAuthClient should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetAccountOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountOAuthClient should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkContains(t, apiErr.Message, errForbidden)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("apiErr.Message does not contain %v", errForbidden)
+	}
 }
 
 func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
@@ -2967,19 +4877,32 @@ func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	got, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountOAuthClient should succeed after retry")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, oauthClientID, got.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != oauthClientID {
+		t.Errorf("got.ID = %v, want %v", got.ID, oauthClientID)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientUpdateOAuthClientSuccess(t *testing.T) {
@@ -2989,29 +4912,60 @@ func TestClientUpdateOAuthClientSuccess(t *testing.T) {
 	want := linode.OAuthClient{ID: oauthClientID, Label: "updated app", Public: public, RedirectURI: "https://example.com/new-callback", Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var got linode.UpdateOAuthClientRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
-
-		if checkNotNil(t, got.Label) {
-			checkEqual(t, want.Label, *got.Label)
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
 
-		if checkNotNil(t, got.RedirectURI) {
-			checkEqual(t, want.RedirectURI, *got.RedirectURI)
+		if got.Label == nil {
+			t.Fatal("got.Label is nil")
 		}
 
-		if checkNotNil(t, got.Public) {
-			checkEqual(t, public, *got.Public)
+		if *got.Label != want.Label {
+			t.Errorf("*got.Label = %v, want %v", *got.Label, want.Label)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if got.RedirectURI == nil {
+			t.Fatal("got.RedirectURI is nil")
+		}
+
+		if *got.RedirectURI != want.RedirectURI {
+			t.Errorf("*got.RedirectURI = %v, want %v", *got.RedirectURI, want.RedirectURI)
+		}
+
+		if got.Public == nil {
+			t.Fatal("got.Public is nil")
+		}
+
+		if *got.Public != public {
+			t.Errorf("*got.Public = %v, want %v", *got.Public, public)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -3019,19 +4973,32 @@ func TestClientUpdateOAuthClientSuccess(t *testing.T) {
 	req := &linode.UpdateOAuthClientRequest{Label: &want.Label, Public: &public, RedirectURI: &want.RedirectURI}
 
 	got, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "UpdateOAuthClient should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+		if r.URL.EscapedPath() != tcAccountOauthClientsClient2F1233Fquery {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), tcAccountOauthClientsClient2F1233Fquery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -3040,19 +5007,29 @@ func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
 	req := &linode.UpdateOAuthClientRequest{Label: &label}
 
 	_, err := client.UpdateOAuthClient(t.Context(), oauthClientIDWithSeparators, req)
-
-	mustNoError(t, err, "UpdateOAuthClient should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientUpdateOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -3061,12 +5038,18 @@ func TestClientUpdateOAuthClientAPIError(t *testing.T) {
 	req := &linode.UpdateOAuthClientRequest{Label: &label}
 
 	_, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateOAuthClient should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientUpdateOAuthClientDoesNotRetryTransientError(t *testing.T) {
@@ -3085,9 +5068,13 @@ func TestClientUpdateOAuthClientDoesNotRetryTransientError(t *testing.T) {
 	req := &linode.UpdateOAuthClientRequest{Label: &label}
 
 	_, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateOAuthClient should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating OAuth client update must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientCreateOAuthClientSuccess(t *testing.T) {
@@ -3096,19 +5083,44 @@ func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	want := linode.CreatedOAuthClient{ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/oauth-clients", r.URL.Path, "request path should match")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountOauthClients {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClients)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var got linode.CreateOAuthClientRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
-		checkEqual(t, oauthClientLabel, got.Label)
-		checkEqual(t, oauthClientRedirectURI, got.RedirectURI)
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if got.Label != oauthClientLabel {
+			t.Errorf("got.Label = %v, want %v", got.Label, oauthClientLabel)
+		}
+
+		if got.RedirectURI != oauthClientRedirectURI {
+			t.Errorf("got.RedirectURI = %v, want %v", got.RedirectURI, oauthClientRedirectURI)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -3116,10 +5128,17 @@ func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	req := &linode.CreateOAuthClientRequest{Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI}
 
 	got, err := client.CreateOAuthClient(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "CreateOAuthClient should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
@@ -3128,66 +5147,111 @@ func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
 	thumbnailPNG := []byte("png-bytes")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "image/png", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != "image/png" {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), "image/png")
+		}
 
 		got, err := io.ReadAll(r.Body)
-		checkNoError(t, err, "reading thumbnail body should not fail")
-		checkEqual(t, thumbnailPNG, got, "thumbnail update should send the PNG bytes")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if !reflect.DeepEqual(got, thumbnailPNG) {
+			t.Errorf("got = %v, want %v", got, thumbnailPNG)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, thumbnailPNG)
-
-	mustNoError(t, err, "UpdateOAuthClientThumbnail should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientUpdateOAuthClientThumbnailEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+		if r.URL.EscapedPath() != "/account/oauth-clients/client%2F123%3Fquery/thumbnail" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/oauth-clients/client%2F123%3Fquery/thumbnail")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators, []byte("png-bytes"))
-
-	mustNoError(t, err, "UpdateOAuthClientThumbnail should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientUpdateOAuthClientThumbnailAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateOAuthClientThumbnail should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T) {
@@ -3197,7 +5261,11 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
+		}
+
 		http.Error(w, errTemporaryFailure, http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -3205,9 +5273,13 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateOAuthClientThumbnail should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating OAuth client thumbnail update must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
@@ -3216,64 +5288,104 @@ func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
 	thumbnailPNG := []byte("png-bytes")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		w.Header().Set("Content-Type", "image/png")
+
 		_, writeErr := w.Write(thumbnailPNG)
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetOAuthClientThumbnail should succeed on 200 response")
-	checkEqual(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
+	if !reflect.DeepEqual(got, thumbnailPNG) {
+		t.Errorf("got = %v, want %v", got, thumbnailPNG)
+	}
 }
 
 func TestClientGetOAuthClientThumbnailEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
+		if r.URL.EscapedPath() != "/account/oauth-clients/client%2F123%3Fquery/thumbnail" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/oauth-clients/client%2F123%3Fquery/thumbnail")
+		}
+
 		w.Header().Set("Content-Type", "image/png")
+
 		_, writeErr := w.Write([]byte("png-bytes"))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators)
-
-	mustNoError(t, err, "GetOAuthClientThumbnail should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetOAuthClientThumbnailAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusNotFound)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetOAuthClientThumbnail should fail on 404 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusNotFound, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusNotFound)
+	}
 }
 
 func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
@@ -3292,83 +5404,140 @@ func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "image/png")
+
 		_, writeErr := w.Write(thumbnailPNG)
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetOAuthClientThumbnail should succeed after retry")
-	checkEqual(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
-	checkEqual(t, int32(2), requestCount.Load(), "read-only GetOAuthClientThumbnail should be retried on transient error")
+	if !reflect.DeepEqual(got, thumbnailPNG) {
+		t.Errorf("got = %v, want %v", got, thumbnailPNG)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientDeleteAccountOAuthClientSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "DELETE request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
-
-	mustNoError(t, err, "DeleteAccountOAuthClient should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteAccountOAuthClientEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != tcAccountOauthClientsClient2F1233Fquery {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), tcAccountOauthClientsClient2F1233Fquery)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientIDWithSeparators)
-
-	mustNoError(t, err, "DeleteAccountOAuthClient should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteAccountOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteAccountOAuthClient should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientDeleteAccountOAuthClientDoesNotRetryTransientError(t *testing.T) {
@@ -3385,9 +5554,13 @@ func TestClientDeleteAccountOAuthClientDoesNotRetryTransientError(t *testing.T) 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteAccountOAuthClient should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "destructive OAuth client delete must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientResetOAuthClientSecretSuccess(t *testing.T) {
@@ -3396,65 +5569,118 @@ func TestClientResetOAuthClientSecretSuccess(t *testing.T) {
 	want := linode.OAuthClientSecret{Secret: "new-secret-once"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "reset secret request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/reset-secret" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/reset-secret")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ResetOAuthClientSecret should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientResetOAuthClientSecretEscapesClientID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/oauth-clients/client%2F123%3Fquery/reset-secret", r.URL.EscapedPath(), "path parameter should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret"}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.EscapedPath() != "/account/oauth-clients/client%2F123%3Fquery/reset-secret" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/oauth-clients/client%2F123%3Fquery/reset-secret")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientIDWithSeparators)
-
-	mustNoError(t, err, "ResetOAuthClientSecret should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientResetOAuthClientSecretAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/reset-secret" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/reset-secret")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ResetOAuthClientSecret should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientResetOAuthClientSecretDoesNotRetryTransientError(t *testing.T) {
@@ -3471,9 +5697,13 @@ func TestClientResetOAuthClientSecretDoesNotRetryTransientError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ResetOAuthClientSecret should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "credential rotation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientCreateOAuthClientAPIError verifies API errors propagate.
@@ -3481,9 +5711,12 @@ func TestClientCreateOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -3491,12 +5724,18 @@ func TestClientCreateOAuthClientAPIError(t *testing.T) {
 	req := &linode.CreateOAuthClientRequest{Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI}
 
 	_, err := client.CreateOAuthClient(t.Context(), req)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateOAuthClient should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 // TestClientCreateOAuthClientDoesNotRetryTransientError verifies creation is not replayed.
@@ -3515,9 +5754,13 @@ func TestClientCreateOAuthClientDoesNotRetryTransientError(t *testing.T) {
 	req := &linode.CreateOAuthClientRequest{Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI}
 
 	_, err := client.CreateOAuthClient(t.Context(), req)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateOAuthClient should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating OAuth client creation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientListAccountEventsSuccess verifies ListAccountEvents sends a GET
@@ -3555,31 +5798,76 @@ func TestClientListAccountEventsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/events", r.URL.Path, "request path should be /account/events")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(events))
+		if r.URL.Path != tcAccountEvents {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountEvents)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(events); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountEvents(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountEvents should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 123, result.Data[0].ID)
-	checkEqual(t, "ticket_create", result.Data[0].Action)
-	checkEqual(t, "failed", result.Data[0].Status)
-	mustNotNil(t, result.Data[0].Entity)
-	checkEqual(t, "ticket", result.Data[0].Entity.Type)
-	mustNotNil(t, result.Data[0].Duration)
-	checkInDelta(t, duration, *result.Data[0].Duration, 0.001)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if result.Data[0].Action != tcTicketCreate {
+		t.Errorf("result.Data[0].Action = %v, want %v", result.Data[0].Action, tcTicketCreate)
+	}
+
+	if result.Data[0].Status != "failed" {
+		t.Errorf("result.Data[0].Status = %v, want %v", result.Data[0].Status, "failed")
+	}
+
+	if result.Data[0].Entity == nil {
+		t.Fatal("result.Data[0].Entity is nil")
+	}
+
+	if result.Data[0].Entity.Type != "ticket" {
+		t.Errorf("result.Data[0].Entity.Type = %v, want %v", result.Data[0].Entity.Type, "ticket")
+	}
+
+	if result.Data[0].Duration == nil {
+		t.Fatal("result.Data[0].Duration is nil")
+	}
+
+	if math.Abs(*result.Data[0].Duration-duration) > 0.001 {
+		t.Errorf("got %v, want %v", *result.Data[0].Duration, duration)
+	}
 }
 
 // TestClientListAccountEventsAPIError verifies ListAccountEvents propagates API errors.
@@ -3587,27 +5875,51 @@ func TestClientListAccountEventsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/events", r.URL.Path, "request path should be /account/events")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountEvents {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountEvents)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountEvents(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountEvents should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountEventsRetriesTransientError verifies the read-only list retries transient failures.
@@ -3620,30 +5932,55 @@ func TestClientListAccountEventsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/events", r.URL.Path, "request path should be /account/events")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEvent]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountEvents {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountEvents)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEvent]{
 			Data: []linode.AccountEvent{{ID: 123, Action: "ticket_create"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountEvents(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountEvents should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 123, result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountChildAccountsSuccess verifies ListAccountChildAccounts sends a GET
@@ -3670,28 +6007,64 @@ func TestClientListAccountChildAccountsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(childAccounts))
+		if r.URL.Path != tcAccountChildAccounts {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountChildAccounts)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(childAccounts); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountChildAccounts(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountChildAccounts should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, childAccountEUUID, result.Data[0].EUUID)
-	checkEqual(t, companyAcme, result.Data[0].Company)
-	checkEqual(t, "11/2024", result.Data[0].CreditCard.Expiry)
-	checkEqual(t, "0111", result.Data[0].CreditCard.LastFour)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].EUUID != childAccountEUUID {
+		t.Errorf("result.Data[0].EUUID = %v, want %v", result.Data[0].EUUID, childAccountEUUID)
+	}
+
+	if result.Data[0].Company != companyAcme {
+		t.Errorf("result.Data[0].Company = %v, want %v", result.Data[0].Company, companyAcme)
+	}
+
+	if result.Data[0].CreditCard.Expiry != tcLit {
+		t.Errorf("result.Data[0].CreditCard.Expiry = %v, want %v", result.Data[0].CreditCard.Expiry, tcLit)
+	}
+
+	if result.Data[0].CreditCard.LastFour != "0111" {
+		t.Errorf("result.Data[0].CreditCard.LastFour = %v, want %v", result.Data[0].CreditCard.LastFour, "0111")
+	}
 }
 
 // TestClientListAccountChildAccountsAPIError verifies ListAccountChildAccounts propagates API errors.
@@ -3699,27 +6072,51 @@ func TestClientListAccountChildAccountsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountChildAccounts {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountChildAccounts)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountChildAccounts(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountChildAccounts should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountChildAccountsRetriesTransientError verifies the read-only list retries transient failures.
@@ -3732,30 +6129,55 @@ func TestClientListAccountChildAccountsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ChildAccount]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountChildAccounts {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountChildAccounts)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ChildAccount]{
 			Data: []linode.ChildAccount{{EUUID: childAccountEUUID, Company: companyAcme}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountChildAccounts(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountChildAccounts should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, childAccountEUUID, result.Data[0].EUUID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].EUUID != childAccountEUUID {
+		t.Errorf("result.Data[0].EUUID = %v, want %v", result.Data[0].EUUID, childAccountEUUID)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountEventSuccess verifies GetAccountEvent sends a GET
@@ -3766,22 +6188,48 @@ func TestClientGetAccountEventSuccess(t *testing.T) {
 	want := linode.AccountEvent{ID: 123, Action: "linode_create", Status: statusSuccessful, Username: "test-user"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/events/123", r.URL.Path, "request path should include event ID")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want), "encoding event response should not fail")
+		if r.URL.Path != tcAccountEvents123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountEvents123)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetAccountEvent(t.Context(), 123)
 
-	mustNoError(t, err, "GetAccountEvent should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, 123, got.ID)
-	checkEqual(t, "linode_create", got.Action)
-	checkEqual(t, statusSuccessful, got.Status)
+	got, err := client.GetAccountEvent(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != 123 {
+		t.Errorf("got.ID = %v, want %v", got.ID, 123)
+	}
+
+	if got.Action != tcLinodeCreate {
+		t.Errorf("got.Action = %v, want %v", got.Action, tcLinodeCreate)
+	}
+
+	if got.Status != statusSuccessful {
+		t.Errorf("got.Status = %v, want %v", got.Status, statusSuccessful)
+	}
 }
 
 // TestClientGetAccountEventAPIError verifies GetAccountEvent propagates API errors.
@@ -3789,17 +6237,25 @@ func TestClientGetAccountEventAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		if r.URL.Path != tcAccountEvents123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountEvents123)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr, "writing error response should not fail")
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	_, err := client.GetAccountEvent(t.Context(), 123)
 
-	mustError(t, err, "GetAccountEvent should fail on 403 response")
+	_, err := client.GetAccountEvent(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 // TestClientGetAccountEventRetriesTransientError verifies the read-only event lookup retries transient failures.
@@ -3812,25 +6268,45 @@ func TestClientGetAccountEventRetriesTransientError(t *testing.T) {
 		current := requestCount.Add(1)
 		if current == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr, "writing transient error should not fail")
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, "/account/events/123", r.URL.Path, "request path should include event ID")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountEvent{ID: 123, Action: "linode_create"}))
+		if r.URL.Path != tcAccountEvents123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountEvents123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountEvent{ID: 123, Action: "linode_create"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
-	result, err := client.GetAccountEvent(t.Context(), 123)
 
-	mustNoError(t, err, "GetAccountEvent should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 123, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	result, err := client.GetAccountEvent(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientMarkAccountEventSeenSuccess verifies MarkAccountEventSeen sends a POST
@@ -3839,22 +6315,41 @@ func TestClientMarkAccountEventSeenSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		checkEqual(t, http.NoBody, r.Body, "request should not send a body")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/account/events/123/seen" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/events/123/seen")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr, "writing success response should not fail")
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	err := client.MarkAccountEventSeen(t.Context(), 123)
 
-	mustNoError(t, err, "MarkAccountEventSeen should succeed on 200 response")
+	err := client.MarkAccountEventSeen(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientMarkAccountEventSeenAPIError verifies MarkAccountEventSeen propagates API errors.
@@ -3862,18 +6357,29 @@ func TestClientMarkAccountEventSeenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/events/123/seen" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/events/123/seen")
+		}
+
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr, "writing error response should not fail")
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-	err := client.MarkAccountEventSeen(t.Context(), 123)
 
-	mustError(t, err, "MarkAccountEventSeen should fail on 403 response")
+	err := client.MarkAccountEventSeen(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 // TestClientMarkAccountEventSeenDoesNotRetryTransientError verifies marking an
@@ -3886,16 +6392,24 @@ func TestClientMarkAccountEventSeenDoesNotRetryTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr, "writing transient error should not fail")
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
-	err := client.MarkAccountEventSeen(t.Context(), 123)
 
-	mustError(t, err, "MarkAccountEventSeen should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating event seen request must not be retried")
+	err := client.MarkAccountEventSeen(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientListAccountPaymentMethodsSuccess verifies ListAccountPaymentMethods sends a GET
@@ -3916,27 +6430,60 @@ func TestClientListAccountPaymentMethodsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(methods))
+		if r.URL.Path != tcAccountPaymentMethods {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(methods); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountPaymentMethods(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountPaymentMethods should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 123, result.Data[0].ID)
-	checkEqual(t, paymentMethodCreditCard, result.Data[0].Type)
-	checkTrue(t, result.Data[0].IsDefault)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if result.Data[0].Type != paymentMethodCreditCard {
+		t.Errorf("result.Data[0].Type = %v, want %v", result.Data[0].Type, paymentMethodCreditCard)
+	}
+
+	if !result.Data[0].IsDefault {
+		t.Error("result.Data[0].IsDefault = false, want true")
+	}
 }
 
 // TestClientListAccountPaymentMethodsAPIError verifies ListAccountPaymentMethods propagates API errors.
@@ -3944,27 +6491,51 @@ func TestClientListAccountPaymentMethodsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountPaymentMethods(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountPaymentMethods should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountPaymentMethodsRetriesTransientError verifies the read-only list retries transient failures.
@@ -3977,30 +6548,55 @@ func TestClientListAccountPaymentMethodsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPaymentMethod]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPaymentMethod]{
 			Data: []linode.AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountPaymentMethods(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountPaymentMethods should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 123, result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientGetAccountPaymentMethodSuccess(t *testing.T) {
@@ -4009,63 +6605,110 @@ func TestClientGetAccountPaymentMethodSuccess(t *testing.T) {
 	want := linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: "1111"}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods123)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.GetAccountPaymentMethod(t.Context(), "123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountPaymentMethod should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, want, *got)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("*got = %v, want %v", *got, want)
+	}
 }
 
 func TestClientGetAccountPaymentMethodEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
+		if r.URL.EscapedPath() != "/account/payment-methods/123%2F456%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/payment-methods/123%2F456%3Fquery")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountPaymentMethod(t.Context(), "123/456?query")
-
-	mustNoError(t, err, "GetAccountPaymentMethod should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetAccountPaymentMethodAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountPaymentMethod(t.Context(), "123")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountPaymentMethod should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkContains(t, apiErr.Message, errForbidden)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("apiErr.Message does not contain %v", errForbidden)
+	}
 }
 
 func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
@@ -4081,80 +6724,134 @@ func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	got, err := client.GetAccountPaymentMethod(t.Context(), "123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountPaymentMethod should succeed after retry")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, 123, got.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != 123 {
+		t.Errorf("got.ID = %v, want %v", got.ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientDeleteAccountPaymentMethodSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
-		checkEmpty(t, r.URL.RawQuery, "delete request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods123)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
-
-	mustNoError(t, err, "DeleteAccountPaymentMethod should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteAccountPaymentMethodEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.URL.EscapedPath() != "/account/payment-methods/123%2F456%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/payment-methods/123%2F456%3Fquery")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123/456?query")
-
-	mustNoError(t, err, "DeleteAccountPaymentMethod should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteAccountPaymentMethodAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteAccountPaymentMethod should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkContains(t, apiErr.Message, errForbidden)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("apiErr.Message does not contain %v", errForbidden)
+	}
 }
 
 func TestClientDeleteAccountPaymentMethodDoesNotRetryTransientError(t *testing.T) {
@@ -4171,71 +6868,119 @@ func TestClientDeleteAccountPaymentMethodDoesNotRetryTransientError(t *testing.T
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteAccountPaymentMethod should surface transient failures")
-	checkEqual(t, int32(1), requestCount.Load(), "destructive DELETE should not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientMakeAccountPaymentMethodDefaultSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
-		checkEmpty(t, r.URL.RawQuery, "make-default request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "make-default request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/payment-methods/123/make-default" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/payment-methods/123/make-default")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
-
-	mustNoError(t, err, "MakeAccountPaymentMethodDefault should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientMakeAccountPaymentMethodDefaultEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/payment-methods/123%2F456%3Fquery/make-default", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.URL.EscapedPath() != "/account/payment-methods/123%2F456%3Fquery/make-default" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/payment-methods/123%2F456%3Fquery/make-default")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123/456?query")
-
-	mustNoError(t, err, "MakeAccountPaymentMethodDefault should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientMakeAccountPaymentMethodDefaultAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/payment-methods/123/make-default" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/payment-methods/123/make-default")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "MakeAccountPaymentMethodDefault should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkContains(t, apiErr.Message, errForbidden)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if !strings.Contains(apiErr.Message, errForbidden) {
+		t.Errorf("apiErr.Message does not contain %v", errForbidden)
+	}
 }
 
 func TestClientMakeAccountPaymentMethodDefaultDoesNotRetryTransientError(t *testing.T) {
@@ -4252,9 +6997,13 @@ func TestClientMakeAccountPaymentMethodDefaultDoesNotRetryTransientError(t *test
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "MakeAccountPaymentMethodDefault should surface transient failures")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating make-default POST should not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
@@ -4264,64 +7013,122 @@ func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
 	created := linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: "1111"}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		checkEmpty(t, r.URL.RawQuery, "create request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]any
 
 		decodeErr := json.NewDecoder(r.Body).Decode(&body)
-		checkNoError(t, decodeErr)
+		if decodeErr != nil {
+			t.Errorf("unexpected error: %v", decodeErr)
+		}
 
 		if decodeErr != nil {
 			return
 		}
 
-		checkEqual(t, paymentMethodCreditCard, body[keyType])
-		checkEqual(t, true, body[keyIsDefault])
-		checkEqual(t, map[string]any{keyToken: paymentMethodToken}, body[keyData])
+		if !reflect.DeepEqual(body[keyType], paymentMethodCreditCard) {
+			t.Errorf("body[keyType] = %v, want %v", body[keyType], paymentMethodCreditCard)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(created))
+		if !reflect.DeepEqual(body[keyIsDefault], true) {
+			t.Errorf("body[keyIsDefault] = %v, want %v", body[keyIsDefault], true)
+		}
+
+		if !reflect.DeepEqual(body[keyData], map[string]any{keyToken: paymentMethodToken}) {
+			t.Errorf("body[keyData] = %v, want %v", body[keyData], map[string]any{keyToken: paymentMethodToken})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.CreateAccountPaymentMethod(t.Context(), request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "CreateAccountPaymentMethod should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 321, result.ID)
-	checkEqual(t, paymentMethodCreditCard, result.Type)
-	checkTrue(t, result.IsDefault)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 321 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 321)
+	}
+
+	if result.Type != paymentMethodCreditCard {
+		t.Errorf("result.Type = %v, want %v", result.Type, paymentMethodCreditCard)
+	}
+
+	if !result.IsDefault {
+		t.Error("result.IsDefault = false, want true")
+	}
 }
 
 func TestClientCreateAccountPaymentMethodAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountPaymentMethods {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.CreateAccountPaymentMethod(t.Context(), &linode.CreateAccountPaymentMethodRequest{Type: paymentMethodCreditCard, Data: map[string]any{keyToken: paymentMethodToken}, IsDefault: true})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateAccountPaymentMethod should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, "forbidden", apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientCreateAccountPaymentMethodDoesNotRetryTransientError(t *testing.T) {
@@ -4331,19 +7138,30 @@ func TestClientCreateAccountPaymentMethodDoesNotRetryTransientError(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.CreateAccountPaymentMethod(t.Context(), &linode.CreateAccountPaymentMethodRequest{Type: paymentMethodCreditCard, Data: map[string]any{keyToken: paymentMethodToken}, IsDefault: true})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateAccountPaymentMethod should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating payment method creation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientListAccountInvoicesSuccess verifies ListAccountInvoices sends a GET
@@ -4364,27 +7182,60 @@ func TestClientListAccountInvoicesSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(invoices))
+		if r.URL.Path != tcAccountInvoices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(invoices); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountInvoices(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountInvoices should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 987, result.Data[0].ID)
-	checkEqual(t, "Invoice 987", result.Data[0].Label)
-	checkInEpsilon(t, 42.50, result.Data[0].Total, 0.0001)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 987 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 987)
+	}
+
+	if result.Data[0].Label != tcInvoice987 {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, tcInvoice987)
+	}
+
+	if math.Abs(result.Data[0].Total-42.50) > math.Abs(42.50)*0.0001 {
+		t.Errorf("got %v, want %v", result.Data[0].Total, 42.50)
+	}
 }
 
 // TestClientListAccountInvoicesAPIError verifies ListAccountInvoices propagates API errors.
@@ -4392,27 +7243,51 @@ func TestClientListAccountInvoicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountInvoices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountInvoices(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountInvoices should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountInvoicesRetriesTransientError verifies the read-only list retries transient failures.
@@ -4425,30 +7300,55 @@ func TestClientListAccountInvoicesRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices", r.URL.Path, "request path should be /account/invoices")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoice]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountInvoices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoice]{
 			Data: []linode.AccountInvoice{{ID: 987, Label: "Invoice 987"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountInvoices(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountInvoices should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 987, result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 987 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 987)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountPaymentsSuccess verifies ListAccountPayments sends a GET
@@ -4468,26 +7368,56 @@ func TestClientListAccountPaymentsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(payments))
+		if r.URL.Path != tcAccountPayments {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPayments)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(payments); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountPayments(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountPayments should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 654, result.Data[0].ID)
-	checkInEpsilon(t, 20.25, result.Data[0].USD, 0.0001)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 654 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 654)
+	}
+
+	if math.Abs(result.Data[0].USD-20.25) > math.Abs(20.25)*0.0001 {
+		t.Errorf("got %v, want %v", result.Data[0].USD, 20.25)
+	}
 }
 
 // TestClientListAccountPaymentsAPIError verifies ListAccountPayments propagates API errors.
@@ -4495,27 +7425,51 @@ func TestClientListAccountPaymentsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPayments {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPayments)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountPayments(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountPayments should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountPaymentsRetriesTransientError verifies the read-only list retries transient failures.
@@ -4528,30 +7482,55 @@ func TestClientListAccountPaymentsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payments", r.URL.Path, "request path should be /account/payments")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPayment]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPayments {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPayments)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPayment]{
 			Data: []linode.AccountPayment{{ID: 654, USD: 20.25}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountPayments(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountPayments should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 654, result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 654 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 654)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientGetAccountPaymentSuccess(t *testing.T) {
@@ -4560,50 +7539,95 @@ func TestClientGetAccountPaymentSuccess(t *testing.T) {
 	payment := linode.AccountPayment{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(payment))
+		if r.URL.Path != tcAccountPayments654 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPayments654)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(payment); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountPayment(t.Context(), 654)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountPayment should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 654, result.ID)
-	checkInEpsilon(t, 20.25, result.USD, 0.0001)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 654 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 654)
+	}
+
+	if math.Abs(result.USD-20.25) > math.Abs(20.25)*0.0001 {
+		t.Errorf("got %v, want %v", result.USD, 20.25)
+	}
 }
 
 func TestClientGetAccountPaymentAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPayments654 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPayments654)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountPayment(t.Context(), 654)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountPayment should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientGetAccountPaymentRetriesTransientError(t *testing.T) {
@@ -4615,34 +7639,58 @@ func TestClientGetAccountPaymentRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountPayment{ID: 654, USD: 20.25}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountPayments654 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPayments654)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountPayment{ID: 654, USD: 20.25}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountPayment(t.Context(), 654)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountPayment should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 654, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 654 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 654)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientListAccountEntityTransfersRemoved(t *testing.T) {
 	t.Parallel()
 
 	_, ok := reflect.TypeFor[*linode.Client]().MethodByName("ListAccountEntityTransfers")
-	checkFalse(t, ok, "deprecated account entity transfer list client method should be removed")
+	if ok {
+		t.Error("ok = true, want false")
+	}
 }
 
 func TestClientListAccountServiceTransfersSuccess(t *testing.T) {
@@ -4664,53 +7712,107 @@ func TestClientListAccountServiceTransfersSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(transfers))
+		if r.URL.Path != tcAccountServiceTransfers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfers)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(transfers); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountServiceTransfers(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountServiceTransfers should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, accountEntityTransferToken, result.Data[0].Token)
-	checkEqual(t, "pending", result.Data[0].Status)
-	checkEqual(t, []int{111, 222}, result.Data[0].Entities.Linodes)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Token != accountEntityTransferToken {
+		t.Errorf("result.Data[0].Token = %v, want %v", result.Data[0].Token, accountEntityTransferToken)
+	}
+
+	if result.Data[0].Status != "pending" {
+		t.Errorf("result.Data[0].Status = %v, want %v", result.Data[0].Status, "pending")
+	}
+
+	if !reflect.DeepEqual(result.Data[0].Entities.Linodes, []int{111, 222}) {
+		t.Errorf("result.Data[0].Entities.Linodes = %v, want %v", result.Data[0].Entities.Linodes, []int{111, 222})
+	}
 }
 
 func TestClientListAccountServiceTransfersAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfers)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountServiceTransfers(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountServiceTransfers should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientListAccountServiceTransfersRetriesTransientError(t *testing.T) {
@@ -4722,30 +7824,55 @@ func TestClientListAccountServiceTransfersRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEntityTransfer]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfers)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEntityTransfer]{
 			Data: []linode.AccountEntityTransfer{{Token: accountEntityTransferToken, Status: "pending"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountServiceTransfers(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountServiceTransfers should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, accountEntityTransferToken, result.Data[0].Token)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Token != accountEntityTransferToken {
+		t.Errorf("result.Data[0].Token = %v, want %v", result.Data[0].Token, accountEntityTransferToken)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountServiceTransferSuccess verifies GetAccountServiceTransfer sends a GET
@@ -4764,25 +7891,52 @@ func TestClientGetAccountServiceTransferSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.GetAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountServiceTransfer should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, accountServiceTransferToken, got.Token)
-	checkEqual(t, statusPending, got.Status)
-	checkEqual(t, []int{111, 222}, got.Entities.Linodes)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Token != accountServiceTransferToken {
+		t.Errorf("got.Token = %v, want %v", got.Token, accountServiceTransferToken)
+	}
+
+	if got.Status != statusPending {
+		t.Errorf("got.Status = %v, want %v", got.Status, statusPending)
+	}
+
+	if !reflect.DeepEqual(got.Entities.Linodes, []int{111, 222}) {
+		t.Errorf("got.Entities.Linodes = %v, want %v", got.Entities.Linodes, []int{111, 222})
+	}
 }
 
 // TestClientGetAccountServiceTransferEscapesToken verifies the client encodes path separators.
@@ -4790,18 +7944,28 @@ func TestClientGetAccountServiceTransferEscapesToken(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: "service/token?query"}))
+		if r.URL.EscapedPath() != "/account/service-transfers/service%2Ftoken%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/service-transfers/service%2Ftoken%3Fquery")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: "service/token?query"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountServiceTransfer(t.Context(), "service/token?query")
-
-	mustNoError(t, err, "GetAccountServiceTransfer should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetAccountServiceTransferAPIError verifies GetAccountServiceTransfer propagates API errors.
@@ -4809,26 +7973,47 @@ func TestClientGetAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountServiceTransfer should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountServiceTransferRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -4841,27 +8026,49 @@ func TestClientGetAccountServiceTransferRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: accountServiceTransferToken, Status: statusPending}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: accountServiceTransferToken, Status: statusPending}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountServiceTransfer should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, accountServiceTransferToken, result.Token)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Token != accountServiceTransferToken {
+		t.Errorf("result.Token = %v, want %v", result.Token, accountServiceTransferToken)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientDeleteAccountServiceTransferSuccess verifies DeleteAccountServiceTransfer sends a DELETE
@@ -4870,23 +8077,41 @@ func TestClientDeleteAccountServiceTransferSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "DELETE request should not send a body")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
-
-	mustNoError(t, err, "DeleteAccountServiceTransfer should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientDeleteAccountServiceTransferEscapesToken verifies the client encodes path separators.
@@ -4894,20 +8119,33 @@ func TestClientDeleteAccountServiceTransferEscapesToken(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/account/service-transfers/service%2Ftoken%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/service-transfers/service%2Ftoken%3Fquery")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), "service/token?query")
-
-	mustNoError(t, err, "DeleteAccountServiceTransfer should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientDeleteAccountServiceTransferAPIError verifies DeleteAccountServiceTransfer propagates API errors.
@@ -4915,26 +8153,47 @@ func TestClientDeleteAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteAccountServiceTransfer should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientDeleteAccountServiceTransferDoesNotRetryTransientError verifies
@@ -4947,17 +8206,24 @@ func TestClientDeleteAccountServiceTransferDoesNotRetryTransientError(t *testing
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "DeleteAccountServiceTransfer should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating transfer cancellation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientAcceptAccountServiceTransferSuccess verifies AcceptAccountServiceTransfer sends a POST
@@ -4966,69 +8232,121 @@ func TestClientAcceptAccountServiceTransferSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "POST accept request should not send a body")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/account/service-transfers/service-token-example/accept" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/service-transfers/service-token-example/accept")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
-
-	mustNoError(t, err, "AcceptAccountServiceTransfer should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientAcceptAccountServiceTransferEscapesToken(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/service-transfers/service%2Ftoken%3Fquery/accept", r.URL.EscapedPath(), "path parameter should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.EscapedPath() != "/account/service-transfers/service%2Ftoken%3Fquery/accept" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/service-transfers/service%2Ftoken%3Fquery/accept")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), "service/token?query")
-
-	mustNoError(t, err, "AcceptAccountServiceTransfer should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientAcceptAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/service-transfers/service-token-example/accept" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/service-transfers/service-token-example/accept")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "AcceptAccountServiceTransfer should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientAcceptAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
@@ -5039,31 +8357,42 @@ func TestClientAcceptAccountServiceTransferDoesNotRetryTransientError(t *testing
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "AcceptAccountServiceTransfer should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating service transfer acceptance must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientAccountEntityTransferAcceptRouteRemoved(t *testing.T) {
 	t.Parallel()
 
 	_, exists := reflect.TypeFor[*linode.Client]().MethodByName("AcceptAccountEntityTransfer")
-	checkFalse(t, exists, "deprecated account entity-transfer accept client method should not be exposed")
+	if exists {
+		t.Error("exists = true, want false")
+	}
 }
 
 func TestClientDeleteAccountEntityTransferDeprecatedRouteRemoved(t *testing.T) {
 	t.Parallel()
 
 	_, exists := reflect.TypeFor[*linode.Client]().MethodByName("DeleteAccountEntityTransfer")
-	checkFalse(t, exists, "deprecated account entity-transfer delete client method should not be exposed")
+	if exists {
+		t.Error("exists = true, want false")
+	}
 }
 
 // TestClientGetAccountInvoiceSuccess verifies GetAccountInvoice sends a GET
@@ -5079,25 +8408,52 @@ func TestClientGetAccountInvoiceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(invoice))
+		if r.URL.Path != tcAccountInvoices12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices12345)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(invoice); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountInvoice should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, accountInvoiceID, result.ID)
-	checkEqual(t, "Invoice #12345", result.Label)
-	checkInDelta(t, 11.00, result.Total, 0.001)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != accountInvoiceID {
+		t.Errorf("result.ID = %v, want %v", result.ID, accountInvoiceID)
+	}
+
+	if result.Label != tcInvoice12345 {
+		t.Errorf("result.Label = %v, want %v", result.Label, tcInvoice12345)
+	}
+
+	if math.Abs(result.Total-11.00) > 0.001 {
+		t.Errorf("got %v, want %v", result.Total, 11.00)
+	}
 }
 
 // TestClientGetAccountInvoiceAPIError verifies GetAccountInvoice propagates API errors.
@@ -5105,26 +8461,47 @@ func TestClientGetAccountInvoiceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountInvoices12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountInvoice should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountUsersSuccess verifies ListAccountUsers sends a GET
@@ -5152,28 +8529,64 @@ func TestClientListAccountUsersSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(users))
+		if r.URL.Path != tcAccountUsers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountUsers)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(users); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountUsers(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountUsers should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, accountLoginUsername, result.Data[0].Username)
-	checkEqual(t, accountUserEmail, result.Data[0].Email)
-	checkTrue(t, result.Data[0].Restricted)
-	checkTrue(t, result.Data[0].TFAEnabled)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Username != accountLoginUsername {
+		t.Errorf("result.Data[0].Username = %v, want %v", result.Data[0].Username, accountLoginUsername)
+	}
+
+	if result.Data[0].Email != accountUserEmail {
+		t.Errorf("result.Data[0].Email = %v, want %v", result.Data[0].Email, accountUserEmail)
+	}
+
+	if !result.Data[0].Restricted {
+		t.Error("result.Data[0].Restricted = false, want true")
+	}
+
+	if !result.Data[0].TFAEnabled {
+		t.Error("result.Data[0].TFAEnabled = false, want true")
+	}
 }
 
 // TestClientListAccountUsersAPIError verifies ListAccountUsers propagates API errors.
@@ -5181,26 +8594,50 @@ func TestClientListAccountUsersAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountUsers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountUsers)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountUsers(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountUsers should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountUsersRetriesTransientError verifies the read-only list retries transient failures.
@@ -5213,30 +8650,55 @@ func TestClientListAccountUsersRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users", r.URL.Path, "request path should be /account/users")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountUser]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountUsers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountUsers)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountUser]{
 			Data: []linode.AccountUser{{Username: accountLoginUsername, Email: accountUserEmail}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountUsers(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountUsers should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, accountLoginUsername, result.Data[0].Username)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Username != accountLoginUsername {
+		t.Errorf("result.Data[0].Username = %v, want %v", result.Data[0].Username, accountLoginUsername)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountUserSuccess verifies GetAccountUser sends a GET
@@ -5255,26 +8717,56 @@ func TestClientGetAccountUserSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(user))
+		if r.URL.Path != "/account/users/"+accountLoginUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(user); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountUser(t.Context(), accountLoginUsername)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountUser should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, accountLoginUsername, result.Username)
-	checkEqual(t, accountUserEmail, result.Email)
-	checkTrue(t, result.Restricted)
-	checkTrue(t, result.TFAEnabled)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Username != accountLoginUsername {
+		t.Errorf("result.Username = %v, want %v", result.Username, accountLoginUsername)
+	}
+
+	if result.Email != accountUserEmail {
+		t.Errorf("result.Email = %v, want %v", result.Email, accountUserEmail)
+	}
+
+	if !result.Restricted {
+		t.Error("result.Restricted = false, want true")
+	}
+
+	if !result.TFAEnabled {
+		t.Error("result.TFAEnabled = false, want true")
+	}
 }
 
 // TestClientGetAccountUserEscapesUsername verifies the client encodes path separators.
@@ -5282,18 +8774,28 @@ func TestClientGetAccountUserEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath())
-		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query"}))
+		if r.URL.EscapedPath() != tcAccountUsersUser2Fname3Fquery {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), tcAccountUsersUser2Fname3Fquery)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetAccountUser(t.Context(), "user/name?query")
-
-	mustNoError(t, err, "GetAccountUser should escape path parameters")
+	_, err := client.GetAccountUser(t.Context(), tcUserNameQuery)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetAccountUserAPIError verifies GetAccountUser propagates API errors.
@@ -5301,25 +8803,46 @@ func TestClientGetAccountUserAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountUser(t.Context(), accountLoginUsername)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountUser should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountUserRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -5332,27 +8855,49 @@ func TestClientGetAccountUserRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountLoginUsername, Email: accountUserEmail}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: accountLoginUsername, Email: accountUserEmail}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountUser(t.Context(), accountLoginUsername)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountUser should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, accountLoginUsername, result.Username)
-	checkEqual(t, int32(2), requestCount.Load(), "request should be retried once")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Username != accountLoginUsername {
+		t.Errorf("result.Username = %v, want %v", result.Username, accountLoginUsername)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountUserGrantsSuccess verifies GetAccountUserGrants sends a GET
@@ -5366,25 +8911,52 @@ func TestClientGetAccountUserGrantsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(grants))
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(grants); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountUserGrants should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
-	mustLen(t, result.Linode, 1)
-	checkEqual(t, 123, result.Linode[0].ID)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Global.AccountAccess != linode.GrantPermission("read_only") {
+		t.Errorf("result.Global.AccountAccess = %v, want %v", result.Global.AccountAccess, linode.GrantPermission("read_only"))
+	}
+
+	if len(result.Linode) != 1 {
+		t.Fatalf("len(result.Linode) = %d, want %d", len(result.Linode), 1)
+	}
+
+	if result.Linode[0].ID != 123 {
+		t.Errorf("result.Linode[0].ID = %v, want %v", result.Linode[0].ID, 123)
+	}
 }
 
 // TestClientGetAccountUserGrantsEscapesUsername verifies the client encodes path separators.
@@ -5392,18 +8964,28 @@ func TestClientGetAccountUserGrantsEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath())
-		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+		if r.URL.EscapedPath() != "/account/users/user%2Fname%3Fquery/grants" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/users/user%2Fname%3Fquery/grants")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Grants{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetAccountUserGrants(t.Context(), "user/name?query")
-
-	mustNoError(t, err, "GetAccountUserGrants should escape path parameters")
+	_, err := client.GetAccountUserGrants(t.Context(), tcUserNameQuery)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetAccountUserGrantsAPIError verifies GetAccountUserGrants propagates API errors.
@@ -5411,25 +8993,46 @@ func TestClientGetAccountUserGrantsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountUserGrants should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountUserGrantsRetriesTransientError verifies the read-only grants lookup retries transient failures.
@@ -5442,27 +9045,49 @@ func TestClientGetAccountUserGrantsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")}}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Grants{Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountUserGrants should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
-	checkEqual(t, int32(2), requestCount.Load(), "request should be retried once")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Global.AccountAccess != linode.GrantPermission("read_only") {
+		t.Errorf("result.Global.AccountAccess = %v, want %v", result.Global.AccountAccess, linode.GrantPermission("read_only"))
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountLoginsSuccess verifies ListAccountLogins sends a GET
@@ -5485,27 +9110,60 @@ func TestClientListAccountLoginsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(logins))
+		if r.URL.Path != tcAccountLogins {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountLogins)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(logins); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountLogins(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountLogins should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 123, result.Data[0].ID)
-	checkEqual(t, accountLoginUsername, result.Data[0].Username)
-	checkEqual(t, accountLoginIP, result.Data[0].IP)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if result.Data[0].Username != accountLoginUsername {
+		t.Errorf("result.Data[0].Username = %v, want %v", result.Data[0].Username, accountLoginUsername)
+	}
+
+	if result.Data[0].IP != accountLoginIP {
+		t.Errorf("result.Data[0].IP = %v, want %v", result.Data[0].IP, accountLoginIP)
+	}
 }
 
 // TestClientListAccountLoginsAPIError verifies ListAccountLogins propagates API errors.
@@ -5513,27 +9171,51 @@ func TestClientListAccountLoginsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountLogins {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountLogins)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountLogins(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountLogins should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountLoginsRetriesTransientError verifies the read-only list retries transient failures.
@@ -5546,30 +9228,55 @@ func TestClientListAccountLoginsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/logins", r.URL.Path, "request path should be /account/logins")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountLogins {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountLogins)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
 			Data: []linode.AccountLogin{{ID: 123, Username: accountLoginUsername}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountLogins(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountLogins should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, 123, result.Data[0].ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].ID != 123 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetProfileLoginSuccess verifies GetProfileLogin sends a GET
@@ -5587,25 +9294,52 @@ func TestClientGetProfileLoginSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(login))
+		if r.URL.Path != tcProfileLogins123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileLogins123)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(login); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetProfileLogin(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetProfileLogin should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 123, result.ID)
-	checkEqual(t, accountLoginUsername, result.Username)
-	checkEqual(t, accountLoginIP, result.IP)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if result.Username != accountLoginUsername {
+		t.Errorf("result.Username = %v, want %v", result.Username, accountLoginUsername)
+	}
+
+	if result.IP != accountLoginIP {
+		t.Errorf("result.IP = %v, want %v", result.IP, accountLoginIP)
+	}
 }
 
 // TestClientGetProfileLoginAPIError verifies GetProfileLogin propagates API errors.
@@ -5613,26 +9347,47 @@ func TestClientGetProfileLoginAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileLogins123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileLogins123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetProfileLogin(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetProfileLogin should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetProfileLoginRetriesTransientError verifies the read-only get retries transient failures.
@@ -5645,27 +9400,49 @@ func TestClientGetProfileLoginRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileLogins123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileLogins123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetProfileLogin(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetProfileLogin should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 123, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountLoginSuccess verifies GetAccountLogin sends a GET
@@ -5683,25 +9460,52 @@ func TestClientGetAccountLoginSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(login))
+		if r.URL.Path != tcAccountLogins123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountLogins123)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(login); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountLogin(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountLogin should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 123, result.ID)
-	checkEqual(t, accountLoginUsername, result.Username)
-	checkEqual(t, accountLoginIP, result.IP)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if result.Username != accountLoginUsername {
+		t.Errorf("result.Username = %v, want %v", result.Username, accountLoginUsername)
+	}
+
+	if result.IP != accountLoginIP {
+		t.Errorf("result.IP = %v, want %v", result.IP, accountLoginIP)
+	}
 }
 
 // TestClientGetAccountLoginAPIError verifies GetAccountLogin propagates API errors.
@@ -5709,26 +9513,47 @@ func TestClientGetAccountLoginAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountLogins123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountLogins123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountLogin(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountLogin should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountLoginRetriesTransientError verifies the read-only get retries transient failures.
@@ -5741,27 +9566,49 @@ func TestClientGetAccountLoginRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountLogins123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountLogins123)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountLogin(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountLogin should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 123, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientListAccountInvoiceItemsSuccess verifies ListAccountInvoiceItems sends a GET
@@ -5783,26 +9630,56 @@ func TestClientListAccountInvoiceItemsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(items))
+		if r.URL.Path != tcAccountInvoices12345Items {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices12345Items)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(items); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountInvoiceItems should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "Nanode 1GB", result.Data[0].Label)
-	checkInDelta(t, 5.00, result.Data[0].Total, 0.001)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Label != tcNanode1GB {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, tcNanode1GB)
+	}
+
+	if math.Abs(result.Data[0].Total-5.00) > 0.001 {
+		t.Errorf("got %v, want %v", result.Data[0].Total, 5.00)
+	}
 }
 
 // TestClientListAccountInvoiceItemsAPIError verifies ListAccountInvoiceItems propagates API errors.
@@ -5810,26 +9687,47 @@ func TestClientListAccountInvoiceItemsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountInvoices12345Items {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices12345Items)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "ListAccountInvoiceItems should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientListAccountInvoiceItemsRetriesTransientError verifies the read-only list retries transient failures.
@@ -5841,8 +9739,13 @@ func TestClientListAccountInvoiceItemsRetriesTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountInvoices12345Items {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices12345Items)
+		}
 
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -5850,21 +9753,34 @@ func TestClientListAccountInvoiceItemsRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoiceItem]{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoiceItem]{
 			Data: []linode.AccountInvoiceItem{{Label: "Nanode 1GB", Total: 5.00}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListAccountInvoiceItems should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	mustLen(t, result.Data, 1)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountInvoiceRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -5877,27 +9793,49 @@ func TestClientGetAccountInvoiceRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountInvoice{ID: accountInvoiceID, Label: "Invoice #12345"}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountInvoices12345 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountInvoices12345)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountInvoice{ID: accountInvoiceID, Label: "Invoice #12345"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountInvoice should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, accountInvoiceID, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != accountInvoiceID {
+		t.Errorf("result.ID = %v, want %v", result.ID, accountInvoiceID)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientGetAccountChildAccountSuccess verifies GetAccountChildAccount sends a GET
@@ -5919,26 +9857,56 @@ func TestClientGetAccountChildAccountSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(childAccount))
+		if r.URL.Path != tcAccountChildAccountsA1BC2DEF34GH567IJ890KLMN12 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountChildAccountsA1BC2DEF34GH567IJ890KLMN12)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(childAccount); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountChildAccount(t.Context(), childAccountEUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountChildAccount should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, childAccountEUUID, result.EUUID)
-	checkEqual(t, companyAcme, result.Company)
-	checkEqual(t, "11/2024", result.CreditCard.Expiry)
-	checkEqual(t, "0111", result.CreditCard.LastFour)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.EUUID != childAccountEUUID {
+		t.Errorf("result.EUUID = %v, want %v", result.EUUID, childAccountEUUID)
+	}
+
+	if result.Company != companyAcme {
+		t.Errorf("result.Company = %v, want %v", result.Company, companyAcme)
+	}
+
+	if result.CreditCard.Expiry != tcLit {
+		t.Errorf("result.CreditCard.Expiry = %v, want %v", result.CreditCard.Expiry, tcLit)
+	}
+
+	if result.CreditCard.LastFour != "0111" {
+		t.Errorf("result.CreditCard.LastFour = %v, want %v", result.CreditCard.LastFour, "0111")
+	}
 }
 
 // TestClientGetAccountChildAccountEscapesEUUID verifies the client encodes path separators.
@@ -5946,17 +9914,24 @@ func TestClientGetAccountChildAccountEscapesEUUID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/child-accounts/child%2Faccount%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: "child/account?query"}))
+		if r.URL.EscapedPath() != "/account/child-accounts/child%2Faccount%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/child-accounts/child%2Faccount%3Fquery")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: "child/account?query"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountChildAccount(t.Context(), "child/account?query")
-
-	mustNoError(t, err, "GetAccountChildAccount should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetAccountChildAccountAPIError verifies GetAccountChildAccount propagates API errors.
@@ -5964,26 +9939,47 @@ func TestClientGetAccountChildAccountAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountChildAccountsA1BC2DEF34GH567IJ890KLMN12 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountChildAccountsA1BC2DEF34GH567IJ890KLMN12)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountChildAccount(t.Context(), childAccountEUUID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountChildAccount should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountChildAccountRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -5996,27 +9992,49 @@ func TestClientGetAccountChildAccountRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: childAccountEUUID, Company: companyAcme}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcAccountChildAccountsA1BC2DEF34GH567IJ890KLMN12 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountChildAccountsA1BC2DEF34GH567IJ890KLMN12)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ChildAccount{EUUID: childAccountEUUID, Company: companyAcme}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountChildAccount(t.Context(), childAccountEUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountChildAccount should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, childAccountEUUID, result.EUUID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.EUUID != childAccountEUUID {
+		t.Errorf("result.EUUID = %v, want %v", result.EUUID, childAccountEUUID)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientCreateAccountServiceTransferSuccess verifies CreateAccountServiceTransfer
@@ -6031,17 +10049,36 @@ func TestClientCreateAccountServiceTransferSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfers)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var got linode.CreateAccountServiceTransferRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&got))
-		checkEqual(t, []int{123, 456}, got.Entities.Linodes)
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(want))
+		if !reflect.DeepEqual(got.Entities.Linodes, []int{123, 456}) {
+			t.Errorf("got.Entities.Linodes = %v, want %v", got.Entities.Linodes, []int{123, 456})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(want); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -6049,24 +10086,46 @@ func TestClientCreateAccountServiceTransferSuccess(t *testing.T) {
 	req := &linode.CreateAccountServiceTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}}}
 
 	got, err := client.CreateAccountServiceTransfer(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "CreateAccountServiceTransfer should succeed on 200 response")
-	mustNotNil(t, got, "result should not be nil")
-	checkEqual(t, statusPending, got.Status)
-	checkEqual(t, "service-transfer-token", got.Token)
-	checkEqual(t, []int{123, 456}, got.Entities.Linodes)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Status != statusPending {
+		t.Errorf("got.Status = %v, want %v", got.Status, statusPending)
+	}
+
+	if got.Token != "service-transfer-token" {
+		t.Errorf("got.Token = %v, want %v", got.Token, "service-transfer-token")
+	}
+
+	if !reflect.DeepEqual(got.Entities.Linodes, []int{123, 456}) {
+		t.Errorf("got.Entities.Linodes = %v, want %v", got.Entities.Linodes, []int{123, 456})
+	}
 }
 
 func TestClientCreateAccountServiceTransferAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountServiceTransfers {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfers)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
@@ -6074,15 +10133,30 @@ func TestClientCreateAccountServiceTransferAPIError(t *testing.T) {
 	req := &linode.CreateAccountServiceTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123}}}
 
 	got, err := client.CreateAccountServiceTransfer(t.Context(), req)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateAccountServiceTransfer should return API error")
-	checkNil(t, got, "result should be nil on API error")
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
+
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
@@ -6093,8 +10167,11 @@ func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
@@ -6102,9 +10179,13 @@ func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing
 	req := &linode.CreateAccountServiceTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123}}}
 
 	_, err := client.CreateAccountServiceTransfer(t.Context(), req)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateAccountServiceTransfer should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating service transfer creation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientCreateAccountChildAccountTokenSuccess verifies CreateAccountChildAccountToken
@@ -6122,28 +10203,64 @@ func TestClientCreateAccountChildAccountTokenSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "token creation should not send a request body")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(proxyToken))
+		if r.URL.Path != "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(proxyToken); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "CreateAccountChildAccountToken should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, 918, result.ID)
-	checkEqual(t, "parent1_1234_2024-05-01T00:01:01", result.Label)
-	checkEqual(t, "*", result.Scopes)
-	checkEqual(t, "abcdefghijklmnop", result.Token)
-	checkEqual(t, "2024-05-01T00:16:01", result.Expiry)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 918 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 918)
+	}
+
+	if result.Label != "parent1_1234_2024-05-01T00:01:01" {
+		t.Errorf("result.Label = %v, want %v", result.Label, "parent1_1234_2024-05-01T00:01:01")
+	}
+
+	if result.Scopes != "*" {
+		t.Errorf("result.Scopes = %v, want %v", result.Scopes, "*")
+	}
+
+	if result.Token != "abcdefghijklmnop" {
+		t.Errorf("result.Token = %v, want %v", result.Token, "abcdefghijklmnop")
+	}
+
+	if result.Expiry != "2024-05-01T00:16:01" {
+		t.Errorf("result.Expiry = %v, want %v", result.Expiry, "2024-05-01T00:16:01")
+	}
 }
 
 // TestClientCreateAccountChildAccountTokenEscapesEUUID verifies the client encodes path separators.
@@ -6151,17 +10268,24 @@ func TestClientCreateAccountChildAccountTokenEscapesEUUID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/child-accounts/child%2Faccount%3Fquery/token", r.URL.EscapedPath(), "path parameter should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ProxyUserToken{Token: "proxy-token"}))
+		if r.URL.EscapedPath() != "/account/child-accounts/child%2Faccount%3Fquery/token" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/child-accounts/child%2Faccount%3Fquery/token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ProxyUserToken{Token: "proxy-token"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.CreateAccountChildAccountToken(t.Context(), "child/account?query")
-
-	mustNoError(t, err, "CreateAccountChildAccountToken should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientCreateAccountChildAccountTokenAPIError verifies API errors propagate.
@@ -6169,26 +10293,47 @@ func TestClientCreateAccountChildAccountTokenAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateAccountChildAccountToken should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError verifies
@@ -6201,17 +10346,24 @@ func TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError(t *testi
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateAccountChildAccountToken should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating token creation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 // TestClientGetAccountBetaSuccess verifies GetAccountBeta sends a GET
@@ -6230,26 +10382,56 @@ func TestClientGetAccountBetaSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(beta))
+		if r.URL.Path != "/account/betas/"+betaExampleOpen {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/betas/"+betaExampleOpen)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(beta); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountBeta should succeed on 200 response")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, betaExampleOpen, result.ID)
-	checkEqual(t, labelExampleOpenBeta, result.Label)
-	mustNotNil(t, result.Description)
-	checkEqual(t, description, *result.Description)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != betaExampleOpen {
+		t.Errorf("result.ID = %v, want %v", result.ID, betaExampleOpen)
+	}
+
+	if result.Label != labelExampleOpenBeta {
+		t.Errorf("result.Label = %v, want %v", result.Label, labelExampleOpenBeta)
+	}
+
+	if result.Description == nil {
+		t.Fatal("result.Description is nil")
+	}
+
+	if *result.Description != description {
+		t.Errorf("*result.Description = %v, want %v", *result.Description, description)
+	}
 }
 
 // TestClientGetAccountBetaEscapesID verifies the client encodes path separators.
@@ -6257,17 +10439,24 @@ func TestClientGetAccountBetaEscapesID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/account/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: "example/open?query"}))
+		if r.URL.EscapedPath() != "/account/betas/example%2Fopen%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/betas/example%2Fopen%3Fquery")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: "example/open?query"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountBeta(t.Context(), "example/open?query")
-
-	mustNoError(t, err, "GetAccountBeta should escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientGetAccountBetaAPIError verifies GetAccountBeta propagates API errors.
@@ -6275,26 +10464,47 @@ func TestClientGetAccountBetaAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/betas/"+betaExampleOpen {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/betas/"+betaExampleOpen)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetAccountBeta should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientGetAccountBetaRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -6307,27 +10517,49 @@ func TestClientGetAccountBetaRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/account/betas/"+betaExampleOpen {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/betas/"+betaExampleOpen)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "GetAccountBeta should succeed after retry")
-	mustNotNil(t, result, "result should not be nil")
-	checkEqual(t, betaExampleOpen, result.ID)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != betaExampleOpen {
+		t.Errorf("result.ID = %v, want %v", result.ID, betaExampleOpen)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 // TestClientEnrollAccountBetaSuccess verifies EnrollAccountBeta sends a POST
@@ -6336,27 +10568,50 @@ func TestClientEnrollAccountBetaSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountBetas)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, betaExampleOpen, body["id"])
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if !reflect.DeepEqual(body["id"], betaExampleOpen) {
+			t.Errorf("got %v, want %v", body["id"], betaExampleOpen)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
-
-	mustNoError(t, err, "EnrollAccountBeta should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientEnrollAccountBetaAPIError verifies EnrollAccountBeta propagates API errors.
@@ -6364,26 +10619,47 @@ func TestClientEnrollAccountBetaAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountBetas)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "EnrollAccountBeta should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr, "error should wrap APIError")
-	mustNotNil(t, apiErr, "APIError should be present")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr == nil {
+		t.Fatal("apiErr is nil")
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 // TestClientEnrollAccountBetaDoesNotRetry verifies the mutating beta enrollment
@@ -6396,20 +10672,33 @@ func TestClientEnrollAccountBetaDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountBetas {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountBetas)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "EnrollAccountBeta should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "EnrollAccountBeta must not retry and replay a mutating request")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientAcknowledgeAccountAgreementsSuccess verifies that
@@ -6419,22 +10708,53 @@ func TestClientAcknowledgeAccountAgreementsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountAgreements {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountAgreements)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, true, body["billing_agreement"])
-		checkEqual(t, true, body["eu_model"])
-		checkEqual(t, true, body["master_service_agreement"])
-		checkNotContains(t, body, "privacy_policy", "omitted fields should not be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if !reflect.DeepEqual(body["billing_agreement"], true) {
+			t.Errorf("got %v, want %v", body["billing_agreement"], true)
+		}
+
+		if !reflect.DeepEqual(body["eu_model"], true) {
+			t.Errorf("got %v, want %v", body["eu_model"], true)
+		}
+
+		if !reflect.DeepEqual(body["master_service_agreement"], true) {
+			t.Errorf("got %v, want %v", body["master_service_agreement"], true)
+		}
+
+		if _, ok := body["privacy_policy"]; ok {
+			t.Errorf("body has unexpected key %v", "privacy_policy")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
@@ -6443,13 +10763,15 @@ func TestClientAcknowledgeAccountAgreementsSuccess(t *testing.T) {
 	billingAgreement := true
 	euModel := true
 	masterServiceAgreement := true
+
 	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{
 		BillingAgreement:       &billingAgreement,
 		EUModel:                &euModel,
 		MasterServiceAgreement: &masterServiceAgreement,
 	})
-
-	mustNoError(t, err, "AcknowledgeAccountAgreements should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientAcknowledgeAccountAgreementsDoesNotRetry verifies the mutating
@@ -6462,21 +10784,35 @@ func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountAgreements {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountAgreements)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	privacyPolicy := true
-	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{PrivacyPolicy: &privacyPolicy})
 
-	mustError(t, err, "AcknowledgeAccountAgreements should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "AcknowledgeAccountAgreements must not retry and replay a mutating request")
+	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{PrivacyPolicy: &privacyPolicy})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientCancelAccountSuccess verifies CancelAccount sends a POST request to
@@ -6485,30 +10821,60 @@ func TestClientCancelAccountSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountCancel {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountCancel)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, "moving providers", body["comments"])
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if !reflect.DeepEqual(body["comments"], "moving providers") {
+			t.Errorf("got %v, want %v", body["comments"], "moving providers")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	comments := "moving providers"
-	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &comments})
 
-	mustNoError(t, err, "CancelAccount should succeed on 200 response")
-	mustNotNil(t, response, "response should not be nil")
-	checkEqual(t, "https://example.test/survey", response.SurveyLink)
+	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &comments})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if response == nil {
+		t.Fatal("response is nil")
+	}
+
+	if response.SurveyLink != "https://example.test/survey" {
+		t.Errorf("response.SurveyLink = %v, want %v", response.SurveyLink, "https://example.test/survey")
+	}
 }
 
 // TestClientCancelAccountWithoutComments verifies comments are optional.
@@ -6516,26 +10882,46 @@ func TestClientCancelAccountWithoutComments(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountCancel {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountCancel)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEmpty(t, body, "omitted comments should send an empty JSON object")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
 		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "CancelAccount should succeed without comments")
-	mustNotNil(t, response, "response should not be nil")
-	checkEqual(t, "https://example.test/survey", response.SurveyLink)
+	if response == nil {
+		t.Fatal("response is nil")
+	}
+
+	if response.SurveyLink != "https://example.test/survey" {
+		t.Errorf("response.SurveyLink = %v, want %v", response.SurveyLink, "https://example.test/survey")
+	}
 }
 
 // TestClientCancelAccountDoesNotRetry verifies account cancellation is not
@@ -6548,21 +10934,35 @@ func TestClientCancelAccountDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountCancel {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountCancel)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	errComments := "temporary"
-	_, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &errComments})
 
-	mustError(t, err, "CancelAccount should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "CancelAccount must not retry and replay a destructive request")
+	_, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &errComments})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
@@ -6584,20 +10984,48 @@ func TestClientUpdateAccountSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account", r.URL.Path, "request path should be /account")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account")
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, "updated@example.com", body["email"])
-		checkEqual(t, "Updated", body["first_name"])
-		checkEqual(t, "123 Main St", body["address_1"])
-		checkNotContains(t, body, "address_2", "omitted fields should not be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(updatedAccount))
+		if !reflect.DeepEqual(body["email"], tcUpdatedExampleCom) {
+			t.Errorf("got %v, want %v", body["email"], tcUpdatedExampleCom)
+		}
+
+		if !reflect.DeepEqual(body["first_name"], tcUpdated) {
+			t.Errorf("got %v, want %v", body["first_name"], tcUpdated)
+		}
+
+		if !reflect.DeepEqual(body["address_1"], tcMainSt) {
+			t.Errorf("got %v, want %v", body["address_1"], tcMainSt)
+		}
+
+		if _, ok := body["address_2"]; ok {
+			t.Errorf("body has unexpected key %v", "address_2")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(updatedAccount); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -6606,16 +11034,27 @@ func TestClientUpdateAccountSuccess(t *testing.T) {
 	email := "updated@example.com"
 	firstName := "Updated"
 	address1 := "123 Main St"
+
 	result, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{
 		Email:     &email,
 		FirstName: &firstName,
 		Address1:  &address1,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "UpdateAccount should succeed on 200 response")
-	checkEqual(t, "updated@example.com", result.Email)
-	checkEqual(t, "Updated", result.FirstName)
-	checkEqual(t, "123 Main St", result.Address1)
+	if result.Email != tcUpdatedExampleCom {
+		t.Errorf("result.Email = %v, want %v", result.Email, tcUpdatedExampleCom)
+	}
+
+	if result.FirstName != tcUpdated {
+		t.Errorf("result.FirstName = %v, want %v", result.FirstName, tcUpdated)
+	}
+
+	if result.Address1 != tcMainSt {
+		t.Errorf("result.Address1 = %v, want %v", result.Address1, tcMainSt)
+	}
 }
 
 // TestClientUpdateAccountNetworkError verifies that UpdateAccount returns a
@@ -6626,12 +11065,14 @@ func TestClientUpdateAccountNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateAccount should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-
-	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &netErr)
+	}
 }
 
 // TestClientUpdateAccountAPIError verifies that UpdateAccount propagates
@@ -6641,21 +11082,29 @@ func TestClientUpdateAccountAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateAccount should fail on 400 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusBadRequest)
+	}
 }
 
 // TestClientUpdateAccountDoesNotRetry verifies the mutating account update is
@@ -6668,20 +11117,33 @@ func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account", r.URL.Path, "request path should be /account")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account")
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateAccount should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "UpdateAccount must not retry and replay a mutating request")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientEnableAccountManagedSuccess verifies that EnableAccountManaged sends a POST
@@ -6690,26 +11152,49 @@ func TestClientEnableAccountManagedSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountSettingsManagedEnable {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettingsManagedEnable)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		body, err := io.ReadAll(r.Body)
-		checkNoError(t, err)
-		checkEmpty(t, body, "request should not include a body")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	err := client.EnableAccountManaged(t.Context())
-
-	mustNoError(t, err, "EnableAccountManaged should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestClientEnableAccountManagedNetworkError verifies that EnableAccountManaged returns a
@@ -6720,12 +11205,14 @@ func TestClientEnableAccountManagedNetworkError(t *testing.T) {
 	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(3))
 
 	err := client.EnableAccountManaged(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "EnableAccountManaged should fail when the server is unreachable")
-
-	var netErr *linode.NetworkError
-
-	checkErrorAs(t, err, &netErr, "error should be a NetworkError")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Errorf("error = %v, want %v", err, &netErr)
+	}
 }
 
 // TestClientEnableAccountManagedAPIError verifies that EnableAccountManaged propagates
@@ -6734,24 +11221,38 @@ func TestClientEnableAccountManagedAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountSettingsManagedEnable {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettingsManagedEnable)
+		}
+
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"managed could not be enabled"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	err := client.EnableAccountManaged(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "EnableAccountManaged should fail on 400 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusBadRequest)
+	}
 }
 
 // TestClientEnableAccountManagedDoesNotRetry verifies the mutating managed enable
@@ -6764,20 +11265,33 @@ func TestClientEnableAccountManagedDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcAccountSettingsManagedEnable {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettingsManagedEnable)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	err := client.EnableAccountManaged(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "EnableAccountManaged should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "EnableAccountManaged must not retry and replay a mutating request")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientUpdateAccountSettingsSuccess verifies that UpdateAccountSettings sends a PUT
@@ -6798,21 +11312,52 @@ func TestClientUpdateAccountSettingsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcAccountSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettings)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		checkEqual(t, true, body["backups_enabled"])
-		checkEqual(t, false, body["network_helper"])
-		checkEqual(t, maintenancePolicyMigrate, body["maintenance_policy"])
-		checkNotContains(t, body, "object_storage", "omitted fields should not be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(settings))
+		if !reflect.DeepEqual(body["backups_enabled"], true) {
+			t.Errorf("got %v, want %v", body["backups_enabled"], true)
+		}
+
+		if !reflect.DeepEqual(body["network_helper"], false) {
+			t.Errorf("got %v, want %v", body["network_helper"], false)
+		}
+
+		if !reflect.DeepEqual(body["maintenance_policy"], maintenancePolicyMigrate) {
+			t.Errorf("got %v, want %v", body["maintenance_policy"], maintenancePolicyMigrate)
+		}
+
+		if _, ok := body["object_storage"]; ok {
+			t.Errorf("body has unexpected key %v", "object_storage")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(settings); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -6823,16 +11368,27 @@ func TestClientUpdateAccountSettingsSuccess(t *testing.T) {
 	var networkHelper bool
 
 	maintenancePolicy := maintenancePolicyMigrate
+
 	result, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{
 		BackupsEnabled:    &backupsEnabled,
 		NetworkHelper:     &networkHelper,
 		MaintenancePolicy: &maintenancePolicy,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "UpdateAccountSettings should succeed on 200 response")
-	checkTrue(t, result.BackupsEnabled)
-	checkFalse(t, result.NetworkHelper)
-	checkEqual(t, maintenancePolicyMigrate, result.MaintenancePolicy)
+	if !result.BackupsEnabled {
+		t.Error("result.BackupsEnabled = false, want true")
+	}
+
+	if result.NetworkHelper {
+		t.Error("result.NetworkHelper = true, want false")
+	}
+
+	if result.MaintenancePolicy != maintenancePolicyMigrate {
+		t.Errorf("result.MaintenancePolicy = %v, want %v", result.MaintenancePolicy, maintenancePolicyMigrate)
+	}
 }
 
 // TestClientUpdateAccountSettingsAPIError verifies that UpdateAccountSettings propagates
@@ -6841,24 +11397,38 @@ func TestClientUpdateAccountSettingsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcAccountSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettings)
+		}
+
 		w.WriteHeader(http.StatusBadRequest)
+
 		_, err := w.Write([]byte(`{"errors":[{"field":"maintenance_policy","reason":"invalid maintenance policy"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateAccountSettings should fail on 400 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-
-	mustErrorAs(t, err, &apiErr, "error should be an APIError")
-	checkEqual(t, http.StatusBadRequest, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusBadRequest)
+	}
 }
 
 // TestClientUpdateAccountSettingsDoesNotRetry verifies the mutating account settings
@@ -6871,20 +11441,33 @@ func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != tcAccountSettings {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountSettings)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-		checkNoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UpdateAccountSettings should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "UpdateAccountSettings must not retry and replay a mutating request")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
@@ -6907,30 +11490,65 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/images/sharegroups/tokens" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/tokens")
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:   tokens,
 			"page":    2,
 			"pages":   3,
 			"results": 7,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListImageShareGroupTokens(t.Context(), 2, 25)
 
-	mustNoError(t, err)
-	mustNotNil(t, result)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, "Backend Services - Engineering", result.Data[0].Label)
-	checkEqual(t, "13428362-5458-4dad-b14b-8d0d4d648f8c", result.Data[0].TokenUUID)
-	checkEqual(t, 2, result.Page)
-	checkEqual(t, 7, result.Results)
+	result, err := client.ListImageShareGroupTokens(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Label != imageShareGroupTokenUpdateLabel {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, imageShareGroupTokenUpdateLabel)
+	}
+
+	if result.Data[0].TokenUUID != "13428362-5458-4dad-b14b-8d0d4d648f8c" {
+		t.Errorf("result.Data[0].TokenUUID = %v, want %v", result.Data[0].TokenUUID, "13428362-5458-4dad-b14b-8d0d4d648f8c")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if result.Results != 7 {
+		t.Errorf("result.Results = %v, want %v", result.Results, 7)
+	}
 }
 
 func TestClientListImageShareGroupTokensError(t *testing.T) {
@@ -6938,17 +11556,25 @@ func TestClientListImageShareGroupTokensError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListImageShareGroupTokens(t.Context(), 1, 25)
 
-	mustError(t, err)
-	checkNil(t, result)
+	result, err := client.ListImageShareGroupTokens(t.Context(), 1, 25)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 }
 
 func TestClientListImageShareGroupsSuccess(t *testing.T) {
@@ -6971,29 +11597,61 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/images/sharegroups" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups")
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"data":    shareGroups,
 			"page":    2,
 			"pages":   3,
 			"results": 7,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListImageShareGroups(t.Context(), 2, 25)
 
-	mustNoError(t, err)
-	mustNotNil(t, result)
-	mustLen(t, result.Data, 1)
-	checkEqual(t, imageShareGroupLabel, result.Data[0].Label)
-	checkEqual(t, 2, result.Page)
-	checkEqual(t, 7, result.Results)
+	result, err := client.ListImageShareGroups(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want %d", len(result.Data), 1)
+	}
+
+	if result.Data[0].Label != imageShareGroupLabel {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, imageShareGroupLabel)
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if result.Results != 7 {
+		t.Errorf("result.Results = %v, want %v", result.Results, 7)
+	}
 }
 
 func TestClientGetImageShareGroupSuccess(t *testing.T) {
@@ -7014,59 +11672,111 @@ func TestClientGetImageShareGroupSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(shareGroup))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcImagesSharegroups123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcImagesSharegroups123)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(shareGroup); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetImageShareGroup(t.Context(), 123)
 
-	mustNoError(t, err)
-	mustNotNil(t, result)
-	checkEqual(t, 123, result.ID)
-	checkEqual(t, imageShareGroupLabel, result.Label)
+	result, err := client.GetImageShareGroup(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != 123 {
+		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	}
+
+	if result.Label != imageShareGroupLabel {
+		t.Errorf("result.Label = %v, want %v", result.Label, imageShareGroupLabel)
+	}
 }
 
 func TestClientGetImageShareGroupAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcImagesSharegroups123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcImagesSharegroups123)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]any{{keyReason: "temporary share group failure"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	result, err := client.GetImageShareGroup(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
-	checkNil(t, result)
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, "temporary share group failure", apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
+
+	if apiErr.Message != "temporary share group failure" {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, "temporary share group failure")
+	}
 }
 
 func TestClientGetImageShareGroupNetworkError(t *testing.T) {
 	t.Parallel()
 
 	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetImageShareGroup(t.Context(), 123)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "GetImageShareGroup should fail when server is unreachable")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &netErr)
+	}
 
-	var netErr *linode.NetworkError
-	mustErrorAs(t, err, &netErr, "error should be a NetworkError")
-	checkEqual(t, "GetImageShareGroup", netErr.Operation)
+	if netErr.Operation != "GetImageShareGroup" {
+		t.Errorf("netErr.Operation = %v, want %v", netErr.Operation, "GetImageShareGroup")
+	}
 }
 
 func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
@@ -7089,30 +11799,52 @@ func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcImagesSharegroups123 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcImagesSharegroups123)
+		}
 
 		if requestCount.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(shareGroup))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(shareGroup); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	result, err := client.GetImageShareGroup(t.Context(), 123)
 
-	mustNoError(t, err)
-	mustNotNil(t, result)
-	checkEqual(t, int32(2), requestCount.Load())
-	checkEqual(t, imageShareGroupLabel, result.Label)
+	result, err := client.GetImageShareGroup(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
+
+	if result.Label != imageShareGroupLabel {
+		t.Errorf("result.Label = %v, want %v", result.Label, imageShareGroupLabel)
+	}
 }
 
 func TestClientCreateImageShareGroupSuccess(t *testing.T) {
@@ -7129,33 +11861,62 @@ func TestClientCreateImageShareGroupSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/images/sharegroups" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
 
 		var body map[string]any
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		checkEqual(t, imageShareGroupLabel, body[keyLabel])
-		checkEqual(t, description, body[keyDescription])
+		if !reflect.DeepEqual(body[keyLabel], imageShareGroupLabel) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], imageShareGroupLabel)
+		}
 
-		if !checkLen(t, body["images"], 1) {
+		if !reflect.DeepEqual(body[keyDescription], description) {
+			t.Errorf("body[keyDescription] = %v, want %v", body[keyDescription], description)
+		}
+
+		images, isList := body["images"].([]any)
+		if !isList || len(images) != 1 {
+			t.Errorf(`body["images"] = %v, want one element`, body["images"])
+
 			return
 		}
 
-		image, ok := body["images"].([]any)[0].(map[string]any)
-		if !checkTrue(t, ok, "image payload should be an object") {
+		image, ok := images[0].(map[string]any)
+		if !ok {
+			t.Error("image payload should be an object")
+
 			return
 		}
 
-		checkEqual(t, "private/7", image[keyID])
-		checkEqual(t, "Linux Debian", image["label"])
+		if !reflect.DeepEqual(image[keyID], "private/7") {
+			t.Errorf("image[keyID] = %v, want %v", image[keyID], "private/7")
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
+		if !reflect.DeepEqual(image["label"], "Linux Debian") {
+			t.Errorf("got %v, want %v", image["label"], "Linux Debian")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ImageShareGroup{
 			ID:           1,
 			UUID:         shareGroupUUIDExample,
 			Label:        imageShareGroupLabel,
@@ -7165,17 +11926,30 @@ func TestClientCreateImageShareGroupSuccess(t *testing.T) {
 			Updated:      &updated,
 			ImagesCount:  1,
 			MembersCount: 0,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.CreateImageShareGroup(t.Context(), request)
 
-	mustNoError(t, err)
-	mustNotNil(t, result)
-	checkEqual(t, imageShareGroupLabel, result.Label)
-	checkEqual(t, 1, result.ImagesCount)
+	result, err := client.CreateImageShareGroup(t.Context(), request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Label != imageShareGroupLabel {
+		t.Errorf("result.Label = %v, want %v", result.Label, imageShareGroupLabel)
+	}
+
+	if result.ImagesCount != 1 {
+		t.Errorf("result.ImagesCount = %v, want %v", result.ImagesCount, 1)
+	}
 }
 
 func TestClientCreateImageShareGroupAPIError(t *testing.T) {
@@ -7183,17 +11957,30 @@ func TestClientCreateImageShareGroupAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "label is required"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
 
-	mustError(t, err, "CreateImageShareGroup should return API errors")
-	checkErrorContains(t, err, "label is required")
+	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != linode.ErrLabelRequired.Error() {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, linode.ErrLabelRequired.Error())
+	}
 }
 
 func TestClientCreateImageShareGroupNetworkError(t *testing.T) {
@@ -7204,13 +11991,20 @@ func TestClientCreateImageShareGroupNetworkError(t *testing.T) {
 	srv.Close()
 
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "CreateImageShareGroup should wrap network errors")
+	networkErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &networkErr)
+	}
 
-	var networkErr *linode.NetworkError
-	mustErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
-	checkEqual(t, "CreateImageShareGroup", networkErr.Operation)
+	if networkErr.Operation != "CreateImageShareGroup" {
+		t.Errorf("networkErr.Operation = %v, want %v", networkErr.Operation, "CreateImageShareGroup")
+	}
 }
 
 func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
@@ -7221,17 +12015,25 @@ func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
 
-	mustError(t, err, "CreateImageShareGroup should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "CreateImageShareGroup must not retry and replay a mutating request")
+	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 const (
@@ -7254,24 +12056,52 @@ func TestClientUploadImageSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/images/upload" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/upload")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
 
 		var body map[string]any
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
 			return
 		}
 
-		checkEqual(t, uploadImageLabelFixture, body[keyLabel])
-		checkEqual(t, regionUSEast, body["region"])
-		checkEqual(t, "custom upload", body[keyDescription])
-		checkEqual(t, true, body["cloud_init"])
-		checkEqual(t, []any{uploadImageTagProd, uploadImageTagWeb}, body["tags"])
+		if !reflect.DeepEqual(body[keyLabel], uploadImageLabelFixture) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], uploadImageLabelFixture)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if !reflect.DeepEqual(body["region"], regionUSEast) {
+			t.Errorf("got %v, want %v", body["region"], regionUSEast)
+		}
+
+		if !reflect.DeepEqual(body[keyDescription], "custom upload") {
+			t.Errorf("body[keyDescription] = %v, want %v", body[keyDescription], "custom upload")
+		}
+
+		if !reflect.DeepEqual(body["cloud_init"], true) {
+			t.Errorf("got %v, want %v", body["cloud_init"], true)
+		}
+
+		if !reflect.DeepEqual(body["tags"], []any{uploadImageTagProd, uploadImageTagWeb}) {
+			t.Errorf("got %v, want %v", body["tags"], []any{uploadImageTagProd, uploadImageTagWeb})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"image": linode.Image{
 				ID:          "private/99",
 				Label:       uploadImageLabelFixture,
@@ -7280,18 +12110,34 @@ func TestClientUploadImageSuccess(t *testing.T) {
 				Tags:        []string{uploadImageTagProd, uploadImageTagWeb},
 			},
 			"upload_to": uploadImageTargetFixture,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.UploadImage(t.Context(), request)
 
-	mustNoError(t, err)
-	mustNotNil(t, result)
-	checkEqual(t, "private/99", result.Image.ID)
-	checkEqual(t, uploadImageLabelFixture, result.Image.Label)
-	checkEqual(t, uploadImageTargetFixture, result.UploadTo)
+	result, err := client.UploadImage(t.Context(), request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Image.ID != "private/99" {
+		t.Errorf("result.Image.ID = %v, want %v", result.Image.ID, "private/99")
+	}
+
+	if result.Image.Label != uploadImageLabelFixture {
+		t.Errorf("result.Image.Label = %v, want %v", result.Image.Label, uploadImageLabelFixture)
+	}
+
+	if result.UploadTo != uploadImageTargetFixture {
+		t.Errorf("result.UploadTo = %v, want %v", result.UploadTo, uploadImageTargetFixture)
+	}
 }
 
 func TestClientUploadImageAPIError(t *testing.T) {
@@ -7299,17 +12145,30 @@ func TestClientUploadImageAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "region is required"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture})
 
-	mustError(t, err, "UploadImage should return API errors")
-	checkErrorContains(t, err, "region is required")
+	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != linode.ErrRegionRequired.Error() {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, linode.ErrRegionRequired.Error())
+	}
 }
 
 func TestClientUploadImageNetworkError(t *testing.T) {
@@ -7320,13 +12179,20 @@ func TestClientUploadImageNetworkError(t *testing.T) {
 	srv.Close()
 
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err, "UploadImage should wrap network errors")
+	networkErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &networkErr)
+	}
 
-	var networkErr *linode.NetworkError
-	mustErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
-	checkEqual(t, "UploadImage", networkErr.Operation)
+	if networkErr.Operation != "UploadImage" {
+		t.Errorf("networkErr.Operation = %v, want %v", networkErr.Operation, "UploadImage")
+	}
 }
 
 func TestClientUploadImageDoesNotRetry(t *testing.T) {
@@ -7337,17 +12203,25 @@ func TestClientUploadImageDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
 
-	mustError(t, err, "UploadImage should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "UploadImage must not retry and replay a mutating request")
+	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 // TestClientListObjectStorageQuotasSuccess verifies that ListObjectStorageQuotas sends a
@@ -7365,33 +12239,62 @@ func TestClientListObjectStorageQuotasSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		checkEqual(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/object-storage/quotas" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/quotas")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.Header.Get("Content-Type") != tcApplicationJSON {
+			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), tcApplicationJSON)
+		}
 
 		body, err := io.ReadAll(r.Body)
-		checkNoError(t, err)
-		checkEmpty(t, body, "request should not include a body")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    quotas,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	got, err := client.ListObjectStorageQuotas(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListObjectStorageQuotas should succeed on 200 response")
-	mustLen(t, got, 1, "one quota should be returned")
-	checkEqual(t, quotaID, got[0][keyID])
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if !reflect.DeepEqual(got[0][keyID], quotaID) {
+		t.Errorf("got[0][keyID] = %v, want %v", got[0][keyID], quotaID)
+	}
 }
 
 // TestClientListObjectStorageQuotasRetriesReadOnlyGET verifies the read-only quotas
@@ -7403,370 +12306,51 @@ func TestClientListObjectStorageQuotasRetriesReadOnlyGET(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
+
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/object-storage/quotas" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/quotas")
+		}
 
 		if calls.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
-			checkNoError(t, err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.ObjectStorageQuota{{keyID: "endpoint-type-1"}},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
 	got, err := client.ListObjectStorageQuotas(t.Context())
-
-	mustNoError(t, err, "ListObjectStorageQuotas should retry and then succeed")
-	mustLen(t, got, 1, "one quota should be returned")
-	checkEqual(t, int32(2), calls.Load(), "GET quotas should retry once after transient failure")
-}
-
-func helperMessage(args []any) string {
-	if len(args) == 0 {
-		return ""
-	}
-
-	format, ok := args[0].(string)
-	if ok {
-		if len(args) > 1 {
-			return ": " + fmt.Sprintf(format, args[1:]...)
-		}
-
-		return ": " + format
-	}
-
-	return ": " + fmt.Sprint(args...)
-}
-
-func fail(tb testing.TB, msg string, args ...any) {
-	tb.Helper()
-
-	tb.Fatalf("%s%s", msg, helperMessage(args))
-}
-
-func isNilValue(value any) bool {
-	if value == nil {
-		return true
-	}
-
-	actualValue := reflect.ValueOf(value)
-	kind := actualValue.Kind()
-
-	canBeNil := kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface || kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice
-	if !canBeNil {
-		return false
-	}
-
-	return actualValue.IsNil()
-}
-
-func toFloat64(value any) (float64, bool) {
-	switch actual := value.(type) {
-	case int:
-		return float64(actual), true
-	case int8:
-		return float64(actual), true
-	case int16:
-		return float64(actual), true
-	case int32:
-		return float64(actual), true
-	case int64:
-		return float64(actual), true
-	case time.Duration:
-		return float64(actual), true
-	case uint:
-		return float64(actual), true
-	case uint8:
-		return float64(actual), true
-	case uint16:
-		return float64(actual), true
-	case uint32:
-		return float64(actual), true
-	case uint64:
-		return float64(actual), true
-	case uintptr:
-		return float64(actual), true
-	case float32:
-		return float64(actual), true
-	case float64:
-		return actual, true
-	default:
-		return 0, false
-	}
-}
-
-func containsValue(container, item any) bool {
-	if text, ok := container.(string); ok {
-		needle, ok := item.(string)
-
-		return ok && strings.Contains(text, needle)
-	}
-
-	if isNilValue(container) {
-		return false
-	}
-
-	containerValue := reflect.ValueOf(container)
-	kind := containerValue.Kind()
-
-	if kind == reflect.Map {
-		key := reflect.ValueOf(item)
-		if !key.IsValid() || !key.Type().AssignableTo(containerValue.Type().Key()) {
-			return false
-		}
-
-		return containerValue.MapIndex(key).IsValid()
-	}
-
-	if kind != reflect.Array && kind != reflect.Slice {
-		return false
-	}
-
-	for index := range containerValue.Len() {
-		if reflect.DeepEqual(containerValue.Index(index).Interface(), item) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func errorAsValue(err error, target any) bool {
-	asError := errors.As
-
-	return asError(err, target)
-}
-
-func mustNoError(tb testing.TB, err error, args ...any) {
-	tb.Helper()
-
 	if err != nil {
-		fail(tb, fmt.Sprintf("unexpected error: %v", err), args...)
-	}
-}
-
-func mustError(tb testing.TB, err error, args ...any) {
-	tb.Helper()
-
-	if err == nil {
-		fail(tb, "expected error", args...)
-	}
-}
-
-func checkErrorIs(tb testing.TB, err, target error, args ...any) {
-	tb.Helper()
-
-	if !errors.Is(err, target) {
-		tb.Errorf("expected error %v to match %v%s", err, target, helperMessage(args))
-	}
-}
-
-func mustErrorIs(tb testing.TB, err, target error, args ...any) {
-	tb.Helper()
-
-	if !errors.Is(err, target) {
-		fail(tb, fmt.Sprintf("expected error %v to match %v", err, target), args...)
-	}
-}
-
-func checkErrorAs(tb testing.TB, err error, target any, args ...any) {
-	tb.Helper()
-
-	if !errorAsValue(err, target) {
-		tb.Errorf("expected error %v to match target %T%s", err, target, helperMessage(args))
-	}
-}
-
-func mustErrorAs(tb testing.TB, err error, target any, args ...any) {
-	tb.Helper()
-
-	if !errorAsValue(err, target) {
-		fail(tb, fmt.Sprintf("expected error %v to match target %T", err, target), args...)
-	}
-}
-
-func checkErrorContains(tb testing.TB, err error, substring string, args ...any) {
-	tb.Helper()
-
-	if err == nil || !strings.Contains(fmt.Sprint(err), substring) {
-		tb.Errorf("expected error %v to contain %q%s", err, substring, helperMessage(args))
-	}
-}
-
-func mustErrorContains(tb testing.TB, err error, substring string, args ...any) {
-	tb.Helper()
-
-	if err == nil || !strings.Contains(fmt.Sprint(err), substring) {
-		fail(tb, fmt.Sprintf("expected error %v to contain %q", err, substring), args...)
-	}
-}
-
-func mustNil(tb testing.TB, actual any, args ...any) {
-	tb.Helper()
-
-	if !isNilValue(actual) {
-		fail(tb, fmt.Sprintf("expected nil, got %#v", actual), args...)
-	}
-}
-
-func checkNotNil(tb testing.TB, actual any, args ...any) bool {
-	tb.Helper()
-
-	if isNilValue(actual) {
-		tb.Errorf("expected non-nil value%s", helperMessage(args))
-
-		return false
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	return true
-}
-
-func mustNotNil(tb testing.TB, actual any, args ...any) {
-	tb.Helper()
-
-	if isNilValue(actual) {
-		fail(tb, "expected non-nil value", args...)
-	}
-}
-
-func checkLen(tb testing.TB, actual any, expected int, args ...any) bool {
-	tb.Helper()
-
-	actualLength, ok := valueLen(actual)
-	if !ok || actualLength != expected {
-		tb.Errorf("expected length %d, got %d%s", expected, actualLength, helperMessage(args))
-
-		return false
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
 	}
 
-	return true
-}
-
-// mustLen uses the package-level valueLen helper from image_assertions_test.go.
-func mustLen(tb testing.TB, actual any, expectedAndArgs ...any) {
-	tb.Helper()
-
-	if len(expectedAndArgs) == 0 {
-		fail(tb, "missing expected length")
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
 	}
-
-	expected, ok := expectedAndArgs[0].(int)
-	if !ok {
-		fail(tb, fmt.Sprintf("expected length argument must be int, got %T", expectedAndArgs[0]))
-	}
-
-	if !checkLen(tb, actual, expected, expectedAndArgs[1:]...) {
-		tb.FailNow()
-	}
-}
-
-func mustTrue(tb testing.TB, actual bool, args ...any) {
-	tb.Helper()
-
-	if !actual {
-		fail(tb, "expected true", args...)
-	}
-}
-
-func checkFalse(tb testing.TB, actual bool, args ...any) {
-	tb.Helper()
-
-	if actual {
-		tb.Errorf("expected false%s", helperMessage(args))
-	}
-}
-
-func checkContains(tb testing.TB, container, item any, args ...any) {
-	tb.Helper()
-
-	if !containsValue(container, item) {
-		tb.Errorf("expected %#v to contain %#v%s", container, item, helperMessage(args))
-	}
-}
-
-func checkNotContains(tb testing.TB, container, item any, args ...any) {
-	tb.Helper()
-
-	if containsValue(container, item) {
-		tb.Errorf("expected %#v not to contain %#v%s", container, item, helperMessage(args))
-	}
-}
-
-func checkInEpsilon(tb testing.TB, expected, actual any, epsilon float64, args ...any) {
-	tb.Helper()
-
-	expectedFloat, expectedOK := toFloat64(expected)
-	actualFloat, actualOK := toFloat64(actual)
-
-	if !expectedOK || !actualOK || math.Abs(expectedFloat-actualFloat) > math.Abs(expectedFloat)*epsilon {
-		tb.Errorf("expected %#v and %#v to be within epsilon %v%s", expected, actual, epsilon, helperMessage(args))
-	}
-}
-
-func checkInDelta(tb testing.TB, expected, actual any, delta float64, args ...any) {
-	tb.Helper()
-
-	expectedFloat, expectedOK := toFloat64(expected)
-	actualFloat, actualOK := toFloat64(actual)
-
-	if !expectedOK || !actualOK || math.Abs(expectedFloat-actualFloat) > delta {
-		tb.Errorf("expected %#v and %#v to be within delta %v%s", expected, actual, delta, helperMessage(args))
-	}
-}
-
-func checkLess(tb testing.TB, actual, ceiling any, args ...any) {
-	tb.Helper()
-
-	actualFloat, actualOK := toFloat64(actual)
-	ceilingFloat, ceilingOK := toFloat64(ceiling)
-
-	if !actualOK || !ceilingOK || actualFloat >= ceilingFloat {
-		tb.Errorf("expected %#v to be less than %#v%s", actual, ceiling, helperMessage(args))
-	}
-}
-
-func checkGreaterOrEqual(tb testing.TB, actual, floor any, args ...any) {
-	tb.Helper()
-
-	actualFloat, actualOK := toFloat64(actual)
-	floorFloat, floorOK := toFloat64(floor)
-
-	if !actualOK || !floorOK || actualFloat < floorFloat {
-		tb.Errorf("expected %#v to be greater than or equal to %#v%s", actual, floor, helperMessage(args))
-	}
-}
-
-func mustGreaterOrEqual(tb testing.TB, actual, floor any, args ...any) {
-	tb.Helper()
-
-	actualFloat, actualOK := toFloat64(actual)
-	floorFloat, floorOK := toFloat64(floor)
-
-	if !actualOK || !floorOK || actualFloat < floorFloat {
-		fail(tb, fmt.Sprintf("expected %#v to be greater than or equal to %#v", actual, floor), args...)
-	}
-}
-
-func mustNotPanics(tb testing.TB, callback func(), args ...any) {
-	tb.Helper()
-
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			fail(tb, fmt.Sprintf("unexpected panic: %#v", recovered), args...)
-		}
-	}()
-
-	callback()
 }

@@ -4,179 +4,310 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeRegionAvailabilityListTool(t *testing.T) {
+func TestLinodeRegionAvailabilityListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
+	if tool.Name != "linode_region_availability_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_region_availability_list")
+	}
 
-		assert.Equal(t, "linode_region_availability_list", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "availability list should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, "environment", "schema should include environment")
-		assert.NotContains(t, tool.InputSchema.Properties, "confirm", "read-only route should not require confirm")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/regions/availability", r.URL.Path, "request path should match the documented route")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true}}}), "encoding response should not fail")
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
+	if _, ok := tool.InputSchema.Properties[canRunKeyEnv]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", canRunKeyEnv)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should be successful")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "region availability", "response should identify availability list")
-		assert.Contains(t, textContent.Text, "g6-standard-1", "response should include plan")
-	})
-
-	t.Run("api failure", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error response should not fail")
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
-
-		require.NoError(t, err, "handler should return API failure as a tool error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve", "response should identify failed request")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
+	if _, ok := tool.InputSchema.Properties["confirm"]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", "confirm")
+	}
 }
 
-func TestLinodeRegionAvailabilityGetTool(t *testing.T) {
+func TestLinodeRegionAvailabilityListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
-
-		assert.Equal(t, "linode_region_availability_get", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "availability get should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyRegionID, "schema should include region_id")
-		assert.Contains(t, tool.InputSchema.Properties, "environment", "schema should include environment")
-		assert.Contains(t, tool.InputSchema.Required, keyRegionID, "region_id must be marked required")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only route should not require confirm")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/regions/us-east/availability", r.URL.Path, "request path should match the documented route")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true}}}), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "result should be successful")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "g6-standard-1", "response should include plan")
-		assert.Contains(t, textContent.Text, regionUSEast, "response should include region")
-	})
-
-	t.Run("invalid region id", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-		_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
-
-		cases := []struct {
-			name string
-			args map[string]any
-			want string
-		}{
-			{name: caseMissingRegion, args: map[string]any{}, want: errRegionIDNonEmpty},
-			{name: caseEmpty, args: map[string]any{keyRegionID: ""}, want: errRegionIDNonEmpty},
-			{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, want: errRegionInvalid},
-			{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue}, want: errRegionInvalid},
-			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, want: errRegionInvalid},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "validation failure should be returned as tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid region_id should be an error result")
-				assertErrorContains(t, result, testCase.want)
-			})
+		if r.URL.Path != "/regions/availability" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/regions/availability")
 		}
-	})
 
-	t.Run("api failure", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error response should not fail")
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
 
-		require.NoError(t, err, "handler should return API failure as a tool error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to retrieve")
-		assertErrorContains(t, result, errForbidden)
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "region availability") {
+		t.Errorf("textContent.Text does not contain %v", "region availability")
+	}
+
+	if !strings.Contains(textContent.Text, "g6-standard-1") {
+		t.Errorf("textContent.Text does not contain %v", "g6-standard-1")
+	}
+}
+
+func TestLinodeRegionAvailabilityListToolApiFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve")
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeRegionAvailabilityGetToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+
+	if tool.Name != "linode_region_availability_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_region_availability_get")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyRegionID, canRunKeyEnv} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyRegionID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyRegionID)
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	}
+}
+
+func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/regions/us-east/availability" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/regions/us-east/availability")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "g6-standard-1") {
+		t.Errorf("textContent.Text does not contain %v", "g6-standard-1")
+	}
+
+	if !strings.Contains(textContent.Text, regionUSEast) {
+		t.Errorf("textContent.Text does not contain %v", regionUSEast)
+	}
+}
+
+func TestLinodeRegionAvailabilityGetToolInvalidRegionId(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: caseMissingRegion, args: map[string]any{}, want: errRegionIDNonEmpty},
+		{name: caseEmpty, args: map[string]any{keyRegionID: ""}, want: errRegionIDNonEmpty},
+		{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, want: errRegionInvalid},
+		{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue}, want: errRegionInvalid},
+		{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, want: errRegionInvalid},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
+			}
+		})
+	}
+}
+
+func TestLinodeRegionAvailabilityGetToolApiFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

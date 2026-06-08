@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -22,51 +24,103 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 	created := linode.SupportTicketAttachment{ID: 654, Filename: supportTicketAttachmentFilename, Size: 128}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		supportCheckEqual(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
-		supportCheckEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		supportCheckEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcSupportTickets123Attachments {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets123Attachments)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var got map[string]any
-		supportCheckNoError(t, json.NewDecoder(r.Body).Decode(&got))
-		supportCheckEqual(t, supportTicketAttachmentFile, got["file"])
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		supportCheckNoError(t, json.NewEncoder(w).Encode(created))
+		if !reflect.DeepEqual(got["file"], supportTicketAttachmentFile) {
+			t.Errorf("got %v, want %v", got["file"], supportTicketAttachmentFile)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	supportRequireNoError(t, err, "CreateSupportTicketAttachment should succeed on 200 response")
-	supportRequireNotNil(t, got, "result should not be nil")
-	supportCheckEqual(t, created.ID, got.ID)
-	supportCheckEqual(t, created.Filename, got.Filename)
-	supportCheckEqual(t, created.Size, got.Size)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != created.ID {
+		t.Errorf("got.ID = %v, want %v", got.ID, created.ID)
+	}
+
+	if got.Filename != created.Filename {
+		t.Errorf("got.Filename = %v, want %v", got.Filename, created.Filename)
+	}
+
+	if got.Size != created.Size {
+		t.Errorf("got.Size = %v, want %v", got.Size, created.Size)
+	}
 }
 
 func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		supportCheckEqual(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcSupportTickets123Attachments {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets123Attachments)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		supportCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	supportRequireError(t, err, "CreateSupportTicketAttachment should propagate API errors")
-	supportCheckNil(t, got)
-	apiErr := supportRequireAPIError(t, err, "error should wrap APIError")
-	supportCheckEqual(t, errForbidden, apiErr.Message)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testing.T) {
@@ -76,17 +130,31 @@ func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testin
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		supportCheckEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		supportCheckEqual(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcSupportTickets123Attachments {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets123Attachments)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		supportCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: supportTicketAttachmentError}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: supportTicketAttachmentError}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	_, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	supportRequireError(t, err, "CreateSupportTicketAttachment should return the transient error")
-	supportCheckEqual(t, int32(1), requestCount.Load(), "mutating support ticket attachment creation must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

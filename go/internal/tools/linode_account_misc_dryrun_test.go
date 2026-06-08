@@ -3,6 +3,8 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -25,16 +27,15 @@ const (
 )
 
 func TestLinodeAccountPromoCreditToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountPromoCreditTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without applying", func(t *testing.T) {
@@ -46,31 +47,48 @@ func TestLinodeAccountPromoCreditToolDryRun(t *testing.T) {
 			keyPromoCode: "PROMO2026",
 			keyDryRun:    true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_promo_credit", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_promo_credit") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_promo_credit")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountPromoCodesTestPath, would["path"])
-		assert.Nil(t, body["current_state"], "no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountPromoCodesTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountPromoCodesTestPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 }
 
 func TestLinodeAccountAgreementsAcknowledgeToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountAgreementsAcknowledgeTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without acknowledging", func(t *testing.T) {
@@ -82,34 +100,53 @@ func TestLinodeAccountAgreementsAcknowledgeToolDryRun(t *testing.T) {
 			keyBillingAgreement: true,
 			keyDryRun:           true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_agreements_acknowledge", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_agreements_acknowledge") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_agreements_acknowledge")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountAgreementsTestPath, would["path"])
-		assert.Nil(t, body["current_state"], "no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountAgreementsTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountAgreementsTestPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "acknowledge surfaces a side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 	})
 }
 
 func TestLinodeAccountBetaEnrollToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountBetaEnrollTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without enrolling", func(t *testing.T) {
@@ -121,35 +158,57 @@ func TestLinodeAccountBetaEnrollToolDryRun(t *testing.T) {
 			keyBetaID: "beta-1",
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_beta_enroll", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_beta_enroll") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_beta_enroll")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountBetasTestPath, would["path"])
-		assert.Nil(t, body["current_state"], "no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountBetasTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountBetasTestPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "beta enroll surfaces a side effect")
-		assert.Contains(t, sideEffects[0], "beta-1", "side effect names the beta program")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
+
+		if s, ok := sideEffects[0].(string); !ok || !strings.Contains(s, "beta-1") {
+			t.Errorf("%q does not contain %q", s, "beta-1")
+		}
 	})
 }
 
 func TestLinodeAccountCancelToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountCancelTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without canceling", func(t *testing.T) {
@@ -160,38 +219,62 @@ func TestLinodeAccountCancelToolDryRun(t *testing.T) {
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_cancel", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_cancel") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_cancel")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountCancelTestPath, would["path"])
-		assert.Nil(t, body["current_state"], "no existing resource to preview")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountCancelTestPath) {
+			t.Errorf("got %v, want %v", would["path"], accountCancelTestPath)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "cancel surfaces a side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "cancel surfaces an irreversibility warning")
-		assert.Contains(t, warnings[0], "irreversible", "warning flags the permanence")
+		if len(warnings) != 1 {
+			t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
+		}
+
+		if s, ok := warnings[0].(string); !ok || !strings.Contains(s, "irreversible") {
+			t.Errorf("%q does not contain %q", s, "irreversible")
+		}
 	})
 }
 
 func TestLinodeAccountEventSeenToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountEventSeenTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads event then would POST seen", func(t *testing.T) {
@@ -204,35 +287,57 @@ func TestLinodeAccountEventSeenToolDryRun(t *testing.T) {
 			keyEventID: float64(accountEventTestID),
 			keyDryRun:  true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_event_seen", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_event_seen") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_event_seen")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountEventGetPath+"/seen", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountEventGetPath+"/seen") {
+			t.Errorf("got %v, want %v", would["path"], accountEventGetPath+"/seen")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "event seen surfaces a side effect")
-		assert.Contains(t, sideEffects[0], "earlier events", "side effect notes the wider mark-seen behavior")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
+
+		if s, ok := sideEffects[0].(string); !ok || !strings.Contains(s, "earlier events") {
+			t.Errorf("%q does not contain %q", s, "earlier events")
+		}
 	})
 }
 
 func TestLinodeAccountChildAccountTokenToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountChildAccountTokenTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview reads child account not the token", func(t *testing.T) {
@@ -245,23 +350,48 @@ func TestLinodeAccountChildAccountTokenToolDryRun(t *testing.T) {
 			keyEUUID:  accountChildEUUID,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_account_child_account_token", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_account_child_account_token") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_child_account_token")
+		}
 
 		state, _ := body["current_state"].(map[string]any)
-		assert.NotContains(t, state, "token", "dry_run current_state must not surface the proxy token")
+		if _, ok := state["token"]; ok {
+			t.Errorf("state has unexpected key %v", "token")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, accountChildGetPath+"/token", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run reads the child account metadata only")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], accountChildGetPath+"/token") {
+			t.Errorf("got %v, want %v", would["path"], accountChildGetPath+"/token")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "token create surfaces a side effect")
-		assert.NotContains(t, sideEffects[0], "token=", "side effect must not echo a token value")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
+
+		if s, ok := sideEffects[0].(string); ok && strings.Contains(s, "token=") {
+			t.Errorf("%q unexpectedly contains %q", s, "token=")
+		}
 	})
 }

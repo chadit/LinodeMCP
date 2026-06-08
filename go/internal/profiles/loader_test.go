@@ -1,6 +1,9 @@
 package profiles_test
 
 import (
+	"errors"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -34,11 +37,21 @@ func TestResolveActiveProfileDefaultsWhenUnset(t *testing.T) {
 	cfg := &config.Config{}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err)
-	assertEqual(t, profiles.BuiltinDefault, got.Name, "empty ActiveProfile must fall back to default")
-	assertFalse(t, got.Disabled, "resolved default must not be disabled")
-	assertNotEmpty(t, got.AllowedTools, "default profile should resolve to at least one read tool")
+	if got.Name != profiles.BuiltinDefault {
+		t.Errorf("got.Name = %v, want %v", got.Name, profiles.BuiltinDefault)
+	}
+
+	if got.Disabled {
+		t.Error("got.Disabled = true, want false")
+	}
+
+	if len(got.AllowedTools) == 0 {
+		t.Error("got.AllowedTools is empty")
+	}
 }
 
 func TestResolveActiveProfileSelectsBuiltin(t *testing.T) {
@@ -47,11 +60,17 @@ func TestResolveActiveProfileSelectsBuiltin(t *testing.T) {
 	cfg := &config.Config{ActiveProfile: profiles.BuiltinComputeAdmin}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err)
-	assertEqual(t, profiles.BuiltinComputeAdmin, got.Name)
-	assertContains(t, got.AllowedTools, "linode_instance_create",
-		"compute-admin must include instance writes from the catalog")
+	if got.Name != profiles.BuiltinComputeAdmin {
+		t.Errorf("got.Name = %v, want %v", got.Name, profiles.BuiltinComputeAdmin)
+	}
+
+	if !slices.Contains(got.AllowedTools, "linode_instance_create") {
+		t.Errorf("got.AllowedTools does not contain %v", "linode_instance_create")
+	}
 }
 
 func TestResolveActiveProfileRefusesDisabledBuiltin(t *testing.T) {
@@ -65,9 +84,9 @@ func TestResolveActiveProfileRefusesDisabledBuiltin(t *testing.T) {
 	}
 
 	_, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
-
-	requireError(t, err)
-	assertErrorIs(t, err, profiles.ErrActiveProfileDisabled)
+	if !errors.Is(err, profiles.ErrActiveProfileDisabled) {
+		t.Errorf("error = %v, want %v", err, profiles.ErrActiveProfileDisabled)
+	}
 }
 
 func TestResolveActiveProfileUserDefinedLiteral(t *testing.T) {
@@ -84,11 +103,21 @@ func TestResolveActiveProfileUserDefinedLiteral(t *testing.T) {
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err)
-	assertEqual(t, "my-prof", got.Name)
-	assertEqual(t, "single tool", got.Description)
-	assertEqual(t, []string{toolVolumesList}, got.AllowedTools)
+	if got.Name != tcMyProf {
+		t.Errorf("got.Name = %v, want %v", got.Name, tcMyProf)
+	}
+
+	if got.Description != "single tool" {
+		t.Errorf("got.Description = %v, want %v", got.Description, "single tool")
+	}
+
+	if !reflect.DeepEqual(got.AllowedTools, []string{toolVolumesList}) {
+		t.Errorf("got.AllowedTools = %v, want %v", got.AllowedTools, []string{toolVolumesList})
+	}
 }
 
 func TestResolveActiveProfileWildcardExpansion(t *testing.T) {
@@ -104,14 +133,20 @@ func TestResolveActiveProfileWildcardExpansion(t *testing.T) {
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	{
+		gotEls := slices.Clone(got.AllowedTools)
+		wantEls := slices.Clone([]string{toolVolumesList, toolVolumeCreate, toolVolumeClone, toolVolumeDelete, toolVolumeResize})
 
-	requireNoError(t, err)
-	assertElementsMatch(
-		t,
-		[]string{toolVolumesList, toolVolumeCreate, toolVolumeClone, toolVolumeDelete, toolVolumeResize},
-		got.AllowedTools,
-		"linode_volume_* must expand to every catalog entry with that prefix",
-	)
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", got.AllowedTools, []string{toolVolumesList, toolVolumeCreate, toolVolumeClone, toolVolumeDelete, toolVolumeResize})
+		}
+	}
 }
 
 func TestResolveActiveProfileDeniedWinsOverAllowed(t *testing.T) {
@@ -128,12 +163,21 @@ func TestResolveActiveProfileDeniedWinsOverAllowed(t *testing.T) {
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err)
-	assertNotContains(t, got.AllowedTools, toolVolumeDelete,
-		"explicit deny must remove a tool the allowed wildcard would have included")
-	assertContains(t, got.AllowedTools, toolVolumeCreate)
-	assertContains(t, got.AllowedTools, toolVolumeResize)
+	if slices.Contains(got.AllowedTools, toolVolumeDelete) {
+		t.Errorf("got.AllowedTools should not contain %v", toolVolumeDelete)
+	}
+
+	if !slices.Contains(got.AllowedTools, toolVolumeCreate) {
+		t.Errorf("got.AllowedTools does not contain %v", toolVolumeCreate)
+	}
+
+	if !slices.Contains(got.AllowedTools, toolVolumeResize) {
+		t.Errorf("got.AllowedTools does not contain %v", toolVolumeResize)
+	}
 }
 
 func TestResolveActiveProfileUnknownName(t *testing.T) {
@@ -142,9 +186,9 @@ func TestResolveActiveProfileUnknownName(t *testing.T) {
 	cfg := &config.Config{ActiveProfile: "nonexistent"}
 
 	_, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
-
-	requireError(t, err)
-	assertErrorIs(t, err, profiles.ErrActiveProfileUnknown)
+	if !errors.Is(err, profiles.ErrActiveProfileUnknown) {
+		t.Errorf("error = %v, want %v", err, profiles.ErrActiveProfileUnknown)
+	}
 }
 
 func TestResolveActiveProfileStarWildcardMatchesEverything(t *testing.T) {
@@ -161,15 +205,26 @@ func TestResolveActiveProfileStarWildcardMatchesEverything(t *testing.T) {
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, catalog)
-
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	wantNames := make([]string, 0, len(catalog))
 	for _, descriptor := range catalog {
 		wantNames = append(wantNames, descriptor.Name)
 	}
 
-	assertElementsMatch(t, wantNames, got.AllowedTools, "* alone must match every registered tool")
+	{
+		gotEls := slices.Clone(got.AllowedTools)
+		wantEls := slices.Clone(wantNames)
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", got.AllowedTools, wantNames)
+		}
+	}
 }
 
 func TestResolveActiveProfileWildcardMatchingNothing(t *testing.T) {
@@ -185,9 +240,13 @@ func TestResolveActiveProfileWildcardMatchingNothing(t *testing.T) {
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "unmatched wildcards must warn, not error")
-	assertEmpty(t, got.AllowedTools, "unmatched wildcard must produce an empty resolved list")
+	if len(got.AllowedTools) != 0 {
+		t.Errorf("got.AllowedTools = %v, want empty", got.AllowedTools)
+	}
 }
 
 func TestResolveActiveProfileOverrideIgnoredForUserDefined(t *testing.T) {
@@ -206,11 +265,21 @@ func TestResolveActiveProfileOverrideIgnoredForUserDefined(t *testing.T) {
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "builtin override must not disable a user-defined profile")
-	assertEqual(t, profileNameCustom, got.Name)
-	assertFalse(t, got.Disabled)
-	assertEqual(t, []string{toolVolumesList}, got.AllowedTools)
+	if got.Name != profileNameCustom {
+		t.Errorf("got.Name = %v, want %v", got.Name, profileNameCustom)
+	}
+
+	if got.Disabled {
+		t.Error("got.Disabled = true, want false")
+	}
+
+	if !reflect.DeepEqual(got.AllowedTools, []string{toolVolumesList}) {
+		t.Errorf("got.AllowedTools = %v, want %v", got.AllowedTools, []string{toolVolumesList})
+	}
 }
 
 func TestResolveActiveProfileUserDefinedPropagatesSettings(t *testing.T) {
@@ -222,17 +291,27 @@ func TestResolveActiveProfileUserDefinedPropagatesSettings(t *testing.T) {
 			"scoped": {
 				Description:         "scoped to dev",
 				AllowedTools:        []string{toolVolumesList},
-				AllowedEnvironments: []string{"dev"},
-				RequiredTokenScopes: []string{"volumes:read_only"},
+				AllowedEnvironments: []string{tcDev},
+				RequiredTokenScopes: []string{tcVolumesReadOnly},
 				AllowYolo:           true,
 			},
 		},
 	}
 
 	got, err := profiles.ResolveActiveProfile(cfg, loaderCatalog())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err)
-	assertEqual(t, []string{"dev"}, got.AllowedEnvironments)
-	assertEqual(t, []string{"volumes:read_only"}, got.RequiredTokenScopes)
-	assertTrue(t, got.AllowYolo, "user-defined AllowYolo must propagate to the resolved profile")
+	if !reflect.DeepEqual(got.AllowedEnvironments, []string{tcDev}) {
+		t.Errorf("got.AllowedEnvironments = %v, want %v", got.AllowedEnvironments, []string{tcDev})
+	}
+
+	if !reflect.DeepEqual(got.RequiredTokenScopes, []string{tcVolumesReadOnly}) {
+		t.Errorf("got.RequiredTokenScopes = %v, want %v", got.RequiredTokenScopes, []string{tcVolumesReadOnly})
+	}
+
+	if !got.AllowYolo {
+		t.Error("got.AllowYolo = false, want true")
+	}
 }

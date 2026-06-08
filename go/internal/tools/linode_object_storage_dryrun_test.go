@@ -3,10 +3,11 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -15,61 +16,95 @@ import (
 
 const objStorageAccessPath = "/object-storage/buckets/us-east-1/my-bucket/access"
 
-func TestLinodeObjectStorageBucketCreateToolDryRun(t *testing.T) {
+func TestLinodeObjectStorageBucketCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeObjectStorageBucketCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeObjectStorageBucketCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeObjectStorageBucketCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(dryRunNoCallServer(t))
 
-		_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(dryRunNoCallServer(t))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:  bucketTest,
+		keyRegion: regionUSEast1,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:  bucketTest,
-			keyRegion: regionUSEast1,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_bucket_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/object-storage/buckets", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	if !reflect.DeepEqual(body["tool"], "linode_object_storage_bucket_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_bucket_create")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-bucket side effect")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, bucketTest, "side effect should name the new bucket")
+	if !reflect.DeepEqual(would["path"], "/object-storage/buckets") {
+		t.Errorf("got %v, want %v", would["path"], "/object-storage/buckets")
+	}
 
-		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns that billing starts immediately")
-	})
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-	t.Run("still validates label", func(t *testing.T) {
-		t.Parallel()
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
-		_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion: regionUSEast1,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "label is required")
-	})
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, bucketTest) {
+		t.Errorf("effect does not contain %v", bucketTest)
+	}
+
+	warnings, _ := body["warnings"].([]any)
+	if len(warnings) != 1 {
+		t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
+	}
+}
+
+func TestLinodeObjectStorageBucketCreateToolDryRunStillValidatesLabel(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast1,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "label is required")
+	}
 }
 
 func TestLinodeObjectStorageBucketAccessAllowToolDryRun(t *testing.T) {
@@ -79,7 +114,9 @@ func TestLinodeObjectStorageBucketAccessAllowToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageBucketAccessAllowTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without applying", func(t *testing.T) {
@@ -94,30 +131,57 @@ func TestLinodeObjectStorageBucketAccessAllowToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_bucket_access_allow", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_object_storage_bucket_access_allow") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_bucket_access_allow")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, objStorageAccessPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], objStorageAccessPath) {
+			t.Errorf("got %v, want %v", would["path"], objStorageAccessPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeObjectStorageBucketAccessAllowTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "label is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "label is required")
+		}
 	})
 }
 
@@ -128,7 +192,9 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageBucketAccessUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -143,91 +209,159 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_bucket_access_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_object_storage_bucket_access_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_bucket_access_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, objStorageAccessPath, would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], objStorageAccessPath) {
+			t.Errorf("got %v, want %v", would["path"], objStorageAccessPath)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "ACL change surfaces one side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, aclPrivate, "side effect should name the target ACL")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, aclPrivate) {
+			t.Errorf("effect does not contain %v", aclPrivate)
+		}
 	})
 
 	t.Run("still validates region", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  bucketTest,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "region is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "region is required")
+		}
 	})
 }
 
-func TestLinodeObjectStorageKeyCreateToolDryRun(t *testing.T) {
+func TestLinodeObjectStorageKeyCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeObjectStorageKeyCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeObjectStorageKeyCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeObjectStorageKeyCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	_, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(dryRunNoCallServer(t))
 
-		_, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(dryRunNoCallServer(t))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:  "my-key",
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:  "my-key",
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_key_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/object-storage/keys", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	if !reflect.DeepEqual(body["tool"], "linode_object_storage_key_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_key_create")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-key side effect")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "my-key", "side effect should name the new key")
+	if !reflect.DeepEqual(would["path"], "/object-storage/keys") {
+		t.Errorf("got %v, want %v", would["path"], "/object-storage/keys")
+	}
 
-		warnings, _ := body["warnings"].([]any)
-		require.Len(t, warnings, 1, "create warns the secret is shown only once")
-	})
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-	t.Run("still validates label", func(t *testing.T) {
-		t.Parallel()
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
-		_, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "label is required")
-	})
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "my-key") {
+		t.Errorf("effect does not contain %v", "my-key")
+	}
+
+	warnings, _ := body["warnings"].([]any)
+	if len(warnings) != 1 {
+		t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
+	}
+}
+
+func TestLinodeObjectStorageKeyCreateToolDryRunStillValidatesLabel(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "label is required")
+	}
 }
 
 func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
@@ -237,7 +371,9 @@ func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageKeyUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating, fetches key not secret", func(t *testing.T) {
@@ -252,37 +388,71 @@ func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_key_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_object_storage_key_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_key_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/object-storage/keys/77", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/object-storage/keys/77") {
+			t.Errorf("got %v, want %v", would["path"], "/object-storage/keys/77")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "renaming the key surfaces the label-change side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, testRenamedLabel, "side effect should name the new label")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, testRenamedLabel) {
+			t.Errorf("effect does not contain %v", testRenamedLabel)
+		}
 	})
 
 	t.Run("still validates key_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeObjectStorageKeyUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "key_id is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "key_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "key_id is required")
+		}
 	})
 }
 
@@ -293,7 +463,9 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageObjectACLUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -310,39 +482,73 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_object_storage_object_acl_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_object_storage_object_acl_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_object_acl_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/object-storage/buckets/us-east-1/my-bucket/object-acl") {
+			t.Errorf("got %v, want %v", would["path"], "/object-storage/buckets/us-east-1/my-bucket/object-acl")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "ACL change surfaces one side effect")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, aclPrivate, "side effect should name the target ACL")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, aclPrivate) {
+			t.Errorf("effect does not contain %v", aclPrivate)
+		}
 	})
 
 	t.Run("still validates name", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
 			keyLabel:  bucketTest,
 			keyACL:    aclPrivate,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "name (object key) is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "name (object key) is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "name (object key) is required")
+		}
 	})
 }
 
@@ -353,7 +559,9 @@ func TestLinodeObjectStorageSSLUploadToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeObjectStorageSSLUploadTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without uploading, no key echoed", func(t *testing.T) {
@@ -368,34 +576,64 @@ func TestLinodeObjectStorageSSLUploadToolDryRun(t *testing.T) {
 			keyPrivateKey:  "key-pem",
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		text := dryRunResultText(t, result)
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(text), &body))
-		assert.Equal(t, "linode_object_storage_ssl_upload", body["tool"])
+		if err := json.Unmarshal([]byte(text), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_object_storage_ssl_upload") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_ssl_upload")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", would["path"])
-		assert.Nil(t, body["current_state"], "upload has no existing resource to preview")
-		assert.NotContains(t, text, "key-pem", "dry_run preview must not echo the private key")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], tcObjectStorageBucketsUsEast1MyBucketSsl) {
+			t.Errorf("got %v, want %v", would["path"], tcObjectStorageBucketsUsEast1MyBucketSsl)
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
+
+		if strings.Contains(text, "key-pem") {
+			t.Errorf("text should not contain %v", "key-pem")
+		}
 	})
 
 	t.Run("still validates private_key", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeObjectStorageSSLUploadTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRegion:      regionUSEast1,
 			keyLabel:       bucketTest,
 			keyCertificate: "cert-pem",
 			keyDryRun:      true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "private_key is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "private_key is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "private_key is required")
+		}
 	})
 }

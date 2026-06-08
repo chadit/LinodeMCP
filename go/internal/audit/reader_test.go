@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -42,7 +43,9 @@ func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Even
 	t.Helper()
 
 	file, err := os.Create(path) //nolint:gosec // path from test tmp dir
-	mustNoError(t, err, "create %s", path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	defer func() { _ = file.Close() }()
 
@@ -51,13 +54,19 @@ func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Even
 	if gzipped {
 		gzWriter := gzip.NewWriter(file)
 
-		defer func() { mustNoError(t, gzWriter.Close(), "close gzip") }()
+		defer func() {
+			if err := gzWriter.Close(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}()
 
 		encoder = json.NewEncoder(gzWriter)
 	}
 
 	for i := range events {
-		mustNoError(t, encoder.Encode(&events[i]), "encode event %d", i)
+		if err := encoder.Encode(&events[i]); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 }
 
@@ -82,18 +91,18 @@ func TestReadRecentNewestFirstAcrossFiles(t *testing.T) {
 	})
 
 	events, err := audit.ReadRecent(dir, &audit.RecentQuery{})
-	mustNoError(t, err, "read must succeed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got := make([]string, 0, len(events))
 	for i := range events {
 		got = append(got, events[i].Tool)
 	}
 
-	checkEqual(
-		t,
-		[]string{"tool_d", "tool_c", "tool_b", "tool_a"}, got,
-		"events must be newest-first: active log (today) then rotated (older), reversed within each file",
-	)
+	if !reflect.DeepEqual(got, []string{"tool_d", "tool_c", "tool_b", "tool_a"}) {
+		t.Errorf("got = %v, want %v", got, []string{"tool_d", "tool_c", "tool_b", "tool_a"})
+	}
 }
 
 // TestReadRecentLimitClamp verifies the limit clamps the result and
@@ -113,19 +122,31 @@ func TestReadRecentLimitClamp(t *testing.T) {
 	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, events)
 
 	got, err := audit.ReadRecent(dir, &audit.RecentQuery{Limit: 10})
-	mustNoError(t, err, "read must succeed")
-	checkLen(t, got, 10, "explicit limit caps the result")
-	checkEqual(t, day(19, 0).Add(49*time.Minute).Unix(), got[0].TS.Unix(),
-		"newest event must come first under a limit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 10 {
+		t.Errorf("len(got) = %d, want %d", len(got), 10)
+	}
+
+	if got[0].TS.Unix() != day(19, 0).Add(49*time.Minute).Unix() {
+		t.Errorf("got[0].TS.Unix() = %v, want %v", got[0].TS.Unix(), day(19, 0).Add(49*time.Minute).Unix())
+	}
 
 	defaulted, err := audit.ReadRecent(dir, &audit.RecentQuery{Limit: 0})
-	mustNoError(t, err, "read must succeed")
-	checkLen(t, defaulted, audit.DefaultRecentLimit, "limit 0 falls back to the default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(defaulted) != audit.DefaultRecentLimit {
+		t.Errorf("len(defaulted) = %d, want %d", len(defaulted), audit.DefaultRecentLimit)
+	}
 }
 
 // TestReadRecentFilters exercises every filter dimension.
-func TestReadRecentFilters(t *testing.T) {
-	t.Parallel()
+func readRecentFilterFixture(t *testing.T) string {
+	t.Helper()
 
 	dir := t.TempDir()
 
@@ -136,52 +157,97 @@ func TestReadRecentFilters(t *testing.T) {
 		makeTestEvent("linode_volume_create", audit.CapabilityWrite, audit.StatusSuccess, day(19, 11)),
 	})
 
+	return dir
+}
+
+func TestReadRecentFilters(t *testing.T) {
+	t.Parallel()
+
+	dir := readRecentFilterFixture(t)
+
 	t.Run("meta excluded by default", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{})
-		mustNoError(t, err)
-
-		for i := range got {
-			checkNotEqual(t, audit.CapabilityMeta, got[i].ToolCapability,
-				"meta events must be excluded unless include_meta is set")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 
-		checkLen(t, got, 3, "three non-meta events")
+		for i := range got {
+			if got[i].ToolCapability == audit.CapabilityMeta {
+				t.Errorf("got[i].ToolCapability = %v, do not want %v", got[i].ToolCapability, audit.CapabilityMeta)
+			}
+		}
+
+		if len(got) != 3 {
+			t.Errorf("len(got) = %d, want %d", len(got), 3)
+		}
 	})
 
 	t.Run("meta included when requested", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{IncludeMeta: true})
-		mustNoError(t, err)
-		checkLen(t, got, 4, "all four events when meta is included")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(got) != 4 {
+			t.Errorf("len(got) = %d, want %d", len(got), 4)
+		}
 	})
 
 	t.Run("tool glob", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{Tool: "linode_instance_*"})
-		mustNoError(t, err)
-		checkLen(t, got, 2, "glob matches the two instance tools")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(got) != 2 {
+			t.Errorf("len(got) = %d, want %d", len(got), 2)
+		}
 	})
+}
+
+func TestReadRecentFiltersByField(t *testing.T) {
+	t.Parallel()
+
+	dir := readRecentFilterFixture(t)
 
 	t.Run("capability exact", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{Capability: audit.CapabilityDestroy})
-		mustNoError(t, err)
-		mustLen(t, got, 1)
-		checkEqual(t, "linode_instance_delete", got[0].Tool)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(got) != 1 {
+			t.Fatalf("len(got) = %d, want %d", len(got), 1)
+		}
+
+		if got[0].Tool != tcLinodeInstanceDelete {
+			t.Errorf("got[0].Tool = %v, want %v", got[0].Tool, tcLinodeInstanceDelete)
+		}
 	})
 
 	t.Run("status exact", func(t *testing.T) {
 		t.Parallel()
 
 		got, err := audit.ReadRecent(dir, &audit.RecentQuery{Status: audit.StatusError})
-		mustNoError(t, err)
-		mustLen(t, got, 1)
-		checkEqual(t, audit.StatusError, got[0].Status)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(got) != 1 {
+			t.Fatalf("len(got) = %d, want %d", len(got), 1)
+		}
+
+		if got[0].Status != audit.StatusError {
+			t.Errorf("got[0].Status = %v, want %v", got[0].Status, audit.StatusError)
+		}
 	})
 
 	t.Run("since/until window", func(t *testing.T) {
@@ -192,8 +258,13 @@ func TestReadRecentFilters(t *testing.T) {
 			Until:       day(19, 10),
 			IncludeMeta: true,
 		})
-		mustNoError(t, err)
-		checkLen(t, got, 2, "inclusive bounds keep the 09:00 and 10:00 events")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(got) != 2 {
+			t.Errorf("len(got) = %d, want %d", len(got), 2)
+		}
 	})
 }
 
@@ -205,8 +276,13 @@ func TestReadRecentMissingDirReturnsEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-audit-yet")
 
 	got, err := audit.ReadRecent(missing, &audit.RecentQuery{})
-	mustNoError(t, err, "missing dir is not an error")
-	checkEmpty(t, got, "missing dir yields no events")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Errorf("got = %v, want empty", got)
+	}
 }
 
 // TestReadRecentSkipsCorruptLines verifies a malformed JSON line is
@@ -220,15 +296,27 @@ func TestReadRecentSkipsCorruptLines(t *testing.T) {
 	good := makeTestEvent("tool_ok", audit.CapabilityRead, audit.StatusSuccess, day(19, 8))
 
 	line, err := json.Marshal(&good)
-	mustNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	content := "{ this is not json\n" + string(line) + "\n"
-	mustNoError(t, os.WriteFile(path, []byte(content), 0o600), "write mixed file")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got, err := audit.ReadRecent(dir, &audit.RecentQuery{})
-	mustNoError(t, err, "corrupt line must not abort the scan")
-	mustLen(t, got, 1, "the one valid event is returned")
-	checkEqual(t, "tool_ok", got[0].Tool)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].Tool != "tool_ok" {
+		t.Errorf("got[0].Tool = %v, want %v", got[0].Tool, "tool_ok")
+	}
 }
 
 // day builds a UTC timestamp in testYear, May, at the given day-of-

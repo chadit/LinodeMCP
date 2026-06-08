@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -26,13 +27,26 @@ func TestClientAddInstanceInterfaceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/linode/instances/123/interfaces", r.URL.Path, "request path should match")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcLinodeInstances123Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedIssueAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedIssueAuthHeader)
+		}
 
 		var got linode.AddInstanceInterfaceRequest
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode") {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
 			return
 		}
 
@@ -42,7 +56,9 @@ func TestClientAddInstanceInterfaceSuccess(t *testing.T) {
 		case got.Public.IPv4 == nil:
 			t.Error("public IPv4 should be sent")
 		default:
-			checkEqual(t, "auto", got.Public.IPv4.Addresses[0].Address, "IPv4 address should match")
+			if got.Public.IPv4.Addresses[0].Address != tcAuto {
+				t.Errorf("got.Public.IPv4.Addresses[0].Address = %v, want %v", got.Public.IPv4.Addresses[0].Address, tcAuto)
+			}
 		}
 
 		switch {
@@ -54,12 +70,16 @@ func TestClientAddInstanceInterfaceSuccess(t *testing.T) {
 			t.Error("IPv4 default route should match")
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(created), "encoding response should not fail")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(created); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.AddInstanceInterface(t.Context(), 123, &linode.AddInstanceInterfaceRequest{
 		Public: &linode.InterfacePublicConfig{
 			IPv4: &linode.InterfacePublicIPv4{
@@ -69,12 +89,25 @@ func TestClientAddInstanceInterfaceSuccess(t *testing.T) {
 		DefaultRoute: &linode.AddInterfaceDefaultRoute{IPv4: &primary},
 		FirewallID:   &firewallID,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "AddInstanceInterface should succeed on 200 response")
-	requireNotNil(t, got)
-	checkEqual(t, 1234, got.ID)
-	requireNotNil(t, got.FirewallID)
-	checkEqual(t, firewallID, *got.FirewallID)
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != 1234 {
+		t.Errorf("got.ID = %v, want %v", got.ID, 1234)
+	}
+
+	if got.FirewallID == nil {
+		t.Fatal("got.FirewallID is nil")
+	}
+
+	if *got.FirewallID != firewallID {
+		t.Errorf("*got.FirewallID = %v, want %v", *got.FirewallID, firewallID)
+	}
 }
 
 func TestClientAddInstanceInterfaceRejectsInvalidInput(t *testing.T) {
@@ -90,10 +123,14 @@ func TestClientAddInstanceInterfaceRejectsInvalidInput(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.AddInstanceInterface(t.Context(), 0, &linode.AddInstanceInterfaceRequest{Public: &linode.InterfacePublicConfig{}})
-	requireErrorIs(t, err, linode.ErrLinodeIDPositive)
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 
 	_, err = client.AddInstanceInterface(t.Context(), 123, nil)
-	requireErrorIs(t, err, linode.ErrAddInstanceInterfaceRequestRequired)
+	if !errors.Is(err, linode.ErrAddInstanceInterfaceRequestRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrAddInstanceInterfaceRequestRequired)
+	}
 
 	if called.Load() {
 		t.Error("invalid inputs should not reach upstream server")
@@ -107,7 +144,11 @@ func TestClientAddInstanceInterfaceDoesNotReplayTransientPost(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
 		http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
 	}))
 	t.Cleanup(srv.Close)
@@ -115,7 +156,11 @@ func TestClientAddInstanceInterfaceDoesNotReplayTransientPost(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(3))
 
 	_, err := client.AddInstanceInterface(t.Context(), 123, &linode.AddInstanceInterfaceRequest{Public: &linode.InterfacePublicConfig{}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "server error should be returned")
-	checkEqual(t, int32(1), calls.Load(), "POST create call should not be replayed after transient server error")
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

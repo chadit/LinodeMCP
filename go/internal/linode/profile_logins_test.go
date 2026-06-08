@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -28,53 +29,114 @@ func TestClientListProfileLoginsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/logins", r.URL.Path, "request path should be /profile/logins")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "values differ")
-		checkEqual(t, int64(0), r.ContentLength, "GET request should not send a body")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(logins), "expected no error")
+		if r.URL.Path != tcProfileLogins {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileLogins)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		if r.ContentLength != int64(0) {
+			t.Errorf("r.ContentLength = %v, want %v", r.ContentLength, int64(0))
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(logins); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListProfileLogins(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "ListProfileLogins should succeed on 200 response")
-	requireNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page, "values differ")
-	checkEqual(t, 3, result.Pages, "values differ")
-	checkEqual(t, 7, result.Results, "values differ")
-	requireLenOne(t, result.Data)
-	checkEqual(t, 321, result.Data[0].ID, "values differ")
-	checkEqual(t, accountLoginUsername, result.Data[0].Username, "values differ")
-	checkEqual(t, "203.0.113.20", result.Data[0].IP, "values differ")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if result.Pages != 3 {
+		t.Errorf("result.Pages = %v, want %v", result.Pages, 3)
+	}
+
+	if result.Results != 7 {
+		t.Errorf("result.Results = %v, want %v", result.Results, 7)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want 1", len(result.Data))
+	}
+
+	if result.Data[0].ID != 321 {
+		t.Errorf("result.Data[0].ID = %v, want %v", result.Data[0].ID, 321)
+	}
+
+	if result.Data[0].Username != accountLoginUsername {
+		t.Errorf("result.Data[0].Username = %v, want %v", result.Data[0].Username, accountLoginUsername)
+	}
+
+	if result.Data[0].IP != "203.0.113.20" {
+		t.Errorf("result.Data[0].IP = %v, want %v", result.Data[0].IP, "203.0.113.20")
+	}
 }
 
 func TestClientListProfileLoginsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/logins", r.URL.Path, "request path should be /profile/logins")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileLogins {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileLogins)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "expected no error")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListProfileLogins(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "ListProfileLogins should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 
-	apiErr := requireAPIError(t, err, "ListProfileLogins should return APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode, "values differ")
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListProfileLoginsRetriesTransientError(t *testing.T) {
@@ -86,26 +148,48 @@ func TestClientListProfileLoginsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary profile login error"}}}), "expected no error")
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary profile login error"}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/profile/logins", r.URL.Path, "request path should be /profile/logins")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcProfileLogins {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileLogins)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
 			Data: []linode.AccountLogin{{ID: 321, Username: accountLoginUsername}},
-		}), "expected no error")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListProfileLogins(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "ListProfileLogins should succeed after retry")
-	requireNotNil(t, result, "result should not be nil")
-	requireLenOne(t, result.Data)
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want 1", len(result.Data))
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }

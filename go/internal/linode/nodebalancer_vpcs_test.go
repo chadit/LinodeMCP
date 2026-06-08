@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -16,31 +18,75 @@ func TestClientListNodeBalancerVPCsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nbCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		nbCheckEqual(t, nodeBalancerVPCsPath, r.URL.Path, "request path should match")
-		nbCheckEqual(t, "page=2&page_size=50", r.URL.RawQuery, "request query should include pagination")
-		nbCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		nbCheckEqual(t, http.NoBody, r.Body, "request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		nbCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != nodeBalancerVPCsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, nodeBalancerVPCsPath)
+		}
+
+		if r.URL.RawQuery != tcPage2PageSize50 {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, tcPage2PageSize50)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{keyVPCID: 456, keySubnetID: 789, keyIPv4Range: cidrV4}},
 			keyPage: 2, keyPages: 3, keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListNodeBalancerVPCs(t.Context(), 123, 2, 50)
 
-	nbRequireNoError(t, err)
-	nbRequireNotNil(t, got)
-	nbRequireLenOne(t, got.Data)
-	nbRequireNotNil(t, got.Data[0].VPCID)
-	nbCheckEqual(t, 456, *got.Data[0].VPCID)
-	nbCheckEqual(t, 789, got.Data[0].SubnetID)
-	nbCheckEqual(t, cidrV4, got.Data[0].IPv4Range)
-	nbCheckEqual(t, 2, got.Page)
-	nbCheckEqual(t, 3, got.Pages)
+	got, err := client.ListNodeBalancerVPCs(t.Context(), 123, 2, 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if len(got.Data) != 1 {
+		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	}
+
+	if got.Data[0].VPCID == nil {
+		t.Fatal("got.Data[0].VPCID is nil")
+	}
+
+	if *got.Data[0].VPCID != 456 {
+		t.Errorf("*got.Data[0].VPCID = %v, want %v", *got.Data[0].VPCID, 456)
+	}
+
+	if got.Data[0].SubnetID != 789 {
+		t.Errorf("got.Data[0].SubnetID = %v, want %v", got.Data[0].SubnetID, 789)
+	}
+
+	if got.Data[0].IPv4Range != cidrV4 {
+		t.Errorf("got.Data[0].IPv4Range = %v, want %v", got.Data[0].IPv4Range, cidrV4)
+	}
+
+	if got.Page != 2 {
+		t.Errorf("got.Page = %v, want %v", got.Page, 2)
+	}
+
+	if got.Pages != 3 {
+		t.Errorf("got.Pages = %v, want %v", got.Pages, 3)
+	}
 }
 
 func TestClientListNodeBalancerVPCsRejectsInvalidNodeBalancerID(t *testing.T) {
@@ -49,31 +95,59 @@ func TestClientListNodeBalancerVPCsRejectsInvalidNodeBalancerID(t *testing.T) {
 	client := linode.NewClient("https://api.example.test/v4", "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListNodeBalancerVPCs(t.Context(), 0, 1, 25)
 
-	nbRequireErrorIs(t, err, linode.ErrNodeBalancerIDPositive)
-	nbCheckNil(t, got)
+	if !errors.Is(err, linode.ErrNodeBalancerIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrNodeBalancerIDPositive)
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 }
 
 func TestClientListNodeBalancerVPCsHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nbCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		nbCheckEqual(t, nodeBalancerVPCsPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != nodeBalancerVPCsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, nodeBalancerVPCsPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		nbCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.ListNodeBalancerVPCs(t.Context(), 123, 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	nbRequireError(t, err)
-	nbCheckNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := nbRequireAPIError(t, err)
-	nbCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	nbCheckEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientListNodeBalancerVPCsRetriesReadOnlyRequest(t *testing.T) {
@@ -82,8 +156,13 @@ func TestClientListNodeBalancerVPCsRetriesReadOnlyRequest(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nbCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		nbCheckEqual(t, nodeBalancerVPCsPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != nodeBalancerVPCsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, nodeBalancerVPCsPath)
+		}
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -91,19 +170,33 @@ func TestClientListNodeBalancerVPCsRetriesReadOnlyRequest(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		nbCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{keyVPCID: 456, keySubnetID: 789}},
 			keyPage: 1, keyPages: 1, keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListNodeBalancerVPCs(t.Context(), 123, 0, 0)
 
-	nbRequireNoError(t, err)
-	nbRequireNotNil(t, got)
-	nbRequireLenOne(t, got.Data)
-	nbCheckEqual(t, int32(2), calls.Load())
+	got, err := client.ListNodeBalancerVPCs(t.Context(), 123, 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if len(got.Data) != 1 {
+		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }

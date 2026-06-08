@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -17,129 +17,215 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeKernelGetTool(t *testing.T) {
+func TestLinodeKernelGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeKernelGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeKernelGetTool(cfg)
+	if tool.Name != "linode_kernel_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_kernel_get")
+	}
 
-		assert.Equal(t, "linode_kernel_get", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyKernelID, "schema should include kernel_id")
-		assert.Contains(t, tool.InputSchema.Required, keyKernelID, "kernel_id must be marked required")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		kernel := linode.Kernel{ID: kernelLatestFixture, Label: kernelLabelFixture, Version: "6.8.9", Architecture: "x86_64"}
+	if _, ok := tool.InputSchema.Properties[keyKernelID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyKernelID)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/kernels/linode/latest-64bit", r.URL.Path, "request path should include kernel ID")
-			assert.Equal(t, "/linode/kernels/linode%2Flatest-64bit", r.URL.EscapedPath(), "request path should encode kernel ID slash")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(kernel))
-		}))
-		defer srv.Close()
+	if !slices.Contains(tool.InputSchema.Required, keyKernelID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyKernelID)
+	}
 
-		cfg := kernelTestConfig(srv.URL)
-		_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
+		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	}
 
-		req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
-		result, err := handler(t.Context(), req)
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+func TestLinodeKernelGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, kernelLatestFixture, "response should contain kernel ID")
-		assert.Contains(t, textContent.Text, kernelLabelFixture, "response should contain kernel label")
-	})
+	kernel := linode.Kernel{ID: kernelLatestFixture, Label: kernelLabelFixture, Version: "6.8.9", Architecture: "x86_64"}
 
-	t.Run("client failure returns tool error", func(t *testing.T) {
-		t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/kernels/linode/latest-64bit", r.URL.Path, "request path should include kernel ID")
-			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+		if r.URL.Path != "/linode/kernels/linode/latest-64bit" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/kernels/linode/latest-64bit")
+		}
+
+		if r.URL.EscapedPath() != "/linode/kernels/linode%2Flatest-64bit" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/linode/kernels/linode%2Flatest-64bit")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(kernel); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := kernelTestConfig(srv.URL)
+	_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, kernelLatestFixture) {
+		t.Errorf("textContent.Text does not contain %v", kernelLatestFixture)
+	}
+
+	if !strings.Contains(textContent.Text, kernelLabelFixture) {
+		t.Errorf("textContent.Text does not contain %v", kernelLabelFixture)
+	}
+}
+
+func TestLinodeKernelGetToolClientFailureReturnsToolError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/linode/kernels/linode/latest-64bit" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/kernels/linode/latest-64bit")
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := kernelTestConfig(srv.URL)
+	_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve kernel") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve kernel")
+	}
+
+	if !strings.Contains(textContent.Text, errTemporaryFailure) {
+		t.Errorf("textContent.Text does not contain %v", errTemporaryFailure)
+	}
+}
+
+func TestLinodeKernelGetToolRejectsInvalidKernelIdBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	invalidValues := map[string]any{
+		caseMissing:        nil,
+		caseBlank:          "",
+		caseNumeric:        123,
+		"missing prefix":   "latest-64bit",
+		"empty prefix":     "/latest-64bit",
+		"empty name":       "linode/",
+		caseExtraSeparator: "linode/latest/64bit",
+		caseQuery:          "linode/latest-64bit?arch=x64",
+		caseFragment:       "linode/latest-64bit#x64",
+		caseDotdot:         pathTraversalValue,
+		"prefixed dotdot":  "linode/..",
+	}
+
+	for name, value := range invalidValues {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				called.Store(true)
 			}))
-		}))
-		defer srv.Close()
+			defer srv.Close()
 
-		cfg := kernelTestConfig(srv.URL)
-		_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+			cfg := kernelTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeKernelGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
-		result, err := handler(t.Context(), req)
+			args := map[string]any{}
+			if name != caseMissing {
+				args[keyKernelID] = value
+			}
 
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "client failure should return a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve kernel")
-		assert.Contains(t, textContent.Text, errTemporaryFailure)
-	})
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-	t.Run("rejects invalid kernel_id before client call", func(t *testing.T) {
-		t.Parallel()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		invalidValues := map[string]any{
-			caseMissing:        nil,
-			caseBlank:          "",
-			caseNumeric:        123,
-			"missing prefix":   "latest-64bit",
-			"empty prefix":     "/latest-64bit",
-			"empty name":       "linode/",
-			caseExtraSeparator: "linode/latest/64bit",
-			caseQuery:          "linode/latest-64bit?arch=x64",
-			caseFragment:       "linode/latest-64bit#x64",
-			caseDotdot:         pathTraversalValue,
-			"prefixed dotdot":  "linode/..",
-		}
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		for name, value := range invalidValues {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-					called.Store(true)
-				}))
-				defer srv.Close()
-
-				cfg := kernelTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeKernelGetTool(cfg)
-
-				args := map[string]any{}
-				if name != caseMissing {
-					args[keyKernelID] = value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.True(t, result.IsError, "invalid kernel_id should return a tool error")
-				assert.False(t, called.Load(), "invalid kernel_id should be rejected before client call")
-			})
-		}
-	})
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
 }
 
 func kernelTestConfig(apiURL string) *config.Config {

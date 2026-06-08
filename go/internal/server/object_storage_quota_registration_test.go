@@ -10,17 +10,28 @@ func TestObjectStorageQuotaGetToolRegisteredAsRead(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+
 	infos := srv.ToolInfos()
-	requireNotEmpty(t, infos, "server must expose registered tools")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	for _, info := range infos {
 		if info.Name != "linode_object_storage_quota_get" {
 			continue
 		}
 
-		assertEqual(t, profiles.CapRead, info.Capability, "quota get is a read-only route")
-		assertContains(t, info.InputSchema.Properties, "obj_quota_id", "quota ID parameter should be exported")
-		assertNotContains(t, info.InputSchema.Properties, "confirm", "read-only route should not require confirm")
+		if info.Capability != profiles.CapRead {
+			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
+		}
+
+		if _, ok := info.InputSchema.Properties["obj_quota_id"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "obj_quota_id")
+		}
+
+		if _, ok := info.InputSchema.Properties["confirm"]; ok {
+			t.Errorf("info.InputSchema.Properties has unexpected key %v", "confirm")
+		}
 
 		return
 	}

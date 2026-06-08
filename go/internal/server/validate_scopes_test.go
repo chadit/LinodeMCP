@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -40,13 +41,22 @@ func TestValidateScopesNoTokenReturnsSentinel(t *testing.T) {
 	cfg := configWithEnv("https://example.invalid", "")
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got, err := srv.ValidateScopes(t.Context())
-	requireError(t, err)
-	assertNil(t, got, "result must be nil when no token configured")
-	requireErrorIs(t, err, profiles.ErrTokenNotConfigured,
-		"missing token must surface as ErrTokenNotConfigured so callers can match it")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+
+	if !errors.Is(err, profiles.ErrTokenNotConfigured) {
+		t.Fatalf("error = %v, want %v", err, profiles.ErrTokenNotConfigured)
+	}
 }
 
 // TestValidateScopesPATPathSucceeds covers the happy path: a PAT
@@ -57,28 +67,44 @@ func TestValidateScopesPATPathSucceeds(t *testing.T) {
 	t.Parallel()
 
 	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertEqual(t, "/profile", r.URL.Path,
-			"PAT path must only hit /profile (no /profile/grants)")
+		if r.URL.Path != "/profile" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(linode.Profile{
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{
 			Username: "u",
 			Scopes:   "*",
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer httpSrv.Close()
 
 	cfg := configWithEnv(httpSrv.URL, "pat-token")
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got, err := srv.ValidateScopes(t.Context())
-	requireNoError(t, err)
-	requireNotNil(t, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profiles.TokenKindPAT, got.Kind)
-	assertFalse(t, got.Comparison.HasMissing(),
-		"wildcard PAT must satisfy every required scope")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Kind != profiles.TokenKindPAT {
+		t.Errorf("got.Kind = %v, want %v", got.Kind, profiles.TokenKindPAT)
+	}
+
+	if got.Comparison.HasMissing() {
+		t.Error("got.Comparison.HasMissing() = true, want false")
+	}
 }
 
 // TestValidateScopesMissingScopesReportedInComparison verifies that
@@ -90,23 +116,35 @@ func TestValidateScopesMissingScopesReportedInComparison(t *testing.T) {
 
 	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		assertNoError(t, json.NewEncoder(w).Encode(linode.Profile{
+
+		if err := json.NewEncoder(w).Encode(linode.Profile{
 			Username: "u",
 			Scopes:   "linodes:read_only",
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer httpSrv.Close()
 
 	cfg := configWithEnv(httpSrv.URL, "pat-token")
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got, err := srv.ValidateScopes(t.Context())
-	requireNoError(t, err, "missing scopes must not surface as an error")
-	requireNotNil(t, got)
-	assertTrue(t, got.Comparison.HasMissing(),
-		"full-access profile needs more scopes than linodes:read_only")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !got.Comparison.HasMissing() {
+		t.Error("got.Comparison.HasMissing() = false, want true")
+	}
 }
 
 // TestProfileIsElevated covers the missing-token policy helper. Default
@@ -116,18 +154,26 @@ func TestProfileIsElevated(t *testing.T) {
 	t.Parallel()
 
 	defaultCfg := baseTestConfig()
+
 	srv, err := server.New(defaultCfg)
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	defaultProfile := srv.ActiveProfile()
-	assertFalse(t, profiles.ProfileIsElevated(&defaultProfile),
-		"default profile is read-only and must not be classified elevated")
+	if profiles.ProfileIsElevated(&defaultProfile) {
+		t.Error("expected condition to be false")
+	}
 
 	fullCfg := configWithEnv("https://example.invalid", "tok")
+
 	fullSrv, err := server.New(fullCfg)
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	fullProfile := fullSrv.ActiveProfile()
-	assertTrue(t, profiles.ProfileIsElevated(&fullProfile),
-		"full-access carries :read_write scopes and must be classified elevated")
+	if !profiles.ProfileIsElevated(&fullProfile) {
+		t.Error("expected condition to be true")
+	}
 }

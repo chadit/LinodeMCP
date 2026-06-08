@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -18,159 +18,248 @@ import (
 
 const managedServiceDeleteToolName = "linode_managed_service_delete"
 
-func TestLinodeManagedServiceDeleteTool(t *testing.T) {
+func TestLinodeManagedServiceDeleteToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeManagedServiceDeleteTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeManagedServiceDeleteTool(cfg)
+	if tool.Name != managedServiceDeleteToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, managedServiceDeleteToolName)
+	}
 
-		assert.Equal(t, managedServiceDeleteToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "managed service delete should be destructive")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapDestroy {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyManagedServiceID, "schema should include service_id")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyManagedServiceID, "service_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-	t.Run("confirm required before client call", func(t *testing.T) {
-		t.Parallel()
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyManagedServiceID]; !ok {
+		t.Errorf("props missing key %v", keyManagedServiceID)
+	}
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissingConfirm, set: false},
-			{name: caseRequiresConfirm, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{keyManagedServiceID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeManagedServiceDeleteToolConfirmRequiredBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+
+			args := map[string]any{keyManagedServiceID: managedServiceToolIDValue}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedServiceDeleteToolInvalidServiceIdRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: caseMissingServiceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDRequired},
+		{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseFractionalServiceID, args: map[string]any{keyManagedServiceID: 9944.5, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseOversizedServiceID, args: map[string]any{keyManagedServiceID: managedServiceOversizedID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedServiceDeleteToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
-
-				args := map[string]any{keyManagedServiceID: managedServiceToolIDValue}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
-			})
-		}
-	})
-
-	t.Run("invalid service id rejected before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: caseMissingServiceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDRequired},
-			{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseFractionalServiceID, args: map[string]any{keyManagedServiceID: 9944.5, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseOversizedServiceID, args: map[string]any{keyManagedServiceID: managedServiceOversizedID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
-			{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errManagedServiceIDPositive},
+		if r.URL.Path != managedServiceToolPathValue {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedServiceToolPathValue)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid service ID should be a tool error")
-				assertErrorContains(t, result, testCase.wantMessage)
-				assert.Equal(t, int32(0), calls, "validation failure must happen before client call")
-			})
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, managedServiceToolPathValue, r.URL.Path, "request path should include service ID")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
-		}))
-		t.Cleanup(srv.Close)
+		w.Header().Set("Content-Type", "application/json")
 
-		_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true, keyConfirmedDryRun: true}))
+	_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "deleted successfully", "response should confirm deletion")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, managedServiceToolPathValue, r.URL.Path, "request path should include service ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true, keyConfirmedDryRun: true}))
+	if !strings.Contains(textContent.Text, "deleted successfully") {
+		t.Errorf("textContent.Text does not contain %v", "deleted successfully")
+	}
+}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to delete linode_managed_service_delete")
-		assertErrorContains(t, result, errForbidden)
-	})
+func TestLinodeManagedServiceDeleteToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != managedServiceToolPathValue {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedServiceToolPathValue)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_managed_service_delete") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_managed_service_delete")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

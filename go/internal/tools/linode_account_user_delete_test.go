@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -19,30 +21,44 @@ import (
 const accountUserDeleteToolName = "linode_account_user_delete"
 
 func TestLinodeAccountUserDeleteToolDefinition(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountUserDeleteTool(cfg)
 
-	assert.Equal(t, accountUserDeleteToolName, tool.Name, "tool name should match")
-	assert.Equal(t, profiles.CapDestroy, capability, "user deletion should be CapDestroy")
-	assert.NotEmpty(t, tool.Description, "tool should have a description")
-	require.NotNil(t, handler, "handler should not be nil")
+	if tool.Name != accountUserDeleteToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, accountUserDeleteToolName)
+	}
+
+	if capability != profiles.CapDestroy {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
 	props := tool.InputSchema.Properties
-	assert.Contains(t, props, keyUsername, "schema should include username")
-	assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	assert.Contains(t, tool.InputSchema.Required, keyUsername, "username must be marked required")
-	assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	if _, ok := props[keyUsername]; !ok {
+		t.Errorf("props missing key %v", keyUsername)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	for _, key := range []string{keyUsername, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
 }
 
 func TestLinodeAccountUserDeleteRequiresConfirm(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -71,20 +87,30 @@ func TestLinodeAccountUserDeleteRequiresConfirm(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, errConfirmEqualsTrue)
-			assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountUserDeleteRejectsInvalidUsername(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -109,74 +135,140 @@ func TestLinodeAccountUserDeleteRejectsInvalidUsername(t *testing.T) {
 			defer cleanup()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid request should be a tool error")
-			assertErrorContains(t, result, testCase.wantMessage)
-			assert.Equal(t, int32(0), calls, "request validation must fail before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountUserDeleteSuccess(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/users/"+accountUserUsername, r.URL.Path, "request path should include username")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUsername)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
 		body, err := io.ReadAll(r.Body)
-		assert.NoError(t, err)
-		assert.Empty(t, body, "delete request should not include a body")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if len(body) != 0 {
+			t.Errorf("body = %v, want empty", body)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeAccountUserDeleteTool(accountUserDeleteConfig(srv.URL))
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyConfirm: true}))
 
-	require.NoError(t, err, "handler should not return an error")
-	require.NotNil(t, result, "result should not be nil")
-	assert.False(t, result.IsError, "should not be an error result")
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
-	assert.Contains(t, textContent.Text, "Account user deleted successfully", "response should include success message")
-	assert.Contains(t, textContent.Text, accountUserUsername, "response should include username")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Account user deleted successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Account user deleted successfully")
+	}
+
+	if !strings.Contains(textContent.Text, accountUserUsername) {
+		t.Errorf("textContent.Text does not contain %v", accountUserUsername)
+	}
 }
 
 func TestLinodeAccountUserDeleteAPIError(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		assert.Equal(t, "/account/users/"+accountUserUsername, r.URL.Path, "request path should include username")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUsername)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	_, _, handler := tools.NewLinodeAccountUserDeleteTool(accountUserDeleteConfig(srv.URL))
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyConfirm: true}))
 
-	require.NoError(t, err, "handler should return API failures as tool errors")
-	require.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.IsError, "API failure should be an error result")
-	assertErrorContains(t, result, "Failed to delete linode_account_user_delete")
-	assertErrorContains(t, result, errForbidden)
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_account_user_delete") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_account_user_delete")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func accountUserDeleteConfig(apiURL string) *config.Config {

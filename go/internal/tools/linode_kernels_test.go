@@ -4,114 +4,156 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeKernelListTool(t *testing.T) {
+func TestLinodeKernelListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, _, handler := tools.NewLinodeKernelListTool(cfg)
 
-		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeKernelListTool(cfg)
+	if tool.Name != "linode_kernel_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_kernel_list")
+	}
 
-		assert.Equal(t, "linode_kernel_list", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success with pagination", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		kernels := []linode.Kernel{{ID: "linode/latest-64bit", Label: "Latest 64 bit", Version: "6.15.7", KVM: true, Architecture: "x86_64", PVOPS: true}}
+func TestLinodeKernelListToolSuccessWithPagination(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/kernels", r.URL.Path, "request path should match")
-			assert.Equal(t, "3", r.URL.Query().Get("page"), "page query should match")
-			assert.Equal(t, "25", r.URL.Query().Get("page_size"), "page_size query should match")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    kernels,
-				keyPage:    3,
-				keyPages:   14,
-				keyResults: 338,
-			}))
-		}))
-		defer srv.Close()
+	kernels := []linode.Kernel{{ID: "linode/latest-64bit", Label: "Latest 64 bit", Version: "6.15.7", KVM: true, Architecture: "x86_64", PVOPS: true}}
 
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/kernels" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/kernels")
+		}
+
+		if r.URL.Query().Get("page") != "3" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("page"), "3")
+		}
+
+		if r.URL.Query().Get("page_size") != "25" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("page_size"), "25")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    kernels,
+			keyPage:    3,
+			keyPages:   14,
+			keyResults: 338,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 			},
-		}
-		_, _, handler := tools.NewLinodeKernelListTool(cfg)
+		},
+	}
+	_, _, handler := tools.NewLinodeKernelListTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyPage: float64(3), keyPageSize: float64(25)})
-		result, err := handler(t.Context(), req)
+	req := createRequestWithArgs(t, map[string]any{keyPage: float64(3), keyPageSize: float64(25)})
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "linode/latest-64bit", "response should contain kernel ID")
-		assert.Contains(t, textContent.Text, `"count": 1`, "response should contain count")
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-	t.Run("invalid pagination rejected before client call", func(t *testing.T) {
-		t.Parallel()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		testCases := map[string]map[string]any{
-			"kernel page below minimum": {keyPage: float64(0)},
-			"kernel page malformed":     {keyPage: "two"},
-			"page size below minimum":   {keyPageSize: float64(1)},
-			"page size above maximum":   {keyPageSize: float64(501)},
-			"page size malformed":       {keyPageSize: "many"},
-		}
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		for name, args := range testCases {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
+	if !strings.Contains(textContent.Text, "linode/latest-64bit") {
+		t.Errorf("textContent.Text does not contain %v", "linode/latest-64bit")
+	}
 
-				var called atomic.Bool
+	if !strings.Contains(textContent.Text, `"count": 1`) {
+		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	}
+}
 
-				srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-					called.Store(true)
-				}))
-				defer srv.Close()
+func TestLinodeKernelListToolInvalidPaginationRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
 
-				cfg := &config.Config{
-					Environments: map[string]config.EnvironmentConfig{
-						envKeyDefault: {
-							Label:  envLabelDefault,
-							Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-						},
+	testCases := map[string]map[string]any{
+		"kernel page below minimum": {keyPage: float64(0)},
+		"kernel page malformed":     {keyPage: "two"},
+		"page size below minimum":   {keyPageSize: float64(1)},
+		"page size above maximum":   {keyPageSize: float64(501)},
+		"page size malformed":       {keyPageSize: "many"},
+	}
+
+	for name, args := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				called.Store(true)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{
+				Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {
+						Label:  envLabelDefault,
+						Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 					},
-				}
-				_, _, handler := tools.NewLinodeKernelListTool(cfg)
+				},
+			}
+			_, _, handler := tools.NewLinodeKernelListTool(cfg)
 
-				req := createRequestWithArgs(t, args)
-				result, err := handler(t.Context(), req)
+			req := createRequestWithArgs(t, args)
 
-				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.True(t, result.IsError, "invalid pagination should return tool error")
-				assert.False(t, called.Load(), "validation should reject before client call")
-			})
-		}
-	})
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
 }

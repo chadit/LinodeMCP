@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -29,7 +30,7 @@ func fixtureSourceProfile() profiles.Profile {
 	return profiles.Profile{
 		Name:                cloneSourceName,
 		Description:         "Compute admin clone source",
-		AllowedTools:        []string{"linode_instance_boot", "linode_instance_list"},
+		AllowedTools:        []string{toolInstanceBoot, "linode_instance_list"},
 		AllowedEnvironments: []string{envProd},
 		RequiredTokenScopes: []string{"linodes:read_write"},
 		AllowYolo:           false,
@@ -102,10 +103,21 @@ func TestDraftNewRegistration(t *testing.T) {
 		fixtureResolver(),
 	)
 
-	checkEqual(t, "linode_profile_draft_new", tool.Name)
-	expectNotEmpty(t, tool.Description)
-	checkEqual(t, profiles.CapMeta, capability)
-	expectNotNil(t, handler)
+	if tool.Name != "linode_profile_draft_new" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_draft_new")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
 // TestDraftNewCreatesEmptyDraft is the no-clone-from happy path.
@@ -119,16 +131,30 @@ func TestDraftNewCreatesEmptyDraft(t *testing.T) {
 
 	out := callDraftHandler(t, handler, map[string]any{keyName: draftFixtureName})
 
-	checkEqual(t, draftFixtureName, out[keyName])
-	checkEmpty(t, out["description"])
-	checkEqual(t, []any{}, out["allowed_tools"])
-	checkEqual(t, []any{}, out["allowed_environments"])
-	checkEqual(t, []any{}, out["required_token_scopes"])
-	checkEqual(t, false, out["allow_yolo"])
+	if !reflect.DeepEqual(out[keyName], draftFixtureName) {
+		t.Errorf("out[keyName] = %v, want %v", out[keyName], draftFixtureName)
+	}
+
+	if v := out[keyDescription]; v != nil && v != "" {
+		t.Errorf("value = %v, want empty", out[keyDescription])
+	}
+
+	for key, want := range map[string]any{
+		tcAllowedTools:        []any{},
+		tcAllowedEnvironments: []any{},
+		tcRequiredTokenScopes: []any{},
+		"allow_yolo":          false,
+	} {
+		if !reflect.DeepEqual(out[key], want) {
+			t.Errorf("out[%v] = %v, want %v", key, out[key], want)
+		}
+	}
 
 	// Registry side-effect: the draft is now retrievable.
 	_, ok := reg.Get(draftFixtureName)
-	checkTrueWithMode(t, false, ok, "draft must be registered after _new returns")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 }
 
 // TestDraftNewClonesFromSource covers the clone_from path: every
@@ -146,12 +172,18 @@ func TestDraftNewClonesFromSource(t *testing.T) {
 
 	src := fixtureSourceProfile()
 
-	checkEqual(t, draftFixtureName, out[keyName])
-	checkEqual(t, src.Description, out["description"])
-	checkEqual(t, anySlice(src.AllowedTools), out["allowed_tools"])
-	checkEqual(t, anySlice(src.AllowedEnvironments), out["allowed_environments"])
-	checkEqual(t, anySlice(src.RequiredTokenScopes), out["required_token_scopes"])
-	checkEqual(t, src.AllowYolo, out["allow_yolo"])
+	for key, want := range map[string]any{
+		keyName:               draftFixtureName,
+		keyDescription:        src.Description,
+		tcAllowedTools:        anySlice(src.AllowedTools),
+		tcAllowedEnvironments: anySlice(src.AllowedEnvironments),
+		tcRequiredTokenScopes: anySlice(src.RequiredTokenScopes),
+		"allow_yolo":          src.AllowYolo,
+	} {
+		if !reflect.DeepEqual(out[key], want) {
+			t.Errorf("out[%v] = %v, want %v", key, out[key], want)
+		}
+	}
 }
 
 // TestDraftNewRefusesMissingName covers the validation guard. The
@@ -192,7 +224,9 @@ func TestDraftNewRefusesUnknownCloneSource(t *testing.T) {
 	}
 
 	_, exists := reg.Get(draftFixtureName)
-	checkFalseWithMode(t, false, exists, "failed _new must not leave a draft behind")
+	if exists {
+		t.Error("exists = true, want false")
+	}
 }
 
 // TestDraftNewRefusesDuplicateName surfaces the underlying
@@ -224,16 +258,25 @@ func TestDraftShowReturnsLiveDraftState(t *testing.T) {
 
 	reg := builder.NewRegistry()
 	src := fixtureSourceProfile()
+
 	_, err := reg.Create(draftFixtureName, &src)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
 
 	out := callDraftHandler(t, showHandler, map[string]any{keyName: draftFixtureName})
 
-	checkEqual(t, draftFixtureName, out[keyName])
-	checkEqual(t, src.Description, out["description"])
-	checkEqual(t, anySlice(src.AllowedTools), out["allowed_tools"])
+	for key, want := range map[string]any{
+		keyName:        draftFixtureName,
+		keyDescription: src.Description,
+		tcAllowedTools: anySlice(src.AllowedTools),
+	} {
+		if !reflect.DeepEqual(out[key], want) {
+			t.Errorf("out[%v] = %v, want %v", key, out[key], want)
+		}
+	}
 }
 
 // TestDraftShowRefusesUnknown covers the typo / expired-session path.
@@ -276,18 +319,28 @@ func TestDraftDiscardRemovesDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
+
 	_, err := reg.Create(draftFixtureName, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
 
 	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftFixtureName})
 
-	checkEqual(t, draftFixtureName, out[keyName])
-	checkEqual(t, true, out["discarded"])
+	if !reflect.DeepEqual(out[keyName], draftFixtureName) {
+		t.Errorf("out[keyName] = %v, want %v", out[keyName], draftFixtureName)
+	}
+
+	if !reflect.DeepEqual(out["discarded"], true) {
+		t.Errorf("got %v, want %v", out["discarded"], true)
+	}
 
 	_, exists := reg.Get(draftFixtureName)
-	checkFalseWithMode(t, false, exists, "discard must remove the draft from the registry")
+	if exists {
+		t.Error("exists = true, want false")
+	}
 }
 
 // TestDraftDiscardIdempotent covers the unknown-name path. Discard
@@ -301,8 +354,13 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 
 	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftNonexistent})
 
-	checkEqual(t, draftNonexistent, out[keyName])
-	checkEqual(t, false, out["discarded"])
+	if !reflect.DeepEqual(out[keyName], draftNonexistent) {
+		t.Errorf("out[keyName] = %v, want %v", out[keyName], draftNonexistent)
+	}
+
+	if !reflect.DeepEqual(out["discarded"], false) {
+		t.Errorf("got %v, want %v", out["discarded"], false)
+	}
 }
 
 // TestDraftDiscardRefusesMissingName mirrors _new and _show.

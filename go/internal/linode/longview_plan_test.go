@@ -2,8 +2,11 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -23,73 +26,151 @@ func TestClientGetLongviewPlanSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
-		longviewCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
-		longviewCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyClientsIncluded: 10,
 			keyID:              "longview-10",
 			keyLabel:           longviewPlan10Label,
 			keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetLongviewPlan(t.Context())
 
-	longviewRequireNoError(t, err)
-	longviewRequireNotNil(t, got)
-	longviewCheckEqual(t, "longview-10", got.ID)
-	longviewCheckEqual(t, longviewPlan10Label, got.Label)
-	longviewCheckEqual(t, 10, got.ClientsIncluded)
-	longviewCheckInEpsilon(t, 0.06, got.Price.Hourly)
-	longviewCheckInEpsilon(t, 40.0, got.Price.Monthly)
+	got, err := client.GetLongviewPlan(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != longviewSubscriptionID {
+		t.Errorf("got.ID = %v, want %v", got.ID, longviewSubscriptionID)
+	}
+
+	if got.Label != longviewPlan10Label {
+		t.Errorf("got.Label = %v, want %v", got.Label, longviewPlan10Label)
+	}
+
+	if got.ClientsIncluded != 10 {
+		t.Errorf("got.ClientsIncluded = %v, want %v", got.ClientsIncluded, 10)
+	}
+
+	if math.Abs(0.06-got.Price.Hourly) > math.Abs(0.06)*0.001 {
+		t.Errorf("got %v, want %v", got.Price.Hourly, 0.06)
+	}
+
+	if math.Abs(40.0-got.Price.Monthly) > math.Abs(40.0)*0.001 {
+		t.Errorf("got %v, want %v", got.Price.Monthly, 40.0)
+	}
 }
 
 func TestClientGetLongviewPlanFreePlan(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetLongviewPlan(t.Context())
 
-	longviewRequireNoError(t, err)
-	longviewRequireNotNil(t, got)
-	longviewCheckEmpty(t, got.ID)
-	longviewCheckEmpty(t, got.ClientsIncluded)
+	got, err := client.GetLongviewPlan(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != "" {
+		t.Errorf("got.ID = %v, want empty", got.ID)
+	}
+
+	if got.ClientsIncluded != 0 {
+		t.Errorf("got.ClientsIncluded = %v, want empty", got.ClientsIncluded)
+	}
 }
 
 func TestClientGetLongviewPlanAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.GetLongviewPlan(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	longviewRequireError(t, err)
-	longviewCheckNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := longviewRequireAPIError(t, err)
-	longviewCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	longviewCheckEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientGetLongviewPlanRetriesTransientError(t *testing.T) {
@@ -98,8 +179,13 @@ func TestClientGetLongviewPlanRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -107,74 +193,144 @@ func TestClientGetLongviewPlanRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: "longview-10"}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: "longview-10"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetLongviewPlan(t.Context())
 
-	longviewRequireNoError(t, err)
-	longviewRequireNotNil(t, got)
-	longviewCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	longviewCheckEqual(t, "longview-10", got.ID)
+	got, err := client.GetLongviewPlan(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
+
+	if got.ID != longviewSubscriptionID {
+		t.Errorf("got.ID = %v, want %v", got.ID, longviewSubscriptionID)
+	}
 }
 
 func TestClientUpdateLongviewPlanSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
-		longviewCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
-		longviewCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var body map[string]any
-		longviewCheckNoError(t, json.NewDecoder(r.Body).Decode(&body))
-		longviewCheckEqual(t, map[string]any{"longview_subscription": longviewSubscriptionPlan}, body, "request body should match")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if !reflect.DeepEqual(body, map[string]any{"longview_subscription": longviewSubscriptionPlan}) {
+			t.Errorf("body = %v, want %v", body, map[string]any{"longview_subscription": longviewSubscriptionPlan})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyClientsIncluded: 40,
 			keyID:              longviewSubscriptionPlan,
 			keyLabel:           "Longview Pro 40 pack",
 			keyPrice:           map[string]float64{keyHourly: 0.12, keyMonthly: 80},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.UpdateLongviewPlan(t.Context(), &linode.UpdateLongviewPlanRequest{LongviewSubscription: longviewSubscriptionPlan})
 
-	longviewRequireNoError(t, err)
-	longviewRequireNotNil(t, got)
-	longviewCheckEqual(t, longviewSubscriptionPlan, got.ID)
-	longviewCheckEqual(t, "Longview Pro 40 pack", got.Label)
-	longviewCheckEqual(t, 40, got.ClientsIncluded)
+	got, err := client.UpdateLongviewPlan(t.Context(), &linode.UpdateLongviewPlanRequest{LongviewSubscription: longviewSubscriptionPlan})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != longviewSubscriptionPlan {
+		t.Errorf("got.ID = %v, want %v", got.ID, longviewSubscriptionPlan)
+	}
+
+	if got.Label != "Longview Pro 40 pack" {
+		t.Errorf("got.Label = %v, want %v", got.Label, "Longview Pro 40 pack")
+	}
+
+	if got.ClientsIncluded != 40 {
+		t.Errorf("got.ClientsIncluded = %v, want %v", got.ClientsIncluded, 40)
+	}
 }
 
 func TestClientUpdateLongviewPlanAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		longviewCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.UpdateLongviewPlan(t.Context(), &linode.UpdateLongviewPlanRequest{LongviewSubscription: longviewSubscriptionPlan})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	longviewRequireError(t, err)
-	longviewCheckNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := longviewRequireAPIError(t, err)
-	longviewCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	longviewCheckEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientUpdateLongviewPlanDoesNotRetry(t *testing.T) {
@@ -183,16 +339,27 @@ func TestClientUpdateLongviewPlanDoesNotRetry(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		longviewCheckEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		longviewCheckEqual(t, longviewPlanPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != longviewPlanPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewPlanPath)
+		}
+
 		calls.Add(1)
 		http.Error(w, "temporary", http.StatusServiceUnavailable)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	_, err := client.UpdateLongviewPlan(t.Context(), &linode.UpdateLongviewPlanRequest{LongviewSubscription: longviewSubscriptionPlan})
 
-	longviewRequireError(t, err, "UpdateLongviewPlan should fail on 503 response")
-	longviewCheckEqual(t, int32(1), calls.Load(), "UpdateLongviewPlan must not retry and replay a mutating request")
+	_, err := client.UpdateLongviewPlan(t.Context(), &linode.UpdateLongviewPlanRequest{LongviewSubscription: longviewSubscriptionPlan})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -29,51 +31,99 @@ func TestClientUpdateAccountUserGrantsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
-
-		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "decode request body")
-
-		global, globalOK := body["global"].(map[string]any)
-		if checkTrue(t, globalOK, "global grants should be an object") {
-			checkEqual(t, map[string]any{"account_access": accountUserGrantReadOnlyError}, global, "global grants should match")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
 
-		checkEqual(t, []any{map[string]any{"id": float64(123), "permissions": accountUserGrantReadWriteError}}, body["linode"], "linode grants should match")
-		checkEqual(t, []any{map[string]any{"id": float64(456), "permissions": accountUserGrantReadOnlyError}}, body["lkecluster"], "lkecluster grants should match")
-		accountCheckNotContains(t, body, "domain", "domain grants should be omitted")
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["global"], map[string]any{"account_access": accountUserGrantReadOnlyError}) {
+			t.Errorf("body[global] = %v, want %v", body["global"], map[string]any{"account_access": accountUserGrantReadOnlyError})
+		}
+
+		if !reflect.DeepEqual(body["linode"], []any{map[string]any{keyID: float64(123), tcPermissions: accountUserGrantReadWriteError}}) {
+			t.Errorf("got %v, want %v", body["linode"], []any{map[string]any{keyID: float64(123), tcPermissions: accountUserGrantReadWriteError}})
+		}
+
+		if !reflect.DeepEqual(body["lkecluster"], []any{map[string]any{keyID: float64(456), tcPermissions: accountUserGrantReadOnlyError}}) {
+			t.Errorf("got %v, want %v", body["lkecluster"], []any{map[string]any{keyID: float64(456), tcPermissions: accountUserGrantReadOnlyError}})
+		}
+
+		if _, ok := body["domain"]; ok {
+			t.Errorf("body has unexpected key %v", "domain")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Grants{
 			Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission(accountUserGrantReadOnlyError)},
 			Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission(accountUserGrantReadWriteError)}},
-		}), "encode response body")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.UpdateAccountUserGrants(t.Context(), accountLoginUsername, request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "UpdateAccountUserGrants should succeed on 200 response")
-	requireNotNil(t, result, "result should not be nil")
-	checkEqual(t, linode.GrantPermission(accountUserGrantReadOnlyError), result.Global.AccountAccess, "account access grant should match")
-	requireLenOne(t, result.Linode)
-	checkEqual(t, 123, result.Linode[0].ID, "linode grant ID should match")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Global.AccountAccess != linode.GrantPermission(accountUserGrantReadOnlyError) {
+		t.Errorf("result.Global.AccountAccess = %v, want %v", result.Global.AccountAccess, linode.GrantPermission(accountUserGrantReadOnlyError))
+	}
+
+	if len(result.Linode) != 1 {
+		t.Fatalf("len(result.Linode) = %d, want 1", len(result.Linode))
+	}
+
+	if result.Linode[0].ID != 123 {
+		t.Errorf("result.Linode[0].ID = %v, want %v", result.Linode[0].ID, 123)
+	}
 }
 
 func TestClientUpdateAccountUserGrantsEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath(), "request path should URL-escape username grants")
-		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Grants{}), "encode response body")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.EscapedPath() != "/account/users/user%2Fname%3Fquery/grants" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/users/user%2Fname%3Fquery/grants")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Grants{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -81,19 +131,29 @@ func TestClientUpdateAccountUserGrantsEscapesUsername(t *testing.T) {
 	request := &linode.UpdateAccountUserGrantsRequest{Linode: &[]linode.UpdateAccountUserGrant{}}
 
 	_, err := client.UpdateAccountUserGrants(t.Context(), "user/name?query", request)
-
-	requireNoError(t, err, "UpdateAccountUserGrants should URL-escape path parameters")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientUpdateAccountUserGrantsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -101,9 +161,18 @@ func TestClientUpdateAccountUserGrantsAPIError(t *testing.T) {
 	request := &linode.UpdateAccountUserGrantsRequest{Linode: &[]linode.UpdateAccountUserGrant{}}
 
 	_, err := client.UpdateAccountUserGrants(t.Context(), accountLoginUsername, request)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "UpdateAccountUserGrants should fail on 403 response")
-	accountCheckForbiddenError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientUpdateAccountUserGrantsDoesNotRetryTransientError(t *testing.T) {
@@ -113,10 +182,20 @@ func TestClientUpdateAccountUserGrantsDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountLoginUsername+"/grants" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountLoginUsername+"/grants")
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserGrantsUpdateError}}}), "encode error response body")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserGrantsUpdateError}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -124,7 +203,11 @@ func TestClientUpdateAccountUserGrantsDoesNotRetryTransientError(t *testing.T) {
 	request := &linode.UpdateAccountUserGrantsRequest{Linode: &[]linode.UpdateAccountUserGrant{}}
 
 	_, err := client.UpdateAccountUserGrants(t.Context(), accountLoginUsername, request)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "UpdateAccountUserGrants should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating grants update must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

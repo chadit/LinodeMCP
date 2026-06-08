@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -39,9 +42,6 @@ const (
 )
 
 func TestLinodeAccountSupportTicketCreateRejectsInvalidOptionalFields(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -79,256 +79,400 @@ func TestLinodeAccountSupportTicketCreateRejectsInvalidOptionalFields(t *testing
 			args[testCase.field] = testCase.value
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid optional field should be a tool error")
-			assertErrorContains(t, result, testCase.wantMessage)
-			assert.Equal(t, int32(0), calls, "request validation must fail before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
-func TestLinodeAccountSupportTicketCreateTool(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
+func TestLinodeAccountSupportTicketCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeAccountSupportTicketCreateTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeAccountSupportTicketCreateTool(&config.Config{})
+	if tool.Name != supportTicketCreateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, supportTicketCreateToolName)
+	}
 
-		assert.Equal(t, supportTicketCreateToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "support ticket creation should be CapAdmin")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keySupportTicketSummary, "schema should include summary")
-		assert.Contains(t, props, keyDescription, "schema should include description")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-		assert.Contains(t, props, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, props, keySupportTicketLinodeID, "schema should include optional linode_id")
-		assert.Contains(t, tool.InputSchema.Required, keySupportTicketSummary, "summary must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyDescription, "description must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-	t.Run("confirm required before client call", func(t *testing.T) {
-		t.Parallel()
+	props := tool.InputSchema.Properties
+	if _, ok := props[keySupportTicketSummary]; !ok {
+		t.Errorf("props missing key %v", keySupportTicketSummary)
+	}
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissingConfirm, set: false},
-			{name: caseRequiresConfirm, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	if _, ok := props[keyDescription]; !ok {
+		t.Errorf("props missing key %v", keyDescription)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyDryRun]; !ok {
+		t.Errorf("props missing key %v", keyDryRun)
+	}
+
+	if _, ok := props[keySupportTicketLinodeID]; !ok {
+		t.Errorf("props missing key %v", keySupportTicketLinodeID)
+	}
+
+	for _, key := range []string{keySupportTicketSummary, keyDescription, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeAccountSupportTicketCreateToolConfirmRequiredBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
+
+			args := map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: supportTicketCreateBody}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeAccountSupportTicketCreateToolInvalidRequestRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: caseMissingSummary, args: map[string]any{keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryRequired},
+		{name: caseEmptySummary, args: map[string]any{keySupportTicketSummary: "", keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryNonEmpty},
+		{name: caseBlankSummary, args: map[string]any{keySupportTicketSummary: blankString, keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryNonEmpty},
+		{name: caseNumericSummary, args: map[string]any{keySupportTicketSummary: 123, keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryNonEmpty},
+		{name: "missing description", args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyConfirm: true}, wantMessage: errDescriptionRequired},
+		{name: "empty description", args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: "", keyConfirm: true}, wantMessage: errDescriptionNonEmpty},
+		{name: caseBlankDescription, args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: blankString, keyConfirm: true}, wantMessage: errDescriptionNonEmpty},
+		{name: "numeric description", args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: 123, keyConfirm: true}, wantMessage: errDescriptionNonEmpty},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeAccountSupportTicketCreateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
-
-				args := map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: supportTicketCreateBody}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
-			})
-		}
-	})
-
-	t.Run("invalid request rejected before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: caseMissingSummary, args: map[string]any{keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryRequired},
-			{name: caseEmptySummary, args: map[string]any{keySupportTicketSummary: "", keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryNonEmpty},
-			{name: caseBlankSummary, args: map[string]any{keySupportTicketSummary: blankString, keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryNonEmpty},
-			{name: caseNumericSummary, args: map[string]any{keySupportTicketSummary: 123, keyDescription: supportTicketCreateBody, keyConfirm: true}, wantMessage: errSummaryNonEmpty},
-			{name: "missing description", args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyConfirm: true}, wantMessage: errDescriptionRequired},
-			{name: "empty description", args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: "", keyConfirm: true}, wantMessage: errDescriptionNonEmpty},
-			{name: caseBlankDescription, args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: blankString, keyConfirm: true}, wantMessage: errDescriptionNonEmpty},
-			{name: "numeric description", args: map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: 123, keyConfirm: true}, wantMessage: errDescriptionNonEmpty},
+		if r.URL.Path != tcSupportTickets {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid request should be a tool error")
-				assertErrorContains(t, result, testCase.wantMessage)
-				assert.Equal(t, int32(0), calls, "request validation must fail before client call")
-			})
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		var got map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-			var got map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-			assert.Equal(t, supportTicketCreateSummary, got["summary"])
-			assert.Equal(t, supportTicketCreateBody, got["description"])
-			assert.Equal(t, "backups", got["bucket"])
-			assert.InDelta(t, float64(23456), got["database_id"], 0)
-			assert.InDelta(t, float64(34567), got["domain_id"], 0)
-			assert.InDelta(t, float64(45678), got["firewall_id"], 0)
-			assert.InDelta(t, float64(12345), got[keySupportTicketLinodeID], 0)
-			assert.InDelta(t, float64(56789), got["lkecluster_id"], 0)
-			assert.InDelta(t, float64(67890), got["longviewclient_id"], 0)
-			assert.Equal(t, "managed", got["managed_issue"])
-			assert.InDelta(t, float64(78901), got["nodebalancer_id"], 0)
-			assert.Equal(t, placementGroupCreateRegion, got[keySupportTicketRegion])
-			assert.Equal(t, supportTicketSeverity, got["severity"])
-			assert.Equal(t, "vlan-a", got["vlan"])
-			assert.InDelta(t, float64(89012), got["volume_id"], 0)
-			assert.InDelta(t, float64(90123), got["vpc_id"], 0)
+		for key, want := range map[string]any{
+			"summary":                           supportTicketCreateSummary,
+			keyDescription:                      supportTicketCreateBody,
+			"bucket":                            tcBackups,
+			"database_id":                       float64(23456),
+			"domain_id":                         float64(34567),
+			"firewall_id":                       float64(45678),
+			keySupportTicketLinodeID:            float64(12345),
+			"lkecluster_id":                     float64(56789),
+			"longviewclient_id":                 float64(67890),
+			"managed_issue":                     tcManaged,
+			"nodebalancer_id":                   float64(78901),
+			keySupportTicketRegion:              placementGroupCreateRegion,
+			monitorAlertDefinitionSeverityParam: supportTicketSeverity,
+			"vlan":                              "vlan-a",
+			"volume_id":                         float64(89012),
+			keyVPCID:                            float64(90123),
+		} {
+			if !reflect.DeepEqual(got[key], want) {
+				t.Errorf("got[%v] = %v, want %v", key, got[key], want)
+			}
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.SupportTicket{ID: 987, Summary: supportTicketCreateSummary, Description: supportTicketCreateBody, Status: supportTicketStatusOpen}))
-		}))
-		defer srv.Close()
+		w.Header().Set("Content-Type", "application/json")
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
+		if err := json.NewEncoder(w).Encode(linode.SupportTicket{ID: 987, Summary: supportTicketCreateSummary, Description: supportTicketCreateBody, Status: supportTicketStatusOpen}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keySupportTicketSummary:  supportTicketCreateSummary,
-			keyDescription:           supportTicketCreateBody,
-			"bucket":                 "backups",
-			"database_id":            float64(23456),
-			"domain_id":              float64(34567),
-			"firewall_id":            float64(45678),
-			keySupportTicketLinodeID: float64(12345),
-			"lkecluster_id":          float64(56789),
-			"longviewclient_id":      float64(67890),
-			"managed_issue":          "managed",
-			"nodebalancer_id":        float64(78901),
-			keySupportTicketRegion:   placementGroupCreateRegion,
-			"severity":               supportTicketSeverity,
-			"vlan":                   "vlan-a",
-			"volume_id":              float64(89012),
-			keyVPCID:                 float64(90123),
-			keyConfirm:               true,
-		}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, supportTicketCreateSummary, "response should include summary")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keySupportTicketSummary:             supportTicketCreateSummary,
+		keyDescription:                      supportTicketCreateBody,
+		"bucket":                            tcBackups,
+		"database_id":                       float64(23456),
+		"domain_id":                         float64(34567),
+		"firewall_id":                       float64(45678),
+		keySupportTicketLinodeID:            float64(12345),
+		"lkecluster_id":                     float64(56789),
+		"longviewclient_id":                 float64(67890),
+		"managed_issue":                     tcManaged,
+		"nodebalancer_id":                   float64(78901),
+		keySupportTicketRegion:              placementGroupCreateRegion,
+		monitorAlertDefinitionSeverityParam: supportTicketSeverity,
+		"vlan":                              "vlan-a",
+		"volume_id":                         float64(89012),
+		keyVPCID:                            float64(90123),
+		keyConfirm:                          true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: supportTicketCreateBody, keyConfirm: true}))
+	if !strings.Contains(textContent.Text, supportTicketCreateSummary) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketCreateSummary)
+	}
+}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to create linode_account_support_ticket_create")
-		assertErrorContains(t, result, errForbidden)
-	})
+func TestLinodeAccountSupportTicketCreateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcSupportTickets {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySupportTicketSummary: supportTicketCreateSummary, keyDescription: supportTicketCreateBody, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_support_ticket_create") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_support_ticket_create")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func TestLinodeAccountSupportTicketCreateToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	_, _, handler := tools.NewLinodeAccountSupportTicketCreateTool(dryRunNoCallServer(t))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		keySupportTicketSummary:  supportTicketCreateSummary,
-		keyDescription:           supportTicketCreateBody,
-		keySupportTicketLinodeID: float64(12345),
-		"severity":               supportTicketSeverity,
-		keyDryRun:                true,
+		keySupportTicketSummary:             supportTicketCreateSummary,
+		keyDescription:                      supportTicketCreateBody,
+		keySupportTicketLinodeID:            float64(12345),
+		monitorAlertDefinitionSeverityParam: supportTicketSeverity,
+		keyDryRun:                           true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, supportTicketCreateToolName, body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], supportTicketCreateToolName) {
+		t.Errorf("got %v, want %v", body["tool"], supportTicketCreateToolName)
+	}
 
 	would, _ := body["would_execute"].(map[string]any)
-	assert.Equal(t, "POST", would["method"])
-	assert.Equal(t, "/support/tickets", would["path"])
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
+
+	if !reflect.DeepEqual(would["path"], tcSupportTickets) {
+		t.Errorf("got %v, want %v", would["path"], tcSupportTickets)
+	}
+
 	bodyPreview, _ := would["body"].(map[string]any)
-	assert.Equal(t, supportTicketCreateSummary, bodyPreview[keySupportTicketSummary])
-	assert.Equal(t, supportTicketCreateBody, bodyPreview[keyDescription])
-	assert.InDelta(t, float64(12345), bodyPreview[keySupportTicketLinodeID], 0)
-	assert.Equal(t, supportTicketSeverity, bodyPreview["severity"])
-	assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	for key, want := range map[string]any{
+		keySupportTicketSummary:             supportTicketCreateSummary,
+		keyDescription:                      supportTicketCreateBody,
+		keySupportTicketLinodeID:            float64(12345),
+		monitorAlertDefinitionSeverityParam: supportTicketSeverity,
+	} {
+		if !reflect.DeepEqual(bodyPreview[key], want) {
+			t.Errorf("bodyPreview[%v] = %v, want %v", key, bodyPreview[key], want)
+		}
+	}
+
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	require.Len(t, sideEffects, 1, "create surfaces the new-ticket side effect")
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
 	effect, gotString := sideEffects[0].(string)
-	require.True(t, gotString)
-	assert.Contains(t, effect, supportTicketCreateSummary, "side effect should name the ticket summary")
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, supportTicketCreateSummary) {
+		t.Errorf("effect does not contain %v", supportTicketCreateSummary)
+	}
 }

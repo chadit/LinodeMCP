@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -16,50 +17,94 @@ func TestClientUpdateImageShareGroupMemberSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/images/sharegroups/123/members/"+shareGroupUUIDExample, r.URL.Path, "request path should include share group ID and token UUID")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/images/sharegroups/123/members/"+shareGroupUUIDExample {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/123/members/"+shareGroupUUIDExample)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-		checkEqual(t, imageShareGroupMemberUpdateLabel, body[keyLabel], "label should be sent")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{
+		if !reflect.DeepEqual(body[keyLabel], imageShareGroupMemberUpdateLabel) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], imageShareGroupMemberUpdateLabel)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ImageShareGroupMember{
 			TokenUUID: shareGroupUUIDExample,
 			Status:    oauthClientStatus,
 			Label:     imageShareGroupMemberUpdateLabel,
 			Created:   imageShareGroupTokenCreated,
-		}), "encoding response should succeed")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	member, err := client.UpdateImageShareGroupMember(t.Context(), 123, shareGroupUUIDExample, &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
 
-	requireNoError(t, err, "UpdateImageShareGroupMember should succeed")
-	requireNotNil(t, member, "member should be returned")
-	checkEqual(t, shareGroupUUIDExample, member.TokenUUID, "response should decode token UUID")
-	checkEqual(t, imageShareGroupMemberUpdateLabel, member.Label, "response should decode label")
+	member, err := client.UpdateImageShareGroupMember(t.Context(), 123, shareGroupUUIDExample, &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if member == nil {
+		t.Fatal("member is nil")
+	}
+
+	if member.TokenUUID != shareGroupUUIDExample {
+		t.Errorf("member.TokenUUID = %v, want %v", member.TokenUUID, shareGroupUUIDExample)
+	}
+
+	if member.Label != imageShareGroupMemberUpdateLabel {
+		t.Errorf("member.Label = %v, want %v", member.Label, imageShareGroupMemberUpdateLabel)
+	}
 }
 
 func TestClientUpdateImageShareGroupMemberEscapesTokenUUID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/images/sharegroups/123/members/token%2Fuuid%3Fquery", r.URL.EscapedPath(), "token UUID should be escaped")
-		checkEmpty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: "token/uuid?query", Label: imageShareGroupMemberUpdateLabel}), "encoding response should succeed")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.EscapedPath() != "/images/sharegroups/123/members/token%2Fuuid%3Fquery" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/sharegroups/123/members/token%2Fuuid%3Fquery")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: "token/uuid?query", Label: imageShareGroupMemberUpdateLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.UpdateImageShareGroupMember(t.Context(), 123, "token/uuid?query", &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
 
-	requireNoError(t, err, "UpdateImageShareGroupMember should escape token path parameters")
+	_, err := client.UpdateImageShareGroupMember(t.Context(), 123, "token/uuid?query", &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientUpdateImageShareGroupMemberEscapesDotSegments(t *testing.T) {
@@ -79,17 +124,28 @@ func TestClientUpdateImageShareGroupMemberEscapesDotSegments(t *testing.T) {
 			t.Parallel()
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-				checkEqual(t, testCase.escapedPath, r.URL.EscapedPath(), "dot segment should stay encoded")
-				w.Header().Set("Content-Type", "application/json")
-				checkNoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: testCase.tokenUUID, Label: imageShareGroupMemberUpdateLabel}), "encoding response should succeed")
+				if r.Method != http.MethodPut {
+					t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+				}
+
+				if r.URL.EscapedPath() != testCase.escapedPath {
+					t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), testCase.escapedPath)
+				}
+
+				w.Header().Set("Content-Type", tcApplicationJSON)
+
+				if err := json.NewEncoder(w).Encode(linode.ImageShareGroupMember{TokenUUID: testCase.tokenUUID, Label: imageShareGroupMemberUpdateLabel}); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
 			}))
 			t.Cleanup(srv.Close)
 
 			client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-			_, err := client.UpdateImageShareGroupMember(t.Context(), 123, testCase.tokenUUID, &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
 
-			requireNoError(t, err, "UpdateImageShareGroupMember should encode dot segments")
+			_, err := client.UpdateImageShareGroupMember(t.Context(), 123, testCase.tokenUUID, &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 		})
 	}
 }
@@ -101,16 +157,24 @@ func TestUpdateImageShareGroupMemberNoRetryOnTransientFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"try again"}]}`))
-		checkNoError(t, err, "writing error response should succeed")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	_, err := client.UpdateImageShareGroupMember(t.Context(), 123, shareGroupUUIDExample, &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
 
-	requireError(t, err, "transient failure should return an error")
-	checkEqual(t, int32(1), calls.Load(), "mutating member update should not be retried")
+	_, err := client.UpdateImageShareGroupMember(t.Context(), 123, shareGroupUUIDExample, &linode.UpdateImageShareGroupMemberRequest{Label: imageShareGroupMemberUpdateLabel})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

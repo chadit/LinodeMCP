@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -16,29 +18,61 @@ func TestClientListTagsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/tags", r.URL.Path, "request path should be /tags")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/tags" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/tags")
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    []linode.Tag{{Label: tagLabelFixture}},
 			keyPage:    2,
 			keyPages:   3,
 			keyResults: 51,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListTags(t.Context(), 2, 25)
 
-	requireNoError(t, err)
-	requireLenOne(t, result.Data)
-	checkEqual(t, tagLabelFixture, result.Data[0].Label)
-	checkEqual(t, 2, result.Page)
-	checkEqual(t, 3, result.Pages)
-	checkEqual(t, 51, result.Results)
+	result, err := client.ListTags(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want 1", len(result.Data))
+	}
+
+	if result.Data[0].Label != tagLabelFixture {
+		t.Errorf("result.Data[0].Label = %v, want %v", result.Data[0].Label, tagLabelFixture)
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if result.Pages != 3 {
+		t.Errorf("result.Pages = %v, want %v", result.Pages, 3)
+	}
+
+	if result.Results != 51 {
+		t.Errorf("result.Results = %v, want %v", result.Results, 51)
+	}
 }
 
 func TestClientListTagsError(t *testing.T) {
@@ -46,17 +80,25 @@ func TestClientListTagsError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListTags(t.Context(), 0, 0)
 
-	requireError(t, err)
-	checkNil(t, result)
+	result, err := client.ListTags(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 }
 
 func TestClientListTagsRetriesReadOnlyRoute(t *testing.T) {
@@ -68,24 +110,38 @@ func TestClientListTagsRetriesReadOnlyRoute(t *testing.T) {
 		call := atomic.AddInt32(&calls, 1)
 		if call == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.Tag{{Label: tagLabelFixture}}}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []linode.Tag{{Label: tagLabelFixture}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	result, err := client.ListTags(t.Context(), 0, 0)
 
-	requireNoError(t, err)
-	requireLenOne(t, result.Data)
-	checkEqual(t, int32(2), calls, "read-only GET route may retry transient failures")
+	result, err := client.ListTags(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want 1", len(result.Data))
+	}
+
+	if calls != int32(2) {
+		t.Errorf("calls = %v, want %v", calls, int32(2))
+	}
 }
 
 func TestClientListTaggedObjectsSuccess(t *testing.T) {
@@ -104,51 +160,103 @@ func TestClientListTaggedObjectsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/tags/prod%2Fweb", r.URL.EscapedPath(), "request path should URL-encode tag label")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(objects))
+		if r.URL.EscapedPath() != "/tags/prod%2Fweb" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/tags/prod%2Fweb")
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(objects); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	result, err := client.ListTaggedObjects(t.Context(), "prod/web", 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "ListTaggedObjects should succeed on 200 response")
-	requireNotNil(t, result, "result should not be nil")
-	checkEqual(t, 2, result.Page)
-	requireLenOne(t, result.Data)
-	checkEqual(t, nodeLabelWeb1, result.Data[0][keyLabel])
-	checkEqual(t, managedLinodeSettingsSSHUser, result.Data[0][keyType])
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.Page != 2 {
+		t.Errorf("result.Page = %v, want %v", result.Page, 2)
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want 1", len(result.Data))
+	}
+
+	if !reflect.DeepEqual(result.Data[0][keyLabel], nodeLabelWeb1) {
+		t.Errorf("result.Data[0][keyLabel] = %v, want %v", result.Data[0][keyLabel], nodeLabelWeb1)
+	}
+
+	if !reflect.DeepEqual(result.Data[0][keyType], managedLinodeSettingsSSHUser) {
+		t.Errorf("result.Data[0][keyType] = %v, want %v", result.Data[0][keyType], managedLinodeSettingsSSHUser)
+	}
 }
 
 func TestClientListTaggedObjectsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/tags/prod", r.URL.Path, "request path should be /tags/prod")
-		checkEmpty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcTagsProd {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcTagsProd)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
+
 		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		checkNoError(t, writeErr)
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	_, err := client.ListTaggedObjects(t.Context(), "prod", 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "ListTaggedObjects should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 
-	apiErr := requireAPIError(t, err, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientListTaggedObjectsRetriesTransientError(t *testing.T) {
@@ -160,30 +268,55 @@ func TestClientListTaggedObjectsRetriesTransientError(t *testing.T) {
 		count := requestCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
+
 			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-			checkNoError(t, writeErr)
+			if writeErr != nil {
+				t.Errorf("unexpected error: %v", writeErr)
+			}
 
 			return
 		}
 
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/tags/prod", r.URL.Path, "request path should be /tags/prod")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.TaggedObject]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcTagsProd {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcTagsProd)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.TaggedObject]{
 			Data: []linode.TaggedObject{{keyID: float64(123), keyLabel: nodeLabelWeb1}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	result, err := client.ListTaggedObjects(t.Context(), "prod", 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "ListTaggedObjects should succeed after retry")
-	requireNotNil(t, result, "result should not be nil")
-	requireLenOne(t, result.Data)
-	checkEqual(t, nodeLabelWeb1, result.Data[0][keyLabel])
-	checkEqual(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Data) != 1 {
+		t.Fatalf("len(result.Data) = %d, want 1", len(result.Data))
+	}
+
+	if !reflect.DeepEqual(result.Data[0][keyLabel], nodeLabelWeb1) {
+		t.Errorf("result.Data[0][keyLabel] = %v, want %v", result.Data[0][keyLabel], nodeLabelWeb1)
+	}
+
+	if requestCount.Load() != int32(2) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
+	}
 }
 
 func TestClientCreateTagSuccess(t *testing.T) {
@@ -193,28 +326,60 @@ func TestClientCreateTagSuccess(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, "/tags", r.URL.Path, "request path should be /tags")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/tags" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/tags")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
 
 		var body map[string]any
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
 			return
 		}
 
-		checkEqual(t, tagLabelFixture, body[keyLabel], "label should be sent")
-		checkEqual(t, []any{float64(101), float64(102)}, body["linodes"], "linode IDs should be sent")
-		checkEqual(t, []any{float64(201)}, body["domains"], "domain IDs should be sent")
-		checkEqual(t, []any{float64(301)}, body["nodebalancers"], "nodebalancer IDs should be sent")
-		checkEqual(t, []any{float64(401)}, body["volumes"], "volume IDs should be sent")
+		if !reflect.DeepEqual(body[keyLabel], tagLabelFixture) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], tagLabelFixture)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.Tag{Label: tagLabelFixture}))
+		if !reflect.DeepEqual(body["linodes"], []any{float64(101), float64(102)}) {
+			t.Errorf("got %v, want %v", body["linodes"], []any{float64(101), float64(102)})
+		}
+
+		if !reflect.DeepEqual(body["domains"], []any{float64(201)}) {
+			t.Errorf("got %v, want %v", body["domains"], []any{float64(201)})
+		}
+
+		if !reflect.DeepEqual(body["nodebalancers"], []any{float64(301)}) {
+			t.Errorf("got %v, want %v", body["nodebalancers"], []any{float64(301)})
+		}
+
+		if !reflect.DeepEqual(body["volumes"], []any{float64(401)}) {
+			t.Errorf("got %v, want %v", body["volumes"], []any{float64(401)})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.Tag{Label: tagLabelFixture}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{
 		Label:         tagLabelFixture,
 		Domains:       []int{201},
@@ -222,11 +387,21 @@ func TestClientCreateTagSuccess(t *testing.T) {
 		NodeBalancers: []int{301},
 		Volumes:       []int{401},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err)
-	requireNotNil(t, tag)
-	checkEqual(t, tagLabelFixture, tag.Label, "tag label should match response")
-	checkEqual(t, int32(1), requestCount.Load(), "request should be sent once")
+	if tag == nil {
+		t.Fatal("tag is nil")
+	}
+
+	if tag.Label != tagLabelFixture {
+		t.Errorf("tag.Label = %v, want %v", tag.Label, tagLabelFixture)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientCreateTagNetworkError(t *testing.T) {
@@ -237,13 +412,24 @@ func TestClientCreateTagNetworkError(t *testing.T) {
 	srv.Close()
 
 	client := linode.NewClient(url, "test-token", nil, linode.WithMaxRetries(0))
+
 	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{Label: tagLabelFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "CreateTag should fail when the server is unreachable")
-	checkNil(t, tag)
+	if tag != nil {
+		t.Errorf("tag = %v, want nil", tag)
+	}
 
-	netErr := requireNetworkError(t, err, "error should be a NetworkError")
-	checkEqual(t, "CreateTag", netErr.Operation)
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.NetworkError", err)
+	}
+
+	if netErr.Operation != "CreateTag" {
+		t.Errorf("netErr.Operation = %v, want %v", netErr.Operation, "CreateTag")
+	}
 }
 
 func TestClientCreateTagNoRetry(t *testing.T) {
@@ -254,60 +440,106 @@ func TestClientCreateTagNoRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
-		checkNoError(t, err, "writing error response should succeed")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{Label: tagLabelFixture})
 
-	requireError(t, err, "CreateTag should return the first transient error")
-	checkNil(t, tag, "tag should be nil on error")
-	checkEqual(t, int32(1), requestCount.Load(), "non-idempotent tag creation must not be retried")
+	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{Label: tagLabelFixture})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if tag != nil {
+		t.Errorf("tag = %v, want nil", tag)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteTagSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/tags/prod%2Fweb", r.URL.EscapedPath(), "request path should URL-encode tag label")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/tags/prod%2Fweb" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/tags/prod%2Fweb")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteTag(t.Context(), "prod/web")
-
-	requireNoError(t, err, "DeleteTag should succeed on 200 response")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteTagAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/tags/prod", r.URL.Path, "request path should be /tags/prod")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcTagsProd {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcTagsProd)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteTag(t.Context(), "prod")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "DeleteTag should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 
-	apiErr := requireAPIError(t, err, "error should wrap APIError")
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	checkEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientDeleteTagNetworkError(t *testing.T) {
@@ -320,11 +552,18 @@ func TestClientDeleteTagNetworkError(t *testing.T) {
 	client := linode.NewClient(url, "my-token", nil, linode.WithMaxRetries(0))
 
 	err := client.DeleteTag(t.Context(), "prod")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "DeleteTag should fail when the server is unreachable")
+	netErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.NetworkError", err)
+	}
 
-	netErr := requireNetworkError(t, err, "error should be a NetworkError")
-	checkEqual(t, "DeleteTag", netErr.Operation)
+	if netErr.Operation != "DeleteTag" {
+		t.Errorf("netErr.Operation = %v, want %v", netErr.Operation, "DeleteTag")
+	}
 }
 
 func TestClientDeleteTagDoesNotRetryTransientError(t *testing.T) {
@@ -334,16 +573,23 @@ func TestClientDeleteTagDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
 	err := client.DeleteTag(t.Context(), "prod")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "DeleteTag should return the transient failure")
-	checkEqual(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -31,11 +30,25 @@ func TestLinodeAuditExportDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeAuditExportTool(&config.Config{})
 
-	assert.Equal(t, "linode_audit_export", tool.Name)
-	assert.Equal(t, profiles.CapMeta, capability, "export is CapMeta so every profile can read it")
-	require.NotNil(t, handler)
-	assert.Contains(t, tool.InputSchema.Properties, "format")
-	assert.Contains(t, tool.InputSchema.Required, "format", "format must be required")
+	if tool.Name != "linode_audit_export" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_export")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties["format"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "format")
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, "format") {
+		t.Errorf("tool.InputSchema.Required does not contain %v", "format")
+	}
 }
 
 // TestLinodeAuditExportWritesNDJSON drives the handler against a temp
@@ -46,7 +59,9 @@ func TestLinodeAuditExportWritesNDJSON(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	auditDir := filepath.Join(stateHome, "linodemcp")
-	require.NoError(t, os.MkdirAll(auditDir, 0o750))
+	if err := os.MkdirAll(auditDir, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
@@ -56,26 +71,48 @@ func TestLinodeAuditExportWritesNDJSON(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditExportTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"format": "ndjson"}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
 	var decoded exportResult
 
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &decoded))
-	assert.Equal(t, "ndjson", decoded.Format)
-	assert.Equal(t, 2, decoded.RecordCount)
+	if err := json.Unmarshal([]byte(textContent.Text), &decoded); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if decoded.Format != "ndjson" {
+		t.Errorf("decoded.Format = %v, want %v", decoded.Format, "ndjson")
+	}
+
+	if decoded.RecordCount != 2 {
+		t.Errorf("decoded.RecordCount = %v, want %v", decoded.RecordCount, 2)
+	}
 
 	t.Cleanup(func() { _ = os.Remove(decoded.Path) })
 
 	body, err := os.ReadFile(decoded.Path)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	lines := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
-	assert.Len(t, lines, 2, "one NDJSON line per event")
+	if len(lines) != 2 {
+		t.Errorf("len(lines) = %d, want %d", len(lines), 2)
+	}
 }
 
 // TestLinodeAuditExportUnknownFormat returns an error result rather
@@ -86,7 +123,15 @@ func TestLinodeAuditExportUnknownFormat(t *testing.T) {
 	_, _, handler := tools.NewLinodeAuditExportTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"format": "xml"}))
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.IsError, "unknown format is an error result")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -19,17 +21,18 @@ func writeToolNodeBalancerStatsFixture(t *testing.T, w http.ResponseWriter) {
 	t.Helper()
 
 	w.Header().Set("Content-Type", "application/json")
+
 	_, err := w.Write([]byte(`{
 		"title":"nodebalancer.example.com (nodebalancer123) - day (5 min avg)",
 		"connections":[[1521483600000,12.5]],
 		"traffic":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]]}
 	}`))
-	checkNoError(t, err, "writing stats fixture should not fail")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
-func TestLinodeNodeBalancerStatsGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeNodeBalancerStatsGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -37,16 +40,42 @@ func TestLinodeNodeBalancerStatsGetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeNodeBalancerStatsGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 
-		checkEqual(t, "linode_nodebalancer_stats_get", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapRead, capability, "tool should be read-only")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContainsWithMode(t, false, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyNodeBalancerID, "nodebalancer_id must be marked required")
-	})
+	if tool.Name != "linode_nodebalancer_stats_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_stats_get")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyNodeBalancerID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyNodeBalancerID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
+	}
+}
+
+func TestLinodeNodeBalancerStatsGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerStatsGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -64,60 +93,117 @@ func TestLinodeNodeBalancerStatsGetTool(t *testing.T) {
 			t.Parallel()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			expectNoError(t, err, "handler should not return Go error")
-			expectNotNil(t, result, "handler should return a result")
-			checkTrueWithMode(t, false, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeNodeBalancerStatsGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/444/stats", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-			writeToolNodeBalancerStatsFixture(t, w)
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerStatsGetTool(srvCfg)
+		if r.URL.Path != "/nodebalancers/444/stats" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/nodebalancers/444/stats")
+		}
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(444)}))
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkFalseWithMode(t, false, result.IsError, "success should not be a tool error")
+		writeToolNodeBalancerStatsFixture(t, w)
+	}))
+	t.Cleanup(srv.Close)
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, "nodebalancer.example.com", "response should contain stats title")
-		expectContainsWithMode(t, false, textContent.Text, "2004.36", "response should contain inbound traffic")
-	})
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerStatsGetTool(srvCfg)
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(444)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/nodebalancers/444/stats", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeNodeBalancerStatsGetTool(srvCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(444)}))
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		checkTrueWithMode(t, false, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve NodeBalancer 444 stats")
-		assertErrorContains(t, result, errForbidden)
-	})
+	if !strings.Contains(textContent.Text, "nodebalancer.example.com") {
+		t.Errorf("textContent.Text does not contain %v", "nodebalancer.example.com")
+	}
+
+	if !strings.Contains(textContent.Text, "2004.36") {
+		t.Errorf("textContent.Text does not contain %v", "2004.36")
+	}
+}
+
+func TestLinodeNodeBalancerStatsGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/nodebalancers/444/stats" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/nodebalancers/444/stats")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerStatsGetTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(444)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve NodeBalancer 444 stats") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve NodeBalancer 444 stats")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

@@ -3,69 +3,106 @@ package tools_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeVPCCreateToolDryRun(t *testing.T) {
+func TestLinodeVPCCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeVPCCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeVPCCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeVPCCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	_, _, handler := tools.NewLinodeVPCCreateTool(dryRunNoCallServer(t))
 
-		_, _, handler := tools.NewLinodeVPCCreateTool(dryRunNoCallServer(t))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:  "vpc-01",
+		keyRegion: regionUSEast,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:  "vpc-01",
-			keyRegion: regionUSEast,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_vpc_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/vpcs", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	if !reflect.DeepEqual(body["tool"], "linode_vpc_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_vpc_create")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-VPC side effect")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "vpc-01", "side effect should name the new VPC")
-		assert.Contains(t, effect, regionUSEast, "side effect should name the target region")
-	})
+	if !reflect.DeepEqual(would["path"], "/vpcs") {
+		t.Errorf("got %v, want %v", would["path"], "/vpcs")
+	}
 
-	t.Run("still validates label", func(t *testing.T) {
-		t.Parallel()
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-		_, _, handler := tools.NewLinodeVPCCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyRegion: regionUSEast,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "label is required")
-	})
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "vpc-01") {
+		t.Errorf("effect does not contain %v", "vpc-01")
+	}
+
+	if !strings.Contains(effect, regionUSEast) {
+		t.Errorf("effect does not contain %v", regionUSEast)
+	}
+}
+
+func TestLinodeVPCCreateToolDryRunStillValidatesLabel(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeVPCCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "label is required")
+	}
 }
 
 func TestLinodeVPCUpdateToolDryRun(t *testing.T) {
@@ -75,7 +112,9 @@ func TestLinodeVPCUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVPCUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -89,95 +128,164 @@ func TestLinodeVPCUpdateToolDryRun(t *testing.T) {
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_vpc_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_vpc_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_vpc_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/vpcs/123", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], tcVpcs123) {
+			t.Errorf("got %v, want %v", would["path"], tcVpcs123)
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "update surfaces the label change")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, testRenamedLabel) {
+			t.Errorf("effect does not contain %v", testRenamedLabel)
+		}
 	})
 
 	t.Run("still validates vpc_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVPCUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "vpc_id is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "vpc_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "vpc_id is required")
+		}
 	})
 }
 
-func TestLinodeVPCSubnetCreateToolDryRun(t *testing.T) {
+func TestLinodeVPCSubnetCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeVPCSubnetCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeVPCSubnetCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeVPCSubnetCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	_, _, handler := tools.NewLinodeVPCSubnetCreateTool(dryRunNoCallServer(t))
 
-		_, _, handler := tools.NewLinodeVPCSubnetCreateTool(dryRunNoCallServer(t))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyVPCID:  float64(123),
+		keyLabel:  "subnet-01",
+		keyIPv4:   cidrV4,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyVPCID:  float64(123),
-			keyLabel:  "subnet-01",
-			keyIPv4:   cidrV4,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_vpc_subnet_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/vpcs/123/subnets", would["path"])
-		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+	if !reflect.DeepEqual(body["tool"], "linode_vpc_subnet_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_vpc_subnet_create")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-subnet side effect")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "subnet-01", "side effect should name the new subnet")
-		assert.Contains(t, effect, cidrV4, "side effect should name the IPv4 range")
-	})
+	if !reflect.DeepEqual(would["path"], "/vpcs/123/subnets") {
+		t.Errorf("got %v, want %v", would["path"], "/vpcs/123/subnets")
+	}
 
-	t.Run("still validates vpc_id", func(t *testing.T) {
-		t.Parallel()
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-		_, _, handler := tools.NewLinodeVPCSubnetCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLabel:  "subnet-01",
-			keyIPv4:   cidrV4,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "vpc_id is required")
-	})
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "subnet-01") {
+		t.Errorf("effect does not contain %v", "subnet-01")
+	}
+
+	if !strings.Contains(effect, cidrV4) {
+		t.Errorf("effect does not contain %v", cidrV4)
+	}
+}
+
+func TestLinodeVPCSubnetCreateToolDryRunStillValidatesVpcId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeVPCSubnetCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLabel:  "subnet-01",
+		keyIPv4:   cidrV4,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "vpc_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "vpc_id is required")
+	}
 }
 
 func TestLinodeVPCSubnetUpdateToolDryRun(t *testing.T) {
@@ -187,7 +295,9 @@ func TestLinodeVPCSubnetUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVPCSubnetUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -202,31 +312,58 @@ func TestLinodeVPCSubnetUpdateToolDryRun(t *testing.T) {
 			keyLabel:    testRenamedLabel,
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_vpc_subnet_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_vpc_subnet_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_vpc_subnet_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/vpcs/123/subnets/456", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/vpcs/123/subnets/456") {
+			t.Errorf("got %v, want %v", would["path"], "/vpcs/123/subnets/456")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 
 	t.Run("still validates subnet_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeVPCSubnetUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVPCID:  float64(123),
 			keyLabel:  testRenamedLabel,
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "subnet_id is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "subnet_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "subnet_id is required")
+		}
 	})
 }
 
@@ -252,31 +389,60 @@ func TestLinodeVPCDeleteToolDryRunDependencies(t *testing.T) {
 		keyVPCID:  float64(888),
 		keyDryRun: true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_vpc_delete", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_vpc_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_vpc_delete")
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 2, "each subnet is a cascade dependency")
+	if len(deps) != 2 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 2)
+	}
 
 	for _, entry := range deps {
 		dep, gotMap := entry.(map[string]any)
-		require.True(t, gotMap)
-		assert.Equal(t, "vpc_subnet", dep["kind"])
-		assert.Equal(t, "cascade_deleted", dep["action"])
+		if !gotMap {
+			t.Fatal("gotMap = false, want true")
+		}
+
+		if !reflect.DeepEqual(dep[tcKind], "vpc_subnet") {
+			t.Errorf("got %v, want %v", dep[tcKind], "vpc_subnet")
+		}
+
+		if !reflect.DeepEqual(dep[tcAction], "cascade_deleted") {
+			t.Errorf("got %v, want %v", dep[tcAction], "cascade_deleted")
+		}
 	}
 
 	warnings, _ := body["warnings"].([]any)
-	require.NotEmpty(t, warnings)
+	if len(warnings) == 0 {
+		t.Fatal("warnings is empty")
+	}
 
 	warning, gotString := warnings[0].(string)
-	require.True(t, gotString)
-	assert.Contains(t, warning, "1 Linode interface(s)")
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
 
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	if !strings.Contains(warning, "1 Linode interface(s)") {
+		t.Errorf("warning does not contain %v", "1 Linode interface(s)")
+	}
+
+	if slices.Contains(*methods, http.MethodDelete) {
+		t.Errorf("*methods should not contain %v", http.MethodDelete)
+	}
 }
 
 // TestLinodeVPCSubnetDeleteToolDryRunDependencies exercises the Phase 2 Tier A
@@ -301,21 +467,44 @@ func TestLinodeVPCSubnetDeleteToolDryRunDependencies(t *testing.T) {
 		keySubnetID: float64(777),
 		keyDryRun:   true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_vpc_subnet_delete", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_vpc_subnet_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_vpc_subnet_delete")
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 1, "the attached Linode is the dependency")
+	if len(deps) != 1 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 1)
+	}
 
 	dep, gotMap := deps[0].(map[string]any)
-	require.True(t, gotMap)
-	assert.Equal(t, "instance", dep["kind"])
-	assert.Equal(t, "detached", dep["action"])
-	assert.InDelta(t, 456, dep["id"], 0)
+	if !gotMap {
+		t.Fatal("gotMap = false, want true")
+	}
 
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	for key, want := range map[string]any{
+		tcKind:             tcInstance,
+		tcAction:           "detached",
+		keySupportTicketID: float64(456),
+	} {
+		if !reflect.DeepEqual(dep[key], want) {
+			t.Errorf("dep[%v] = %v, want %v", key, dep[key], want)
+		}
+	}
+
+	if slices.Contains(*methods, http.MethodDelete) {
+		t.Errorf("*methods should not contain %v", http.MethodDelete)
+	}
 }

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -38,7 +40,9 @@ func TestLinodeDomainImportToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDomainImportTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without importing", func(t *testing.T) {
@@ -51,30 +55,57 @@ func TestLinodeDomainImportToolDryRun(t *testing.T) {
 			keyRemoteNameserver: remoteNameserverExample,
 			keyDryRun:           true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_domain_import", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_domain_import") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_domain_import")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/domains/import", would["path"])
-		assert.Nil(t, body["current_state"])
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/domains/import") {
+			t.Errorf("got %v, want %v", would["path"], "/domains/import")
+		}
+
+		if body["current_state"] != nil {
+			t.Errorf("value = %v, want nil", body["current_state"])
+		}
 	})
 
 	t.Run("still validates domain", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeDomainImportTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRemoteNameserver: remoteNameserverExample,
 			keyDryRun:           true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "domain is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "domain is required")
+		}
 	})
 }
 
@@ -85,7 +116,9 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDomainCloneTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without cloning", func(t *testing.T) {
@@ -99,143 +132,240 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 			keyDomain:   domainExample,
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_domain_clone", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_domain_clone") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_domain_clone")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/domains/333/clone", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "POST") {
+			t.Errorf("got %v, want %v", would["method"], "POST")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/domains/333/clone") {
+			t.Errorf("got %v, want %v", would["path"], "/domains/333/clone")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 	})
 
 	t.Run("still validates domain_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeDomainCloneTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyDomain: domainExample,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "domain_id must be a positive integer")
-	})
-}
-
-func TestLinodeDomainCreateToolDryRun(t *testing.T) {
-	t.Parallel()
-
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
-
-		tool, _, _ := tools.NewLinodeDomainCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
-
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeDomainCreateTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDomain: domainExample,
-			keyType:   "master",
 			keyDryRun: true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_domain_create", body["tool"])
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/domains", would["path"])
-		assert.Nil(t, body["current_state"])
-
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-domain side effect")
-
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, domainExample, "side effect should name the new domain")
-		assert.Contains(t, effect, "master", "side effect should state the domain type")
-	})
-
-	t.Run("still validates domain", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, handler := tools.NewLinodeDomainCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyType:   "master",
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "domain is required")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain_id must be a positive integer") {
+			t.Errorf("error text %q does not contain %q", text.Text, "domain_id must be a positive integer")
+		}
 	})
 }
 
-func TestLinodeDomainRecordCreateToolDryRun(t *testing.T) {
+func TestLinodeDomainCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeDomainCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
 
-		tool, _, _ := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
-	})
+func TestLinodeDomainCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without creating", func(t *testing.T) {
-		t.Parallel()
+	_, _, handler := tools.NewLinodeDomainCreateTool(dryRunNoCallServer(t))
 
-		_, _, handler := tools.NewLinodeDomainRecordCreateTool(dryRunNoCallServer(t))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyDomain: domainExample,
+		keyType:   "master",
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyDomainID: float64(333),
-			keyType:     "A",
-			keyTarget:   testPublicIPv4,
-			keyDryRun:   true,
-		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_domain_record_create", body["tool"])
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/domains/333/records", would["path"])
-		assert.Nil(t, body["current_state"])
+	if !reflect.DeepEqual(body["tool"], "linode_domain_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_domain_create")
+	}
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "create surfaces the new-record side effect")
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "A record", "side effect should name the record type")
-		assert.Contains(t, effect, testPublicIPv4, "side effect should name the target")
-	})
+	if !reflect.DeepEqual(would["path"], "/domains") {
+		t.Errorf("got %v, want %v", would["path"], "/domains")
+	}
 
-	t.Run("still validates domain_id", func(t *testing.T) {
-		t.Parallel()
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
-		_, _, handler := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyType:   "A",
-			keyTarget: testPublicIPv4,
-			keyDryRun: true,
-		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "domain_id is required")
-	})
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, domainExample) {
+		t.Errorf("effect does not contain %v", domainExample)
+	}
+
+	if !strings.Contains(effect, "master") {
+		t.Errorf("effect does not contain %v", "master")
+	}
+}
+
+func TestLinodeDomainCreateToolDryRunStillValidatesDomain(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeDomainCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyType:   "master",
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "domain is required")
+	}
+}
+
+func TestLinodeDomainRecordCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
+	t.Parallel()
+
+	tool, _, _ := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	}
+}
+
+func TestLinodeDomainRecordCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeDomainRecordCreateTool(dryRunNoCallServer(t))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyDomainID: float64(333),
+		keyType:     "A",
+		keyTarget:   testPublicIPv4,
+		keyDryRun:   true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_domain_record_create") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_domain_record_create")
+	}
+
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/domains/333/records") {
+		t.Errorf("got %v, want %v", would["path"], "/domains/333/records")
+	}
+
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
+
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "A record") {
+		t.Errorf("effect does not contain %v", "A record")
+	}
+
+	if !strings.Contains(effect, testPublicIPv4) {
+		t.Errorf("effect does not contain %v", testPublicIPv4)
+	}
+}
+
+func TestLinodeDomainRecordCreateToolDryRunStillValidatesDomainId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyType:   "A",
+		keyTarget: testPublicIPv4,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "domain_id is required")
+	}
 }
 
 func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
@@ -245,7 +375,9 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDomainRecordUpdateTool(&config.Config{})
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		}
 	})
 
 	t.Run("preview without updating", func(t *testing.T) {
@@ -261,37 +393,71 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 			keyTarget:   "192.0.2.2",
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		require.False(t, result.IsError)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.IsError {
+			t.Fatal("result.IsError = true, want false")
+		}
 
 		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		assert.Equal(t, "linode_domain_record_update", body["tool"])
+		if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body["tool"], "linode_domain_record_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_domain_record_update")
+		}
 
 		would, _ := body["would_execute"].(map[string]any)
-		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/domains/333/records/555", would["path"])
-		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+		if !reflect.DeepEqual(would["method"], "PUT") {
+			t.Errorf("got %v, want %v", would["method"], "PUT")
+		}
+
+		if !reflect.DeepEqual(would["path"], "/domains/333/records/555") {
+			t.Errorf("got %v, want %v", would["path"], "/domains/333/records/555")
+		}
+
+		if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+			t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+		}
 
 		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "update surfaces the target change")
+		if len(sideEffects) != 1 {
+			t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+		}
 
 		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "192.0.2.2", "side effect names the new target")
+		if !gotString {
+			t.Fatal("gotString = false, want true")
+		}
+
+		if !strings.Contains(effect, "192.0.2.2") {
+			t.Errorf("effect does not contain %v", "192.0.2.2")
+		}
 	})
 
 	t.Run("still validates domain_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeDomainRecordUpdateTool(&config.Config{})
+
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRecordID: float64(555),
 			keyDryRun:   true,
 		}))
-		require.NoError(t, err)
-		assert.True(t, result.IsError)
-		assertErrorContains(t, result, "domain_id is required")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.IsError {
+			t.Error("result.IsError = false, want true")
+		}
+
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "domain_id is required")
+		}
 	})
 }
 
@@ -317,26 +483,52 @@ func TestLinodeDomainDeleteToolDryRunDependencies(t *testing.T) {
 		keyDomainID: float64(888),
 		keyDryRun:   true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, "linode_domain_delete", body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_domain_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_domain_delete")
+	}
 
 	deps, _ := body["dependencies"].([]any)
-	require.Len(t, deps, 1, "only NS records are surfaced as dependencies")
+	if len(deps) != 1 {
+		t.Fatalf("len(deps) = %d, want %d", len(deps), 1)
+	}
 
 	dep, gotMap := deps[0].(map[string]any)
-	require.True(t, gotMap)
-	assert.Equal(t, "ns_record", dep["kind"])
+	if !gotMap {
+		t.Fatal("gotMap = false, want true")
+	}
+
+	if !reflect.DeepEqual(dep[tcKind], "ns_record") {
+		t.Errorf("got %v, want %v", dep[tcKind], "ns_record")
+	}
 
 	warnings, _ := body["warnings"].([]any)
-	require.NotEmpty(t, warnings)
+	if len(warnings) == 0 {
+		t.Fatal("warnings is empty")
+	}
 
 	warning, gotString := warnings[0].(string)
-	require.True(t, gotString)
-	assert.Contains(t, warning, "2 DNS record(s)")
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
 
-	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+	if !strings.Contains(warning, "2 DNS record(s)") {
+		t.Errorf("warning does not contain %v", "2 DNS record(s)")
+	}
+
+	if slices.Contains(*methods, http.MethodDelete) {
+		t.Errorf("*methods should not contain %v", http.MethodDelete)
+	}
 }

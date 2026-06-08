@@ -2,7 +2,9 @@ package audit_test
 
 import (
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -17,7 +19,9 @@ func openTestSQLiteSink(t *testing.T) *audit.SQLiteSink {
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
 
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)
-	mustNoError(t, err, "NewSQLiteSink must succeed at a fresh tmp path")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	t.Cleanup(func() { _ = sink.Close() })
 
@@ -66,15 +70,53 @@ func TestSQLiteSinkInsertsAndReadsBack(t *testing.T) {
 		 FROM events WHERE event_id = ?`,
 		evt.EventID,
 	)
-	mustNoError(t, row.Scan(&tool, &capability, &status, &latencyMS, &argsJSON, &redacted),
-		"the written row must be readable")
+	if err := row.Scan(&tool, &capability, &status, &latencyMS, &argsJSON, &redacted); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	checkEqual(t, "linode_instance_create", tool)
-	checkEqual(t, "write", capability, "capability stored as its string form")
-	checkEqual(t, "success", status)
-	checkEqual(t, int64(42), latencyMS)
-	checkJSONEq(t, `{"label":"web-1","region":"us-east"}`, argsJSON, "args stored as JSON")
-	checkJSONEq(t, `["token"]`, redacted, "redacted-key list stored as JSON")
+	if tool != tcLinodeInstanceCreate {
+		t.Errorf("tool = %v, want %v", tool, tcLinodeInstanceCreate)
+	}
+
+	if capability != "write" {
+		t.Errorf("capability = %v, want %v", capability, "write")
+	}
+
+	if status != "success" {
+		t.Errorf("status = %v, want %v", status, "success")
+	}
+
+	if latencyMS != int64(42) {
+		t.Errorf("latencyMS = %v, want %v", latencyMS, int64(42))
+	}
+	{
+		var wantJSON, gotJSON any
+		if err := json.Unmarshal([]byte(`{"label":"web-1","region":"us-east"}`), &wantJSON); err != nil {
+			t.Errorf("invalid expected JSON: %v", err)
+		}
+
+		if err := json.Unmarshal([]byte(argsJSON), &gotJSON); err != nil {
+			t.Errorf("invalid actual JSON: %v", err)
+		}
+
+		if !reflect.DeepEqual(gotJSON, wantJSON) {
+			t.Errorf("JSON = %s, want %s", argsJSON, `{"label":"web-1","region":"us-east"}`)
+		}
+	}
+	{
+		var wantJSON, gotJSON any
+		if err := json.Unmarshal([]byte(`["token"]`), &wantJSON); err != nil {
+			t.Errorf("invalid expected JSON: %v", err)
+		}
+
+		if err := json.Unmarshal([]byte(redacted), &gotJSON); err != nil {
+			t.Errorf("invalid actual JSON: %v", err)
+		}
+
+		if !reflect.DeepEqual(gotJSON, wantJSON) {
+			t.Errorf("JSON = %s, want %s", redacted, `["token"]`)
+		}
+	}
 }
 
 // TestSQLiteSinkIgnoresDuplicateEventID verifies INSERT OR IGNORE
@@ -95,8 +137,13 @@ func TestSQLiteSinkIgnoresDuplicateEventID(t *testing.T) {
 
 	row := sink.DB().QueryRowContext(t.Context(),
 		`SELECT COUNT(*) FROM events WHERE event_id = ?`, evt.EventID)
-	mustNoError(t, row.Scan(&count))
-	checkEqual(t, 1, count, "duplicate event_id must not create a second row")
+	if err := row.Scan(&count); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("count = %v, want %v", count, 1)
+	}
 }
 
 // TestSQLiteSinkStoresNullsForAbsentOptionals verifies plan_id and
@@ -117,8 +164,15 @@ func TestSQLiteSinkStoresNullsForAbsentOptionals(t *testing.T) {
 
 	row := sink.DB().QueryRowContext(t.Context(),
 		`SELECT plan_id, error FROM events WHERE event_id = ?`, evt.EventID)
-	mustNoError(t, row.Scan(&planID, &errCol))
+	if err := row.Scan(&planID, &errCol); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	checkFalse(t, planID.Valid, "nil PlanID must store as NULL")
-	checkFalse(t, errCol.Valid, "nil Error must store as NULL")
+	if planID.Valid {
+		t.Error("planID.Valid = true, want false")
+	}
+
+	if errCol.Valid {
+		t.Error("errCol.Valid = true, want false")
+	}
 }

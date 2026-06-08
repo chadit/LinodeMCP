@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -16,40 +17,80 @@ func TestClientGetObjectStorageQuotaSuccess(t *testing.T) {
 	quota := linode.ObjectStorageQuota{keyID: "obj-buckets-us-sea-1.linodeobjects.com", "quota": 250}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, "/object-storage/quotas/obj-buckets-us-sea-1.linodeobjects.com", r.URL.Path, "request path should match quota endpoint")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"), "values differ")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(quota), "expected no error")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/object-storage/quotas/obj-buckets-us-sea-1.linodeobjects.com" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/quotas/obj-buckets-us-sea-1.linodeobjects.com")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(quota); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetObjectStorageQuota(t.Context(), "obj-buckets-us-sea-1.linodeobjects.com")
 
-	requireNoError(t, err, "expected no error")
-	requireNotNil(t, result, "expected non-nil value")
-	checkEqual(t, "obj-buckets-us-sea-1.linodeobjects.com", (*result)[keyID], "values differ")
+	result, err := client.GetObjectStorageQuota(t.Context(), "obj-buckets-us-sea-1.linodeobjects.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !reflect.DeepEqual((*result)[keyID], "obj-buckets-us-sea-1.linodeobjects.com") {
+		t.Errorf("(*result)[keyID] = %v, want %v", (*result)[keyID], "obj-buckets-us-sea-1.linodeobjects.com")
+	}
 }
 
 func TestClientGetObjectStorageQuotaEscapesQuotaID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, "/object-storage/quotas/quota%2F..%2F%3Fx=1", r.URL.EscapedPath(), "quota ID should be one encoded path segment")
-		checkEmpty(t, r.URL.RawQuery, "encoded quota ID should not become a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ObjectStorageQuota{keyID: "quota/../?x=1"}), "expected no error")
+		if r.URL.EscapedPath() != "/object-storage/quotas/quota%2F..%2F%3Fx=1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/object-storage/quotas/quota%2F..%2F%3Fx=1")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ObjectStorageQuota{keyID: "quota/../?x=1"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetObjectStorageQuota(t.Context(), "quota/../?x=1")
 
-	requireNoError(t, err, "expected no error")
-	requireNotNil(t, result, "expected non-nil value")
-	checkEqual(t, "quota/../?x=1", (*result)[keyID], "values differ")
+	result, err := client.GetObjectStorageQuota(t.Context(), "quota/../?x=1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !reflect.DeepEqual((*result)[keyID], "quota/../?x=1") {
+		t.Errorf("(*result)[keyID] = %v, want %v", (*result)[keyID], "quota/../?x=1")
+	}
 }
 
 func TestClientGetObjectStorageQuotaError(t *testing.T) {
@@ -57,17 +98,25 @@ func TestClientGetObjectStorageQuotaError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}), "expected no error")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetObjectStorageQuota(t.Context(), "missing-quota")
 
-	requireError(t, err, "expected error")
-	checkNil(t, result, "expected nil")
+	result, err := client.GetObjectStorageQuota(t.Context(), "missing-quota")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
 }
 
 func TestClientGetObjectStorageQuotaRetriesReadOnlyRoute(t *testing.T) {
@@ -79,22 +128,36 @@ func TestClientGetObjectStorageQuotaRetriesReadOnlyRoute(t *testing.T) {
 		call := atomic.AddInt32(&calls, 1)
 		if call == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}), "expected no error")
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.ObjectStorageQuota{keyID: "retry-quota"}), "expected no error")
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ObjectStorageQuota{keyID: "retry-quota"}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	result, err := client.GetObjectStorageQuota(t.Context(), "retry-quota")
 
-	requireNoError(t, err, "expected no error")
-	requireNotNil(t, result, "expected non-nil value")
-	checkEqual(t, int32(2), calls, "read-only GET route may retry transient failures")
+	result, err := client.GetObjectStorageQuota(t.Context(), "retry-quota")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls != int32(2) {
+		t.Errorf("calls = %v, want %v", calls, int32(2))
+	}
 }

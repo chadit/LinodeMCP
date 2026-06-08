@@ -2,6 +2,8 @@ package linode_test
 
 import (
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,11 +39,15 @@ func TestAPIErrorMessage(t *testing.T) {
 
 			msg := tt.apiErr.Error()
 			for _, s := range tt.mustContain {
-				checkContains(t, msg, s, "error message should contain expected text")
+				if !strings.Contains(msg, s) {
+					t.Errorf("msg does not contain %v", s)
+				}
 			}
 
 			for _, s := range tt.mustNotContain {
-				checkNotContains(t, msg, s, "error message should not contain unexpected text")
+				if strings.Contains(msg, s) {
+					t.Errorf("msg should not contain %v", s)
+				}
 			}
 		})
 	}
@@ -72,10 +78,21 @@ func TestAPIErrorStatusChecks(t *testing.T) {
 			t.Parallel()
 
 			err := &linode.APIError{StatusCode: tt.statusCode, Message: "test"}
-			checkEqual(t, tt.isAuth, err.IsAuthenticationError(), "IsAuthenticationError mismatch")
-			checkEqual(t, tt.isRateLimit, err.IsRateLimitError(), "IsRateLimitError mismatch")
-			checkEqual(t, tt.isForbidden, err.IsForbiddenError(), "IsForbiddenError mismatch")
-			checkEqual(t, tt.isServerError, err.IsServerError(), "IsServerError mismatch")
+			if err.IsAuthenticationError() != tt.isAuth {
+				t.Errorf("err.IsAuthenticationError() = %v, want %v", err.IsAuthenticationError(), tt.isAuth)
+			}
+
+			if err.IsRateLimitError() != tt.isRateLimit {
+				t.Errorf("err.IsRateLimitError() = %v, want %v", err.IsRateLimitError(), tt.isRateLimit)
+			}
+
+			if err.IsForbiddenError() != tt.isForbidden {
+				t.Errorf("err.IsForbiddenError() = %v, want %v", err.IsForbiddenError(), tt.isForbidden)
+			}
+
+			if err.IsServerError() != tt.isServerError {
+				t.Errorf("err.IsServerError() = %v, want %v", err.IsServerError(), tt.isServerError)
+			}
 		})
 	}
 }
@@ -89,9 +106,13 @@ func TestNetworkErrorErrorAndUnwrap(t *testing.T) {
 	inner := errors.New("connection refused")
 	err := &linode.NetworkError{Operation: "GetProfile", Err: inner}
 
-	mustErrorContains(t, err, "GetProfile", "error message should include the operation name")
-	mustErrorContains(t, err, "connection refused", "error message should include the underlying cause")
-	checkEqual(t, inner, err.Unwrap(), "Unwrap should return the original inner error")
+	if got := err.Error(); got != "network error during GetProfile: connection refused" {
+		t.Errorf("err.Error() = %q, want %q", got, "network error during GetProfile: connection refused")
+	}
+
+	if !reflect.DeepEqual(err.Unwrap(), inner) {
+		t.Errorf("err.Unwrap() = %v, want %v", err.Unwrap(), inner)
+	}
 }
 
 // Confirms retryable error formatting and unwrap chain integrity.
@@ -129,15 +150,21 @@ func TestRetryableError(t *testing.T) {
 
 			msg := tt.err.Error()
 			for _, s := range tt.mustContain {
-				checkContains(t, msg, s, "error message should contain expected text")
+				if !strings.Contains(msg, s) {
+					t.Errorf("msg does not contain %v", s)
+				}
 			}
 
 			for _, s := range tt.mustNotContain {
-				checkNotContains(t, msg, s, "error message should not contain unexpected text")
+				if strings.Contains(msg, s) {
+					t.Errorf("msg should not contain %v", s)
+				}
 			}
 
 			if tt.unwrapTarget != nil {
-				checkErrorIs(t, tt.err, tt.err.Err, "Unwrap should expose the inner error")
+				if err := tt.err; !errors.Is(err, tt.err.Err) {
+					t.Errorf("error = %v, want %v", err, tt.err.Err)
+				}
 			}
 		})
 	}

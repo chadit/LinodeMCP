@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -23,140 +26,219 @@ const (
 	errSupportTicketAttachmentIDPositive  = "ticket_id must be a positive integer"
 )
 
-func TestLinodeAccountSupportTicketAttachmentCreateTool(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
+func TestLinodeAccountSupportTicketAttachmentCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(&config.Config{})
+	if tool.Name != supportTicketAttachmentCreateToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, supportTicketAttachmentCreateToolName)
+	}
 
-		assert.Equal(t, supportTicketAttachmentCreateToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "support ticket attachment creation should be CapAdmin")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, supportTicketAttachmentTicketID, "schema should include ticket_id")
-		assert.Contains(t, props, supportTicketAttachmentFileParam, "schema should include file")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-		assert.Contains(t, props, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Required, supportTicketAttachmentTicketID, "ticket_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, supportTicketAttachmentFileParam, "file must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-	t.Run("confirm required before client call", func(t *testing.T) {
-		t.Parallel()
+	props := tool.InputSchema.Properties
+	if _, ok := props[supportTicketAttachmentTicketID]; !ok {
+		t.Errorf("props missing key %v", supportTicketAttachmentTicketID)
+	}
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissingConfirm, set: false},
-			{name: caseRequiresConfirm, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+	if _, ok := props[supportTicketAttachmentFileParam]; !ok {
+		t.Errorf("props missing key %v", supportTicketAttachmentFileParam)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyDryRun]; !ok {
+		t.Errorf("props missing key %v", keyDryRun)
+	}
+
+	for _, key := range []string{supportTicketAttachmentTicketID, supportTicketAttachmentFileParam, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeAccountSupportTicketAttachmentCreateToolConfirmRequiredBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+			_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
+
+			args := map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: supportTicketAttachmentFile}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeAccountSupportTicketAttachmentCreateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				defer srv.Close()
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
-
-				args := map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: supportTicketAttachmentFile}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "missing or false confirm should be a tool error")
-				assertErrorContains(t, result, "confirm=true")
-				assert.Equal(t, int32(0), calls, "confirmation must fail before client call")
-			})
+		if r.URL.Path != "/support/tickets/123/attachments" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/123/attachments")
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-			var got map[string]any
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-			assert.Equal(t, supportTicketAttachmentFile, got[supportTicketAttachmentFileParam])
+		var got map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: 654, "filename": supportTicketAttachmentFilename, "size": 128}))
-		}))
-		defer srv.Close()
+		if !reflect.DeepEqual(got[supportTicketAttachmentFileParam], supportTicketAttachmentFile) {
+			t.Errorf("got[supportTicketAttachmentFileParam] = %v, want %v", got[supportTicketAttachmentFileParam], supportTicketAttachmentFile)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
+		w.Header().Set("Content-Type", "application/json")
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			supportTicketAttachmentTicketID:  float64(123),
-			supportTicketAttachmentFileParam: supportTicketAttachmentFile,
-			keyConfirm:                       true,
-		}))
+		if err := json.NewEncoder(w).Encode(map[string]any{keyBetaID: 654, "filename": supportTicketAttachmentFilename, "size": 128}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, supportTicketAttachmentFilename, "response should include filename")
-	})
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		supportTicketAttachmentTicketID:  float64(123),
+		supportTicketAttachmentFileParam: supportTicketAttachmentFile,
+		keyConfirm:                       true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/support/tickets/123/attachments", r.URL.Path, "request path should include ticket ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}))
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to create support ticket attachment")
-		assertErrorContains(t, result, errForbidden)
-	})
+	if !strings.Contains(textContent.Text, supportTicketAttachmentFilename) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketAttachmentFilename)
+	}
+}
+
+func TestLinodeAccountSupportTicketAttachmentCreateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/support/tickets/123/attachments" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/123/attachments")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create support ticket attachment") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create support ticket attachment")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func TestLinodeAccountSupportTicketAttachmentCreateToolRejectsInvalidInput(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	cases := []struct {
@@ -191,20 +273,30 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolRejectsInvalidInput(t *te
 			_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return transport error")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid request should be a tool error")
-			assertErrorContains(t, result, testCase.wantMessage)
-			assert.Equal(t, int32(0), calls, "request validation must fail before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
 		})
 	}
 }
 
 func TestLinodeAccountSupportTicketAttachmentCreateToolDryRun(t *testing.T) {
-	assert := accountAssert{}
-	require := accountRequire{}
-
 	t.Parallel()
 
 	_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(dryRunNoCallServer(t))
@@ -214,24 +306,52 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolDryRun(t *testing.T) {
 		supportTicketAttachmentFileParam: supportTicketAttachmentFile,
 		keyDryRun:                        true,
 	}))
-	require.NoError(t, err)
-	require.False(t, result.IsError)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	assert.Equal(t, supportTicketAttachmentCreateToolName, body["tool"])
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], supportTicketAttachmentCreateToolName) {
+		t.Errorf("got %v, want %v", body["tool"], supportTicketAttachmentCreateToolName)
+	}
 
 	would, _ := body["would_execute"].(map[string]any)
-	assert.Equal(t, "POST", would["method"])
-	assert.Equal(t, "/support/tickets/123/attachments", would["path"])
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
+
+	if !reflect.DeepEqual(would["path"], "/support/tickets/123/attachments") {
+		t.Errorf("got %v, want %v", would["path"], "/support/tickets/123/attachments")
+	}
+
 	bodyPreview, _ := would["body"].(map[string]any)
-	assert.Equal(t, supportTicketAttachmentFile, bodyPreview[supportTicketAttachmentFileParam])
-	assert.Nil(t, body["current_state"], "attachment create has no existing resource to preview")
+	if !reflect.DeepEqual(bodyPreview[supportTicketAttachmentFileParam], supportTicketAttachmentFile) {
+		t.Errorf("bodyPreview[supportTicketAttachmentFileParam] = %v, want %v", bodyPreview[supportTicketAttachmentFileParam], supportTicketAttachmentFile)
+	}
+
+	if body["current_state"] != nil {
+		t.Errorf("value = %v, want nil", body["current_state"])
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	require.Len(t, sideEffects, 1, "attachment create surfaces a side effect")
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
 	effect, gotString := sideEffects[0].(string)
-	require.True(t, gotString)
-	assert.Contains(t, effect, "ticket 123", "side effect should name the ticket")
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "ticket 123") {
+		t.Errorf("effect does not contain %v", "ticket 123")
+	}
 }

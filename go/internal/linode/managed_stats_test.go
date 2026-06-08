@@ -2,14 +2,13 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -30,23 +29,54 @@ func TestClientGetManagedStatsSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedStatsPath, r.URL.Path, "request path should be /managed/stats")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(stats))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedStatsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedStatsPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedIssueAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedIssueAuthHeader)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(stats); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetManagedStats(t.Context())
 
-	require.NoError(t, err, "GetManagedStats should succeed on 200 response")
-	require.NotNil(t, result)
-	monitoring, ok := result["monitoring"].(map[string]any)
-	require.True(t, ok, "monitoring stats should be decoded")
-	assert.InEpsilon(t, float64(1), monitoring[managedStatsCPUKey], 0.001)
+	result, err := client.GetManagedStats(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	monitoring, isMap := result["monitoring"].(map[string]any)
+	if !isMap {
+		t.Fatal(`result["monitoring"] is not a map[string]any`)
+	}
+
+	cpu, isFloat := monitoring[managedStatsCPUKey].(float64)
+	if !isFloat {
+		t.Fatalf("monitoring[managedStatsCPUKey] = %v, want a float64", monitoring[managedStatsCPUKey])
+	}
+
+	if math.Abs(cpu-1) > 0.001 {
+		t.Errorf("monitoring[managedStatsCPUKey] = %v, want %v", cpu, float64(1))
+	}
 }
 
 func TestClientGetManagedStatsRetriesTransientError(t *testing.T) {
@@ -55,46 +85,81 @@ func TestClientGetManagedStatsRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedStatsPath, r.URL.Path, "request path should be /managed/stats")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedStatsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedStatsPath)
+		}
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+
+			if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"monitoring": map[string]any{managedStatsCPUKey: 1}}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{"monitoring": map[string]any{managedStatsCPUKey: 1}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
-	result, err := client.GetManagedStats(t.Context())
 
-	require.NoError(t, err, "read-only Managed stats get should retry transient failures")
-	require.NotNil(t, result)
-	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+	result, err := client.GetManagedStats(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }
 
 func TestClientGetManagedStatsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedStatsPath, r.URL.Path, "request path should be /managed/stats")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedStatsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedStatsPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedStatsForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedStatsForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetManagedStats(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "GetManagedStats should fail on API errors")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }

@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -19,6 +19,7 @@ func writeToolInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
 	t.Helper()
 
 	w.Header().Set("Content-Type", "application/json")
+
 	_, err := w.Write([]byte(`{
 		"title":"linode.com - my-linode (linode123456) - day (5 min avg)",
 		"cpu":[[1521483600000,0.42]],
@@ -26,12 +27,12 @@ func writeToolInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
 		"netv4":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]],"private_in":[[1521484800000,0]],"private_out":[[1521484800000,5.6]]},
 		"netv6":{"in":[[1521484800000,0]],"out":[[1521484800000,0]],"private_in":[[1521484800000,195.18]],"private_out":[[1521484800000,5.6]]}
 	}`))
-	assert.NoError(t, err, "writing stats fixture should not fail")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
-func TestLinodeInstanceStatsGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceStatsGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -39,15 +40,42 @@ func TestLinodeInstanceStatsGetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeInstanceStatsGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_stats_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, tool.InputSchema.Required, keyLinodeID, "linode_id must be marked required")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_instance_stats_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_stats_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyLinodeID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyLinodeID)
+	}
+}
+
+func TestLinodeInstanceStatsGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceStatsGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -65,73 +93,135 @@ func TestLinodeInstanceStatsGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceStatsGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/instances/123/stats", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			writeToolInstanceStatsFixture(t, w)
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceStatsGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
-		result, err := srvHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
-
-		require.NotEmpty(t, result.Content, "result should include content")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "linode.com - my-linode", "response should contain stats title")
-		assert.Contains(t, textContent.Text, "0.42", "response should contain CPU data")
-	})
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/instances/123/stats", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.Path != "/linode/instances/123/stats" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/stats")
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceStatsGetTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)}))
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to get stats for instance 123")
-		assertErrorContains(t, result, errForbidden)
-	})
+		writeToolInstanceStatsFixture(t, w)
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInstanceStatsGetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	if len(result.Content) == 0 {
+		t.Fatal("result.Content is empty")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode.com - my-linode") {
+		t.Errorf("textContent.Text does not contain %v", "linode.com - my-linode")
+	}
+
+	if !strings.Contains(textContent.Text, "0.42") {
+		t.Errorf("textContent.Text does not contain %v", "0.42")
+	}
+}
+
+func TestLinodeInstanceStatsGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/linode/instances/123/stats" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/stats")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInstanceStatsGetTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to get stats for instance 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to get stats for instance 123")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 const (
@@ -142,9 +232,7 @@ const (
 	errStatsMonthRange              = "month must be an integer between 1 and 12"
 )
 
-func TestLinodeInstanceStatsByYearMonthTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceStatsByYearMonthToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -152,16 +240,40 @@ func TestLinodeInstanceStatsByYearMonthTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, toolLinodeInstanceStatsMonthGet, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "capability should be read")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyStatsYear, "schema should include year")
-		assert.Contains(t, tool.InputSchema.Properties, keyStatsMonth, "schema should include month")
-	})
+	t.Parallel()
+
+	if tool.Name != toolLinodeInstanceStatsMonthGet {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolLinodeInstanceStatsMonthGet)
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyLinodeID, keyStatsYear, keyStatsMonth} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+}
+
+func TestLinodeInstanceStatsByYearMonthToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -180,65 +292,129 @@ func TestLinodeInstanceStatsByYearMonthTool(t *testing.T) {
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return result")
-			assert.True(t, result.IsError, "validation failure should return tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceStatsByYearMonthToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/instances/123/stats/2024/8", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"cpu":   [][]float64{{1521483600000, 0.42}},
-				"io":    map[string]any{"io": [][]float64{{1521484800000, 0.19}}, "swap": [][]float64{{1521484800000, 0}}},
-				"netv4": map[string]any{"in": [][]float64{{1521484800000, 2004.36}}, "out": [][]float64{{1521484800000, 3928.91}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 5.6}}},
-				"netv6": map[string]any{"in": [][]float64{{1521484800000, 10}}, "out": [][]float64{{1521484800000, 20}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 0}}},
-				"title": "linode123 stats",
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(8)}))
+		if r.URL.Path != "/linode/instances/123/stats/2024/8" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/stats/2024/8")
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return result")
-		assert.False(t, result.IsError, "success should not be a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "linode123 stats")
-		assert.Contains(t, textContent.Text, "2004.36")
-	})
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+		w.Header().Set("Content-Type", "application/json")
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/instances/123/stats/2024/8", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"cpu":   [][]float64{{1521483600000, 0.42}},
+			"io":    map[string]any{"io": [][]float64{{1521484800000, 0.19}}, "swap": [][]float64{{1521484800000, 0}}},
+			"netv4": map[string]any{"in": [][]float64{{1521484800000, 2004.36}}, "out": [][]float64{{1521484800000, 3928.91}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 5.6}}},
+			"netv6": map[string]any{"in": [][]float64{{1521484800000, 10}}, "out": [][]float64{{1521484800000, 20}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 0}}},
+			"title": "linode123 stats",
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(8)}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return result")
-		assert.True(t, result.IsError, "API failure should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve statistics for instance 123 in 2024-08")
-		assertErrorContains(t, result, errForbidden)
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(8)}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "linode123 stats") {
+		t.Errorf("textContent.Text does not contain %v", "linode123 stats")
+	}
+
+	if !strings.Contains(textContent.Text, "2004.36") {
+		t.Errorf("textContent.Text does not contain %v", "2004.36")
+	}
+}
+
+func TestLinodeInstanceStatsByYearMonthToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/linode/instances/123/stats/2024/8" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/stats/2024/8")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(8)}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve statistics for instance 123 in 2024-08") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve statistics for instance 123 in 2024-08")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

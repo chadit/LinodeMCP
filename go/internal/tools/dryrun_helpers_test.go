@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
@@ -25,9 +23,15 @@ func dryRunGetStateServer(t *testing.T, wantGetPath string, state any) (*config.
 		*methods = append(*methods, r.Method)
 
 		if r.Method == http.MethodGet {
-			assert.Equal(t, wantGetPath, r.URL.Path, "dry_run should read state from the resource path")
+			if r.URL.Path != wantGetPath {
+				t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, wantGetPath)
+			}
+
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(state))
+
+			if err := json.NewEncoder(w).Encode(state); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
@@ -74,7 +78,10 @@ func dryRunRouteServer(t *testing.T, routes map[string]any) (*config.Config, *[]
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(body))
+
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 

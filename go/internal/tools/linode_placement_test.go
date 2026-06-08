@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
@@ -35,9 +36,7 @@ const (
 	keyPlacementMembers         = "members"
 )
 
-func TestLinodePlacementGroupGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodePlacementGroupGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -45,13 +44,34 @@ func TestLinodePlacementGroupGetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodePlacementGroupGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_placement_group_get", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, "CapRead", capability.String(), "tool should be read-only")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_placement_group_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability.String() != "CapRead" {
+		t.Errorf("capability.String() = %v, want %v", capability.String(), "CapRead")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodePlacementGroupGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodePlacementGroupGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -69,54 +89,92 @@ func TestLinodePlacementGroupGetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should match")
-			assert.Equal(t, "/placement/groups/528", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
-				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
-				keyPlacementIsCompliant: true, keyPlacementMembers: []map[string]any{{keyLinodeID: 123, keyPlacementIsCompliant: true}},
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
-		}
-		_, _, srvHandler := tools.NewLinodePlacementGroupGetTool(srvCfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528"})
-		result, err := srvHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, placementGroupLabel, "response should contain placement group label")
-		assert.Contains(t, textContent.Text, placementGroupRegion, "response should contain placement group region")
-	})
 }
 
-func TestLinodePlacementGroupDeleteTool(t *testing.T) {
+func TestLinodePlacementGroupGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcPlacementGroups528 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups528)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
+			keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
+			keyPlacementIsCompliant: true, keyPlacementMembers: []map[string]any{{keyLinodeID: 123, keyPlacementIsCompliant: true}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodePlacementGroupGetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528"})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, placementGroupLabel) {
+		t.Errorf("textContent.Text does not contain %v", placementGroupLabel)
+	}
+
+	if !strings.Contains(textContent.Text, placementGroupRegion) {
+		t.Errorf("textContent.Text does not contain %v", placementGroupRegion)
+	}
+}
+
+func TestLinodePlacementGroupDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -124,18 +182,39 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodePlacementGroupDeleteTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_placement_group_delete", tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, "CapDestroy", capability.String(), "tool should be destroy capability")
-		assert.Contains(t, tool.InputSchema.Properties, keyPlacementGroupID, "schema should include group_id")
-		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
-		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Required, keyPlacementGroupID, "group_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	t.Parallel()
+
+	if tool.Name != "linode_placement_group_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability.String() != "CapDestroy" {
+		t.Errorf("capability.String() = %v, want %v", capability.String(), "CapDestroy")
+	}
+
+	for _, key := range []string{keyPlacementGroupID, keyConfirm, keyDryRun} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyPlacementGroupID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodePlacementGroupDeleteToolValidation(t *testing.T) {
+	t.Parallel()
 
 	validationTests := []struct {
 		name         string
@@ -172,141 +251,250 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 			_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
 			result, err := srvHandler(t.Context(), createRequestWithArgs(t, tt.args))
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-			assert.False(t, called.Load(), "validation should reject before client call")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodePlacementGroupDeleteToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		var requestCount atomic.Int32
+	var requestCount atomic.Int32
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should match")
-			assert.Equal(t, "/placement/groups/528", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"), "authorization header should match")
-			assert.Equal(t, http.NoBody, r.Body, "delete request should not include a body")
-			w.WriteHeader(http.StatusOK)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encoding response should not fail")
-		}))
-		defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
 		}
-		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "deleted successfully", "response should confirm deletion")
-		assert.Equal(t, int32(1), requestCount.Load(), "delete should make one request")
-	})
-
-	t.Run("dry run previews without deleting", func(t *testing.T) {
-		t.Parallel()
-
-		var methodsSeen []string
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run should fetch state with GET")
-			assert.Equal(t, "/placement/groups/528", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
-				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
-				keyPlacementIsCompliant: true, keyPlacementMembers: []map[string]any{},
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.Path != tcPlacementGroups528 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups528)
 		}
-		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "dry_run should not be a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "dry_run", "response should be a dry-run preview")
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen, "dry_run must not issue DELETE")
-	})
-
-	t.Run("dry run surfaces member Linodes as detached dependencies", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
-				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
-				keyPlacementIsCompliant: true,
-				keyPlacementMembers:     []map[string]any{{keyLinodeID: 111}, {keyLinodeID: 222}},
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
-		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.False(t, result.IsError, "dry_run should not be a tool error")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "detached", "each member Linode should be a detached dependency")
-		assert.Contains(t, textContent.Text, "111", "member Linode IDs should be named")
-		assert.Contains(t, textContent.Text, "222", "member Linode IDs should be named")
-		assert.Contains(t, textContent.Text, "detaches 2 Linode", "preview should warn about detached members")
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errNotFound}},
-			}), "encoding response should not fail")
-		}))
-		defer srv.Close()
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
 		}
-		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "client failure should be a tool error")
-		assertErrorContains(t, result, "linode_placement_group_delete failed")
-	})
+		w.WriteHeader(http.StatusOK)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "deleted successfully") {
+		t.Errorf("textContent.Text does not contain %v", "deleted successfully")
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
+}
+
+func TestLinodePlacementGroupDeleteToolDryRunPreviewsWithoutDeleting(t *testing.T) {
+	t.Parallel()
+
+	var methodsSeen []string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcPlacementGroups528 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcPlacementGroups528)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
+			keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
+			keyPlacementIsCompliant: true, keyPlacementMembers: []map[string]any{},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "dry_run") {
+		t.Errorf("textContent.Text does not contain %v", "dry_run")
+	}
+
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
+
+func TestLinodePlacementGroupDeleteToolDryRunSurfacesMemberLinodesAsDetachedDependencies(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
+			keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
+			keyPlacementIsCompliant: true,
+			keyPlacementMembers:     []map[string]any{{keyLinodeID: 111}, {keyLinodeID: 222}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "detached") {
+		t.Errorf("textContent.Text does not contain %v", "detached")
+	}
+
+	if !strings.Contains(textContent.Text, "111") {
+		t.Errorf("textContent.Text does not contain %v", "111")
+	}
+
+	if !strings.Contains(textContent.Text, "222") {
+		t.Errorf("textContent.Text does not contain %v", "222")
+	}
+
+	if !strings.Contains(textContent.Text, "detaches 2 Linode") {
+		t.Errorf("textContent.Text does not contain %v", "detaches 2 Linode")
+	}
+}
+
+func TestLinodePlacementGroupDeleteToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errNotFound}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "linode_placement_group_delete failed") {
+		t.Errorf("error text %q does not contain %q", text.Text, "linode_placement_group_delete failed")
+	}
 }

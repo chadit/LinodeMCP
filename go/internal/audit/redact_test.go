@@ -1,6 +1,8 @@
 package audit_test
 
 import (
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/audit"
@@ -22,7 +24,9 @@ func TestRedactionListNoDuplicates(t *testing.T) {
 
 	for _, name := range fields {
 		_, dup := seen[name]
-		checkFalse(t, dup, "redaction list must not contain duplicate %q", name)
+		if dup {
+			t.Error("dup = true, want false")
+		}
 
 		seen[name] = struct{}{}
 	}
@@ -44,27 +48,62 @@ func TestRedactReplacesSensitiveTopLevelKeys(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	checkEqual(t, 12345, redacted["linode_id"], "non-sensitive value must pass through")
-	checkEqual(t, "my-instance", redacted[argKeyLabel])
-	checkTrue(t, audit.IsRedacted(redacted[argRootPass]), "root_pass must be redacted")
-	checkTrue(t, audit.IsRedacted(redacted[argKeyToken]), "token must be redacted")
-	checkElementsMatch(t, []string{argRootPass, argKeyToken}, keys,
-		"redacted-key list must report each scrubbed name")
+	if !reflect.DeepEqual(redacted["linode_id"], 12345) {
+		t.Errorf("got %v, want %v", redacted["linode_id"], 12345)
+	}
+
+	if !reflect.DeepEqual(redacted[argKeyLabel], "my-instance") {
+		t.Errorf("redacted[argKeyLabel] = %v, want %v", redacted[argKeyLabel], "my-instance")
+	}
+
+	if !audit.IsRedacted(redacted[argRootPass]) {
+		t.Error("audit.IsRedacted(redacted[argRootPass]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argKeyToken]) {
+		t.Error("audit.IsRedacted(redacted[argKeyToken]) = false, want true")
+	}
+	{
+		gotEls := slices.Clone(keys)
+		wantEls := slices.Clone([]string{argRootPass, argKeyToken})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", keys, []string{argRootPass, argKeyToken})
+		}
+	}
 }
 
 func TestRedactAccountUserUpdateSensitiveFields(t *testing.T) {
 	t.Parallel()
 
 	args := map[string]any{
-		"password_created": "2024-01-02T03:04:05",
-		"ssh_keys":         []any{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest"},
+		tcPasswordCreated: "2024-01-02T03:04:05",
+		tcSSHKeys:         []any{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest"},
 	}
 
 	redacted, keys := audit.Redact(args)
 
-	checkTrue(t, audit.IsRedacted(redacted["password_created"]), "password_created must be redacted")
-	checkTrue(t, audit.IsRedacted(redacted["ssh_keys"]), "ssh_keys must be redacted")
-	checkElementsMatch(t, []string{"password_created", "ssh_keys"}, keys)
+	if !audit.IsRedacted(redacted[tcPasswordCreated]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !audit.IsRedacted(redacted[tcSSHKeys]) {
+		t.Error("expected condition to be true")
+	}
+	{
+		gotEls := slices.Clone(keys)
+		wantEls := slices.Clone([]string{tcPasswordCreated, tcSSHKeys})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", keys, []string{tcPasswordCreated, tcSSHKeys})
+		}
+	}
 }
 
 // TestRedactRecursesIntoNestedMaps verifies the spec's "match by
@@ -84,12 +123,21 @@ func TestRedactRecursesIntoNestedMaps(t *testing.T) {
 	redacted, keys := audit.Redact(args)
 
 	nested, ok := redacted["meta"].(map[string]any)
-	mustTrue(t, ok, "nested object must remain a map")
-	checkTrue(t, audit.IsRedacted(nested["api_key"]),
-		"nested api_key must be redacted")
-	checkEqual(t, valUSEast, nested[keyRegion],
-		"nested non-sensitive value passes through")
-	checkContains(t, keys, "api_key", "nested key reported in keys list")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !audit.IsRedacted(nested["api_key"]) {
+		t.Error("expected condition to be true")
+	}
+
+	if !reflect.DeepEqual(nested[keyRegion], valUSEast) {
+		t.Errorf("nested[keyRegion] = %v, want %v", nested[keyRegion], valUSEast)
+	}
+
+	if !slices.Contains(keys, "api_key") {
+		t.Errorf("keys does not contain %v", "api_key")
+	}
 }
 
 // TestRedactExactNameMatch locks the spec's exact-match rule:
@@ -107,12 +155,21 @@ func TestRedactExactNameMatch(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	checkEqual(t, "should-pass-through-because-variant", redacted["cluster_root_pass"],
-		"variant cluster_root_pass must not match exact rule for root_pass")
-	checkEqual(t, "also-variant", redacted["new_root_pass"])
-	checkEqual(t, "different-case", redacted["Root_Pass"],
-		"case-folded variant must not match exact rule")
-	checkEmpty(t, keys, "no sensitive keys hit the exact-match rule")
+	if !reflect.DeepEqual(redacted["cluster_root_pass"], "should-pass-through-because-variant") {
+		t.Errorf("got %v, want %v", redacted["cluster_root_pass"], "should-pass-through-because-variant")
+	}
+
+	if !reflect.DeepEqual(redacted["new_root_pass"], "also-variant") {
+		t.Errorf("got %v, want %v", redacted["new_root_pass"], "also-variant")
+	}
+
+	if !reflect.DeepEqual(redacted["Root_Pass"], "different-case") {
+		t.Errorf("got %v, want %v", redacted["Root_Pass"], "different-case")
+	}
+
+	if len(keys) != 0 {
+		t.Errorf("keys = %v, want empty", keys)
+	}
 }
 
 // TestRedactNilArgsProducesEmptyResult covers the empty-input path.
@@ -123,8 +180,13 @@ func TestRedactNilArgsProducesEmptyResult(t *testing.T) {
 
 	redacted, keys := audit.Redact(nil)
 
-	checkNil(t, redacted, "nil args produce nil result")
-	checkEmpty(t, keys)
+	if redacted != nil {
+		t.Errorf("redacted = %v, want nil", redacted)
+	}
+
+	if len(keys) != 0 {
+		t.Errorf("keys = %v, want empty", keys)
+	}
 }
 
 // TestRedactReturnsCopyNotMutation guards the no-mutation contract.
@@ -138,8 +200,9 @@ func TestRedactReturnsCopyNotMutation(t *testing.T) {
 
 	_, _ = audit.Redact(args)
 
-	checkEqual(t, "secret", args[argRootPass],
-		"original args map must not be mutated")
+	if !reflect.DeepEqual(args[argRootPass], "secret") {
+		t.Errorf("args[argRootPass] = %v, want %v", args[argRootPass], "secret")
+	}
 }
 
 // TestRedactionFieldSetMatchesList confirms the set helper builds a
@@ -151,11 +214,15 @@ func TestRedactionFieldSetMatchesList(t *testing.T) {
 	fields := audit.RedactionFields()
 	set := audit.RedactionFieldSet()
 
-	checkLen(t, set, len(fields), "set must have one entry per list field")
+	if len(set) != len(fields) {
+		t.Errorf("len(set) = %d, want %d", len(set), len(fields))
+	}
 
 	for _, name := range fields {
 		_, present := set[name]
-		checkTrue(t, present, "field %q must appear in the set", name)
+		if !present {
+			t.Error("present = false, want true")
+		}
 	}
 }
 
@@ -181,8 +248,17 @@ func TestRedactionFieldsPIIList(t *testing.T) {
 		"zip",
 	}
 
-	checkElementsMatch(t, expected, audit.RedactionFieldsPII(),
-		"PII list must exactly match the source-verified conservative scope")
+	{
+		gotEls := slices.Clone(audit.RedactionFieldsPII())
+		wantEls := slices.Clone(expected)
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", audit.RedactionFieldsPII(), expected)
+		}
+	}
 }
 
 // TestRedactionFieldsPIINoDuplicates guards against an accidental
@@ -196,7 +272,9 @@ func TestRedactionFieldsPIINoDuplicates(t *testing.T) {
 
 	for _, name := range fields {
 		_, dup := seen[name]
-		checkFalse(t, dup, "PII list must not contain duplicate %q", name)
+		if dup {
+			t.Error("dup = true, want false")
+		}
 
 		seen[name] = struct{}{}
 	}
@@ -213,8 +291,9 @@ func TestRedactionListsDisjoint(t *testing.T) {
 
 	for _, pii := range audit.RedactionFieldsPII() {
 		_, overlap := credSet[pii]
-		checkFalse(t, overlap,
-			"PII name %q must not also appear in the credential list", pii)
+		if overlap {
+			t.Error("overlap = true, want false")
+		}
 	}
 }
 
@@ -239,21 +318,56 @@ func TestRedactWithPIIScrubsPIIFields(t *testing.T) {
 
 	redacted, keys := audit.RedactWithPII(args)
 
-	checkEqual(t, 42, redacted[argLinodeID], "non-sensitive value must pass through")
-	checkEqual(t, "primary", redacted[argKeyLabel])
-	checkEqual(t, "us", redacted["country"],
-		"country is a region filter, NOT redacted")
-	checkTrue(t, audit.IsRedacted(redacted[argKeyToken]), "credential still redacted")
-	checkTrue(t, audit.IsRedacted(redacted[argTaxID]))
-	checkTrue(t, audit.IsRedacted(redacted[argPhone]))
-	checkTrue(t, audit.IsRedacted(redacted[argAddress1]))
-	checkTrue(t, audit.IsRedacted(redacted[argCity]))
-	checkTrue(t, audit.IsRedacted(redacted[argContactName]))
-	checkTrue(t, audit.IsRedacted(redacted[argContactEmail]))
-	checkElementsMatch(t,
-		[]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail},
-		keys,
-		"redacted-key list must report each scrubbed name once")
+	if !reflect.DeepEqual(redacted[argLinodeID], 42) {
+		t.Errorf("redacted[argLinodeID] = %v, want %v", redacted[argLinodeID], 42)
+	}
+
+	if !reflect.DeepEqual(redacted[argKeyLabel], "primary") {
+		t.Errorf("redacted[argKeyLabel] = %v, want %v", redacted[argKeyLabel], "primary")
+	}
+
+	if !reflect.DeepEqual(redacted["country"], "us") {
+		t.Errorf("got %v, want %v", redacted["country"], "us")
+	}
+
+	if !audit.IsRedacted(redacted[argKeyToken]) {
+		t.Error("audit.IsRedacted(redacted[argKeyToken]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argTaxID]) {
+		t.Error("audit.IsRedacted(redacted[argTaxID]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argPhone]) {
+		t.Error("audit.IsRedacted(redacted[argPhone]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argAddress1]) {
+		t.Error("audit.IsRedacted(redacted[argAddress1]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argCity]) {
+		t.Error("audit.IsRedacted(redacted[argCity]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argContactName]) {
+		t.Error("audit.IsRedacted(redacted[argContactName]) = false, want true")
+	}
+
+	if !audit.IsRedacted(redacted[argContactEmail]) {
+		t.Error("audit.IsRedacted(redacted[argContactEmail]) = false, want true")
+	}
+	{
+		gotEls := slices.Clone(keys)
+		wantEls := slices.Clone([]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", keys, []string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail})
+		}
+	}
 }
 
 // TestRedactLeavesPIIWhenFlagOff is the inverse contract: when the
@@ -272,14 +386,25 @@ func TestRedactLeavesPIIWhenFlagOff(t *testing.T) {
 
 	redacted, keys := audit.Redact(args)
 
-	checkTrue(t, audit.IsRedacted(redacted[argKeyToken]),
-		"credential must always be redacted")
-	checkEqual(t, "TX-99", redacted[argTaxID],
-		"PII passes through when caller uses Redact (flag off path)")
-	checkEqual(t, "+1-555-0100", redacted[argPhone])
-	checkEqual(t, "123 Main St", redacted[argAddress1])
-	checkEqual(t, []string{argKeyToken}, keys,
-		"only the credential should appear in the redacted-key list")
+	if !audit.IsRedacted(redacted[argKeyToken]) {
+		t.Error("audit.IsRedacted(redacted[argKeyToken]) = false, want true")
+	}
+
+	if !reflect.DeepEqual(redacted[argTaxID], "TX-99") {
+		t.Errorf("redacted[argTaxID] = %v, want %v", redacted[argTaxID], "TX-99")
+	}
+
+	if !reflect.DeepEqual(redacted[argPhone], "+1-555-0100") {
+		t.Errorf("redacted[argPhone] = %v, want %v", redacted[argPhone], "+1-555-0100")
+	}
+
+	if !reflect.DeepEqual(redacted[argAddress1], "123 Main St") {
+		t.Errorf("redacted[argAddress1] = %v, want %v", redacted[argAddress1], "123 Main St")
+	}
+
+	if !reflect.DeepEqual(keys, []string{argKeyToken}) {
+		t.Errorf("keys = %v, want %v", keys, []string{argKeyToken})
+	}
 }
 
 // TestRedactionFieldSetPIIMatchesList: same drift guard as
@@ -290,10 +415,14 @@ func TestRedactionFieldSetPIIMatchesList(t *testing.T) {
 	fields := audit.RedactionFieldsPII()
 	set := audit.RedactionFieldSetPII()
 
-	checkLen(t, set, len(fields), "PII set must have one entry per list field")
+	if len(set) != len(fields) {
+		t.Errorf("len(set) = %d, want %d", len(set), len(fields))
+	}
 
 	for _, name := range fields {
 		_, present := set[name]
-		checkTrue(t, present, "PII field %q must appear in the set", name)
+		if !present {
+			t.Error("present = false, want true")
+		}
 	}
 }

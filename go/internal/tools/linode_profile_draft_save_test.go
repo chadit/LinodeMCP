@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -48,7 +50,9 @@ func writableSaveConfig(t *testing.T) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "config.yml")
-	expectNoError(t, os.WriteFile(path, []byte(minimalConfigYAML), 0o600))
+	if err := os.WriteFile(path, []byte(minimalConfigYAML), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	return path
 }
@@ -71,10 +75,21 @@ func TestSaveRegistration(t *testing.T) {
 		staticConfigPath("/dev/null"),
 	)
 
-	checkEqual(t, "linode_profile_draft_save", tool.Name)
-	expectNotEmpty(t, tool.Description)
-	checkEqual(t, profiles.CapMeta, capability)
-	expectNotNil(t, handler)
+	if tool.Name != "linode_profile_draft_save" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_draft_save")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapMeta {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
 // TestSaveCreatesNewProfile is the happy path for a brand-new
@@ -86,8 +101,11 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 	path := writableSaveConfig(t)
 
 	reg := builder.NewRegistry()
+
 	draft, err := reg.Create(saveDraftName, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	draft.Description = "saved via test"
 	draft.AllowedTools = []string{toolHello, toolInstanceBoot}
@@ -99,22 +117,59 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 		keyConfirm: true,
 	})
 
-	expectEqual(t, saveDraftName, out[keyName])
-	checkEqual(t, true, out["is_new"])
-	added, _ := out["added_tools"].([]any)
-	expectStringAnyElementsMatch(t, []string{toolHello, toolInstanceBoot}, added, "save diff must report added tools")
+	if !reflect.DeepEqual(out[keyName], saveDraftName) {
+		t.Errorf("out[keyName] = %v, want %v", out[keyName], saveDraftName)
+	}
 
-	checkEmpty(t, out["removed_tools"])
+	if !reflect.DeepEqual(out["is_new"], true) {
+		t.Errorf("got %v, want %v", out["is_new"], true)
+	}
+
+	added, _ := out["added_tools"].([]any)
+
+	gotElems1 := make([]string, len(added))
+	for i, v := range added {
+		gotElems1[i], _ = v.(string)
+	}
+
+	wantElems1 := slices.Clone([]string{toolHello, toolInstanceBoot})
+
+	slices.Sort(gotElems1)
+	slices.Sort(wantElems1)
+
+	if !slices.Equal(gotElems1, wantElems1) {
+		t.Errorf("elements = %v, want %v (any order)", gotElems1, []string{toolHello, toolInstanceBoot})
+	}
+
+	if v, ok := out["removed_tools"].([]any); ok && len(v) != 0 {
+		t.Errorf("value = %v, want empty", out["removed_tools"])
+	}
 
 	// Disk side-effect: reload config and confirm the new profile
 	// landed with the right contents.
 	reloaded, err := config.Load(path)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	stored, ok := reloaded.Profiles[saveDraftName]
-	expectTrue(t, ok, "saved profile must appear in cfg.Profiles after reload")
-	checkEqual(t, "saved via test", stored.Description)
-	expectStringElementsMatch(t, []string{toolHello, toolInstanceBoot}, stored.AllowedTools, "saved profile tools must round-trip")
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if stored.Description != "saved via test" {
+		t.Errorf("stored.Description = %v, want %v", stored.Description, "saved via test")
+	}
+
+	gotElems2 := slices.Clone(stored.AllowedTools)
+	wantElems2 := slices.Clone([]string{toolHello, toolInstanceBoot})
+
+	slices.Sort(gotElems2)
+	slices.Sort(wantElems2)
+
+	if !slices.Equal(gotElems2, wantElems2) {
+		t.Errorf("elements = %v, want %v (any order)", gotElems2, []string{toolHello, toolInstanceBoot})
+	}
 }
 
 // TestSaveUpdatesExistingProfile is the round-trip update case. The
@@ -127,7 +182,9 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 
 	// Stage an existing user-defined profile.
 	priorCfg, err := config.Load(path)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	priorCfg.Profiles = map[string]config.UserProfileConfig{
 		saveDraftName: {
@@ -135,11 +192,16 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 			AllowedTools: []string{toolHello},
 		},
 	}
-	expectNoError(t, config.WriteAtomic(path, priorCfg))
+	if err := config.WriteAtomic(path, priorCfg); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	reg := builder.NewRegistry()
+
 	draft, err := reg.Create(saveDraftName, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	draft.Description = "updated"
 	draft.AllowedTools = []string{toolInstanceBoot}
@@ -151,18 +213,33 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 		keyConfirm: true,
 	})
 
-	checkEqual(t, false, out["is_new"])
+	if !reflect.DeepEqual(out["is_new"], false) {
+		t.Errorf("got %v, want %v", out["is_new"], false)
+	}
+
 	added, _ := out["added_tools"].([]any)
-	checkEqual(t, []any{toolInstanceBoot}, added)
+	if !reflect.DeepEqual(added, []any{toolInstanceBoot}) {
+		t.Errorf("added = %v, want %v", added, []any{toolInstanceBoot})
+	}
 
 	removed, _ := out["removed_tools"].([]any)
-	checkEqual(t, []any{toolHello}, removed)
+	if !reflect.DeepEqual(removed, []any{toolHello}) {
+		t.Errorf("removed = %v, want %v", removed, []any{toolHello})
+	}
 
 	changes, _ := out["changed_fields"].(map[string]any)
-	expectContains(t, changes, "description")
-	descChange, _ := changes["description"].(map[string]any)
-	checkEqual(t, "prior", descChange["old"])
-	checkEqual(t, "updated", descChange["new"])
+	if _, ok := changes[keyDescription]; !ok {
+		t.Errorf("changes missing key %v", keyDescription)
+	}
+
+	descChange, _ := changes[keyDescription].(map[string]any)
+	if !reflect.DeepEqual(descChange["old"], "prior") {
+		t.Errorf("got %v, want %v", descChange["old"], "prior")
+	}
+
+	if !reflect.DeepEqual(descChange["new"], "updated") {
+		t.Errorf("got %v, want %v", descChange["new"], "updated")
+	}
 }
 
 // TestSaveRefusesMissingConfirm guards the destructive operation
@@ -172,12 +249,18 @@ func TestSaveRefusesMissingConfirm(t *testing.T) {
 	t.Parallel()
 
 	path := writableSaveConfig(t)
+
 	originalBytes, err := os.ReadFile(path)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	reg := builder.NewRegistry()
+
 	_, err = reg.Create(saveDraftName, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
 
@@ -191,8 +274,13 @@ func TestSaveRefusesMissingConfirm(t *testing.T) {
 
 	// File untouched.
 	finalBytes, err := os.ReadFile(path)
-	expectNoError(t, err)
-	checkEqual(t, originalBytes, finalBytes, "refused save must not write to disk")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(finalBytes, originalBytes) {
+		t.Errorf("finalBytes = %v, want %v", finalBytes, originalBytes)
+	}
 }
 
 // TestSaveRefusesBuiltinName covers the built-in-shadow guard. The
@@ -203,8 +291,11 @@ func TestSaveRefusesBuiltinName(t *testing.T) {
 	path := writableSaveConfig(t)
 
 	reg := builder.NewRegistry()
+
 	_, err := reg.Create(profiles.BuiltinComputeAdmin, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
 
@@ -265,8 +356,11 @@ func TestSaveRefusesEmptyConfigPath(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
+
 	_, err := reg.Create(saveDraftName, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(""))
 
@@ -309,8 +403,11 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 	path := writableSaveConfig(t)
 
 	reg := builder.NewRegistry()
+
 	draft, err := reg.Create(saveDraftName, nil)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	draft.AllowedTools = []string{toolHello}
 
@@ -323,17 +420,37 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 	}
 
 	result, err := handler(t.Context(), req)
-	expectNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	expectTrue(t, ok)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
 
 	var payload map[string]any
-	expectNoError(t, json.Unmarshal([]byte(textContent.Text), &payload))
+	if err := json.Unmarshal([]byte(textContent.Text), &payload); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	expectContainsWithMode(t, false, payload, "name")
-	expectContainsWithMode(t, false, payload, "is_new")
-	expectContainsWithMode(t, false, payload, "added_tools")
-	expectContainsWithMode(t, false, payload, "removed_tools")
-	expectContainsWithMode(t, false, payload, "changed_fields")
+	if _, ok := payload["name"]; !ok {
+		t.Errorf("payload missing key %v", "name")
+	}
+
+	if _, ok := payload["is_new"]; !ok {
+		t.Errorf("payload missing key %v", "is_new")
+	}
+
+	if _, ok := payload["added_tools"]; !ok {
+		t.Errorf("payload missing key %v", "added_tools")
+	}
+
+	if _, ok := payload["removed_tools"]; !ok {
+		t.Errorf("payload missing key %v", "removed_tools")
+	}
+
+	if _, ok := payload["changed_fields"]; !ok {
+		t.Errorf("payload missing key %v", "changed_fields")
+	}
 }

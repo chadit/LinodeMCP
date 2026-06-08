@@ -2,13 +2,11 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -24,45 +22,87 @@ func TestClientGetManagedCredentialSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, managedCredentialPath, r.URL.Path, "request path should include credential ID")
-		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{ID: managedCredentialID, Label: managedCredentialLabel, LastDecrypted: managedCredentialLastDecrypted}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedCredentialPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ManagedCredential{ID: managedCredentialID, Label: managedCredentialLabel, LastDecrypted: managedCredentialLastDecrypted}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetManagedCredential(t.Context(), managedCredentialID)
 
-	require.NoError(t, err, "GetManagedCredential should succeed on 200 response")
-	require.NotNil(t, got)
-	assert.Equal(t, managedCredentialID, got.ID)
-	assert.Equal(t, managedCredentialLabel, got.Label)
-	assert.Equal(t, managedCredentialLastDecrypted, got.LastDecrypted)
+	got, err := client.GetManagedCredential(t.Context(), managedCredentialID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != managedCredentialID {
+		t.Errorf("got.ID = %v, want %v", got.ID, managedCredentialID)
+	}
+
+	if got.Label != managedCredentialLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, managedCredentialLabel)
+	}
+
+	if got.LastDecrypted != managedCredentialLastDecrypted {
+		t.Errorf("got.LastDecrypted = %v, want %v", got.LastDecrypted, managedCredentialLastDecrypted)
+	}
 }
 
 func TestClientGetManagedCredentialAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, managedCredentialPath, r.URL.Path, "request path should include credential ID")
+		if r.URL.Path != managedCredentialPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "access denied"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetManagedCredential(t.Context(), managedCredentialID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetManagedCredentialRetriesTransientRead(t *testing.T) {
@@ -72,26 +112,43 @@ func TestClientGetManagedCredentialRetriesTransientRead(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		assert.Equal(t, managedCredentialPath, r.URL.Path, "request path should include credential ID")
+
+		if r.URL.Path != managedCredentialPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedCredentialPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedCredential{ID: managedCredentialID, Label: managedCredentialLabel}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.ManagedCredential{ID: managedCredentialID, Label: managedCredentialLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-	got, err := client.GetManagedCredential(t.Context(), managedCredentialID)
 
-	require.NoError(t, err, "safe GET should retry after transient API error")
-	require.NotNil(t, got)
-	assert.Equal(t, int32(2), attempts.Load(), "safe GET should retry once")
+	got, err := client.GetManagedCredential(t.Context(), managedCredentialID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }

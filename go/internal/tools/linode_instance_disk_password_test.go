@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -19,9 +18,7 @@ const keyDiskPassword = "password"
 
 // TestLinodeInstanceDiskPasswordResetTool verifies the instance disk password reset tool
 // registers correctly, validates confirm, and resets disk root passwords.
-func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceDiskPasswordResetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -29,19 +26,51 @@ func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeInstanceDiskPasswordResetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_instance_disk_password_reset", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "tool should require write capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, props, keyDiskID, "schema should include disk_id")
-		assert.Contains(t, props, keyDiskPassword, "schema should include password")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	})
+	if tool.Name != "linode_instance_disk_password_reset" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_disk_password_reset")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyLinodeID]; !ok {
+		t.Errorf("props missing key %v", keyLinodeID)
+	}
+
+	if _, ok := props[keyDiskID]; !ok {
+		t.Errorf("props missing key %v", keyDiskID)
+	}
+
+	if _, ok := props[keyDiskPassword]; !ok {
+		t.Errorf("props missing key %v", keyDiskPassword)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeInstanceDiskPasswordResetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceDiskPasswordResetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -67,81 +96,145 @@ func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("client error maps to tool error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceDiskPasswordResetToolClientErrorMapsToToolError(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/disks/10/password", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"invalid password"}]}`))
-			assert.NoError(t, writeErr, "writing error response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/disks/10/password" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/disks/10/password")
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceDiskPasswordResetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
-		})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to reset password")
-		assertErrorContains(t, result, "invalid password")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"invalid password"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInstanceDiskPasswordResetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
 	})
 
-	t.Run("successful password reset", func(t *testing.T) {
-		t.Parallel()
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/disks/10/password", r.URL.Path, "request path should match")
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-			var body map[string]string
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-			assert.Equal(t, rootPassStrong, body[keyDiskPassword], "password should match request")
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(srv.Close)
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to reset password") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to reset password")
+	}
 
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "invalid password") {
+		t.Errorf("error text %q does not contain %q", text.Text, "invalid password")
+	}
+}
+
+func TestLinodeInstanceDiskPasswordResetToolSuccessfulPasswordReset(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/disks/10/password" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/disks/10/password")
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceDiskPasswordResetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
-		})
-		result, err := srvHandler(t.Context(), req)
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Password reset", "response should confirm password reset")
-		assert.Contains(t, textContent.Text, "10", "response should contain disk ID")
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if body[keyDiskPassword] != rootPassStrong {
+			t.Errorf("body[keyDiskPassword] = %v, want %v", body[keyDiskPassword], rootPassStrong)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInstanceDiskPasswordResetTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true,
 	})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Password reset") {
+		t.Errorf("textContent.Text does not contain %v", "Password reset")
+	}
+
+	if !strings.Contains(textContent.Text, "10") {
+		t.Errorf("textContent.Text does not contain %v", "10")
+	}
 }

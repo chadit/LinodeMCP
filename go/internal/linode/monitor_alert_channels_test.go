@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -26,12 +27,25 @@ func TestClientListMonitorAlertChannelsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		monitorCheckEqual(t, monitorAlertChannelsPath, r.URL.Path, "request path should match")
-		monitorCheckEqual(t, monitorAlertChannelsQuery, r.URL.RawQuery, "request query should include pagination")
-		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertChannelsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertChannelsPath)
+		}
+
+		if r.URL.RawQuery != monitorAlertChannelsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, monitorAlertChannelsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyID:          monitorAlertChannelID,
 				keyLabel:       monitorAlertChannelLabel,
@@ -56,48 +70,108 @@ func TestClientListMonitorAlertChannelsSuccess(t *testing.T) {
 			keyPage:    2,
 			keyPages:   3,
 			keyResults: 75,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListMonitorAlertChannels(t.Context(), 2, 25)
 
-	monitorRequireNoError(t, err)
-	monitorRequireNotNil(t, got)
-	monitorCheckEqual(t, 2, got.Page)
-	monitorCheckEqual(t, 3, got.Pages)
-	monitorCheckEqual(t, 75, got.Results)
-	monitorRequireLenOne(t, got.Data)
-	monitorCheckEqual(t, monitorAlertChannelID, got.Data[0].ID)
-	monitorCheckEqual(t, monitorAlertChannelLabel, got.Data[0].Label)
-	monitorCheckEqual(t, monitorAlertChannelEmailType, got.Data[0].ChannelType)
-	monitorCheckEqual(t, monitorAlertChannelEmail, got.Data[0].Content.Email.EmailAddresses[0])
-	monitorRequireLenOne(t, got.Data[0].Alerts)
-	monitorCheckEqual(t, monitorAlertDefinitionURL, got.Data[0].Alerts[0].URL)
+	got, err := client.ListMonitorAlertChannels(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Page != 2 {
+		t.Errorf("got.Page = %v, want %v", got.Page, 2)
+	}
+
+	if got.Pages != 3 {
+		t.Errorf("got.Pages = %v, want %v", got.Pages, 3)
+	}
+
+	if got.Results != 75 {
+		t.Errorf("got.Results = %v, want %v", got.Results, 75)
+	}
+
+	if len(got.Data) != 1 {
+		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	}
+
+	if got.Data[0].ID != monitorAlertChannelID {
+		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertChannelID)
+	}
+
+	if got.Data[0].Label != monitorAlertChannelLabel {
+		t.Errorf("got.Data[0].Label = %v, want %v", got.Data[0].Label, monitorAlertChannelLabel)
+	}
+
+	if got.Data[0].ChannelType != monitorAlertChannelEmailType {
+		t.Errorf("got.Data[0].ChannelType = %v, want %v", got.Data[0].ChannelType, monitorAlertChannelEmailType)
+	}
+
+	if got.Data[0].Content.Email.EmailAddresses[0] != monitorAlertChannelEmail {
+		t.Errorf("got.Data[0].Content.Email.EmailAddresses[0] = %v, want %v", got.Data[0].Content.Email.EmailAddresses[0], monitorAlertChannelEmail)
+	}
+
+	if len(got.Data[0].Alerts) != 1 {
+		t.Fatalf("len(got.Data[0].Alerts) = %d, want 1", len(got.Data[0].Alerts))
+	}
+
+	if got.Data[0].Alerts[0].URL != monitorAlertDefinitionURL {
+		t.Errorf("got.Data[0].Alerts[0].URL = %v, want %v", got.Data[0].Alerts[0].URL, monitorAlertDefinitionURL)
+	}
 }
 
 func TestClientListMonitorAlertChannelsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		monitorCheckEqual(t, monitorAlertChannelsPath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertChannelsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertChannelsPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	got, err := client.ListMonitorAlertChannels(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	monitorRequireError(t, err)
-	monitorCheckNil(t, got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
-	apiErr := monitorRequireAPIError(t, err)
-	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	monitorCheckEqual(t, errForbidden, apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientListMonitorAlertChannelsRetriesTransientError(t *testing.T) {
@@ -106,8 +180,13 @@ func TestClientListMonitorAlertChannelsRetriesTransientError(t *testing.T) {
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		monitorCheckEqual(t, monitorAlertChannelsPath, r.URL.Path, "request path should match")
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != monitorAlertChannelsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorAlertChannelsPath)
+		}
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -115,19 +194,36 @@ func TestClientListMonitorAlertChannelsRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{keyID: monitorAlertChannelID, keyLabel: monitorAlertChannelLabel}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListMonitorAlertChannels(t.Context(), 0, 0)
 
-	monitorRequireNoError(t, err)
-	monitorRequireNotNil(t, got)
-	monitorCheckEqual(t, int32(2), calls.Load(), "read route should retry once after transient failure")
-	monitorRequireLenOne(t, got.Data)
-	monitorCheckEqual(t, monitorAlertChannelID, got.Data[0].ID)
+	got, err := client.ListMonitorAlertChannels(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
+
+	if len(got.Data) != 1 {
+		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	}
+
+	if got.Data[0].ID != monitorAlertChannelID {
+		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertChannelID)
+	}
 }

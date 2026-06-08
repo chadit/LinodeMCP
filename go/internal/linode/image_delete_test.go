@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -17,55 +18,101 @@ func TestClientDeleteImageSuccess(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/images/private%2F12345", r.URL.EscapedPath(), "image ID should be one encoded path segment")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "delete request should not include a body")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/images/private%2F12345" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F12345")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImage(t.Context(), privateImage12345Fixture)
 
-	requireNoError(t, err)
-	checkEqual(t, int32(1), requestCount.Load(), "delete should make one request")
+	err := client.DeleteImage(t.Context(), privateImage12345Fixture)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteImageEscapesPathSeparators(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/images/private%2F%2E%2E%3Fquery%23frag", r.URL.EscapedPath(), "image ID should be one encoded path segment")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/images/private%2F%2E%2E%3Fquery%23frag" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F%2E%2E%3Fquery%23frag")
+		}
+
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImage(t.Context(), "private/..?query#frag")
 
-	requireNoError(t, err)
+	err := client.DeleteImage(t.Context(), "private/..?query#frag")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteImageEscapesStandaloneTraversalMarker(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, "/images/%2E%2E", r.URL.EscapedPath(), "standalone traversal marker should be encoded")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.EscapedPath() != "/images/%2E%2E" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/%2E%2E")
+		}
+
 		w.WriteHeader(http.StatusOK)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImage(t.Context(), "..")
 
-	requireNoError(t, err)
+	err := client.DeleteImage(t.Context(), pathTraversalDotDot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteImageError(t *testing.T) {
@@ -73,16 +120,21 @@ func TestClientDeleteImageError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errNotFound}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteImage(t.Context(), privateImage12345Fixture)
 
-	requireError(t, err)
+	err := client.DeleteImage(t.Context(), privateImage12345Fixture)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 }
 
 func TestClientDeleteImageDoesNotRetry(t *testing.T) {
@@ -93,15 +145,23 @@ func TestClientDeleteImageDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	err := client.DeleteImage(t.Context(), privateImage12345Fixture)
 
-	requireError(t, err)
-	checkEqual(t, int32(1), calls.Load(), "destructive DELETE route must not retry transient failures")
+	err := client.DeleteImage(t.Context(), privateImage12345Fixture)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -26,159 +25,251 @@ const (
 	caseNumber              = "number"
 )
 
-func TestLinodeLongviewClientCreateTool(t *testing.T) {
+func TestLinodeLongviewClientCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
+	if tool.Name != longviewToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, longviewToolName)
+	}
 
-		assert.Equal(t, longviewToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapAdmin, capability, "Longview client creation returns setup credentials")
-		assert.Contains(t, tool.Description, "WARNING", "tool should warn about returned credentials")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyLabel, "schema should include label")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	})
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
 
-	t.Run("confirm required before client", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		cases := []struct {
-			name    string
-			confirm any
-			include bool
-		}{
-			{name: caseMissing},
-			{name: caseFalse, confirm: false, include: true},
-			{name: "string", confirm: boolStringTrue, include: true},
-			{name: caseNumber, confirm: 1, include: true},
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeLongviewClientCreateToolConfirmRequiredBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		confirm any
+		include bool
+	}{
+		{name: caseMissing},
+		{name: caseFalse, confirm: false, include: true},
+		{name: "string", confirm: boolStringTrue, include: true},
+		{name: caseNumber, confirm: 1, include: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
+
+			args := map[string]any{keyLabel: longviewClientLabel}
+			if testCase.include {
+				args[keyConfirm] = testCase.confirm
+			}
+
+			req := createRequestWithArgs(t, args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
+		})
+	}
+}
+
+func TestLinodeLongviewClientCreateToolMissingLabelRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: caseMissing, args: map[string]any{keyConfirm: true}},
+		{name: caseBlank, args: map[string]any{keyConfirm: true, keyLabel: blankString}},
+		{name: caseNumeric, args: map[string]any{keyConfirm: true, keyLabel: 789}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errLabelRequired) {
+				t.Errorf("error text %q does not contain %q", text.Text, errLabelRequired)
+			}
+		})
+	}
+}
+
+func TestLinodeLongviewClientCreateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	apiClient := linode.CreatedLongviewClient{
+		APIKey:      longviewClientAPIKey,
+		Apps:        linode.LongviewApps{Apache: true, MySQL: true},
+		Created:     longviewClientCreatedAt,
+		ID:          789,
+		InstallCode: longviewClientInstall,
+		Label:       longviewClientLabel,
+		Updated:     longviewClientUpdatedAt,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
-
-				args := map[string]any{keyLabel: longviewClientLabel}
-				if testCase.include {
-					args[keyConfirm] = testCase.confirm
-				}
-
-				req := createRequestWithArgs(t, args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid confirm should be an error result")
-				assertErrorContains(t, result, "confirm=true")
-			})
-		}
-	})
-
-	t.Run("missing label rejects before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			args map[string]any
-		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true}},
-			{name: caseBlank, args: map[string]any{keyConfirm: true, keyLabel: blankString}},
-			{name: caseNumeric, args: map[string]any{keyConfirm: true, keyLabel: 789}},
+		if r.URL.Path != longviewClientsBasePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewClientsBasePath)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
-				req := createRequestWithArgs(t, testCase.args)
-
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid label should be an error result")
-				assertErrorContains(t, result, errLabelRequired)
-			})
-		}
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		apiClient := linode.CreatedLongviewClient{
-			APIKey:      longviewClientAPIKey,
-			Apps:        linode.LongviewApps{Apache: true, MySQL: true},
-			Created:     longviewClientCreatedAt,
-			ID:          789,
-			InstallCode: longviewClientInstall,
-			Label:       longviewClientLabel,
-			Updated:     longviewClientUpdatedAt,
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/longview/clients", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		var got linode.CreateLongviewClientRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-			var got linode.CreateLongviewClientRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-			assert.Equal(t, longviewClientLabel, got.Label)
+		if got.Label != longviewClientLabel {
+			t.Errorf("got.Label = %v, want %v", got.Label, longviewClientLabel)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(apiClient))
-		}))
-		t.Cleanup(srv.Close)
+		w.Header().Set("Content-Type", "application/json")
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyLabel: longviewClientLabel})
+		if err := json.NewEncoder(w).Encode(apiClient); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		result, err := handler(t.Context(), req)
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyLabel: longviewClientLabel})
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "success should not be an error")
-		require.NotEmpty(t, result.Content, "result should include content")
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Longview client created successfully")
-		assert.Contains(t, textContent.Text, longviewClientAPIKey)
-		assert.Contains(t, textContent.Text, longviewClientInstall)
-	})
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/longview/clients", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		t.Cleanup(srv.Close)
+	if len(result.Content) == 0 {
+		t.Fatal("result.Content is empty")
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
-		req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyLabel: longviewClientLabel})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		result, err := handler(t.Context(), req)
+	if !strings.Contains(textContent.Text, "Longview client created successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Longview client created successfully")
+	}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to create linode_longview_client_create")
-		assertErrorContains(t, result, errForbidden)
-	})
+	if !strings.Contains(textContent.Text, longviewClientAPIKey) {
+		t.Errorf("textContent.Text does not contain %v", longviewClientAPIKey)
+	}
+
+	if !strings.Contains(textContent.Text, longviewClientInstall) {
+		t.Errorf("textContent.Text does not contain %v", longviewClientInstall)
+	}
+}
+
+func TestLinodeLongviewClientCreateToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != longviewClientsBasePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, longviewClientsBasePath)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeLongviewClientCreateTool(cfg)
+	req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyLabel: longviewClientLabel})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_longview_client_create") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_longview_client_create")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }

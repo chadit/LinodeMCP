@@ -2,6 +2,7 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -19,57 +20,102 @@ func TestClientDeleteMonitorServiceAlertDefinitionSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		monitorCheckEqual(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
-		monitorCheckEmpty(t, r.URL.RawQuery, "request query should be empty")
-		monitorCheckEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != monitorServiceAlertDefinitionDeletePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceAlertDefinitionDeletePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionID)
 
-	monitorRequireNoError(t, err)
+	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteMonitorServiceAlertDefinitionEscapesPathParams(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, monitorServiceAlertDefinitionEscapedDeletePath, r.URL.EscapedPath(), "request path should be escaped")
-		w.Header().Set("Content-Type", "application/json")
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.URL.EscapedPath() != monitorServiceAlertDefinitionEscapedDeletePath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), monitorServiceAlertDefinitionEscapedDeletePath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeWithSlash, monitorAlertDefinitionID)
 
-	monitorRequireNoError(t, err)
+	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeWithSlash, monitorAlertDefinitionID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteMonitorServiceAlertDefinitionAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		monitorCheckEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		monitorCheckEqual(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != monitorServiceAlertDefinitionDeletePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceAlertDefinitionDeletePath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		monitorCheckNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	monitorRequireError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
 
-	apiErr := monitorRequireAPIError(t, err)
-	monitorCheckEqual(t, http.StatusForbidden, apiErr.StatusCode)
-	monitorCheckEqual(t, errForbidden, apiErr.Message)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientDeleteMonitorServiceAlertDefinitionDoesNotRetryTransientError(t *testing.T) {
@@ -79,15 +125,27 @@ func TestClientDeleteMonitorServiceAlertDefinitionDoesNotRetryTransientError(t *
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		monitorCheckEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		monitorCheckEqual(t, monitorServiceAlertDefinitionDeletePath, r.URL.Path, "request path should match")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != monitorServiceAlertDefinitionDeletePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceAlertDefinitionDeletePath)
+		}
+
 		http.Error(w, "temporary", http.StatusServiceUnavailable)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionID)
 
-	monitorRequireError(t, err)
-	monitorCheckEqual(t, int32(1), calls.Load(), "destructive route must not retry after transient failure")
+	err := client.DeleteMonitorServiceAlertDefinition(t.Context(), monitorServiceTypeDatabase, monitorAlertDefinitionID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }

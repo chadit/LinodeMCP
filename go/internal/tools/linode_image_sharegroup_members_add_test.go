@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -17,67 +19,115 @@ import (
 
 const imageShareGroupMembersAddToolName = "linode_image_sharegroup_members_add"
 
-func TestLinodeImageShareGroupMembersAddTool(t *testing.T) {
+func TestLinodeImageShareGroupMembersAddToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeImageShareGroupMembersAddTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeImageShareGroupMembersAddTool(&config.Config{})
+	if tool.Name != imageShareGroupMembersAddToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, imageShareGroupMembersAddToolName)
+	}
 
-		shareGroupAssertEqual(t, imageShareGroupMembersAddToolName, tool.Name, "tool name should match")
-		shareGroupAssertEqual(t, profiles.CapWrite, capability, "tool should be write capability")
-		shareGroupAssertNotEmpty(t, tool.Description, "tool should have a description")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyLabel, "schema should include label")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyToken, "schema should include token")
-		shareGroupAssertContains(t, tool.InputSchema.Properties, keyConfirm, "mutating member add tool must require confirm")
-		shareGroupRequireNotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			shareGroupAssertEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			shareGroupAssertEqual(t, "/images/sharegroups/54321/members", r.URL.Path, "request path should include share group ID")
-			shareGroupAssertEmpty(t, r.URL.RawQuery, "request query should be empty")
-			shareGroupAssertEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+	for _, key := range []string{keyShareGroupID, keyLabel, keyToken, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
 
-			var body map[string]any
-			shareGroupAssertNoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-			shareGroupAssertEqual(t, memberLabelFixture, body[keyLabel], "label should be sent")
-			shareGroupAssertEqual(t, memberTokenFixture, body[keyToken], "token should be sent")
-
-			w.Header().Set("Content-Type", "application/json")
-			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyBetaID:       54321,
-				keyLabel:        "Engineering Share Group",
-				keyDescription:  "Shared engineering images",
-				"members_count": 1,
-			}))
-		}))
-		t.Cleanup(srv.Close)
-
-		_, _, handler := tools.NewLinodeImageShareGroupMembersAddTool(imageShareGroupMembersAddConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyShareGroupID: 54321,
-			keyLabel:        " Engineering ",
-			keyToken:        " member-token ",
-			keyConfirm:      true,
-		}))
-
-		shareGroupRequireNoError(t, err, "handler should not return an error")
-		shareGroupRequireNotNil(t, result, "result should not be nil")
-		shareGroupAssertFalse(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		shareGroupRequireTrue(t, ok, "content should be TextContent")
-		shareGroupAssertContains(t, textContent.Text, "Added members", "response should include success message")
-		shareGroupAssertContains(t, textContent.Text, "Engineering Share Group", "response should include share group label")
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodeImageShareGroupMembersAddToolValidation(t *testing.T) {
+func TestLinodeImageShareGroupMembersAddToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/images/sharegroups/54321/members" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/images/sharegroups/54321/members")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !reflect.DeepEqual(body[keyLabel], memberLabelFixture) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], memberLabelFixture)
+		}
+
+		if !reflect.DeepEqual(body[keyToken], memberTokenFixture) {
+			t.Errorf("body[keyToken] = %v, want %v", body[keyToken], memberTokenFixture)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyBetaID:       54321,
+			keyLabel:        "Engineering Share Group",
+			keyDescription:  "Shared engineering images",
+			"members_count": 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeImageShareGroupMembersAddTool(imageShareGroupMembersAddConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyShareGroupID: 54321,
+		keyLabel:        " Engineering ",
+		keyToken:        " member-token ",
+		keyConfirm:      true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Added members") {
+		t.Errorf("textContent.Text does not contain %v", "Added members")
+	}
+
+	if !strings.Contains(textContent.Text, "Engineering Share Group") {
+		t.Errorf("textContent.Text does not contain %v", "Engineering Share Group")
+	}
+}
+
+func TestLinodeImageShareGroupMembersAddToolValidationClientErrorConfirm(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
@@ -100,13 +150,27 @@ func TestLinodeImageShareGroupMembersAddToolValidation(t *testing.T) {
 			}
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			shareGroupRequireNoError(t, err)
-			shareGroupRequireNotNil(t, result)
-			shareGroupAssertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
-			shareGroupAssertEqual(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
+
+func TestLinodeImageShareGroupMembersAddToolValidationClientErrorArgs(t *testing.T) {
+	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
 		"invalid sharegroup id":            {keyShareGroupID: 0, keyLabel: memberLabelFixture, keyToken: memberTokenFixture, keyConfirm: true},
@@ -129,38 +193,61 @@ func TestLinodeImageShareGroupMembersAddToolValidation(t *testing.T) {
 			t.Cleanup(closeServer)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			shareGroupRequireNoError(t, err)
-			shareGroupRequireNotNil(t, result)
-			shareGroupAssertTrue(t, result.IsError, "invalid input should be an error result")
-			shareGroupAssertEqual(t, int32(0), calls.Load(), "input validation must happen before client call")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
 		})
 	}
+}
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeImageShareGroupMembersAddToolValidationClientErrorDirect(t *testing.T) {
+	t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			shareGroupAssertNoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
 
-		_, _, handler := tools.NewLinodeImageShareGroupMembersAddTool(imageShareGroupMembersAddConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyShareGroupID: 54321,
-			keyLabel:        memberLabelFixture,
-			keyToken:        memberTokenFixture,
-			keyConfirm:      true,
-		}))
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	_, _, handler := tools.NewLinodeImageShareGroupMembersAddTool(imageShareGroupMembersAddConfig(srv.URL))
 
-		shareGroupRequireNoError(t, err)
-		shareGroupRequireNotNil(t, result)
-		shareGroupAssertTrue(t, result.IsError, "upstream API error should be an error result")
-		assertErrorContains(t, result, "Failed to add members to image share group")
-	})
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyShareGroupID: 54321,
+		keyLabel:        memberLabelFixture,
+		keyToken:        memberTokenFixture,
+		keyConfirm:      true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to add members to image share group") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to add members to image share group")
+	}
 }
 
 func imageShareGroupMembersAddConfig(apiURL string) *config.Config {

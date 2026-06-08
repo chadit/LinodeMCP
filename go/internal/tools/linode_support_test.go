@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -30,520 +31,889 @@ const (
 )
 
 // End-to-end verification of support ticket listing.
-func TestLinodeSupportTicketsTool(t *testing.T) {
+func TestLinodeSupportTicketsToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeSupportTicketsTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeSupportTicketsTool(cfg)
+	if tool.Name != "linode_support_tickets" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_tickets")
+	}
 
-		assert.Equal(t, "linode_support_tickets", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-		tickets := linode.PaginatedResponse[linode.SupportTicket]{
-			Data:    []linode.SupportTicket{{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}},
-			Page:    2,
-			Pages:   3,
-			Results: 75,
-		}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(tickets))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeSupportTicketsTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, supportTicketSummary, "response should contain ticket summary")
-		assert.Contains(t, textContent.Text, supportTicketOpenedBy, "response should contain opener")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeSupportTicketsTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve linode_support_tickets", "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
-
-	t.Run("invalid pagination rejects before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
-			{name: paginationCasePageFractional, args: map[string]any{keyPage: 1.5}, wantMessage: errPageInteger},
-			{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
-			{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
-		}
-
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeSupportTicketsTool(cfg)
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid pagination should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
-		}
-	})
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 }
 
-func TestLinodeSupportTicketRepliesTool(t *testing.T) {
+func TestLinodeSupportTicketsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tickets := linode.PaginatedResponse[linode.SupportTicket]{
+		Data:    []linode.SupportTicket{{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
-
-		assert.Equal(t, "linode_support_ticket_replies", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, supportTicketIDKey, "schema should include ticket_id")
-		assert.Contains(t, tool.InputSchema.Required, supportTicketIDKey, "ticket_id must be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		replies := linode.PaginatedResponse[linode.SupportTicketReply]{
-			Data:    []linode.SupportTicketReply{{ID: 22222, Description: "We are investigating this ticket.", CreatedBy: supportTicketOpenedBy}},
-			Page:    2,
-			Pages:   3,
-			Results: 75,
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/support/tickets/11111/replies", r.URL.Path, "request path should include ticket ID and replies")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(replies))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111, keyPage: 2, keyPageSize: 25})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "We are investigating this ticket.", "response should contain reply description")
-		assert.Contains(t, textContent.Text, supportTicketOpenedBy, "response should contain reply creator")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/support/tickets/11111/replies", r.URL.Path, "request path should include ticket ID and replies")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve linode_support_ticket_replies", "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
-
-	t.Run("invalid arguments reject before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: caseMissing, args: map[string]any{}, wantMessage: errSupportTicketIDRequired},
-			{name: caseZero, args: map[string]any{supportTicketIDKey: 0}, wantMessage: errSupportTicketID},
-			{name: caseNegative, args: map[string]any{supportTicketIDKey: -1}, wantMessage: errSupportTicketID},
-			{name: caseString, args: map[string]any{supportTicketIDKey: "11111"}, wantMessage: errSupportTicketID},
-			{name: "path separator ticket id", args: map[string]any{supportTicketIDKey: pathSeparatorValue}, wantMessage: errSupportTicketID},
-			{name: "query separator ticket id", args: map[string]any{supportTicketIDKey: querySeparatorValue}, wantMessage: errSupportTicketID},
-			{name: "traversal ticket id", args: map[string]any{supportTicketIDKey: pathTraversalValue}, wantMessage: errSupportTicketID},
-			{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: 1.5}, wantMessage: errSupportTicketID},
-			{name: paginationCasePageZero, args: map[string]any{supportTicketIDKey: 11111, keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-			{name: paginationCasePageSizeString, args: map[string]any{supportTicketIDKey: 11111, keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+		if r.URL.Path != tcSupportTickets {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid arguments should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
+		if r.URL.RawQuery != longviewSubscriptionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsToolQuery)
 		}
-	})
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(tickets); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeSupportTicketsTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, supportTicketSummary) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketSummary)
+	}
+
+	if !strings.Contains(textContent.Text, supportTicketOpenedBy) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketOpenedBy)
+	}
 }
 
-func TestLinodeSupportTicketGetTool(t *testing.T) {
+func TestLinodeSupportTicketsToolApiError(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeSupportTicketGetTool(cfg)
-
-		assert.Equal(t, "linode_support_ticket_get", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, supportTicketIDKey, "schema should include ticket_id")
-		assert.Contains(t, tool.InputSchema.Required, supportTicketIDKey, "ticket_id must be required")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		ticket := linode.SupportTicket{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/support/tickets/11111", r.URL.Path, "request path should include ticket ID")
-			assert.Empty(t, r.URL.RawQuery, "get ticket should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
-
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(ticket))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeSupportTicketGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, supportTicketSummary, "response should contain ticket summary")
-		assert.Contains(t, textContent.Text, supportTicketOpenedBy, "response should contain opener")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/support/tickets/11111", r.URL.Path, "request path should include ticket ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeSupportTicketGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve linode_support_ticket_get", "response should identify failed tool")
-		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
-	})
-
-	t.Run("invalid ticket id rejects before client", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name        string
-			args        map[string]any
-			wantMessage string
-		}{
-			{name: caseMissing, args: map[string]any{}, wantMessage: errSupportTicketIDRequired},
-			{name: caseZero, args: map[string]any{supportTicketIDKey: 0}, wantMessage: errSupportTicketID},
-			{name: caseNegative, args: map[string]any{supportTicketIDKey: -1}, wantMessage: errSupportTicketID},
-			{name: caseString, args: map[string]any{supportTicketIDKey: "11111"}, wantMessage: errSupportTicketID},
-			{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: 1.5}, wantMessage: errSupportTicketID},
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeSupportTicketGetTool(cfg)
-				req := createRequestWithArgs(t, testCase.args)
-				result, err := handler(t.Context(), req)
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid ticket_id should be an error result")
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				require.True(t, ok, "content should be TextContent")
-				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
-			})
+		if r.URL.Path != tcSupportTickets {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcSupportTickets)
 		}
-	})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeSupportTicketsTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_tickets") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_tickets")
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
 }
 
-func TestLinodeSupportTicketCloseTool(t *testing.T) {
+func TestLinodeSupportTicketsToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+		{name: paginationCasePageFractional, args: map[string]any{keyPage: 1.5}, wantMessage: errPageInteger},
+		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+		{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	}
 
-		tool, capability, handler := tools.NewLinodeSupportTicketCloseTool(&config.Config{})
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-		assert.Equal(t, "linode_support_ticket_close", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "closing support ticket mutates state")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeSupportTicketsTool(cfg)
+			req := createRequestWithArgs(t, testCase.args)
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, supportTicketIDKey, "schema should include ticket_id")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-		assert.Contains(t, props, keyDryRun, "schema should include dry_run")
-		assert.Contains(t, tool.InputSchema.Required, supportTicketIDKey, "ticket_id must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-	t.Run("requires confirm before client", func(t *testing.T) {
-		t.Parallel()
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		cases := []struct {
-			name  string
-			value any
-			set   bool
-		}{
-			{name: caseMissingConfirm, set: false},
-			{name: caseRequiresConfirm, value: false, set: true},
-			{name: caseString, value: boolStringTrue, set: true},
-			{name: caseNumeric, value: 1, set: true},
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodeSupportTicketRepliesToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
+
+	if tool.Name != "linode_support_ticket_replies" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_ticket_replies")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if _, ok := tool.InputSchema.Properties[supportTicketIDKey]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", supportTicketIDKey)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, supportTicketIDKey) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", supportTicketIDKey)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeSupportTicketRepliesToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	replies := linode.PaginatedResponse[linode.SupportTicketReply]{
+		Data:    []linode.SupportTicketReply{{ID: 22222, Description: "We are investigating this ticket.", CreatedBy: supportTicketOpenedBy}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				handler, cleanup := newSupportTicketCloseHandler(t, &calls)
-				defer cleanup()
-
-				args := map[string]any{supportTicketIDKey: float64(11111)}
-				if testCase.set {
-					args[keyConfirm] = testCase.value
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "result should be a tool error")
-				assertErrorContains(t, result, errConfirmEqualsTrue)
-				assert.Equal(t, int32(0), calls.Load(), "confirm failure must happen before client call")
-			})
-		}
-	})
-
-	t.Run("rejects invalid ticket id", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			args map[string]any
-		}{
-			{name: caseMissingTicketID, args: map[string]any{keyConfirm: true}},
-			{name: caseZeroTicketID, args: map[string]any{supportTicketIDKey: float64(0), keyConfirm: true}},
-			{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: float64(1.5), keyConfirm: true}},
-			{name: "string ticket id", args: map[string]any{supportTicketIDKey: "11111", keyConfirm: true}},
-			{name: "slash ticket id", args: map[string]any{supportTicketIDKey: "11/111", keyConfirm: true}},
-			{name: "query ticket id", args: map[string]any{supportTicketIDKey: "11111?x=1", keyConfirm: true}},
-			{name: "traversal ticket id", args: map[string]any{supportTicketIDKey: pathTraversalValue, keyConfirm: true}},
+		if r.URL.Path != "/support/tickets/11111/replies" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/11111/replies")
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls atomic.Int32
-
-				handler, cleanup := newSupportTicketCloseHandler(t, &calls)
-				defer cleanup()
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should return validation as a tool error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid ticket_id should be an error result")
-				assertErrorContains(t, result, supportTicketIDKey)
-				assert.Equal(t, int32(0), calls.Load(), "validation must fail before client call")
-			})
+		if r.URL.RawQuery != longviewSubscriptionsToolQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsToolQuery)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/support/tickets/11111/close", r.URL.Path, "request path should close the support ticket")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
-		}))
-		defer srv.Close()
+		if err := json.NewEncoder(w).Encode(replies); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-		_, _, handler := tools.NewLinodeSupportTicketCloseTool(supportTicketCloseConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketIDKey: float64(11111), keyConfirm: true}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Support ticket closed successfully", "response should include success message")
-		assert.Contains(t, textContent.Text, "11111", "response should include ticket ID")
-	})
+	req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111, keyPage: 2, keyPageSize: 25})
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/support/tickets/11111/close", r.URL.Path, "request path should close the support ticket")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		_, _, handler := tools.NewLinodeSupportTicketCloseTool(supportTicketCloseConfig(srv.URL))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketIDKey: float64(11111), keyConfirm: true}))
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to close linode_support_ticket_close")
-		assertErrorContains(t, result, errForbidden)
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-	t.Run("dry run", func(t *testing.T) {
-		t.Parallel()
+	if !strings.Contains(textContent.Text, "We are investigating this ticket.") {
+		t.Errorf("textContent.Text does not contain %v", "We are investigating this ticket.")
+	}
 
-		_, _, handler := tools.NewLinodeSupportTicketCloseTool(dryRunNoCallServer(t))
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketIDKey: float64(11111), keyDryRun: true}))
+	if !strings.Contains(textContent.Text, supportTicketOpenedBy) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketOpenedBy)
+	}
+}
 
-		require.NoError(t, err, "dry run should not return a handler error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry run should succeed without confirm")
-		body := decodeSupportToolJSON(t, result)
-		assert.Equal(t, "linode_support_ticket_close", body["tool"])
-		would, ok := body["would_execute"].(map[string]any)
-		require.True(t, ok, "would_execute should be an object")
-		assert.Equal(t, http.MethodPost, would["method"])
-		assert.Equal(t, "/support/tickets/11111/close", would["path"])
+func TestLinodeSupportTicketRepliesToolApiError(t *testing.T) {
+	t.Parallel()
 
-		sideEffects, _ := body["side_effects"].([]any)
-		require.Len(t, sideEffects, 1, "close surfaces a side effect")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
 
-		effect, gotString := sideEffects[0].(string)
-		require.True(t, gotString)
-		assert.Contains(t, effect, "11111", "side effect should name the ticket")
-	})
+		if r.URL.Path != "/support/tickets/11111/replies" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/11111/replies")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_replies") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_replies")
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeSupportTicketRepliesToolInvalidArgumentsRejectBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: caseMissing, args: map[string]any{}, wantMessage: errSupportTicketIDRequired},
+		{name: caseZero, args: map[string]any{supportTicketIDKey: 0}, wantMessage: errSupportTicketID},
+		{name: caseNegative, args: map[string]any{supportTicketIDKey: -1}, wantMessage: errSupportTicketID},
+		{name: caseString, args: map[string]any{supportTicketIDKey: "11111"}, wantMessage: errSupportTicketID},
+		{name: "path separator ticket id", args: map[string]any{supportTicketIDKey: pathSeparatorValue}, wantMessage: errSupportTicketID},
+		{name: "query separator ticket id", args: map[string]any{supportTicketIDKey: querySeparatorValue}, wantMessage: errSupportTicketID},
+		{name: "traversal ticket id", args: map[string]any{supportTicketIDKey: pathTraversalValue}, wantMessage: errSupportTicketID},
+		{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: 1.5}, wantMessage: errSupportTicketID},
+		{name: paginationCasePageZero, args: map[string]any{supportTicketIDKey: 11111, keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+		{name: paginationCasePageSizeString, args: map[string]any{supportTicketIDKey: 11111, keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodeSupportTicketGetToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeSupportTicketGetTool(cfg)
+
+	if tool.Name != "linode_support_ticket_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_ticket_get")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if _, ok := tool.InputSchema.Properties[supportTicketIDKey]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", supportTicketIDKey)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, supportTicketIDKey) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", supportTicketIDKey)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeSupportTicketGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	ticket := linode.SupportTicket{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/support/tickets/11111" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/11111")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(ticket); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeSupportTicketGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, supportTicketSummary) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketSummary)
+	}
+
+	if !strings.Contains(textContent.Text, supportTicketOpenedBy) {
+		t.Errorf("textContent.Text does not contain %v", supportTicketOpenedBy)
+	}
+}
+
+func TestLinodeSupportTicketGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != "/support/tickets/11111" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/11111")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeSupportTicketGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{supportTicketIDKey: 11111})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_get") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_get")
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
+	}
+}
+
+func TestLinodeSupportTicketGetToolInvalidTicketIdRejectsBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantMessage string
+	}{
+		{name: caseMissing, args: map[string]any{}, wantMessage: errSupportTicketIDRequired},
+		{name: caseZero, args: map[string]any{supportTicketIDKey: 0}, wantMessage: errSupportTicketID},
+		{name: caseNegative, args: map[string]any{supportTicketIDKey: -1}, wantMessage: errSupportTicketID},
+		{name: caseString, args: map[string]any{supportTicketIDKey: "11111"}, wantMessage: errSupportTicketID},
+		{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: 1.5}, wantMessage: errSupportTicketID},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{}
+			_, _, handler := tools.NewLinodeSupportTicketGetTool(cfg)
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantMessage) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			}
+		})
+	}
+}
+
+func TestLinodeSupportTicketCloseToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeSupportTicketCloseTool(&config.Config{})
+
+	if tool.Name != "linode_support_ticket_close" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_ticket_close")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[supportTicketIDKey]; !ok {
+		t.Errorf("props missing key %v", supportTicketIDKey)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyDryRun]; !ok {
+		t.Errorf("props missing key %v", keyDryRun)
+	}
+
+	for _, key := range []string{supportTicketIDKey, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeSupportTicketCloseToolRequiresConfirmBeforeClient(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseString, value: boolStringTrue, set: true},
+		{name: caseNumeric, value: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			handler, cleanup := newSupportTicketCloseHandler(t, &calls)
+			defer cleanup()
+
+			args := map[string]any{supportTicketIDKey: float64(11111)}
+			if testCase.set {
+				args[keyConfirm] = testCase.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
+				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeSupportTicketCloseToolRejectsInvalidTicketId(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: caseMissingTicketID, args: map[string]any{keyConfirm: true}},
+		{name: caseZeroTicketID, args: map[string]any{supportTicketIDKey: float64(0), keyConfirm: true}},
+		{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: float64(1.5), keyConfirm: true}},
+		{name: "string ticket id", args: map[string]any{supportTicketIDKey: "11111", keyConfirm: true}},
+		{name: "slash ticket id", args: map[string]any{supportTicketIDKey: "11/111", keyConfirm: true}},
+		{name: "query ticket id", args: map[string]any{supportTicketIDKey: "11111?x=1", keyConfirm: true}},
+		{name: "traversal ticket id", args: map[string]any{supportTicketIDKey: pathTraversalValue, keyConfirm: true}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			handler, cleanup := newSupportTicketCloseHandler(t, &calls)
+			defer cleanup()
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, supportTicketIDKey) {
+				t.Errorf("error text %q does not contain %q", text.Text, supportTicketIDKey)
+			}
+
+			if calls.Load() != int32(0) {
+				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeSupportTicketCloseToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/support/tickets/11111/close" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/11111/close")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	_, _, handler := tools.NewLinodeSupportTicketCloseTool(supportTicketCloseConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketIDKey: float64(11111), keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Support ticket closed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Support ticket closed successfully")
+	}
+
+	if !strings.Contains(textContent.Text, "11111") {
+		t.Errorf("textContent.Text does not contain %v", "11111")
+	}
+}
+
+func TestLinodeSupportTicketCloseToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/support/tickets/11111/close" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/support/tickets/11111/close")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	_, _, handler := tools.NewLinodeSupportTicketCloseTool(supportTicketCloseConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketIDKey: float64(11111), keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to close linode_support_ticket_close") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to close linode_support_ticket_close")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeSupportTicketCloseToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeSupportTicketCloseTool(dryRunNoCallServer(t))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketIDKey: float64(11111), keyDryRun: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	body := decodeSupportToolJSON(t, result)
+	if !reflect.DeepEqual(body["tool"], "linode_support_ticket_close") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_support_ticket_close")
+	}
+
+	would, ok := body["would_execute"].(map[string]any)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], http.MethodPost) {
+		t.Errorf("got %v, want %v", would["method"], http.MethodPost)
+	}
+
+	if !reflect.DeepEqual(would["path"], "/support/tickets/11111/close") {
+		t.Errorf("got %v, want %v", would["path"], "/support/tickets/11111/close")
+	}
+
+	sideEffects, _ := body["side_effects"].([]any)
+	if len(sideEffects) != 1 {
+		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
+
+	effect, gotString := sideEffects[0].(string)
+	if !gotString {
+		t.Fatal("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, "11111") {
+		t.Errorf("effect does not contain %v", "11111")
+	}
 }
 
 func supportTicketCloseConfig(apiURL string) *config.Config {
@@ -569,10 +939,14 @@ func decodeSupportToolJSON(t *testing.T, result *mcp.CallToolResult) map[string]
 	t.Helper()
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "content should be TextContent")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	return body
 }

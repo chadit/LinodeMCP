@@ -2,8 +2,11 @@ package server_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -83,9 +86,17 @@ func TestNew(t *testing.T) {
 		t.Parallel()
 
 		srv, err := server.New(nil)
-		requireError(t, err, "New with nil config should return an error")
-		assertNil(t, srv, "server should be nil when config is nil")
-		assertErrorIs(t, err, server.ErrConfigNil, "error should be ErrConfigNil")
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+
+		if srv != nil {
+			t.Errorf("srv = %v, want nil", srv)
+		}
+
+		if !errors.Is(err, server.ErrConfigNil) {
+			t.Errorf("error = %v, want %v", err, server.ErrConfigNil)
+		}
 	})
 
 	t.Run("valid config creates server with full-access profile", func(t *testing.T) {
@@ -99,16 +110,21 @@ func TestNew(t *testing.T) {
 		}
 
 		srv, err := server.New(cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-		requireNoError(t, err, "New with valid config should not return an error")
-		requireNotNil(t, srv, "server should not be nil with valid config")
-		assertNotEmpty(t, srv.Tools(), "full-access should register every tool")
-		assertEqual(
-			t,
-			profiles.BuiltinFullAccess,
-			srv.ActiveProfile().Name,
-			"server should expose the resolved active profile",
-		)
+		if srv == nil {
+			t.Fatal("srv is nil")
+		}
+
+		if len(srv.Tools()) == 0 {
+			t.Error("srv.Tools() is empty")
+		}
+
+		if srv.ActiveProfile().Name != profiles.BuiltinFullAccess {
+			t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profiles.BuiltinFullAccess)
+		}
 	})
 
 	t.Run("tools are registered", func(t *testing.T) {
@@ -118,9 +134,13 @@ func TestNew(t *testing.T) {
 		cfg.Server = config.ServerConfig{Name: "TestMCP", LogLevel: logLevelInfo}
 
 		srv, err := server.New(cfg)
-		requireNoError(t, err, "New should succeed with valid config")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-		assertNotEmpty(t, srv.Tools(), "should have at least one tool registered")
+		if len(srv.Tools()) == 0 {
+			t.Error("srv.Tools() is empty")
+		}
 	})
 }
 
@@ -140,12 +160,22 @@ func TestToolWrapperMethods(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err, "New should succeed with valid config")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for _, tool := range srv.Tools() {
-		assertNotEmpty(t, tool.Name(), "tool name should not be empty")
-		assertNotEmpty(t, tool.Description(), "tool description should not be empty")
-		assertNotNil(t, tool.InputSchema(), "tool input schema should not be nil")
+		if tool.Name() == "" {
+			t.Error("tool.Name() is empty")
+		}
+
+		if tool.Description() == "" {
+			t.Error("tool.Description() is empty")
+		}
+
+		if tool.InputSchema() == nil {
+			t.Error("tool.InputSchema() is nil")
+		}
 	}
 }
 
@@ -230,34 +260,70 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_monitor_service_alert_definition_get":        profiles.CapRead,
 		"linode_monitor_service_alert_definition_delete":     profiles.CapDestroy,
 
-		"linode_monitor_service_alert_definition_update":        profiles.CapWrite,
-		"linode_monitor_dashboards":                             profiles.CapRead,
-		"linode_monitor_dashboard_get":                          profiles.CapRead,
-		"linode_monitor_alert_definitions":                      profiles.CapRead,
-		"linode_monitor_alert_channels":                         profiles.CapRead,
-		"linode_longview_client_create":                         profiles.CapAdmin,
-		"linode_longview_plan_update":                           profiles.CapAdmin,
-		"linode_betas":                                          profiles.CapRead,
-		"linode_beta_get":                                       profiles.CapRead,
-		"linode_account_betas":                                  profiles.CapRead,
-		"linode_profile_phone_number_send":                      profiles.CapWrite,
-		"linode_profile_phone_number_delete":                    profiles.CapDestroy,
-		"linode_profile_phone_number_verify":                    profiles.CapWrite,
-		"linode_profile_tfa_disable":                            profiles.CapAdmin,
-		"linode_profile_tfa_enable_confirm":                     profiles.CapAdmin,
-		"linode_profile_tokens":                                 profiles.CapRead,
-		"linode_profile_token_update":                           profiles.CapAdmin,
-		"linode_profile_logins":                                 profiles.CapRead,
-		"linode_profile_preferences_update":                     profiles.CapWrite,
-		"linode_profile_security_questions":                     profiles.CapRead,
-		"linode_profile_devices":                                profiles.CapRead,
-		"linode_profile_login_get":                              profiles.CapRead,
-		"linode_profile_app_get":                                profiles.CapRead,
-		"linode_profile_app_delete":                             profiles.CapDestroy,
-		"linode_profile_device_get":                             profiles.CapRead,
-		"linode_profile_device_revoke":                          profiles.CapDestroy,
-		"linode_account_oauth_clients":                          profiles.CapRead,
-		"linode_profile_apps":                                   profiles.CapRead,
+		"linode_monitor_service_alert_definition_update": profiles.CapWrite,
+		"linode_monitor_dashboards":                      profiles.CapRead,
+		"linode_monitor_dashboard_get":                   profiles.CapRead,
+		"linode_monitor_alert_definitions":               profiles.CapRead,
+		"linode_monitor_alert_channels":                  profiles.CapRead,
+		"linode_longview_client_create":                  profiles.CapAdmin,
+		"linode_longview_plan_update":                    profiles.CapAdmin,
+		"linode_betas":                                   profiles.CapRead,
+		"linode_beta_get":                                profiles.CapRead,
+		"linode_account_betas":                           profiles.CapRead,
+		"linode_profile_phone_number_send":               profiles.CapWrite,
+		"linode_profile_phone_number_delete":             profiles.CapDestroy,
+		"linode_profile_phone_number_verify":             profiles.CapWrite,
+		"linode_profile_tfa_disable":                     profiles.CapAdmin,
+		"linode_profile_tfa_enable_confirm":              profiles.CapAdmin,
+		"linode_profile_tokens":                          profiles.CapRead,
+		"linode_profile_token_update":                    profiles.CapAdmin,
+		"linode_profile_logins":                          profiles.CapRead,
+		"linode_profile_preferences_update":              profiles.CapWrite,
+		"linode_profile_security_questions":              profiles.CapRead,
+		"linode_profile_devices":                         profiles.CapRead,
+		"linode_profile_login_get":                       profiles.CapRead,
+		"linode_profile_app_get":                         profiles.CapRead,
+		"linode_profile_app_delete":                      profiles.CapDestroy,
+		"linode_profile_device_get":                      profiles.CapRead,
+		"linode_profile_device_revoke":                   profiles.CapDestroy,
+		"linode_account_oauth_clients":                   profiles.CapRead,
+		"linode_profile_apps":                            profiles.CapRead,
+	}
+
+	registeredNames := make(map[string]struct{}, len(descriptors))
+	for _, descriptor := range descriptors {
+		registeredNames[descriptor.Name] = struct{}{}
+		if capability, ok := want[descriptor.Name]; ok {
+			if descriptor.Capability != capability {
+				t.Errorf("descriptor.Capability = %v, want %v", descriptor.Capability, capability)
+			}
+
+			delete(want, descriptor.Name)
+		}
+	}
+
+	if _, ok := registeredNames["linode_account_entity_transfers"]; ok {
+		t.Errorf("registeredNames has unexpected key %v", "linode_account_entity_transfers")
+	}
+
+	if _, ok := registeredNames["linode_account_entity_transfer_create"]; ok {
+		t.Errorf("registeredNames has unexpected key %v", "linode_account_entity_transfer_create")
+	}
+
+	if _, ok := registeredNames["linode_account_entity_transfer_get"]; ok {
+		t.Errorf("registeredNames has unexpected key %v", "linode_account_entity_transfer_get")
+	}
+
+	if len(want) != 0 {
+		t.Errorf("want = %v, want empty", want)
+	}
+}
+
+func TestToolDescriptorsIncludesExpectedToolsExtra(t *testing.T) {
+	t.Parallel()
+
+	descriptors := server.ToolDescriptors(baseTestConfig())
+	want := map[string]profiles.Capability{
 		"linode_longview_clients":                               profiles.CapRead,
 		"linode_longview_client_update":                         profiles.CapAdmin,
 		"linode_longview_client_delete":                         profiles.CapDestroy,
@@ -317,9 +383,9 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_engine_list":                           profiles.CapRead,
 		"linode_database_type_list":                             profiles.CapRead,
 		"linode_database_type_get":                              profiles.CapRead,
-		"linode_nodebalancer_config_get":                        profiles.CapRead,
+		tcLinodeNodebalancerConfigGet:                           profiles.CapRead,
 		"linode_nodebalancer_firewall_update":                   profiles.CapWrite,
-		"linode_nodebalancer_config_rebuild":                    profiles.CapWrite,
+		tcLinodeNodebalancerConfigRebuild:                       profiles.CapWrite,
 		"linode_database_engine_get":                            profiles.CapRead,
 		"linode_database_mysql_config_get":                      profiles.CapRead,
 		"linode_database_postgresql_config_get":                 profiles.CapRead,
@@ -364,33 +430,39 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_instance_firewall_list":                         profiles.CapRead,
 	}
 
-	registeredNames := make(map[string]struct{}, len(descriptors))
 	for _, descriptor := range descriptors {
-		registeredNames[descriptor.Name] = struct{}{}
 		if capability, ok := want[descriptor.Name]; ok {
-			assertEqual(t, capability, descriptor.Capability, "descriptor capability should match")
+			if descriptor.Capability != capability {
+				t.Errorf("descriptor.Capability = %v, want %v", descriptor.Capability, capability)
+			}
+
 			delete(want, descriptor.Name)
 		}
 	}
 
-	assertNotContains(t, registeredNames, "linode_account_entity_transfers", "deprecated entity transfer list tool should not be registered")
-	assertNotContains(t, registeredNames, "linode_account_entity_transfer_create", "deprecated entity-transfer create route should not be registered")
-	assertNotContains(t, registeredNames, "linode_account_entity_transfer_get", "deprecated entity transfer get tool should not be registered")
-	assertEmpty(t, want, "expected descriptors should be registered")
+	if len(want) != 0 {
+		t.Errorf("want = %v, want empty", want)
+	}
 }
 
 func TestDeprecatedAccountEntityTransfersListToolRemoved(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(baseTestConfig())
-	requireNoError(t, err, "server should initialize")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for _, tool := range srv.Tools() {
-		assertNotEqual(t, "linode_account_entity_transfers", tool.Name(), "deprecated entity transfer list tool should not be registered")
+		if tool.Name() == "linode_account_entity_transfers" {
+			t.Errorf("tool.Name() = %v, do not want %v", tool.Name(), "linode_account_entity_transfers")
+		}
 	}
 
 	for _, descriptor := range srv.ToolCatalog() {
-		assertNotEqual(t, "linode_account_entity_transfers", descriptor.Name, "deprecated entity transfer list tool should not be in the catalog")
+		if descriptor.Name == "linode_account_entity_transfers" {
+			t.Errorf("descriptor.Name = %v, do not want %v", descriptor.Name, "linode_account_entity_transfers")
+		}
 	}
 }
 
@@ -411,12 +483,22 @@ func TestToolWrapperExecuteReturnsError(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err, "New should succeed with valid config")
-	requireNotEmpty(t, srv.Tools(), "server should have registered tools")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(srv.Tools()) == 0 {
+		t.Fatal("srv.Tools() is empty")
+	}
 
 	result, execErr := srv.Tools()[0].Execute(t.Context(), nil)
-	assertNil(t, result, "Execute should return nil result")
-	assertErrorIs(t, execErr, server.ErrExecuteNotImplemented, "Execute should return ErrExecuteNotImplemented")
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+
+	if !errors.Is(execErr, server.ErrExecuteNotImplemented) {
+		t.Errorf("error = %v, want %v", execErr, server.ErrExecuteNotImplemented)
+	}
 }
 
 // TestShutdownReturnsImmediatelyWithNoInflight verifies that Shutdown does
@@ -429,7 +511,9 @@ func TestShutdownReturnsImmediatelyWithNoInflight(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
-	requireNoError(t, srv.Shutdown(ctx), "Shutdown should return nil with no in-flight handlers")
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // TestShutdownDrainsInflightHandlers dispatches a blocking tool call through
@@ -454,7 +538,9 @@ func TestShutdownDrainsInflightHandlers(t *testing.T) {
 		defer close(dispatchDone)
 
 		response := srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
-		assertNotNil(t, response, "HandleMessage should return a JSON-RPC response")
+		if response == nil {
+			t.Error("response is nil")
+		}
 	}()
 
 	waitForHandlerEntry(t, handlerEntered)
@@ -476,7 +562,10 @@ func TestShutdownDrainsInflightHandlers(t *testing.T) {
 
 	close(releaseHandler)
 
-	requireNoError(t, <-shutdownDone, "Shutdown should drain the in-flight call")
+	if err := <-shutdownDone; err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	waitForDispatchDone(t, dispatchDone)
 }
 
@@ -503,7 +592,9 @@ func TestShutdownTimesOutOnStuckHandler(t *testing.T) {
 		defer close(dispatchDone)
 
 		response := srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
-		assertNotNil(t, response, "HandleMessage should return a JSON-RPC response")
+		if response == nil {
+			t.Error("response is nil")
+		}
 	}()
 
 	waitForHandlerEntry(t, handlerEntered)
@@ -515,8 +606,10 @@ func TestShutdownTimesOutOnStuckHandler(t *testing.T) {
 
 	close(releaseHandler)
 
-	requireError(t, err, "Shutdown should return an error when the drain times out")
-	requireErrorIs(t, err, context.DeadlineExceeded, "Shutdown should wrap the context error")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want %v", err, context.DeadlineExceeded)
+	}
+
 	waitForDispatchDone(t, dispatchDone)
 }
 
@@ -546,7 +639,9 @@ func newTestServerWithAPIURL(t *testing.T, apiURL string) *server.Server {
 	}
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err, "test server construction should succeed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	return srv
 }
@@ -574,8 +669,11 @@ func newBlockingAccountServer(t *testing.T, handlerEntered chan<- struct{}, rele
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+
 		_, err := w.Write([]byte(`{}`))
-		assertNoError(t, err, "blocking account response should write")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 }
 
@@ -611,78 +709,117 @@ func TestHelloToolHandlerDispatch(t *testing.T) {
 	request.Params.Arguments = map[string]any{"name": serverNameTest}
 
 	result, err := handler(t.Context(), request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "hello handler should not return an error")
-	requireNotNil(t, result, "hello handler should return a result")
-	requireLen(t, result.Content, 1, "result should have exactly one content item")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result.Content) != 1 {
+		t.Fatalf("len(result.Content) = %d, want %d", len(result.Content), 1)
+	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
-	requireTrue(t, ok, "first content item should be TextContent")
-	assertContains(t, textContent.Text, "Hello, Test!", "greeting should contain the provided name")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Hello, Test!") {
+		t.Errorf("textContent.Text does not contain %v", "Hello, Test!")
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigList(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_list", Capability: profiles.CapRead})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
+	}
+
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead})
+	}
+
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_list", Capability: profiles.CapRead}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_list", Capability: profiles.CapRead})
+	}
+
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigGet, Capability: profiles.CapRead}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigGet, Capability: profiles.CapRead})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigNodesList(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_nodes_list", Capability: profiles.CapRead})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_nodes_list", Capability: profiles.CapRead}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_nodes_list", Capability: profiles.CapRead})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigNodeGet(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigCreate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerNodeCreate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_create", Capability: profiles.CapWrite})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_create", Capability: profiles.CapWrite}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_node_create", Capability: profiles.CapWrite})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerNodeDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_delete", Capability: profiles.CapDestroy})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_delete", Capability: profiles.CapDestroy}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_node_delete", Capability: profiles.CapDestroy})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigUpdate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigRebuild(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_rebuild", Capability: profiles.CapWrite})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigRebuild, Capability: profiles.CapWrite}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigRebuild, Capability: profiles.CapWrite})
+	}
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	assertContains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy})
+	}
 }

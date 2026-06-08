@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -24,26 +23,55 @@ const (
 	vlanInterfaceUpdateJSON           = `{"vlan":{"vlan_label":"backend","ipam_address":"10.0.0.1/24"}}`
 )
 
-func TestLinodeInstanceInterfaceUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceInterfaceUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}}}}
 	tool, capability, handler := tools.NewLinodeInstanceInterfaceUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, toolLinodeInstanceInterfaceUpdate, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "capability should be write")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.Description, "WARNING", "tool description should warn about mutation")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, props, keyInterfaceID, "schema should include interface_id")
-		assert.Contains(t, props, keyInterface, "schema should include interface")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm")
-	})
+	if tool.Name != toolLinodeInstanceInterfaceUpdate {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolLinodeInstanceInterfaceUpdate)
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if !strings.Contains(tool.Description, "WARNING") {
+		t.Errorf("tool.Description does not contain %v", "WARNING")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyLinodeID]; !ok {
+		t.Errorf("props missing key %v", keyLinodeID)
+	}
+
+	if _, ok := props[keyInterfaceID]; !ok {
+		t.Errorf("props missing key %v", keyInterfaceID)
+	}
+
+	if _, ok := props[keyInterface]; !ok {
+		t.Errorf("props missing key %v", keyInterface)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeInstanceInterfaceUpdateToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeInstanceInterfaceUpdateTool(cfg)
 
 	validationTests := []instanceConfigCreateValidationCase{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON}, wantContains: errConfirmEqualsTrue},
@@ -73,98 +101,174 @@ func TestLinodeInstanceInterfaceUpdateTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := handler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-		})
-	}
-
-	t.Run("successful vpc interface update", func(t *testing.T) {
-		t.Parallel()
-
-		updated := linode.InstanceInterface{ID: 456, VPC: &linode.InterfaceVPCConfig{SubnetID: 789}}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-			assert.Equal(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-
-			var got linode.UpdateInstanceInterfaceRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
-
-			if assert.NotNil(t, got.VPC, "vpc interface should be sent") {
-				assert.Equal(t, 456, got.VPC.SubnetID, "subnet id should match request JSON")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(updated), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: vpcInterfaceUpdateJSON, keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
+		})
+	}
+}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+func TestLinodeInstanceInterfaceUpdateToolSuccessfulVpcInterfaceUpdate(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "456", "response should contain interface ID")
-		assert.Contains(t, textContent.Text, "Interface 456 updated on instance 123", "response should contain message")
-	})
+	updated := linode.InstanceInterface{ID: 456, VPC: &linode.InterfaceVPCConfig{SubnetID: 789}}
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true})
-		result, err := srvHandler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update interface 456 on instance 123")
-	})
-
-	t.Run("accepts public and vlan interface bodies", func(t *testing.T) {
-		t.Parallel()
-
-		var calls atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			calls.Add(1)
-
-			assert.Equal(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456}), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
-
-		for _, body := range []string{publicInterfaceUpdateJSON, vlanInterfaceUpdateJSON} {
-			req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: body, keyConfirm: true})
-			result, err := srvHandler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.False(t, result.IsError, "result should not be a tool error")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
 		}
 
-		assert.Equal(t, int32(2), calls.Load(), "both interface body shapes should call upstream")
-	})
+		if r.URL.Path != tcLinodeInstances123Interfaces456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces456)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		var got linode.UpdateInstanceInterfaceRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if got.VPC == nil {
+			t.Fatal("vpc interface should be sent")
+		}
+
+		if got.VPC.SubnetID != 456 {
+			t.Errorf("got.VPC.SubnetID = %v, want %v", got.VPC.SubnetID, 456)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(updated); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: vpcInterfaceUpdateJSON, keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "456") {
+		t.Errorf("textContent.Text does not contain %v", "456")
+	}
+
+	if !strings.Contains(textContent.Text, "Interface 456 updated on instance 123") {
+		t.Errorf("textContent.Text does not contain %v", "Interface 456 updated on instance 123")
+	}
+}
+
+func TestLinodeInstanceInterfaceUpdateToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true})
+
+	result, err := srvHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update interface 456 on instance 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update interface 456 on instance 123")
+	}
+}
+
+func TestLinodeInstanceInterfaceUpdateToolAcceptsPublicAndVlanInterfaceBodies(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+
+		if r.URL.Path != tcLinodeInstances123Interfaces456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces456)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
+
+	for _, body := range []string{publicInterfaceUpdateJSON, vlanInterfaceUpdateJSON} {
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: body, keyConfirm: true})
+
+		result, err := srvHandler(t.Context(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+
+		if result.IsError {
+			t.Error("result.IsError = true, want false")
+		}
+	}
+
+	if calls.Load() != int32(2) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
+	}
 }

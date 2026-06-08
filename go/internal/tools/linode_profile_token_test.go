@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -29,194 +32,313 @@ const (
 	caseInvalidScopes           = "invalid_scopes_type"
 )
 
-func TestLinodeProfileTokenCreateTool(t *testing.T) {
+func TestLinodeProfileTokenCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+	if tool.Name != "linode_profile_token_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_token_create")
+	}
 
-		checkEqual(t, "linode_profile_token_create", tool.Name, "tool name should match")
-		checkEqual(t, profiles.CapAdmin, capability, "tool should be admin capability")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectNotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	}
 
-		props := tool.InputSchema.Properties
-		expectContainsWithMode(t, false, props, keyExpiry, "schema should include expiry")
-		expectContainsWithMode(t, false, props, profileTokenLabelParam, "schema should include label")
-		expectContainsWithMode(t, false, props, profileTokenScopesParam, "schema should include scopes")
-		expectContainsWithMode(t, false, props, keyConfirm, "mutating token tool must require confirm")
-		expectContainsWithMode(t, false, props, keyDryRun, "admin tool should expose dry_run")
-		expectContainsWithMode(t, false, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		createdToken := linode.ProfileToken{
-			keyCreated:              profileTokenCreatedFixture,
-			keyExpiry:               profileTokenExpiryFixture,
-			keyID:                   float64(321),
-			keyLabel:                profileTokenLabelFixture,
-			profileTokenScopesParam: profileTokenScopesFixture,
-			keyToken:                profileTokenSecretFixture,
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyExpiry]; !ok {
+		t.Errorf("props missing key %v", keyExpiry)
+	}
+
+	if _, ok := props[profileTokenLabelParam]; !ok {
+		t.Errorf("props missing key %v", profileTokenLabelParam)
+	}
+
+	if _, ok := props[profileTokenScopesParam]; !ok {
+		t.Errorf("props missing key %v", profileTokenScopesParam)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+
+	if _, ok := props[keyDryRun]; !ok {
+		t.Errorf("props missing key %v", keyDryRun)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	}
+}
+
+func TestLinodeProfileTokenCreateToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	createdToken := linode.ProfileToken{
+		keyCreated:              profileTokenCreatedFixture,
+		keyExpiry:               profileTokenExpiryFixture,
+		keyID:                   float64(321),
+		keyLabel:                profileTokenLabelFixture,
+		profileTokenScopesParam: profileTokenScopesFixture,
+		keyToken:                profileTokenSecretFixture,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-			checkEqual(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		if r.URL.Path != tcProfileTokens {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens)
+		}
 
-			var got linode.CreateProfileTokenRequest
-			checkNoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
-			checkEqual(t, profileTokenExpiryFixture, got.Expiry)
-			checkEqual(t, profileTokenLabelFixture, got.Label)
-			checkEqual(t, profileTokenScopesFixture, got.Scopes)
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(createdToken))
-		}))
-		defer srv.Close()
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		cfg := profileTokenTestConfig(srv.URL)
-		_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+		var got linode.CreateProfileTokenRequest
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyExpiry:               profileTokenExpiryFixture,
-			profileTokenLabelParam:  profileTokenLabelFixture,
-			profileTokenScopesParam: profileTokenScopesFixture,
-			keyConfirm:              true,
+		if got.Expiry != profileTokenExpiryFixture {
+			t.Errorf("got.Expiry = %v, want %v", got.Expiry, profileTokenExpiryFixture)
+		}
+
+		if got.Label != profileTokenLabelFixture {
+			t.Errorf("got.Label = %v, want %v", got.Label, profileTokenLabelFixture)
+		}
+
+		if got.Scopes != profileTokenScopesFixture {
+			t.Errorf("got.Scopes = %v, want %v", got.Scopes, profileTokenScopesFixture)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(createdToken); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := profileTokenTestConfig(srv.URL)
+	_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyExpiry:               profileTokenExpiryFixture,
+		profileTokenLabelParam:  profileTokenLabelFixture,
+		profileTokenScopesParam: profileTokenScopesFixture,
+		keyConfirm:              true,
+	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenLabelFixture) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenLabelFixture)
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenScopesFixture) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenScopesFixture)
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenSecretFixture) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenSecretFixture)
+	}
+}
+
+func TestLinodeProfileTokenCreateToolApiErrorReturnsToolError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != tcProfileTokens {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileTokens)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := profileTokenTestConfig(srv.URL)
+	_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		profileTokenLabelParam: profileTokenLabelFixture,
+		keyConfirm:             true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_profile_token_create") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_profile_token_create")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+func TestLinodeProfileTokenCreateToolConfirmGuardRejectsBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		confirm any
+		set     bool
+	}{
+		{name: caseMissing},
+		{name: caseFalse, confirm: false, set: true},
+		{name: caseString, confirm: boolStringTrue, set: true},
+		{name: caseNumber, confirm: 1, set: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var requestCount atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requestCount.Add(1)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer srv.Close()
+
+			cfg := profileTokenTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+
+			args := map[string]any{profileTokenLabelParam: profileTokenLabelFixture}
+			if testCase.set {
+				args[keyConfirm] = testCase.confirm
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
+
+			textContent, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Error("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, profileTokenConfirmRequired) {
+				t.Errorf("textContent.Text does not contain %v", profileTokenConfirmRequired)
+			}
 		})
-		result, err := handler(t.Context(), req)
+	}
+}
 
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		checkFalseWithMode(t, false, result.IsError, "should not be an error result")
+func TestLinodeProfileTokenCreateToolInvalidOptionalFieldRejectsBeforeClientCall(t *testing.T) {
+	t.Parallel()
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContainsWithMode(t, false, textContent.Text, profileTokenLabelFixture, "response should contain token label")
-		expectContainsWithMode(t, false, textContent.Text, profileTokenScopesFixture, "response should contain token scopes")
-		expectContainsWithMode(t, false, textContent.Text, profileTokenSecretFixture, "response should contain token value")
-	})
+	cases := []struct {
+		name    string
+		field   string
+		message string
+	}{
+		{name: caseInvalidExpiry, field: keyExpiry, message: "expiry must be a string"},
+		{name: caseInvalidLabel, field: profileTokenLabelParam, message: errLabelString},
+		{name: caseInvalidScopes, field: profileTokenScopesParam, message: "scopes must be a string"},
+	}
 
-	t.Run("api error returns tool error", func(t *testing.T) {
-		t.Parallel()
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-			checkEqual(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
-		}))
-		defer srv.Close()
+			var requestCount atomic.Int32
 
-		cfg := profileTokenTestConfig(srv.URL)
-		_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requestCount.Add(1)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer srv.Close()
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			profileTokenLabelParam: profileTokenLabelFixture,
-			keyConfirm:             true,
-		}))
+			cfg := profileTokenTestConfig(srv.URL)
+			_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
 
-		expectNoError(t, err, "handler should return API failures as tool errors")
-		expectNotNil(t, result, "result should not be nil")
-		checkTrueWithMode(t, false, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to create linode_profile_token_create")
-		assertErrorContains(t, result, errForbidden)
-	})
+			args := map[string]any{keyConfirm: true, testCase.field: 123}
 
-	t.Run("confirm guard rejects before client call", func(t *testing.T) {
-		t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-		cases := []struct {
-			name    string
-			confirm any
-			set     bool
-		}{
-			{name: caseMissing},
-			{name: caseFalse, confirm: false, set: true},
-			{name: caseString, confirm: boolStringTrue, set: true},
-			{name: caseNumber, confirm: 1, set: true},
-		}
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-				var requestCount atomic.Int32
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
 
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					requestCount.Add(1)
-					w.WriteHeader(http.StatusInternalServerError)
-				}))
-				defer srv.Close()
-
-				cfg := profileTokenTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
-
-				args := map[string]any{profileTokenLabelParam: profileTokenLabelFixture}
-				if testCase.set {
-					args[keyConfirm] = testCase.confirm
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should return validation as a tool result")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "invalid confirm should be an error result")
-				checkEqual(t, int32(0), requestCount.Load(), "client must not be called when confirm is invalid")
-
-				textContent, ok := result.Content[0].(mcp.TextContent)
-				expectTrue(t, ok, "content should be TextContent")
-				expectContainsWithMode(t, false, textContent.Text, profileTokenConfirmRequired, "response should describe confirm requirement")
-			})
-		}
-	})
-
-	t.Run("invalid optional field rejects before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name    string
-			field   string
-			message string
-		}{
-			{name: caseInvalidExpiry, field: keyExpiry, message: "expiry must be a string"},
-			{name: caseInvalidLabel, field: profileTokenLabelParam, message: errLabelString},
-			{name: caseInvalidScopes, field: profileTokenScopesParam, message: "scopes must be a string"},
-		}
-
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var requestCount atomic.Int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					requestCount.Add(1)
-					w.WriteHeader(http.StatusInternalServerError)
-				}))
-				defer srv.Close()
-
-				cfg := profileTokenTestConfig(srv.URL)
-				_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
-
-				args := map[string]any{keyConfirm: true, testCase.field: 123}
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should return validation as a tool result")
-				expectNotNil(t, result, "result should not be nil")
-				checkTrueWithMode(t, false, result.IsError, "invalid optional field should be an error result")
-				checkEqual(t, int32(0), requestCount.Load(), "client must not be called when an optional field is invalid")
-				assertErrorContains(t, result, testCase.message)
-			})
-		}
-	})
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.message) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.message)
+			}
+		})
+	}
 }
 
 func profileTokenTestConfig(apiURL string) *config.Config {
@@ -250,36 +372,78 @@ func TestLinodeProfileTokenCreateToolDryRun(t *testing.T) {
 		profileTokenScopesParam: profileTokenScopesFixture,
 		keyDryRun:               true,
 	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	expectNoError(t, err, "handler should not return an error")
-	expectNotNil(t, result, "result should not be nil")
-	checkFalseWithMode(t, false, result.IsError, "dry run should not be an error result")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
 	var body map[string]any
-	expectNoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-	checkEqual(t, true, body[keyDryRun], "response should be a dry-run preview")
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
 
 	would, wouldOK := body["would_execute"].(map[string]any)
-	expectTrue(t, wouldOK, "dry run response should include would_execute")
-	checkEqual(t, "POST", would["method"])
-	checkEqual(t, "/profile/tokens", would["path"])
+	if !wouldOK {
+		t.Error("wouldOK = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "POST") {
+		t.Errorf("got %v, want %v", would["method"], "POST")
+	}
+
+	if !reflect.DeepEqual(would["path"], tcProfileTokens) {
+		t.Errorf("got %v, want %v", would["path"], tcProfileTokens)
+	}
 
 	wouldBody, bodyOK := would["body"].(map[string]any)
-	expectTrue(t, bodyOK, "dry run response should include request body")
-	checkEqual(t, profileTokenLabelFixture, wouldBody[profileTokenLabelParam])
-	checkEqual(t, int32(0), requestCount.Load(), "dry run should not call the POST endpoint")
+	if !bodyOK {
+		t.Error("bodyOK = false, want true")
+	}
+
+	if !reflect.DeepEqual(wouldBody[profileTokenLabelParam], profileTokenLabelFixture) {
+		t.Errorf("wouldBody[profileTokenLabelParam] = %v, want %v", wouldBody[profileTokenLabelParam], profileTokenLabelFixture)
+	}
+
+	if requestCount.Load() != int32(0) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+	}
 
 	sideEffects, _ := body["side_effects"].([]any)
-	expectLen(t, sideEffects, 1, "token create surfaces a side effect")
+	if len(sideEffects) != 1 {
+		t.Errorf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
+	}
 
 	effect, gotString := sideEffects[0].(string)
-	expectTrue(t, gotString)
-	expectContainsWithMode(t, false, effect, profileTokenLabelFixture, "side effect should name the token")
+	if !gotString {
+		t.Error("gotString = false, want true")
+	}
+
+	if !strings.Contains(effect, profileTokenLabelFixture) {
+		t.Errorf("effect does not contain %v", profileTokenLabelFixture)
+	}
 
 	warnings, _ := body["warnings"].([]any)
-	expectLen(t, warnings, 1, "token create warns the secret is shown once")
+	if len(warnings) != 1 {
+		t.Errorf("len(warnings) = %d, want %d", len(warnings), 1)
+	}
 
 	warning, gotWarn := warnings[0].(string)
-	expectTrue(t, gotWarn)
-	expectContainsWithMode(t, false, warning, "once", "warning should flag the one-time secret")
+	if !gotWarn {
+		t.Error("gotWarn = false, want true")
+	}
+
+	if !strings.Contains(warning, "once") {
+		t.Errorf("warning does not contain %v", "once")
+	}
 }

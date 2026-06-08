@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -26,135 +26,214 @@ const (
 	managedLinodeSettingsToolLabelValue = "linode123"
 )
 
-func TestLinodeManagedLinodeSettingsGetTool(t *testing.T) {
+func TestLinodeManagedLinodeSettingsGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeManagedLinodeSettingsGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeManagedLinodeSettingsGetTool(cfg)
+	if tool.Name != managedLinodeSettingsGetToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, managedLinodeSettingsGetToolName)
+	}
 
-		assert.Equal(t, managedLinodeSettingsGetToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "managed Linode settings lookup should be CapRead")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyManagedLinodeSettingsLinodeID, "schema should include linode_id")
-		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
-		assert.Contains(t, tool.InputSchema.Required, keyManagedLinodeSettingsLinodeID, "linode_id must be marked required")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("invalid linode id rejected before client call", func(t *testing.T) {
-		t.Parallel()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
 
-		cases := []struct {
-			name string
-			args map[string]any
-		}{
-			{name: caseMissingLinodeID, args: map[string]any{}},
-			{name: "zero linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: 0}},
-			{name: "negative linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: -1}},
-			{name: "string linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234"}},
-			{name: "fractional linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: 234.5}},
-			{name: "oversized linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsOversizedID}},
-			{name: caseSlashLinodeID, args: map[string]any{keyManagedLinodeSettingsLinodeID: "234/235"}},
-			{name: "query linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234?x=1"}},
-			{name: caseTraversalLinodeID, args: map[string]any{keyManagedLinodeSettingsLinodeID: pathTraversalValue}},
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyManagedLinodeSettingsLinodeID]; !ok {
+		t.Errorf("props missing key %v", keyManagedLinodeSettingsLinodeID)
+	}
+
+	if _, ok := props[keyConfirm]; ok {
+		t.Errorf("props has unexpected key %v", keyConfirm)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyManagedLinodeSettingsLinodeID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyManagedLinodeSettingsLinodeID)
+	}
+}
+
+func TestLinodeManagedLinodeSettingsGetToolInvalidLinodeIdRejectedBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: caseMissingLinodeID, args: map[string]any{}},
+		{name: "zero linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: 0}},
+		{name: "negative linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: -1}},
+		{name: "string linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234"}},
+		{name: "fractional linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: 234.5}},
+		{name: "oversized linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsOversizedID}},
+		{name: caseSlashLinodeID, args: map[string]any{keyManagedLinodeSettingsLinodeID: "234/235"}},
+		{name: "query linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234?x=1"}},
+		{name: caseTraversalLinodeID, args: map[string]any{keyManagedLinodeSettingsLinodeID: pathTraversalValue}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&calls, 1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := managedLinodeSettingsConfig(srv.URL)
+			_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "linode_id") {
+				t.Errorf("error text %q does not contain %q", text.Text, "linode_id")
+			}
+
+			if calls != int32(0) {
+				t.Errorf("calls = %v, want %v", calls, int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeManagedLinodeSettingsGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	sshUser := keyGrantLinode
+	sshPort := 22
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var calls int32
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					atomic.AddInt32(&calls, 1)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := managedLinodeSettingsConfig(srv.URL)
-				_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				require.NoError(t, err, "handler should not return transport error")
-				require.NotNil(t, result, "result should not be nil")
-				assert.True(t, result.IsError, "invalid request should be a tool error")
-				assertErrorContains(t, result, "linode_id")
-				assert.Equal(t, int32(0), calls, "request validation must fail before client call")
-			})
+		if r.URL.Path != managedLinodeSettingsToolPathValue {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsToolPathValue)
 		}
-	})
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		sshUser := keyGrantLinode
-		sshPort := 22
+		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, managedLinodeSettingsToolPathValue, r.URL.Path, "request path should include Linode ID")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedLinodeSettings{
-				ID:    managedLinodeSettingsToolIDValue,
-				Label: managedLinodeSettingsToolLabelValue,
-				Group: managedLinodeSettingsGroup,
-				SSH: linode.ManagedLinodeSettingsSSH{
-					Access: true,
-					IP:     "203.0.113.1",
-					Port:   &sshPort,
-					User:   &sshUser,
-				},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+		if err := json.NewEncoder(w).Encode(linode.ManagedLinodeSettings{
+			ID:    managedLinodeSettingsToolIDValue,
+			Label: managedLinodeSettingsToolLabelValue,
+			Group: managedLinodeSettingsGroup,
+			SSH: linode.ManagedLinodeSettingsSSH{
+				Access: true,
+				IP:     "203.0.113.1",
+				Port:   &sshPort,
+				User:   &sshUser,
+			},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
+	_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsToolIDValue}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsToolIDValue}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, managedLinodeSettingsToolLabelValue, "response should include label")
-		assert.Contains(t, textContent.Text, "203.0.113.1", "response should include ssh settings")
-	})
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, managedLinodeSettingsToolPathValue, r.URL.Path, "request path should include Linode ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: errForbidden}},
-			}))
-		}))
-		t.Cleanup(srv.Close)
+	if !strings.Contains(textContent.Text, managedLinodeSettingsToolLabelValue) {
+		t.Errorf("textContent.Text does not contain %v", managedLinodeSettingsToolLabelValue)
+	}
 
-		_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
+	if !strings.Contains(textContent.Text, "203.0.113.1") {
+		t.Errorf("textContent.Text does not contain %v", "203.0.113.1")
+	}
+}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsToolIDValue}))
+func TestLinodeManagedLinodeSettingsGetToolApiError(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err, "handler should return API failures as tool errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to retrieve linode_managed_linode_settings_get")
-		assertErrorContains(t, result, errForbidden)
-	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != managedLinodeSettingsToolPathValue {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, managedLinodeSettingsToolPathValue)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsToolIDValue}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_linode_settings_get") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_linode_settings_get")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
 }
 
 func managedLinodeSettingsConfig(apiURL string) *config.Config {

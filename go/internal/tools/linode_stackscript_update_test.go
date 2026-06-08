@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -24,29 +24,58 @@ const (
 	stackScriptUpdateDesc     = "update description"
 )
 
-func TestLinodeStackScriptUpdateTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeStackScriptUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
 	tool, capability, handler := tools.NewLinodeStackScriptUpdateTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "linode_stackscript_update", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapWrite, capability, "StackScript update should be write capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		require.NotNil(t, handler, "handler should not be nil")
+	t.Parallel()
 
-		props := tool.InputSchema.Properties
-		assert.Contains(t, props, keyStackScriptID, "schema should include stackscript_id property")
-		assert.Contains(t, props, keyLabel, "schema should include label property")
-		assert.Contains(t, props, keyScript, "schema should include script property")
-		assert.Contains(t, props, keyImages, "schema should include images property")
-		assert.Contains(t, props, keyDescription, "schema should include description property")
-		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
-	})
+	if tool.Name != "linode_stackscript_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_stackscript_update")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	props := tool.InputSchema.Properties
+	if _, ok := props[keyStackScriptID]; !ok {
+		t.Errorf("props missing key %v", keyStackScriptID)
+	}
+
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	if _, ok := props[keyScript]; !ok {
+		t.Errorf("props missing key %v", keyScript)
+	}
+
+	if _, ok := props[keyImages]; !ok {
+		t.Errorf("props missing key %v", keyImages)
+	}
+
+	if _, ok := props[keyDescription]; !ok {
+		t.Errorf("props missing key %v", keyDescription)
+	}
+
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
+	}
+}
+
+func TestLinodeStackScriptUpdateToolValidation(t *testing.T) {
+	t.Parallel()
 
 	validationTests := []struct {
 		name         string
@@ -91,94 +120,159 @@ func TestLinodeStackScriptUpdateTool(t *testing.T) {
 			_, _, validationHandler := tools.NewLinodeStackScriptUpdateTool(validationCfg)
 
 			req := createRequestWithArgs(t, tt.args)
+
 			result, err := validationHandler(t.Context(), req)
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, tt.wantContains)
-			assert.Equal(t, int32(0), requestCount.Load(), "validation should reject before client call")
-		})
-	}
-
-	t.Run("successful update", func(t *testing.T) {
-		t.Parallel()
-
-		updated := linode.StackScript{ID: 12345, Label: testStackScriptLabel, Script: testStackScriptWithWhitespace, Images: []string{testDebian12Image}, RevNote: stackScriptRevNoteUpdated, IsPublic: true}
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount.Add(1)
-			assert.Equal(t, "/linode/stackscripts/12345", r.URL.Path, "request path should match StackScript endpoint")
-			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-
-			var body map[string]any
-			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
-				return
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.Equal(t, testStackScriptLabel, body[keyLabel], "label should be sent")
-			assert.Equal(t, testStackScriptWithWhitespace, body[keyScript], "script should preserve exact content")
-			assert.Equal(t, []any{testDebian12Image}, body[keyImages], "images should be sent")
-			assert.Equal(t, stackScriptUpdateDesc, body[keyDescription], "description should be sent")
-			assert.Equal(t, true, body[keyStackScriptIsPublic], "is_public should be sent")
-			assert.Equal(t, stackScriptRevNoteUpdated, body["rev_note"], "rev_note should be sent")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(updated), "encoding response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, successHandler := tools.NewLinodeStackScriptUpdateTool(successCfg)
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
+			}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyStackScriptID:       12345,
+			if requestCount.Load() != int32(0) {
+				t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
+			}
+		})
+	}
+}
+
+func TestLinodeStackScriptUpdateToolSuccessfulUpdate(t *testing.T) {
+	t.Parallel()
+
+	updated := linode.StackScript{ID: 12345, Label: testStackScriptLabel, Script: testStackScriptWithWhitespace, Images: []string{testDebian12Image}, RevNote: stackScriptRevNoteUpdated, IsPublic: true}
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+
+		if r.URL.Path != "/linode/stackscripts/12345" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/stackscripts/12345")
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body should decode: %v", err)
+
+			return
+		}
+
+		for key, want := range map[string]any{
 			keyLabel:               testStackScriptLabel,
 			keyScript:              testStackScriptWithWhitespace,
-			keyImages:              testDebian12Image,
+			keyImages:              []any{testDebian12Image},
 			keyDescription:         stackScriptUpdateDesc,
 			keyStackScriptIsPublic: true,
 			"rev_note":             stackScriptRevNoteUpdated,
-			keyConfirm:             true,
-		})
-		result, err := successHandler(t.Context(), req)
+		} {
+			if !reflect.DeepEqual(body[key], want) {
+				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
+			}
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be an error")
-		assert.Equal(t, int32(1), requestCount.Load(), "handler should call the client once")
+		w.Header().Set("Content-Type", "application/json")
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, testStackScriptLabel, "response should contain the StackScript label")
-		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
+		if err := json.NewEncoder(w).Encode(updated); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeStackScriptUpdateTool(successCfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyStackScriptID:       12345,
+		keyLabel:               testStackScriptLabel,
+		keyScript:              testStackScriptWithWhitespace,
+		keyImages:              testDebian12Image,
+		keyDescription:         stackScriptUpdateDesc,
+		keyStackScriptIsPublic: true,
+		"rev_note":             stackScriptRevNoteUpdated,
+		keyConfirm:             true,
 	})
 
-	t.Run("client error propagates", func(t *testing.T) {
-		t.Parallel()
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"reason":"script invalid"}]}`))
-			assert.NoError(t, err, "writing error response should succeed")
-		}))
-		t.Cleanup(srv.Close)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, errHandler := tools.NewLinodeStackScriptUpdateTool(errCfg)
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
 
-		req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 12345, keyLabel: testStackScriptLabel, keyConfirm: true})
-		result, err := errHandler(t.Context(), req)
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to update StackScript")
-	})
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, testStackScriptLabel) {
+		t.Errorf("textContent.Text does not contain %v", testStackScriptLabel)
+	}
+
+	if !strings.Contains(textContent.Text, "updated successfully") {
+		t.Errorf("textContent.Text does not contain %v", "updated successfully")
+	}
+}
+
+func TestLinodeStackScriptUpdateToolClientErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, err := w.Write([]byte(`{"errors":[{"reason":"script invalid"}]}`))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, errHandler := tools.NewLinodeStackScriptUpdateTool(errCfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 12345, keyLabel: testStackScriptLabel, keyConfirm: true})
+
+	result, err := errHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update StackScript") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update StackScript")
+	}
 }

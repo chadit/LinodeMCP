@@ -1,6 +1,7 @@
 package profiles_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -9,10 +10,7 @@ import (
 func TestRequiredScopesRegionGet(t *testing.T) {
 	t.Parallel()
 
-	assertEqual(
-		t,
-		[]profiles.Scope{profiles.ScopeLinodesReadOnly},
-		profiles.RequiredScopes("linode_region_get", profiles.CapRead),
-		"region get should use read-only linodes scope",
-	)
+	if !reflect.DeepEqual(profiles.RequiredScopes("linode_region_get", profiles.CapRead), []profiles.Scope{profiles.ScopeLinodesReadOnly}) {
+		t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_region_get", profiles.CapRead), []profiles.Scope{profiles.ScopeLinodesReadOnly})
+	}
 }

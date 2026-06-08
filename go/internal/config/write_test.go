@@ -1,8 +1,10 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -39,9 +41,9 @@ func TestWriteAtomicNilConfigReturnsSentinel(t *testing.T) {
 	t.Parallel()
 
 	err := config.WriteAtomic(filepath.Join(t.TempDir(), "out.yml"), nil)
-
-	checkError(t, err)
-	checkErrorIs(t, err, config.ErrNilConfig)
+	if !errors.Is(err, config.ErrNilConfig) {
+		t.Errorf("error = %v, want %v", err, config.ErrNilConfig)
+	}
 }
 
 // TestWriteAtomicYAMLRoundTrip writes the config to a .yml file and
@@ -54,12 +56,22 @@ func TestWriteAtomicYAMLRoundTrip(t *testing.T) {
 	cfg := minimalWritableConfig()
 	cfg.ActiveProfile = "compute-admin"
 
-	checkNoError(t, config.WriteAtomic(path, cfg))
+	if err := config.WriteAtomic(path, cfg); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	loaded, err := config.Load(path)
-	checkNoError(t, err, "round-trip Load must succeed on the written file")
-	checkEqual(t, "compute-admin", loaded.ActiveProfile)
-	checkEqual(t, "Test", loaded.Server.Name)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if loaded.ActiveProfile != "compute-admin" {
+		t.Errorf("loaded.ActiveProfile = %v, want %v", loaded.ActiveProfile, "compute-admin")
+	}
+
+	if loaded.Server.Name != tcTest {
+		t.Errorf("loaded.Server.Name = %v, want %v", loaded.Server.Name, tcTest)
+	}
 }
 
 // TestWriteAtomicJSONRoundTrip checks that JSON output uses the JSON
@@ -72,15 +84,27 @@ func TestWriteAtomicJSONRoundTrip(t *testing.T) {
 	cfg := minimalWritableConfig()
 	cfg.ActiveProfile = "readonly-full"
 
-	checkNoError(t, config.WriteAtomic(path, cfg))
+	if err := config.WriteAtomic(path, cfg); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	data, err := os.ReadFile(path) // #nosec G304 -- path is the test's tempdir target
-	checkNoError(t, err)
-	checkEqual(t, byte('{'), data[0], "JSON extension must produce JSON output (starts with '{')")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if data[0] != byte('{') {
+		t.Errorf("data[0] = %v, want %v", data[0], byte('{'))
+	}
 
 	loaded, err := config.Load(path)
-	checkNoError(t, err)
-	checkEqual(t, "readonly-full", loaded.ActiveProfile)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if loaded.ActiveProfile != "readonly-full" {
+		t.Errorf("loaded.ActiveProfile = %v, want %v", loaded.ActiveProfile, "readonly-full")
+	}
 }
 
 // TestWriteAtomicPreservesOriginalMode confirms WriteAtomic does not
@@ -92,21 +116,31 @@ func TestWriteAtomicPreservesOriginalMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
 	cfg := minimalWritableConfig()
 
-	checkNoError(t, config.WriteAtomic(path, cfg), "initial write should succeed (sets default 0600)")
+	if err := config.WriteAtomic(path, cfg); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	checkNoError(t, os.Chmod(path, 0o400), "operator hardens permissions to read-only")
+	if err := os.Chmod(path, 0o400); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	// Need to bump back to 0o600 so the next write can replace the file.
 	// The file mode test is about the destination's preserved mode after
 	// rename, not about whether the writer can overwrite a read-only
 	// file (rename on POSIX needs write permission on the directory, not
 	// the destination file).
-	checkNoError(t, config.WriteAtomic(path, cfg), "second write must succeed and preserve the 0400 mode")
+	if err := config.WriteAtomic(path, cfg); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	info, err := os.Stat(path)
-	checkNoError(t, err)
-	checkEqual(t, os.FileMode(0o400), info.Mode().Perm(),
-		"rewritten file must keep the original 0400 permission bits")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if info.Mode().Perm() != os.FileMode(0o400) {
+		t.Errorf("info.Mode().Perm() = %v, want %v", info.Mode().Perm(), os.FileMode(0o400))
+	}
 }
 
 // TestWriteAtomicNewFileUsesDefaultMode covers the new-file path: a
@@ -117,12 +151,18 @@ func TestWriteAtomicNewFileUsesDefaultMode(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "fresh.yml")
 
-	checkNoError(t, config.WriteAtomic(path, minimalWritableConfig()))
+	if err := config.WriteAtomic(path, minimalWritableConfig()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	info, err := os.Stat(path)
-	checkNoError(t, err)
-	checkEqual(t, os.FileMode(0o600), info.Mode().Perm(),
-		"new file must default to 0600")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if info.Mode().Perm() != os.FileMode(0o600) {
+		t.Errorf("info.Mode().Perm() = %v, want %v", info.Mode().Perm(), os.FileMode(0o600))
+	}
 }
 
 // TestWriteAtomicRejectsRoundTripInvalid verifies that a config which
@@ -135,7 +175,9 @@ func TestWriteAtomicRejectsRoundTripInvalid(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
 	good := minimalWritableConfig()
 
-	checkNoError(t, config.WriteAtomic(path, good))
+	if err := config.WriteAtomic(path, good); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	// Construct an invalid config: an environment with APIURL but no
 	// Token survives setDefaults and trips ErrMissingToken in validate.
@@ -152,13 +194,20 @@ func TestWriteAtomicRejectsRoundTripInvalid(t *testing.T) {
 	}
 
 	err := config.WriteAtomic(path, bad)
-	checkError(t, err, "validation failure must surface, not silently overwrite")
+	if err == nil {
+		t.Error("expected an error, got nil")
+	}
 
 	// Confirm the existing file is unchanged: still loads cleanly with
 	// the original Server.Name.
 	loaded, err := config.Load(path)
-	checkNoError(t, err)
-	checkEqual(t, "Test", loaded.Server.Name, "failed write must not replace the good file on disk")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if loaded.Server.Name != tcTest {
+		t.Errorf("loaded.Server.Name = %v, want %v", loaded.Server.Name, tcTest)
+	}
 }
 
 // TestWriteAtomicLeavesNoTempLeftovers verifies that even on validation
@@ -170,7 +219,9 @@ func TestWriteAtomicLeavesNoTempLeftovers(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 
-	checkNoError(t, config.WriteAtomic(path, minimalWritableConfig()))
+	if err := config.WriteAtomic(path, minimalWritableConfig()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	bad := minimalWritableConfig()
 	bad.Environments[envKeyDefault] = config.EnvironmentConfig{
@@ -181,12 +232,18 @@ func TestWriteAtomicLeavesNoTempLeftovers(t *testing.T) {
 		},
 	}
 
-	checkError(t, config.WriteAtomic(path, bad))
+	if err := config.WriteAtomic(path, bad); err == nil {
+		t.Error("expected an error, got nil")
+	}
 
 	entries, err := os.ReadDir(dir)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	for _, e := range entries {
-		checkNotContains(t, e.Name(), ".tmp.", "failed atomic write must not leave a .tmp.* file behind")
+		if strings.Contains(e.Name(), ".tmp.") {
+			t.Errorf("e.Name() should not contain %v", ".tmp.")
+		}
 	}
 }

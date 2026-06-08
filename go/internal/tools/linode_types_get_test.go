@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -25,55 +24,90 @@ const (
 	linodeTypeIDInvalidMessage  = "type_id must not contain '/', '?', '#', or '..'"
 )
 
-func TestLinodeTypeGetTool(t *testing.T) {
+func TestLinodeTypeGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeTypeGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeTypeGetTool(cfg)
+	if tool.Name != linodeTypeGetToolName {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, linodeTypeGetToolName)
+	}
 
-		assert.Equal(t, linodeTypeGetToolName, tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should declare read capability")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, linodeTypeGetPath, r.URL.EscapedPath(), "request path should include type id")
-			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeGetID, Label: linodeTypeGetLabel, Class: classStandard}))
-		}))
-		defer srv.Close()
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
 
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
-			},
+func TestLinodeTypeGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
-		_, _, handler := tools.NewLinodeTypeGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{databaseTypeIDParam: linodeTypeGetID})
-		result, err := handler(t.Context(), req)
+		if r.URL.EscapedPath() != linodeTypeGetPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), linodeTypeGetPath)
+		}
 
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, linodeTypeGetID, "response should contain type id")
-		assert.Contains(t, textContent.Text, linodeTypeGetLabel, "response should contain type label")
-	})
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeGetID, Label: linodeTypeGetLabel, Class: classStandard}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+			},
+		},
+	}
+	_, _, handler := tools.NewLinodeTypeGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{databaseTypeIDParam: linodeTypeGetID})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, linodeTypeGetID) {
+		t.Errorf("textContent.Text does not contain %v", linodeTypeGetID)
+	}
+
+	if !strings.Contains(textContent.Text, linodeTypeGetLabel) {
+		t.Errorf("textContent.Text does not contain %v", linodeTypeGetLabel)
+	}
 }
 
 func TestLinodeTypeGetToolValidation(t *testing.T) {
@@ -101,14 +135,26 @@ func TestLinodeTypeGetToolValidation(t *testing.T) {
 			t.Parallel()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.True(t, result.IsError, "invalid type_id should return tool error")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
 			textContent, ok := result.Content[0].(mcp.TextContent)
-			require.True(t, ok, "content should be TextContent")
-			assert.Contains(t, textContent.Text, testCase.want)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.want) {
+				t.Errorf("textContent.Text does not contain %v", testCase.want)
+			}
 		})
 	}
 }

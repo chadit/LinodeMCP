@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -16,21 +15,35 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeInstanceTransferGetTool(t *testing.T) {
+func TestLinodeInstanceTransferGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
 
-		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+	if tool.Name != "linode_instance_transfer_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_transfer_get")
+	}
 
-		assert.Equal(t, "linode_instance_transfer_get", tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "transfer lookup should be read capability")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
-		require.NotNil(t, handler, "handler should not be nil")
-	})
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestLinodeInstanceTransferGetToolInvalid(t *testing.T) {
+	t.Parallel()
 
 	invalidCases := []struct {
 		name         string
@@ -44,7 +57,6 @@ func TestLinodeInstanceTransferGetTool(t *testing.T) {
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: errLinodeIDMin},
 		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
 	}
-
 	for _, testCase := range invalidCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
@@ -60,82 +72,141 @@ func TestLinodeInstanceTransferGetTool(t *testing.T) {
 			_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
-			result, err := handler(t.Context(), req)
 
-			require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-			require.NotNil(t, result, "result should not be nil")
-			assert.True(t, result.IsError, "invalid input should return an error result")
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
 			textContent, ok := result.Content[0].(mcp.TextContent)
-			require.True(t, ok, "content should be TextContent")
-			assert.Contains(t, textContent.Text, testCase.wantContains)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+
+			if !strings.Contains(textContent.Text, testCase.wantContains) {
+				t.Errorf("textContent.Text does not contain %v", testCase.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceTransferGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		transfer := linode.InstanceTransfer{Billable: 0, Quota: 2000, Used: 22956600198}
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/instances/123/transfer", r.URL.Path, "request path should include Linode ID")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(transfer))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
-			},
+	transfer := linode.InstanceTransfer{Billable: 0, Quota: 2000, Used: 22956600198}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
-		_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "22956600198", "response should contain transfer usage")
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/linode/instances/123/transfer", r.URL.Path, "request path should include Linode ID")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-				},
-			},
+		if r.URL.Path != "/linode/instances/123/transfer" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/transfer")
 		}
-		_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
-		result, err := handler(t.Context(), req)
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
-		require.NotNil(t, result, "result should not be nil")
-		assert.True(t, result.IsError, "API failures should return an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve Linode instance transfer statistics")
-	})
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(transfer); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+			},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "22956600198") {
+		t.Errorf("textContent.Text does not contain %v", "22956600198")
+	}
+}
+
+func TestLinodeInstanceTransferGetToolApiError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/linode/instances/123/transfer" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/transfer")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+			},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Failed to retrieve Linode instance transfer statistics") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Linode instance transfer statistics")
+	}
 }

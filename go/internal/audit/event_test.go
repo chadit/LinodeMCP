@@ -2,6 +2,7 @@ package audit_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -46,25 +47,77 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		false,
 	)
 
-	checkFalse(t, evt.TS.IsZero(), "TS must be populated")
-	checkNotZero(t, evt.TSUnixNS, "TSUnixNS must be populated")
-	checkTrue(t, strings.HasPrefix(evt.EventID, audit.EventIDPrefix),
-		"EventID must carry the evt_ prefix")
-	checkEqual(t, fixtureTool, evt.Tool)
-	checkEqual(t, audit.CapabilityDestroy, evt.ToolCapability)
-	checkEqual(t, fixtureEnvironment, evt.Environment)
-	checkEqual(t, fixtureProfile, evt.Profile)
-	checkEqual(t, audit.ModeNormal, evt.Mode, "default mode must be normal")
-	checkNil(t, evt.PlanID, "plan_id is nil unless set via SetMode")
-	checkEqual(t, args[argLinodeID], evt.Args[argLinodeID])
-	checkEmpty(t, evt.ArgsRedacted, "no sensitive keys in fixture")
-	checkEqual(t, audit.StatusSuccess, evt.Status, "default status is success")
-	checkZero(t, evt.LatencyMS, "latency populates via Finalize")
-	checkEmpty(t, evt.ResultSummary)
-	checkNil(t, evt.Error)
-	checkEqual(t, fixtureVersion, evt.LinodemcpVersion)
-	checkEqual(t, fixtureSession, evt.SessionID)
-	checkEqual(t, uint64(3), evt.CredentialGeneration)
+	if evt.TS.IsZero() {
+		t.Error("evt.TS.IsZero() = true, want false")
+	}
+
+	if evt.TSUnixNS == 0 {
+		t.Errorf("evt.TSUnixNS = %v, want non-zero", evt.TSUnixNS)
+	}
+
+	if !strings.HasPrefix(evt.EventID, audit.EventIDPrefix) {
+		t.Error("expected condition to be true")
+	}
+
+	if evt.Tool != fixtureTool {
+		t.Errorf("evt.Tool = %v, want %v", evt.Tool, fixtureTool)
+	}
+
+	if evt.ToolCapability != audit.CapabilityDestroy {
+		t.Errorf("evt.ToolCapability = %v, want %v", evt.ToolCapability, audit.CapabilityDestroy)
+	}
+
+	if evt.Environment != fixtureEnvironment {
+		t.Errorf("evt.Environment = %v, want %v", evt.Environment, fixtureEnvironment)
+	}
+
+	if evt.Profile != fixtureProfile {
+		t.Errorf("evt.Profile = %v, want %v", evt.Profile, fixtureProfile)
+	}
+
+	if evt.Mode != audit.ModeNormal {
+		t.Errorf("evt.Mode = %v, want %v", evt.Mode, audit.ModeNormal)
+	}
+
+	if evt.PlanID != nil {
+		t.Errorf("evt.PlanID = %v, want nil", evt.PlanID)
+	}
+
+	if !reflect.DeepEqual(evt.Args[argLinodeID], args[argLinodeID]) {
+		t.Errorf("evt.Args[argLinodeID] = %v, want %v", evt.Args[argLinodeID], args[argLinodeID])
+	}
+
+	if len(evt.ArgsRedacted) != 0 {
+		t.Errorf("evt.ArgsRedacted = %v, want empty", evt.ArgsRedacted)
+	}
+
+	if evt.Status != audit.StatusSuccess {
+		t.Errorf("evt.Status = %v, want %v", evt.Status, audit.StatusSuccess)
+	}
+
+	if evt.LatencyMS != 0 {
+		t.Errorf("evt.LatencyMS = %v, want zero", evt.LatencyMS)
+	}
+
+	if evt.ResultSummary != "" {
+		t.Errorf("evt.ResultSummary = %v, want empty", evt.ResultSummary)
+	}
+
+	if evt.Error != nil {
+		t.Errorf("evt.Error = %v, want nil", evt.Error)
+	}
+
+	if evt.LinodemcpVersion != fixtureVersion {
+		t.Errorf("evt.LinodemcpVersion = %v, want %v", evt.LinodemcpVersion, fixtureVersion)
+	}
+
+	if evt.SessionID != fixtureSession {
+		t.Errorf("evt.SessionID = %v, want %v", evt.SessionID, fixtureSession)
+	}
+
+	if evt.CredentialGeneration != uint64(3) {
+		t.Errorf("evt.CredentialGeneration = %v, want %v", evt.CredentialGeneration, uint64(3))
+	}
 }
 
 // TestFinalizeWritesOutcomeFields locks the contract that Finalize
@@ -78,11 +131,25 @@ func TestFinalizeWritesOutcomeFields(t *testing.T) {
 
 	evt.Finalize(audit.StatusError, 250*time.Millisecond, "API returned 500", "instance update failed")
 
-	checkEqual(t, audit.StatusError, evt.Status)
-	checkEqual(t, int64(250), evt.LatencyMS)
-	checkEqual(t, "instance update failed", evt.ResultSummary)
-	mustNotNil(t, evt.Error)
-	checkEqual(t, "API returned 500", *evt.Error)
+	if evt.Status != audit.StatusError {
+		t.Errorf("evt.Status = %v, want %v", evt.Status, audit.StatusError)
+	}
+
+	if evt.LatencyMS != int64(250) {
+		t.Errorf("evt.LatencyMS = %v, want %v", evt.LatencyMS, int64(250))
+	}
+
+	if evt.ResultSummary != "instance update failed" {
+		t.Errorf("evt.ResultSummary = %v, want %v", evt.ResultSummary, "instance update failed")
+	}
+
+	if evt.Error == nil {
+		t.Fatal("evt.Error is nil")
+	}
+
+	if *evt.Error != "API returned 500" {
+		t.Errorf("*evt.Error = %v, want %v", *evt.Error, "API returned 500")
+	}
 }
 
 // TestFinalizeWithEmptyErrorMessageLeavesErrorNil covers the happy
@@ -95,8 +162,13 @@ func TestFinalizeWithEmptyErrorMessageLeavesErrorNil(t *testing.T) {
 
 	evt.Finalize(audit.StatusSuccess, 100*time.Millisecond, "", "ok")
 
-	checkEqual(t, audit.StatusSuccess, evt.Status)
-	checkNil(t, evt.Error, "empty errMsg must produce nil Error pointer")
+	if evt.Status != audit.StatusSuccess {
+		t.Errorf("evt.Status = %v, want %v", evt.Status, audit.StatusSuccess)
+	}
+
+	if evt.Error != nil {
+		t.Errorf("evt.Error = %v, want nil", evt.Error)
+	}
 }
 
 // TestSetModePopulatesPlanID locks the plan-mode contract: passing a
@@ -108,11 +180,20 @@ func TestSetModePopulatesPlanID(t *testing.T) {
 	evt := newFixtureEvent(t)
 
 	evt.SetMode(audit.ModeApply, "plan_01H...")
-	mustNotNil(t, evt.PlanID)
-	checkEqual(t, "plan_01H...", *evt.PlanID)
+
+	if evt.PlanID == nil {
+		t.Fatal("evt.PlanID is nil")
+	}
+
+	if *evt.PlanID != "plan_01H..." {
+		t.Errorf("*evt.PlanID = %v, want %v", *evt.PlanID, "plan_01H...")
+	}
 
 	evt.SetMode(audit.ModeNormal, "")
-	checkNil(t, evt.PlanID, "empty planID must clear the pointer")
+
+	if evt.PlanID != nil {
+		t.Errorf("evt.PlanID = %v, want nil", evt.PlanID)
+	}
 }
 
 // TestMarshalJSONSerializesEmptyCollectionsAsArrays guards against
@@ -129,13 +210,22 @@ func TestMarshalJSONSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	}
 
 	body, err := evt.MarshalJSON()
-	mustNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	var parsed map[string]any
-	mustNoError(t, json.Unmarshal(body, &parsed))
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	checkIsType(t, map[string]any{}, parsed["args"], "args must serialize as object")
-	checkIsType(t, []any{}, parsed["args_redacted"], "args_redacted must serialize as array")
+	if reflect.TypeOf(parsed["args"]) != reflect.TypeFor[map[string]any]() {
+		t.Errorf("type = %T, want %T", parsed["args"], map[string]any{})
+	}
+
+	if reflect.TypeOf(parsed["args_redacted"]) != reflect.TypeFor[[]any]() {
+		t.Errorf("type = %T, want %T", parsed["args_redacted"], []any{})
+	}
 }
 
 // TestEventIDIsCorrectLength checks the format constants. ULID body
@@ -147,8 +237,13 @@ func TestEventIDIsCorrectLength(t *testing.T) {
 
 	id := audit.NewEventID(time.Now())
 
-	checkLen(t, id, 30, "event id is evt_ (4) + 26-char ULID body")
-	checkTrue(t, strings.HasPrefix(id, audit.EventIDPrefix))
+	if len(id) != 30 {
+		t.Errorf("len(id) = %d, want %d", len(id), 30)
+	}
+
+	if !strings.HasPrefix(id, audit.EventIDPrefix) {
+		t.Error("strings.HasPrefix(id, audit.EventIDPrefix) = false, want true")
+	}
 }
 
 // TestEventIDUsesCrockfordAlphabet confirms the encoder produces
@@ -162,8 +257,9 @@ func TestEventIDUsesCrockfordAlphabet(t *testing.T) {
 	body := strings.TrimPrefix(id, audit.EventIDPrefix)
 
 	for _, char := range body {
-		checkNotContains(t, "ILOU", string(char),
-			"ULID body must not contain ambiguous Crockford characters")
+		if strings.ContainsRune("ILOU", char) {
+			t.Errorf("collection should not contain %v", string(char))
+		}
 	}
 }
 
@@ -176,7 +272,9 @@ func TestEventIDsAreUnique(t *testing.T) {
 	id1 := audit.NewEventID(time.Now())
 	id2 := audit.NewEventID(time.Now())
 
-	checkNotEqual(t, id1, id2, "two consecutive event ids must not collide")
+	if id2 == id1 {
+		t.Errorf("id2 = %v, do not want %v", id2, id1)
+	}
 }
 
 // newFixtureEvent is the shared helper that emits an event the

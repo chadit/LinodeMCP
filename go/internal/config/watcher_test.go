@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -23,13 +24,20 @@ func TestWatcherInitialLoad(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	defer watcher.Close()
 
 	cfg := watcher.Get()
-	checkNotNil(t, cfg)
-	checkEqual(t, "TestServer", cfg.Server.Name)
+	if cfg == nil {
+		t.Fatal("cfg is nil")
+	}
+
+	if cfg.Server.Name != tcTestServer {
+		t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, tcTestServer)
+	}
 }
 
 // TestWatcherPicksUpReload verifies that mutating the file with a newer
@@ -41,7 +49,9 @@ func TestWatcherPicksUpReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	defer watcher.Close()
 
@@ -53,32 +63,31 @@ func TestWatcherPicksUpReload(t *testing.T) {
 	// Bump the file mtime forward a full second so the next poll's
 	// timestamp comparison sees the change cleanly across filesystems
 	// with second-granularity mtimes (HFS+, FAT, tmpfs in some configs).
-	updated := `
-server:
-  name: "ReloadedServer"
-  logLevel: "info"
-environments:
-  default:
-    label: "Default"
-    linode:
-      apiUrl: "https://api.linode.com/v4"
-      token: "tok"
-`
-	checkNoError(t, os.WriteFile(path, []byte(updated), 0o600))
+	updated := reloadedServerYAML
+	if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	bumpMtime(t, path)
 
-	checkEventually(
-		t,
-		func() bool {
-			cfg := watcher.Get()
+	deadline := time.NewTimer(reloadAssertWait)
+	defer deadline.Stop()
 
-			return cfg != nil && cfg.Server.Name == "ReloadedServer"
-		},
-		reloadAssertWait,
-		pollInterval,
-		"watcher should reload after mtime change",
-	)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		cfg := watcher.Get()
+		if cfg != nil && cfg.Server.Name == tcReloadedServer {
+			break
+		}
+
+		select {
+		case <-deadline.C:
+			t.Fatal("watcher should reload after mtime change")
+		case <-ticker.C:
+		}
+	}
 }
 
 // TestWatcherKeepsLastConfigOnBadReload verifies that a syntactically bad
@@ -91,12 +100,16 @@ func TestWatcherKeepsLastConfigOnBadReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	defer watcher.Close()
 
 	original := watcher.Get()
-	checkNotNil(t, original)
+	if original == nil {
+		t.Error("original is nil")
+	}
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -104,21 +117,31 @@ func TestWatcherKeepsLastConfigOnBadReload(t *testing.T) {
 	watcher.Start(ctx)
 
 	// Write garbage that fails parse + validation.
-	checkNoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
+	if err := os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
 	bumpMtime(t, path)
 
 	// Give the watcher time to attempt the reload.
 	select {
 	case reloadErr := <-watcher.Errors():
-		checkError(t, reloadErr)
+		if reloadErr == nil {
+			t.Error("expected an error, got nil")
+		}
 	case <-time.After(reloadAssertWait):
 		t.Fatal("expected a reload error on the errors channel")
 	}
 
 	// Get should still return the original (validated) config.
 	current := watcher.Get()
-	checkNotNil(t, current)
-	checkEqual(t, original.Server.Name, current.Server.Name, "bad reload must not blank the cached config")
+	if current == nil {
+		t.Fatal("current is nil")
+	}
+
+	if current.Server.Name != original.Server.Name {
+		t.Errorf("current.Server.Name = %v, want %v", current.Server.Name, original.Server.Name)
+	}
 }
 
 // TestWatcherOnChangeFiresAfterReload verifies that a SetOnChange callback
@@ -131,7 +154,9 @@ func TestWatcherOnChangeFiresAfterReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	defer watcher.Close()
 
@@ -160,13 +185,21 @@ environments:
       apiUrl: "https://api.linode.com/v4"
       token: "tok"
 `
-	checkNoError(t, os.WriteFile(path, []byte(updated), 0o600))
+	if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
 	bumpMtime(t, path)
 
 	select {
 	case cfg := <-received:
-		checkNotNil(t, cfg)
-		checkEqual(t, "CallbackTriggered", cfg.Server.Name, "OnChange callback must receive the post-reload Config")
+		if cfg == nil {
+			t.Fatal("cfg is nil")
+		}
+
+		if cfg.Server.Name != "CallbackTriggered" {
+			t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, "CallbackTriggered")
+		}
 	case <-time.After(reloadAssertWait):
 		t.Fatal("OnChange callback did not fire within the deadline")
 	}
@@ -182,7 +215,9 @@ func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	defer watcher.Close()
 
@@ -201,7 +236,10 @@ func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
 	watcher.Start(ctx)
 
 	// Garbage config: parse will fail, lastMod stays put, callback must NOT fire.
-	checkNoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
+	if err := os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
 	bumpMtime(t, path)
 
 	select {
@@ -228,12 +266,14 @@ func TestWatcherCloseStopsPolling(t *testing.T) {
 	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
 
 	watcher, err := config.NewWatcher(path, pollInterval)
-	checkNoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	watcher.Start(t.Context())
 	watcher.Close()
 	// Second close must not panic.
-	checkNotPanics(t, watcher.Close)
+	watcher.Close()
 }
 
 // bumpMtime writes the file's mtime forward by 2 seconds so that polls on
@@ -242,5 +282,126 @@ func bumpMtime(t *testing.T, path string) {
 	t.Helper()
 
 	future := time.Now().Add(2 * time.Second)
-	checkNoError(t, os.Chtimes(path, future, future))
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestWatcherReloadsUnderSynctest exercises the hot-reload path inside a
+// synctest bubble. The bubble's fake clock fires the poll ticker without any
+// real time passing, so the test runs instantly with no real sleeps. When the bubble
+// function returns, synctest waits for every goroutine it started to exit and
+// fails if one is still alive -- a built-in goroutine-leak check for run() that
+// needs no third-party dependency.
+func TestWatcherReloadsUnderSynctest(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
+
+	synctest.Test(t, func(t *testing.T) {
+		watcher, err := config.NewWatcher(path, pollInterval)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		reloaded := make(chan *config.Config, 1)
+
+		watcher.SetOnChange(func(cfg *config.Config) {
+			select {
+			case reloaded <- cfg:
+			default:
+			}
+		})
+
+		watcher.Start(t.Context())
+
+		updated := reloadedServerYAML
+		if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Force a strictly-newer mtime. ModTime is a real wall-clock value
+		// (synctest fakes time.Now but not the filesystem), so derive the new
+		// stamp from the file's own mtime rather than time.Now.
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		newer := info.ModTime().Add(2 * time.Second)
+		if err := os.Chtimes(path, newer, newer); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Advance the fake clock past one poll: the ticker fires, run() reloads,
+		// and the callback runs -- all with zero real time elapsed.
+		time.Sleep(2 * pollInterval)
+		synctest.Wait()
+
+		select {
+		case cfg := <-reloaded:
+			if cfg.Server.Name != tcReloadedServer {
+				t.Errorf("cfg.Server.Name = %v, want %v", cfg.Server.Name, "ReloadedServer")
+			}
+		default:
+			t.Fatal("watcher did not reload after the mtime change")
+		}
+
+		if got := watcher.Get().Server.Name; got != tcReloadedServer {
+			t.Errorf("watcher.Get().Server.Name = %v, want %v", got, "ReloadedServer")
+		}
+
+		// Releasing run() before the bubble returns proves Close stops the
+		// goroutine; a broken Close would leave it live and synctest would fail.
+		watcher.Close()
+	})
+}
+
+// TestWatcherCloseStopsPollingUnderSynctest verifies Close actually halts the
+// poll loop: a file change made after Close, even with a newer mtime, must not
+// be picked up. A Close that left run() spinning would reload and fail the
+// assertion. The synctest bubble runs it instantly on the fake clock.
+func TestWatcherCloseStopsPollingUnderSynctest(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
+
+	synctest.Test(t, func(t *testing.T) {
+		watcher, err := config.NewWatcher(path, pollInterval)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		watcher.Start(t.Context())
+		synctest.Wait() // run() is durably blocked on its poll select
+		watcher.Close()
+		synctest.Wait() // run() observes the stop and exits
+
+		// Mutate the file after Close. A stopped watcher must ignore it.
+		updated := reloadedServerYAML
+		if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		newer := info.ModTime().Add(2 * time.Second)
+		if err := os.Chtimes(path, newer, newer); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Advance the fake clock past several polls; with run() stopped nothing
+		// should reload.
+		time.Sleep(2 * pollInterval)
+		synctest.Wait()
+
+		if got := watcher.Get().Server.Name; got == tcReloadedServer {
+			t.Errorf("watcher reloaded after Close: Server.Name = %v", got)
+		}
+	})
 }

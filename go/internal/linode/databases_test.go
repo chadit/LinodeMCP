@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -59,50 +61,92 @@ func TestClientListDatabaseEnginesSuccess(t *testing.T) {
 	engines := []linode.DatabaseEngine{{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseEnginesPath, r.URL.Path, "request path should be /databases/engines")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseEnginesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseEnginesPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    engines,
 			keyPage:    2,
 			keyPages:   3,
 			keyResults: 51,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListDatabaseEngines(t.Context(), 2, 25)
 
-	mustNoError(t, err, "ListDatabaseEngines should succeed on 200 response")
-	mustLen(t, got, 1)
-	checkEqual(t, databaseEngineID, got[0].ID)
-	checkEqual(t, databaseEngineMySQL, got[0].Engine)
-	checkEqual(t, databaseEngineVersion, got[0].Version)
+	got, err := client.ListDatabaseEngines(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != databaseEngineID {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, databaseEngineID)
+	}
+
+	if got[0].Engine != databaseEngineMySQL {
+		t.Errorf("got[0].Engine = %v, want %v", got[0].Engine, databaseEngineMySQL)
+	}
+
+	if got[0].Version != databaseEngineVersion {
+		t.Errorf("got[0].Version = %v, want %v", got[0].Version, databaseEngineVersion)
+	}
 }
 
 func TestClientListDatabaseEnginesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseEnginesPath, r.URL.Path, "request path should be /databases/engines")
+		if r.URL.Path != databaseEnginesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseEnginesPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListDatabaseEngines(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListDatabaseTypesSuccess(t *testing.T) {
@@ -121,51 +165,92 @@ func TestClientListDatabaseTypesSuccess(t *testing.T) {
 	}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseTypesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseTypesPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    types,
 			keyPage:    2,
 			keyPages:   3,
 			keyResults: 51,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.ListDatabaseTypes(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	mustNoError(t, err, "ListDatabaseTypes should succeed on 200 response")
-	mustLen(t, got, 1)
-	checkEqual(t, databaseTypeID, got[0].ID)
-	checkEqual(t, databaseTypeLabel, got[0].Label)
-	checkEqual(t, 1, got[0].Engines.MySQL[0].Quantity)
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != databaseTypeID {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, databaseTypeID)
+	}
+
+	if got[0].Label != databaseTypeLabel {
+		t.Errorf("got[0].Label = %v, want %v", got[0].Label, databaseTypeLabel)
+	}
+
+	if got[0].Engines.MySQL[0].Quantity != 1 {
+		t.Errorf("got[0].Engines.MySQL[0].Quantity = %v, want %v", got[0].Engines.MySQL[0].Quantity, 1)
+	}
 }
 
 func TestClientListDatabaseTypesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		if r.URL.Path != databaseTypesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseTypesPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListDatabaseTypes(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
@@ -178,97 +263,172 @@ func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		if r.URL.Path != databaseTypesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseTypesPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    types,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListDatabaseTypes(t.Context(), 0, 0)
 
-	mustNoError(t, err, "read-only ListDatabaseTypes should retry transient failures")
-	mustLen(t, got, 1)
-	checkEqual(t, databaseTypeID, got[0].ID)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.ListDatabaseTypes(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != databaseTypeID {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, databaseTypeID)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabaseTypeSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != databaseTypeEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseTypeEscapedPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 2, 25)
 
-	mustNoError(t, err, "GetDatabaseType should succeed on 200 response")
-	mustNotNil(t, got, "database type should not be nil")
-	checkEqual(t, databaseTypeID, got.ID)
-	checkEqual(t, databaseTypeLabel, got.Label)
+	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseTypeID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseTypeID)
+	}
+
+	if got.Label != databaseTypeLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseTypeLabel)
+	}
 }
 
 func TestClientGetDatabaseTypeEscapesPathSeparators(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseTypeEscapedSeparatorPath, r.URL.EscapedPath(), "request path should escape separators in type id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeIDWithSeparators, Label: databaseTypeLabel}))
+		if r.URL.EscapedPath() != databaseTypeEscapedSeparatorPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseTypeEscapedSeparatorPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeIDWithSeparators, Label: databaseTypeLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseType(t.Context(), databaseTypeIDWithSeparators, 0, 0)
 
-	mustNoError(t, err)
-	mustNotNil(t, got)
-	checkEqual(t, databaseTypeIDWithSeparators, got.ID)
+	got, err := client.GetDatabaseType(t.Context(), databaseTypeIDWithSeparators, 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseTypeIDWithSeparators {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseTypeIDWithSeparators)
+	}
 }
 
 func TestClientGetDatabaseTypeAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		if r.URL.EscapedPath() != databaseTypeEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseTypeEscapedPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabaseTypeRetriesTransientRead(t *testing.T) {
@@ -279,40 +439,69 @@ func TestClientGetDatabaseTypeRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		if r.URL.EscapedPath() != databaseTypeEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseTypeEscapedPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
 
-	mustNoError(t, err)
-	mustNotNil(t, got)
-	checkEqual(t, int32(2), attempts.Load(), "transient read failures should be retried")
+	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseMySQLConfigPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseMySQLConfigPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"binlog_retention_period": map[string]any{
 				keyDescription: "The minimum amount of time in seconds to keep binlog entries before deletion.",
 				keyExample:     600,
@@ -325,38 +514,61 @@ func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {
 					keyType:        databaseConfigTypeInteger,
 				},
 			},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseMySQLConfig(t.Context())
 
-	mustNoError(t, err, "GetDatabaseMySQLConfig should succeed on 200 response")
-	checkContains(t, got, "binlog_retention_period")
-	checkContains(t, got, "mysql")
+	got, err := client.GetDatabaseMySQLConfig(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := got["binlog_retention_period"]; !ok {
+		t.Errorf("got missing key %v", "binlog_retention_period")
+	}
+
+	if _, ok := got["mysql"]; !ok {
+		t.Errorf("got missing key %v", "mysql")
+	}
 }
 
 func TestClientGetDatabaseMySQLConfigAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		if r.URL.Path != databaseMySQLConfigPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseMySQLConfigPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabaseMySQLConfig(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
@@ -367,44 +579,73 @@ func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		if r.URL.Path != databaseMySQLConfigPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseMySQLConfigPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"mysql": map[string]any{
 				"connect_timeout": map[string]any{keyType: databaseConfigTypeInteger},
 			},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabaseMySQLConfig(t.Context())
 
-	mustNoError(t, err, "read-only GetDatabaseMySQLConfig should retry transient failures")
-	checkContains(t, got, "mysql")
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabaseMySQLConfig(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := got["mysql"]; !ok {
+		t.Errorf("got missing key %v", "mysql")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabasePostgreSQLConfigSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databasePostgreSQLConfigPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLConfigPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			databasePostgreSQLConfigNamespace: map[string]any{
 				databaseConfigMaxConnections: map[string]any{
 					keyDescription: "Sets the maximum number of concurrent connections.",
@@ -412,37 +653,57 @@ func TestClientGetDatabasePostgreSQLConfigSuccess(t *testing.T) {
 					keyType:        databaseConfigTypeInteger,
 				},
 			},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
 
-	mustNoError(t, err, "GetDatabasePostgreSQLConfig should succeed on 200 response")
-	checkContains(t, got, "pg")
+	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := got["pg"]; !ok {
+		t.Errorf("got missing key %v", "pg")
+	}
 }
 
 func TestClientGetDatabasePostgreSQLConfigAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		if r.URL.Path != databasePostgreSQLConfigPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLConfigPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabasePostgreSQLConfig(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
@@ -453,32 +714,48 @@ func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		if r.URL.Path != databasePostgreSQLConfigPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLConfigPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			databasePostgreSQLConfigNamespace: map[string]any{
 				databaseConfigMaxConnections: map[string]any{keyType: databaseConfigTypeInteger},
 			},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
 
-	mustNoError(t, err, "read-only GetDatabasePostgreSQLConfig should retry transient failures")
-	checkContains(t, got, "pg")
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := got["pg"]; !ok {
+		t.Errorf("got missing key %v", "pg")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientListDatabaseInstancesSuccess(t *testing.T) {
@@ -487,50 +764,92 @@ func TestClientListDatabaseInstancesSuccess(t *testing.T) {
 	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"data":     instances,
 			keyPage:    2,
 			keyPages:   3,
 			keyResults: 51,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListDatabaseInstances(t.Context(), 2, 25)
 
-	mustNoError(t, err, "ListDatabaseInstances should succeed on 200 response")
-	mustLen(t, got, 1)
-	checkEqual(t, databaseInstanceID, got[0].ID)
-	checkEqual(t, databaseInstanceLabel, got[0].Label)
-	checkEqual(t, databaseEngineMySQL, got[0].Engine)
+	got, err := client.ListDatabaseInstances(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != databaseInstanceID {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, databaseInstanceID)
+	}
+
+	if got[0].Label != databaseInstanceLabel {
+		t.Errorf("got[0].Label = %v, want %v", got[0].Label, databaseInstanceLabel)
+	}
+
+	if got[0].Engine != databaseEngineMySQL {
+		t.Errorf("got[0].Engine = %v, want %v", got[0].Engine, databaseEngineMySQL)
+	}
 }
 
 func TestClientListDatabaseInstancesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		if r.URL.Path != databaseInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListDatabaseInstances(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
@@ -541,30 +860,46 @@ func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		if r.URL.Path != databaseInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListDatabaseInstances(t.Context(), 0, 0)
 
-	mustNoError(t, err, "read-only ListDatabaseInstances should retry transient failures")
-	mustLen(t, got, 1)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.ListDatabaseInstances(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
@@ -573,50 +908,92 @@ func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
 	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
-		checkEqual(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    instances,
 			keyPage:    2,
 			keyPages:   3,
 			keyResults: 51,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListDatabasePostgreSQLInstances(t.Context(), 2, 25)
 
-	mustNoError(t, err, "ListDatabasePostgreSQLInstances should succeed on 200 response")
-	mustLen(t, got, 1)
-	checkEqual(t, databaseInstanceID, got[0].ID)
-	checkEqual(t, databaseInstanceLabel, got[0].Label)
-	checkEqual(t, databaseEnginePostgreSQL, got[0].Engine)
+	got, err := client.ListDatabasePostgreSQLInstances(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != databaseInstanceID {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, databaseInstanceID)
+	}
+
+	if got[0].Label != databaseInstanceLabel {
+		t.Errorf("got[0].Label = %v, want %v", got[0].Label, databaseInstanceLabel)
+	}
+
+	if got[0].Engine != databaseEnginePostgreSQL {
+		t.Errorf("got[0].Engine = %v, want %v", got[0].Engine, databaseEnginePostgreSQL)
+	}
 }
 
 func TestClientListDatabasePostgreSQLInstancesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		if r.URL.Path != databasePostgreSQLInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListDatabasePostgreSQLInstances(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientListDatabasePostgreSQLInstancesRetriesTransientRead(t *testing.T) {
@@ -627,97 +1004,181 @@ func TestClientListDatabasePostgreSQLInstancesRetriesTransientRead(t *testing.T)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		if r.URL.Path != databasePostgreSQLInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListDatabasePostgreSQLInstances(t.Context(), 0, 0)
 
-	mustNoError(t, err, "read-only ListDatabasePostgreSQLInstances should retry transient failures")
-	mustLen(t, got, 1)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.ListDatabasePostgreSQLInstances(t.Context(), 0, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "GetDatabaseInstance should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseInstanceID, got.ID)
-	checkEqual(t, databaseInstanceLabel, got.Label)
+	got, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseInstanceID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseInstanceID)
+	}
+
+	if got.Label != databaseInstanceLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseInstanceLabel)
+	}
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "GetDatabasePostgreSQLInstance should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseInstanceID, got.ID)
-	checkEqual(t, databaseInstanceLabel, got.Label)
-	checkEqual(t, databaseEnginePostgreSQL, got.Engine)
+	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseInstanceID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseInstanceID)
+	}
+
+	if got.Label != databaseInstanceLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseInstanceLabel)
+	}
+
+	if got.Engine != databaseEnginePostgreSQL {
+		t.Errorf("got.Engine = %v, want %v", got.Engine, databaseEnginePostgreSQL)
+	}
 }
 
 func TestClientGetDatabasePostgreSQLInstanceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabasePostgreSQLInstanceRetriesTransientRead(t *testing.T) {
@@ -728,71 +1189,123 @@ func TestClientGetDatabasePostgreSQLInstanceRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Engine: databaseEnginePostgreSQL}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Engine: databaseEnginePostgreSQL}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "read-only GetDatabasePostgreSQLInstance should retry transient failures")
-	mustNotNil(t, got)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabaseInstanceSSLSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseInstanceSSLPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSSLPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "GetDatabaseInstanceSSL should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
+	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.CACertificate != databaseSSLCACertificate {
+		t.Errorf("got.CACertificate = %v, want %v", got.CACertificate, databaseSSLCACertificate)
+	}
 }
 
 func TestClientGetDatabaseInstanceSSLAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		if r.URL.Path != databaseInstanceSSLPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSSLPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
@@ -803,72 +1316,127 @@ func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		if r.URL.Path != databaseInstanceSSLPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSSLPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "read-only GetDatabaseInstanceSSL should retry transient failures")
-	mustNotNil(t, got)
-	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.CACertificate != databaseSSLCACertificate {
+		t.Errorf("got.CACertificate = %v, want %v", got.CACertificate, databaseSSLCACertificate)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSSLSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstanceSSLPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSSLPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "GetDatabasePostgreSQLInstanceSSL should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
+	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.CACertificate != databaseSSLCACertificate {
+		t.Errorf("got.CACertificate = %v, want %v", got.CACertificate, databaseSSLCACertificate)
+	}
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSSLAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		if r.URL.Path != databasePostgreSQLInstanceSSLPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSSLPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabasePostgreSQLInstanceSSLRetriesTransientRead(t *testing.T) {
@@ -879,51 +1447,83 @@ func TestClientGetDatabasePostgreSQLInstanceSSLRetriesTransientRead(t *testing.T
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		if r.URL.Path != databasePostgreSQLInstanceSSLPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSSLPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "read-only GetDatabasePostgreSQLInstanceSSL should retry transient failures")
-	mustNotNil(t, got)
-	checkEqual(t, databaseSSLCACertificate, got.CACertificate)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.CACertificate != databaseSSLCACertificate {
+		t.Errorf("got.CACertificate = %v, want %v", got.CACertificate, databaseSSLCACertificate)
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabaseInstanceAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabaseInstanceRetriesTransientRead(t *testing.T) {
@@ -934,72 +1534,127 @@ func TestClientGetDatabaseInstanceRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "read-only GetDatabaseInstance should retry transient failures")
-	mustNotNil(t, got)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabaseInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientGetDatabaseInstanceCredentialsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseInstanceCredentialsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "GetDatabaseInstanceCredentials should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, "linode", got.Username)
-	checkEqual(t, "secret", got.Password)
+	got, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Username != firewallSettingsKeyLinode {
+		t.Errorf("got.Username = %v, want %v", got.Username, firewallSettingsKeyLinode)
+	}
+
+	if got.Password != databaseCredentialsPassword {
+		t.Errorf("got.Password = %v, want %v", got.Password, databaseCredentialsPassword)
+	}
 }
 
 func TestClientGetDatabaseInstanceCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
+		if r.URL.Path != databaseInstanceCredentialsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabaseInstanceCredentialsRetriesTransientRead(t *testing.T) {
@@ -1009,74 +1664,136 @@ func TestClientGetDatabaseInstanceCredentialsRetriesTransientRead(t *testing.T) 
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include instance credentials path")
+
+		if r.URL.Path != databaseInstanceCredentialsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "read-only GetDatabaseInstanceCredentials should retry transient failures")
-	mustNotNil(t, got)
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }
 
 func TestClientResetDatabaseInstanceCredentialsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "request body should be empty")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceCredentialsResetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsResetPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "ResetDatabaseInstanceCredentials should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, "linode", got.Username)
-	checkEqual(t, "secret", got.Password)
+	got, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Username != firewallSettingsKeyLinode {
+		t.Errorf("got.Username = %v, want %v", got.Username, firewallSettingsKeyLinode)
+	}
+
+	if got.Password != databaseCredentialsPassword {
+		t.Errorf("got.Password = %v, want %v", got.Password, databaseCredentialsPassword)
+	}
 }
 
 func TestClientResetDatabaseInstanceCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceCredentialsResetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsResetPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientResetDatabaseInstanceCredentialsDoesNotRetryTransientPost(t *testing.T) {
@@ -1086,63 +1803,114 @@ func TestClientResetDatabaseInstanceCredentialsDoesNotRetryTransientPost(t *test
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceCredentialsResetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsResetPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "credential reset POST must not be retried")
+	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientResetDatabasePostgreSQLInstanceCredentialsSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "request body should be empty")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLCredentialsResetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLCredentialsResetPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "ResetDatabasePostgreSQLInstanceCredentials should succeed on 200 response")
+	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientResetDatabasePostgreSQLInstanceCredentialsAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLCredentialsResetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLCredentialsResetPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientResetDatabasePostgreSQLInstanceCredentialsDoesNotRetryTransientPost(t *testing.T) {
@@ -1152,20 +1920,35 @@ func TestClientResetDatabasePostgreSQLInstanceCredentialsDoesNotRetryTransientPo
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLCredentialsResetPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLCredentialsResetPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "PostgreSQL credential reset POST must not be retried")
+	err := client.ResetDatabasePostgreSQLInstanceCredentials(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
@@ -1186,27 +1969,57 @@ func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var gotReq linode.CreateDatabaseInstanceRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		checkEqual(t, expectedReq, gotReq)
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		if !reflect.DeepEqual(gotReq, expectedReq) {
+			t.Errorf("gotReq = %v, want %v", gotReq, expectedReq)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.CreateDatabaseInstance(t.Context(), &expectedReq)
 
-	mustNoError(t, err, "CreateDatabaseInstance should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseInstanceID, got.ID)
-	checkEqual(t, databaseInstanceLabel, got.Label)
+	got, err := client.CreateDatabaseInstance(t.Context(), &expectedReq)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseInstanceID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseInstanceID)
+	}
+
+	if got.Label != databaseInstanceLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseInstanceLabel)
+	}
 }
 
 func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1216,20 +2029,35 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	_, err := client.CreateDatabaseInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEngineID, Region: regionUSEast})
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "non-idempotent create POST must not be retried")
+	_, err := client.CreateDatabaseInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEngineID, Region: regionUSEast})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
@@ -1250,27 +2078,57 @@ func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var gotReq linode.CreateDatabaseInstanceRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		checkEqual(t, expectedReq, gotReq)
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		if !reflect.DeepEqual(gotReq, expectedReq) {
+			t.Errorf("gotReq = %v, want %v", gotReq, expectedReq)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &expectedReq)
 
-	mustNoError(t, err, "CreateDatabasePostgreSQLInstance should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseInstanceID, got.ID)
-	checkEqual(t, databaseInstanceLabel, got.Label)
+	got, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &expectedReq)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseInstanceID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseInstanceID)
+	}
+
+	if got.Label != databaseInstanceLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseInstanceLabel)
+	}
 }
 
 func TestClientCreateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1280,40 +2138,75 @@ func TestClientCreateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	_, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEnginePostgreSQLID, Region: regionUSEast})
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL create POST must not be retried")
+	_, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEnginePostgreSQLID, Region: regionUSEast})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "delete request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "DeleteDatabasePostgreSQLInstance should succeed on 200 response")
+	err := client.DeleteDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1323,20 +2216,35 @@ func TestClientDeleteDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.DeleteDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL delete DELETE must not be retried")
+	err := client.DeleteDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
@@ -1357,27 +2265,57 @@ func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var gotReq linode.UpdateDatabaseInstanceRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		checkEqual(t, expectedReq, gotReq)
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		if !reflect.DeepEqual(gotReq, expectedReq) {
+			t.Errorf("gotReq = %v, want %v", gotReq, expectedReq)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &expectedReq)
 
-	mustNoError(t, err, "UpdateDatabaseInstance should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseInstanceID, got.ID)
-	checkEqual(t, databaseInstanceLabel, got.Label)
+	got, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &expectedReq)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseInstanceID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseInstanceID)
+	}
+
+	if got.Label != databaseInstanceLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseInstanceLabel)
+	}
 }
 
 func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1389,20 +2327,35 @@ func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	_, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting update PUT must not be retried")
+	_, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientUpdateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
@@ -1423,28 +2376,61 @@ func TestClientUpdateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
 
 		var gotReq linode.UpdateDatabaseInstanceRequest
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		checkEqual(t, expectedReq, gotReq)
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+		if !reflect.DeepEqual(gotReq, expectedReq) {
+			t.Errorf("gotReq = %v, want %v", gotReq, expectedReq)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.UpdateDatabasePostgreSQLInstance(t.Context(), databaseInstanceID, &expectedReq)
 
-	mustNoError(t, err, "UpdateDatabasePostgreSQLInstance should succeed on 200 response")
-	mustNotNil(t, got)
-	checkEqual(t, databaseInstanceID, got.ID)
-	checkEqual(t, databaseInstanceLabel, got.Label)
-	checkEqual(t, databaseEnginePostgreSQL, got.Engine)
+	got, err := client.UpdateDatabasePostgreSQLInstance(t.Context(), databaseInstanceID, &expectedReq)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseInstanceID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseInstanceID)
+	}
+
+	if got.Label != databaseInstanceLabel {
+		t.Errorf("got.Label = %v, want %v", got.Label, databaseInstanceLabel)
+	}
+
+	if got.Engine != databaseEnginePostgreSQL {
+		t.Errorf("got.Engine = %v, want %v", got.Engine, databaseEnginePostgreSQL)
+	}
 }
 
 func TestClientUpdateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1456,40 +2442,75 @@ func TestClientUpdateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include instance id")
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	_, err := client.UpdateDatabasePostgreSQLInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting PostgreSQL update PUT must not be retried")
+	_, err := client.UpdateDatabasePostgreSQLInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientDeleteDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "delete request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "DeleteDatabaseInstance should succeed on 200 response")
+	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1499,40 +2520,75 @@ func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-		checkEqual(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != databaseInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "destructive database DELETE must not be retried")
+	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientPatchDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "patch request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstancePatchPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePatchPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "PatchDatabaseInstance should succeed on 200 response")
+	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1542,40 +2598,75 @@ func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstancePatchPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePatchPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting patch POST must not be retried")
+	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientSuspendDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "suspend request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceSuspendPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSuspendPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "SuspendDatabaseInstance should succeed on 200 response")
+	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientSuspendDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1585,40 +2676,75 @@ func TestClientSuspendDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceSuspendPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSuspendPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting suspend POST must not be retried")
+	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientSuspendDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLInstanceSuspendPath, r.URL.Path, "request path should include PostgreSQL instance id and suspend suffix")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "suspend request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstanceSuspendPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSuspendPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.SuspendDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "SuspendDatabasePostgreSQLInstance should succeed on 200 response")
+	err := client.SuspendDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientSuspendDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1628,40 +2754,75 @@ func TestClientSuspendDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLInstanceSuspendPath, r.URL.Path, "request path should include PostgreSQL instance id and suspend suffix")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstanceSuspendPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSuspendPath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.SuspendDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting PostgreSQL suspend POST must not be retried")
+	err := client.SuspendDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientResumeDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceResumePath, r.URL.Path, "request path should include instance id and resume suffix")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "resume request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceResumePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceResumePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.ResumeDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "ResumeDatabaseInstance should succeed on 200 response")
+	err := client.ResumeDatabaseInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientResumeDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1671,40 +2832,75 @@ func TestClientResumeDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databaseInstanceResumePath, r.URL.Path, "request path should include instance id and resume suffix")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databaseInstanceResumePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceResumePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.ResumeDatabaseInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting resume POST must not be retried")
+	err := client.ResumeDatabaseInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientResumeDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		checkEqual(t, http.NoBody, r.Body, "resume request should not send a body")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstanceResumePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceResumePath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		if !reflect.DeepEqual(r.Body, http.NoBody) {
+			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustNoError(t, err, "ResumeDatabasePostgreSQLInstance should succeed on 200 response")
+	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientResumeDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
@@ -1714,65 +2910,122 @@ func TestClientResumeDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
-		checkEqual(t, http.MethodPost, r.Method, "request method should be POST")
-		checkEqual(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
+
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != databasePostgreSQLInstanceResumePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceResumePath)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
-	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
 
-	mustError(t, err)
-	checkEqual(t, int32(1), attempts.Load(), "side-effecting PostgreSQL resume POST must not be retried")
+	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if attempts.Load() != int32(1) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(1))
+	}
 }
 
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-		checkEqual(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}))
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != databaseEngineEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseEngineEscapedPath)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
 
-	mustNoError(t, err, "GetDatabaseEngine should succeed on 200 response")
-	mustNotNil(t, got, "engine should not be nil")
-	checkEqual(t, databaseEngineID, got.ID)
-	checkEqual(t, databaseEngineMySQL, got.Engine)
-	checkEqual(t, databaseEngineVersion, got.Version)
+	got, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.ID != databaseEngineID {
+		t.Errorf("got.ID = %v, want %v", got.ID, databaseEngineID)
+	}
+
+	if got.Engine != databaseEngineMySQL {
+		t.Errorf("got.Engine = %v, want %v", got.Engine, databaseEngineMySQL)
+	}
+
+	if got.Version != databaseEngineVersion {
+		t.Errorf("got.Version = %v, want %v", got.Version, databaseEngineVersion)
+	}
 }
 
 func TestClientGetDatabaseEngineAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
+		if r.URL.EscapedPath() != databaseEngineEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseEngineEscapedPath)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	mustError(t, err)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	mustErrorAs(t, err, &apiErr)
-	checkEqual(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetDatabaseEngineRetriesTransientRead(t *testing.T) {
@@ -1783,26 +3036,42 @@ func TestClientGetDatabaseEngineRetriesTransientRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 
-		checkEqual(t, databaseEngineEscapedPath, r.URL.EscapedPath(), "request path should escape engine id")
+		if r.URL.EscapedPath() != databaseEngineEscapedPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), databaseEngineEscapedPath)
+		}
 
 		if attempts.Load() == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+			if err := json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-			}))
+			}); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}))
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineMySQL, Version: databaseEngineVersion}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
 
-	mustNoError(t, err, "read-only GetDatabaseEngine should retry transient failures")
-	mustNotNil(t, got, "engine should not be nil")
-	checkEqual(t, int32(2), attempts.Load(), "transient read should be retried once")
+	got, err := client.GetDatabaseEngine(t.Context(), databaseEngineID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if attempts.Load() != int32(2) {
+		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
 }

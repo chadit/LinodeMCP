@@ -2,13 +2,12 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -24,23 +23,46 @@ func TestClientListInstanceFirewalls(t *testing.T) {
 	firewalls := []linode.Firewall{{ID: 456, Label: instanceFirewallLabelFixture, Status: instanceFirewallStatusEnabled}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/linode/instances/123/firewalls", r.URL.Path, "request path should match")
-		assert.Equal(t, "2", r.URL.Query().Get("page"), "page query should match")
-		assert.Equal(t, "50", r.URL.Query().Get("page_size"), "page_size query should match")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointInstanceFirewallsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointInstanceFirewallsPath)
+		}
+
+		if r.URL.Query().Get("page") != "2" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("page"), "2")
+		}
+
+		if r.URL.Query().Get("page_size") != "50" {
+			t.Errorf("got %v, want %v", r.URL.Query().Get("page_size"), "50")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: firewalls, keyPage: 2, keyPages: 3, keyResults: 1,
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListInstanceFirewalls(t.Context(), 123, 2, 50)
 
-	require.NoError(t, err, "list instance firewalls should not fail")
-	require.Len(t, got, 1, "one firewall should be returned")
-	assert.Equal(t, instanceFirewallLabelFixture, got[0].Label, "firewall label should match")
+	got, err := client.ListInstanceFirewalls(t.Context(), 123, 2, 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].Label != instanceFirewallLabelFixture {
+		t.Errorf("got[0].Label = %v, want %v", got[0].Label, instanceFirewallLabelFixture)
+	}
 }
 
 func TestClientListInstanceInterfaceFirewalls(t *testing.T) {
@@ -49,25 +71,45 @@ func TestClientListInstanceInterfaceFirewalls(t *testing.T) {
 	firewalls := []linode.Firewall{{ID: 789, Label: instanceFirewallLabelFixture, Status: instanceFirewallStatusEnabled}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/linode/instances/123/interfaces/456/firewalls", r.URL.EscapedPath(), "escaped request path should match")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.EscapedPath() != "/linode/instances/123/interfaces/456/firewalls" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/linode/instances/123/interfaces/456/firewalls")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{
 			Data:    firewalls,
 			Page:    1,
 			Pages:   1,
 			Results: 1,
-		}), "encoding response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 123, 456)
 
-	require.NoError(t, err, "list instance interface firewalls should not fail")
-	require.Len(t, got, 1, "one firewall should be returned")
-	assert.Equal(t, instanceFirewallLabelFixture, got[0].Label, "firewall label should match")
+	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 123, 456)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].Label != instanceFirewallLabelFixture {
+		t.Errorf("got[0].Label = %v, want %v", got[0].Label, instanceFirewallLabelFixture)
+	}
 }
 
 func TestClientListInstanceInterfaceFirewallsRejectsInvalidIDs(t *testing.T) {
@@ -76,32 +118,53 @@ func TestClientListInstanceInterfaceFirewallsRejectsInvalidIDs(t *testing.T) {
 	client := linode.NewClient("https://api.linode.com/v4", "test-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 0, 456)
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected before request")
-	assert.Nil(t, got, "no firewalls should be returned")
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 
 	got, err = client.ListInstanceInterfaceFirewalls(t.Context(), 123, 0)
-	require.ErrorIs(t, err, linode.ErrInterfaceIDPositive, "invalid interface ID should be rejected before request")
-	assert.Nil(t, got, "no firewalls should be returned")
+	if !errors.Is(err, linode.ErrInterfaceIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrInterfaceIDPositive)
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 }
 
 func TestClientListInstanceInterfaceFirewallsHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/interfaces/456/firewalls", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/linode/instances/123/interfaces/456/firewalls" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/interfaces/456/firewalls")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}), "encoding error response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 123, 456)
 
-	require.Error(t, err, "HTTP error should be returned")
-	assert.Nil(t, got, "no firewalls should be returned")
+	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 123, 456)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 }
 
 func TestClientListInstanceFirewallsRejectsInvalidLinodeID(t *testing.T) {
@@ -110,28 +173,44 @@ func TestClientListInstanceFirewallsRejectsInvalidLinodeID(t *testing.T) {
 	client := linode.NewClient("https://api.linode.com/v4", "test-token", nil, linode.WithMaxRetries(0))
 	got, err := client.ListInstanceFirewalls(t.Context(), 0, 0, 0)
 
-	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected before request")
-	assert.Nil(t, got, "no firewalls should be returned")
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 }
 
 func TestClientListInstanceFirewallsHTTPError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/linode/instances/123/firewalls", r.URL.Path, "request path should match")
-		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != endpointInstanceFirewallsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointInstanceFirewallsPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}), "encoding error response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListInstanceFirewalls(t.Context(), 123, 0, 0)
 
-	require.Error(t, err, "HTTP error should be returned")
-	assert.Nil(t, got, "no firewalls should be returned")
+	got, err := client.ListInstanceFirewalls(t.Context(), 123, 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
 }
 
 func TestClientUpdateInstanceFirewallsSuccess(t *testing.T) {
@@ -140,30 +219,54 @@ func TestClientUpdateInstanceFirewallsSuccess(t *testing.T) {
 	firewalls := []linode.Firewall{{ID: 456, Label: "assigned-instance-firewall", Status: instanceFirewallStatusEnabled}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
-		assert.Equal(t, "/linode/instances/123/firewalls", r.URL.Path, "request path should match")
-		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != endpointInstanceFirewallsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointInstanceFirewallsPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
 
 		var body linode.UpdateInstanceFirewallsRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-		assert.Equal(t, []int{456, 789}, body.FirewallIDs, "request body should include firewall IDs")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{
+		if !reflect.DeepEqual(body.FirewallIDs, []int{456, 789}) {
+			t.Errorf("body.FirewallIDs = %v, want %v", body.FirewallIDs, []int{456, 789})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{
 			Data:    firewalls,
 			Page:    2,
 			Pages:   4,
 			Results: 1,
-		}), "encoding response should succeed")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	got, err := client.UpdateInstanceFirewalls(t.Context(), 123, 2, 25, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{456, 789}})
 
-	require.NoError(t, err, "UpdateInstanceFirewalls should succeed on 200 response")
-	require.Len(t, got, 1)
-	assert.Equal(t, 456, got[0].ID)
+	got, err := client.UpdateInstanceFirewalls(t.Context(), 123, 2, 25, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{456, 789}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != 456 {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, 456)
+	}
 }
 
 func TestClientUpdateInstanceFirewallsAllowsEmptyAssignments(t *testing.T) {
@@ -171,19 +274,32 @@ func TestClientUpdateInstanceFirewallsAllowsEmptyAssignments(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body linode.UpdateInstanceFirewallsRequest
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
-		assert.Empty(t, body.FirewallIDs, "empty firewall_ids should be sent to remove assignments")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{Data: []linode.Firewall{}}), "encoding response should succeed")
+		if len(body.FirewallIDs) != 0 {
+			t.Errorf("body.FirewallIDs = %v, want empty", body.FirewallIDs)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{Data: []linode.Firewall{}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	got, err := client.UpdateInstanceFirewalls(t.Context(), 123, 0, 0, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{}})
 
-	require.NoError(t, err, "UpdateInstanceFirewalls should allow an empty firewall_ids list")
-	assert.Empty(t, got)
+	got, err := client.UpdateInstanceFirewalls(t.Context(), 123, 0, 0, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Errorf("got = %v, want empty", got)
+	}
 }
 
 func TestClientUpdateInstanceFirewallsRejectsInvalidLinodeID(t *testing.T) {
@@ -198,11 +314,19 @@ func TestClientUpdateInstanceFirewallsRejectsInvalidLinodeID(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	_, err := client.UpdateInstanceFirewalls(t.Context(), -1, 0, 0, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{456}})
 
-	require.Error(t, err, "UpdateInstanceFirewalls should reject invalid linode IDs before request")
-	assert.False(t, called.Load(), "invalid linode ID should not reach upstream server")
-	assert.ErrorIs(t, err, linode.ErrLinodeIDPositive, "error should expose invalid linode ID sentinel")
+	_, err := client.UpdateInstanceFirewalls(t.Context(), -1, 0, 0, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{456}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if called.Load() {
+		t.Error("called.Load() = true, want false")
+	}
+
+	if !errors.Is(err, linode.ErrLinodeIDPositive) {
+		t.Errorf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
+	}
 }
 
 func TestClientUpdateInstanceFirewallsRejectsNilRequest(t *testing.T) {
@@ -217,11 +341,19 @@ func TestClientUpdateInstanceFirewallsRejectsNilRequest(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	_, err := client.UpdateInstanceFirewalls(t.Context(), 123, 0, 0, nil)
 
-	require.Error(t, err, "UpdateInstanceFirewalls should reject a nil request before request")
-	assert.False(t, called.Load(), "nil request should not reach upstream server")
-	assert.ErrorIs(t, err, linode.ErrUpdateInstanceFirewallsRequestRequired, "error should expose missing request sentinel")
+	_, err := client.UpdateInstanceFirewalls(t.Context(), 123, 0, 0, nil)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if called.Load() {
+		t.Error("called.Load() = true, want false")
+	}
+
+	if !errors.Is(err, linode.ErrUpdateInstanceFirewallsRequestRequired) {
+		t.Errorf("error = %v, want %v", err, linode.ErrUpdateInstanceFirewallsRequestRequired)
+	}
 }
 
 func TestClientUpdateInstanceFirewallsDoesNotRetryTransientFailure(t *testing.T) {
@@ -232,15 +364,23 @@ func TestClientUpdateInstanceFirewallsDoesNotRetryTransientFailure(t *testing.T)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}), "encoding error should succeed")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2))
-	_, err := client.UpdateInstanceFirewalls(t.Context(), 123, 0, 0, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{456}})
 
-	require.Error(t, err, "UpdateInstanceFirewalls should return the transient error")
-	assert.Equal(t, int32(1), callCount.Load(), "state-changing PUT must not be replayed after a transient error")
+	_, err := client.UpdateInstanceFirewalls(t.Context(), 123, 0, 0, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: []int{456}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if callCount.Load() != int32(1) {
+		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(1))
+	}
 }

@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -15,163 +18,47 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeFirewallDevicesListTool(t *testing.T) {
+func TestLinodeFirewallDevicesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	tool, capability, handler := tools.NewLinodeFirewallDevicesListTool(&config.Config{})
 
-		tool, capability, handler := tools.NewLinodeFirewallDevicesListTool(&config.Config{})
+	if tool.Name != "linode_firewall_devices_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_devices_list")
+	}
 
-		expectEqual(t, "linode_firewall_devices_list", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-		expectContains(t, tool.InputSchema.Properties, keyPage, "schema should include page property")
-		expectContains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size property")
-	})
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
 
-		devices := linode.PaginatedResponse[linode.FirewallDevice]{
-			Data: []linode.FirewallDevice{{
-				ID: 456,
-				Entity: linode.FirewallDeviceEntity{
-					ID:    123,
-					Label: firewallDeviceLabelFixture,
-					Type:  monitorAlertDefinitionToolServiceType,
-					URL:   "/v4/linode/instances/123",
-				},
-			}},
-			Page:    2,
-			Pages:   3,
-			Results: 1,
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
+	}
+
+	for _, key := range []string{keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
 		}
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/123/devices", r.URL.Path, "request path should match")
-			checkEqual(t, "2", r.URL.Query().Get(keyPage), "page query should match")
-			checkEqual(t, "50", r.URL.Query().Get(keyPageSize), "page_size query should match")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(devices))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDevicesListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyPage: float64(2), keyPageSize: float64(50)})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, firewallDeviceLabelFixture, "response should include device entity label")
-		expectContains(t, textContent.Text, monitorAlertDefinitionToolServiceType, "response should include entity type")
-	})
-
-	t.Run("rejects invalid firewall id before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := map[string]any{
-			caseMissingFirewallPathID:   nil,
-			caseZeroFirewallPathID:      float64(0),
-			caseSlashFirewallPathID:     paymentMethodIDSlash,
-			caseQueryFirewallPathID:     databaseInvalidInstanceIDQuery,
-			caseTraversalFirewallPathID: pathTraversalValue,
-		}
-
-		for name, rawID := range cases {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallDevicesListTool(cfg)
-
-				args := map[string]any{}
-				if rawID != nil {
-					args[keyFirewallID] = rawID
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid firewall_id should be rejected")
-				assertErrorContains(t, result, errFirewallIDPositive)
-				expectFalse(t, called.Load(), "client should not be called for invalid firewall_id")
-			})
-		}
-	})
-
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/123/devices", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDevicesListTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
-
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve linode_firewall_devices_list")
-	})
+	}
 }
 
-func TestLinodeFirewallDeviceGetTool(t *testing.T) {
+func TestLinodeFirewallDevicesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-
-		tool, capability, handler := tools.NewLinodeFirewallDeviceGetTool(&config.Config{})
-
-		expectEqual(t, "linode_firewall_device_get", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapRead, capability, "tool should be read capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallDeviceID, "schema should include device_id property")
-		expectContains(t, tool.InputSchema.Required, keyFirewallDeviceID, "schema should require device_id")
-	})
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		device := linode.FirewallDevice{
+	devices := linode.PaginatedResponse[linode.FirewallDevice]{
+		Data: []linode.FirewallDevice{{
 			ID: 456,
 			Entity: linode.FirewallDeviceEntity{
 				ID:    123,
@@ -179,416 +66,835 @@ func TestLinodeFirewallDeviceGetTool(t *testing.T) {
 				Type:  monitorAlertDefinitionToolServiceType,
 				URL:   "/v4/linode/instances/123",
 			},
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 1,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			checkNoError(t, json.NewEncoder(w).Encode(device))
-		}))
-		t.Cleanup(srv.Close)
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err, "handler should not return an error")
-		expectNotNil(t, result, "result should not be nil")
-		expectFalse(t, result.IsError, "should not be an error result")
-
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, firewallDeviceLabelFixture, "response should include device entity label")
-		expectContains(t, textContent.Text, monitorAlertDefinitionToolServiceType, "response should include entity type")
-	})
-
-	t.Run("rejects invalid ids before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			args map[string]any
-			want string
-		}{
-			{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
-			{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
-			{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
-			{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
-			{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
-			{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123)}, want: errFirewallDeviceIDPositive},
-			{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0)}, want: errFirewallDeviceIDPositive},
-			{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash}, want: errFirewallDeviceIDPositive},
-			{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery}, want: errFirewallDeviceIDPositive},
-			{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue}, want: errFirewallDeviceIDPositive},
+		if r.URL.Path != tcNetworkingFirewalls123Devices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid IDs should be rejected")
-				assertErrorContains(t, result, testCase.want)
-				expectFalse(t, called.Load(), "client should not be called for invalid IDs")
-			})
+		if r.URL.Query().Get(keyPage) != "2" {
+			t.Errorf("r.URL.Query().Get(keyPage) = %v, want %v", r.URL.Query().Get(keyPage), "2")
 		}
-	})
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+		if r.URL.Query().Get(keyPageSize) != "50" {
+			t.Errorf("r.URL.Query().Get(keyPageSize) = %v, want %v", r.URL.Query().Get(keyPageSize), "50")
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method, "request method should be GET")
-			checkEqual(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+		w.Header().Set("Content-Type", "application/json")
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+		if err := json.NewEncoder(w).Encode(devices); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)}))
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDevicesListTool(cfg)
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to retrieve linode_firewall_device_get")
-	})
+	req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyPage: float64(2), keyPageSize: float64(50)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, firewallDeviceLabelFixture) {
+		t.Errorf("textContent.Text does not contain %v", firewallDeviceLabelFixture)
+	}
+
+	if !strings.Contains(textContent.Text, monitorAlertDefinitionToolServiceType) {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertDefinitionToolServiceType)
+	}
 }
 
-func TestLinodeFirewallDeviceDeleteTool(t *testing.T) {
+func TestLinodeFirewallDevicesListToolRejectsInvalidFirewallIdBeforeClientCall(t *testing.T) {
 	t.Parallel()
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
+	cases := map[string]any{
+		caseMissingFirewallPathID:   nil,
+		caseZeroFirewallPathID:      float64(0),
+		caseSlashFirewallPathID:     paymentMethodIDSlash,
+		caseQueryFirewallPathID:     databaseInvalidInstanceIDQuery,
+		caseTraversalFirewallPathID: pathTraversalValue,
+	}
 
-		tool, capability, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+	for name, rawID := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-		expectEqual(t, "linode_firewall_device_delete", tool.Name, "tool name should match")
-		expectNotEmpty(t, tool.Description, "tool should have a description")
-		expectEqual(t, profiles.CapDestroy, capability, "tool should be destroy capability")
-		expectNotNil(t, handler, "handler should not be nil")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
-		expectContains(t, tool.InputSchema.Properties, keyFirewallDeviceID, "schema should include device_id property")
-		expectContains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm property")
-		expectContains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
-		expectContains(t, tool.InputSchema.Required, keyFirewallDeviceID, "schema should require device_id")
-		expectContains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
-	})
+			var called atomic.Bool
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			checkEqual(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
-			checkEmpty(t, r.URL.RawQuery, "request should not include query params")
-			w.Header().Set("Content-Type", "application/json")
-			_, writeErr := w.Write([]byte(`{}`))
-			checkNoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallDevicesListTool(cfg)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+			args := map[string]any{}
+			if rawID != nil {
+				args[keyFirewallID] = rawID
+			}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectFalse(t, result.IsError, "delete should succeed")
+			if result == nil {
+				t.Fatal("result is nil")
+			}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		expectTrue(t, ok, "content should be TextContent")
-		expectContains(t, textContent.Text, "Firewall device removed successfully", "response should include message")
-		expectContains(t, textContent.Text, keyFirewallID, "response should include firewall ID field")
-		expectContains(t, textContent.Text, keyFirewallDeviceID, "response should include device ID field")
-	})
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
 
-	t.Run("rejects invalid confirm before client call", func(t *testing.T) {
-		t.Parallel()
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
+				t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+			}
 
-		cases := map[string]any{
-			caseMissingConfirm:         nil,
-			caseConfirmFalse:           false,
-			caseStringConfirmRejected:  boolStringTrue,
-			caseNumericConfirmRejected: float64(1),
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallDevicesListToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
 
-		for name, rawConfirm := range cases {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
-
-				args := map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)}
-				if rawConfirm != nil {
-					args[keyConfirm] = rawConfirm
-				}
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid confirm should be rejected")
-				assertErrorContains(t, result, "confirm=true")
-				expectFalse(t, called.Load(), "client should not be called without confirm")
-			})
-		}
-	})
-
-	t.Run("rejects invalid ids before client call", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			name string
-			args map[string]any
-			want string
-		}{
-			{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
-			{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
-			{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
-			{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
-			{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
-			{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
-			{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
-			{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
-			{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
-			{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+		if r.URL.Path != tcNetworkingFirewalls123Devices {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices)
 		}
 
-		for _, testCase := range cases {
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
 
-				var called atomic.Bool
-
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					called.Store(true)
-					w.WriteHeader(http.StatusOK)
-				}))
-				t.Cleanup(srv.Close)
-
-				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-				}}
-				_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
-
-				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-
-				expectNoError(t, err, "handler should not return Go error")
-				expectNotNil(t, result, "handler should return a result")
-				expectTrue(t, result.IsError, "invalid IDs should be rejected")
-				assertErrorContains(t, result, testCase.want)
-				expectFalse(t, called.Load(), "client should not be called for invalid IDs")
-			})
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
-	})
+	}))
+	t.Cleanup(srv.Close)
 
-	t.Run("client error", func(t *testing.T) {
-		t.Parallel()
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDevicesListTool(cfg)
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			checkEqual(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			checkNoError(t, writeErr)
-		}))
-		t.Cleanup(srv.Close)
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
 
-		expectNoError(t, err, "handler should not return Go error")
-		expectNotNil(t, result, "handler should return a result")
-		expectTrue(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "linode_firewall_device_delete failed")
-	})
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_devices_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_devices_list")
+	}
+}
+
+func TestLinodeFirewallDeviceGetToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeFirewallDeviceGetTool(&config.Config{})
+
+	if tool.Name != "linode_firewall_device_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_device_get")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
+	}
+
+	if _, ok := tool.InputSchema.Properties[keyFirewallDeviceID]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallDeviceID)
+	}
+
+	if !slices.Contains(tool.InputSchema.Required, keyFirewallDeviceID) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallDeviceID)
+	}
+}
+
+func TestLinodeFirewallDeviceGetToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	device := linode.FirewallDevice{
+		ID: 456,
+		Entity: linode.FirewallDeviceEntity{
+			ID:    123,
+			Label: firewallDeviceLabelFixture,
+			Type:  monitorAlertDefinitionToolServiceType,
+			URL:   "/v4/linode/instances/123",
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNetworkingFirewalls123Devices456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices456)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(device); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, firewallDeviceLabelFixture) {
+		t.Errorf("textContent.Text does not contain %v", firewallDeviceLabelFixture)
+	}
+
+	if !strings.Contains(textContent.Text, monitorAlertDefinitionToolServiceType) {
+		t.Errorf("textContent.Text does not contain %v", monitorAlertDefinitionToolServiceType)
+	}
+}
+
+func TestLinodeFirewallDeviceGetToolRejectsInvalidIdsBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+		{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+		{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+		{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+		{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+		{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123)}, want: errFirewallDeviceIDPositive},
+		{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0)}, want: errFirewallDeviceIDPositive},
+		{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash}, want: errFirewallDeviceIDPositive},
+		{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery}, want: errFirewallDeviceIDPositive},
+		{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue}, want: errFirewallDeviceIDPositive},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallDeviceGetToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcNetworkingFirewalls123Devices456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices456)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_device_get") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_device_get")
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+
+	if tool.Name != "linode_firewall_device_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_device_delete")
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapDestroy {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyFirewallID, keyFirewallDeviceID, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	for _, key := range []string{keyFirewallID, keyFirewallDeviceID, keyConfirm} {
+		if !slices.Contains(tool.InputSchema.Required, key) {
+			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		}
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcNetworkingFirewalls123Devices456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices456)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		_, writeErr := w.Write([]byte(`{}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Error("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Firewall device removed successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Firewall device removed successfully")
+	}
+
+	if !strings.Contains(textContent.Text, keyFirewallID) {
+		t.Errorf("textContent.Text does not contain %v", keyFirewallID)
+	}
+
+	if !strings.Contains(textContent.Text, keyFirewallDeviceID) {
+		t.Errorf("textContent.Text does not contain %v", keyFirewallDeviceID)
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolRejectsInvalidConfirmBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]any{
+		caseMissingConfirm:         nil,
+		caseConfirmFalse:           false,
+		caseStringConfirmRejected:  boolStringTrue,
+		caseNumericConfirmRejected: float64(1),
+	}
+
+	for name, rawConfirm := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+			args := map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)}
+			if rawConfirm != nil {
+				args[keyConfirm] = rawConfirm
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
+				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolRejectsInvalidIdsBeforeClientCall(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+		{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+		{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+		{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+		{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+		{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+		{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+		{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+		{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+		{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallDeviceIDPositive},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
+			}
+
+			if called.Load() {
+				t.Error("called.Load() = true, want false")
+			}
+		})
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolClientError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		}
+
+		if r.URL.Path != tcNetworkingFirewalls123Devices456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices456)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "linode_firewall_device_delete failed") {
+		t.Errorf("error text %q does not contain %q", text.Text, "linode_firewall_device_delete failed")
+	}
 }
 
 // Dry-run coverage for firewall device delete. Kept in a sibling
 // function so the main test's subtest count stays under maintidx's
 // threshold.
-func TestLinodeFirewallDeviceDeleteToolDryRun(t *testing.T) {
+func TestLinodeFirewallDeviceDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	t.Run("schema advertises dry_run", func(t *testing.T) {
-		t.Parallel()
+	tool, _, _ := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
+		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	}
+}
 
-		tool, _, _ := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
-		expectContains(t, tool.InputSchema.Properties, "dry_run",
-			"schema must advertise the dry_run boolean to the model")
-	})
+func TestLinodeFirewallDeviceDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
+	t.Parallel()
 
-	t.Run("preview without mutating", func(t *testing.T) {
-		t.Parallel()
+	var methodsSeen []string
 
-		var methodsSeen []string
+	deviceBody := `{"id":456,"created":"2024-01-01T00:00:00","updated":"2024-01-01T00:00:00","entity":{"id":789,"type":"linode","label":"web-01","url":"/linode/instances/789"}}`
 
-		deviceBody := `{"id":456,"created":"2024-01-01T00:00:00","updated":"2024-01-01T00:00:00","entity":{"id":789,"type":"linode","label":"web-01","url":"/linode/instances/789"}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methodsSeen = append(methodsSeen, r.Method)
+		if r.URL.Path != tcNetworkingFirewalls123Devices456 {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNetworkingFirewalls123Devices456)
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			methodsSeen = append(methodsSeen, r.Method)
-			checkEqual(t, "/networking/firewalls/123/devices/456", r.URL.Path)
-
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
-
-				if _, writeErr := w.Write([]byte(deviceBody)); writeErr != nil {
-					t.Errorf("write response: %v", writeErr)
-				}
-
-				return
-			}
-
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID:       float64(123),
-			keyFirewallDeviceID: float64(456),
-			keyDryRun:           true,
-		})
-		result, err := handler(t.Context(), req)
-
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError)
-
-		textContent, isText := result.Content[0].(mcp.TextContent)
-		expectTrue(t, isText)
-
-		var body map[string]any
-		expectNoError(t, json.Unmarshal([]byte(textContent.Text), &body))
-		expectEqual(t, true, body[keyDryRun])
-		expectEqual(t, "linode_firewall_device_delete", body["tool"])
-
-		would, isWouldObject := body["would_execute"].(map[string]any)
-		expectTrue(t, isWouldObject)
-		expectEqual(t, "DELETE", would["method"])
-		expectEqual(t, "/networking/firewalls/123/devices/456", would["path"])
-
-		expectEqual(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
-	})
-
-	t.Run("does not require confirm", func(t *testing.T) {
-		t.Parallel()
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			checkEqual(t, http.MethodGet, r.Method)
+		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 
-			if _, writeErr := w.Write([]byte(`{"id":456,"created":"2024-01-01T00:00:00","updated":"2024-01-01T00:00:00","entity":{"id":789,"type":"linode","label":"web-01","url":"/linode/instances/789"}}`)); writeErr != nil {
+			if _, writeErr := w.Write([]byte(deviceBody)); writeErr != nil {
 				t.Errorf("write response: %v", writeErr)
 			}
-		}))
-		defer srv.Close()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		}}
-		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+			return
+		}
 
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID:       float64(123),
-			keyFirewallDeviceID: float64(456),
-			keyDryRun:           true,
-		})
-		result, err := handler(t.Context(), req)
+		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectFalse(t, result.IsError,
-			"dry_run without confirm must succeed; confirm only gates real execution")
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID:       float64(123),
+		keyFirewallDeviceID: float64(456),
+		keyDryRun:           true,
 	})
 
-	t.Run("dry_run still rejects non-positive firewall_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID:       float64(-1),
-			keyFirewallDeviceID: float64(456),
-			keyDryRun:           true,
-		})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectTrue(t, result.IsError,
-			"dry_run with non-positive firewall_id must error the same way the real call would")
-		assertErrorContains(t, result, "firewall_id must be a positive integer")
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Error("isText = false, want true")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body[keyDryRun], true) {
+		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
+	}
+
+	if !reflect.DeepEqual(body["tool"], "linode_firewall_device_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_firewall_device_delete")
+	}
+
+	would, isWouldObject := body["would_execute"].(map[string]any)
+	if !isWouldObject {
+		t.Error("isWouldObject = false, want true")
+	}
+
+	if !reflect.DeepEqual(would["method"], "DELETE") {
+		t.Errorf("got %v, want %v", would["method"], "DELETE")
+	}
+
+	if !reflect.DeepEqual(would["path"], tcNetworkingFirewalls123Devices456) {
+		t.Errorf("got %v, want %v", would["path"], tcNetworkingFirewalls123Devices456)
+	}
+
+	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
+		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if _, writeErr := w.Write([]byte(`{"id":456,"created":"2024-01-01T00:00:00","updated":"2024-01-01T00:00:00","entity":{"id":789,"type":"linode","label":"web-01","url":"/linode/instances/789"}}`)); writeErr != nil {
+			t.Errorf("write response: %v", writeErr)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID:       float64(123),
+		keyFirewallDeviceID: float64(456),
+		keyDryRun:           true,
 	})
 
-	t.Run("dry_run still rejects non-positive device_id", func(t *testing.T) {
-		t.Parallel()
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
-		req := createRequestWithArgs(t, map[string]any{
-			keyFirewallID:       float64(123),
-			keyFirewallDeviceID: float64(-1),
-			keyDryRun:           true,
-		})
-		result, err := handler(t.Context(), req)
+	if result == nil {
+		t.Fatal("result is nil")
+	}
 
-		expectNoError(t, err)
-		expectNotNil(t, result)
-		expectTrue(t, result.IsError,
-			"dry_run with non-positive device_id must error the same way the real call would")
-		assertErrorContains(t, result, "device id must be a positive integer")
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolDryRunDryRunStillRejectsNonPositiveFirewallId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID:       float64(-1),
+		keyFirewallDeviceID: float64(456),
+		keyDryRun:           true,
 	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "firewall_id must be a positive integer") {
+		t.Errorf("error text %q does not contain %q", text.Text, "firewall_id must be a positive integer")
+	}
+}
+
+func TestLinodeFirewallDeviceDeleteToolDryRunDryRunStillRejectsNonPositiveDeviceId(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+	req := createRequestWithArgs(t, map[string]any{
+		keyFirewallID:       float64(123),
+		keyFirewallDeviceID: float64(-1),
+		keyDryRun:           true,
+	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "device id must be a positive integer") {
+		t.Errorf("error text %q does not contain %q", text.Text, "device id must be a positive integer")
+	}
 }

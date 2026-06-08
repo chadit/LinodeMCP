@@ -11,21 +11,39 @@ func TestVolumeCloneToolRegisteredAsWrite(t *testing.T) {
 	t.Parallel()
 
 	srv, err := server.New(fullAccessConfig())
-	requireNoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	infos := srv.ToolInfos()
-	requireNotEmpty(t, infos, "server must expose registered tools")
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
 
 	for _, info := range infos {
 		if info.Name != "linode_volume_clone" {
 			continue
 		}
 
-		assertEqual(t, profiles.CapWrite, info.Capability)
-		assertContains(t, info.InputSchema.Properties, "volume_id")
-		assertContains(t, info.InputSchema.Properties, "label")
-		assertContains(t, info.InputSchema.Properties, "confirm")
-		assertContains(t, info.InputSchema.Properties, "dry_run")
+		if info.Capability != profiles.CapWrite {
+			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapWrite)
+		}
+
+		if _, ok := info.InputSchema.Properties["volume_id"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "volume_id")
+		}
+
+		if _, ok := info.InputSchema.Properties["label"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "label")
+		}
+
+		if _, ok := info.InputSchema.Properties["confirm"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "confirm")
+		}
+
+		if _, ok := info.InputSchema.Properties["dry_run"]; !ok {
+			t.Errorf("info.InputSchema.Properties missing key %v", "dry_run")
+		}
 
 		return
 	}

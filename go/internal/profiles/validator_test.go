@@ -3,6 +3,7 @@ package profiles_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -50,15 +51,29 @@ func TestValidateScopesPATPath(t *testing.T) {
 	}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, required)
-	requireNoError(t, err)
-	requireNotNil(t, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profiles.TokenKindPAT, got.Kind,
-		"non-empty Profile.Scopes must be classified as PAT")
-	assertFalse(t, got.Comparison.HasMissing())
-	assertFalse(t, got.Comparison.HasExcess())
-	assertFalse(t, inspector.grantsCalled,
-		"GetProfileGrants must not be called on the PAT path")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Kind != profiles.TokenKindPAT {
+		t.Errorf("got.Kind = %v, want %v", got.Kind, profiles.TokenKindPAT)
+	}
+
+	if got.Comparison.HasMissing() {
+		t.Error("got.Comparison.HasMissing() = true, want false")
+	}
+
+	if got.Comparison.HasExcess() {
+		t.Error("got.Comparison.HasExcess() = true, want false")
+	}
+
+	if inspector.grantsCalled {
+		t.Error("inspector.grantsCalled = true, want false")
+	}
 }
 
 // TestValidateScopesOAuthPath verifies the OAuth path: empty
@@ -83,15 +98,25 @@ func TestValidateScopesOAuthPath(t *testing.T) {
 	required := []profiles.Scope{profiles.ScopeLinodesReadWrite}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, required)
-	requireNoError(t, err)
-	requireNotNil(t, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profiles.TokenKindOAuth, got.Kind,
-		"empty Profile.Scopes must be classified as OAuth")
-	assertTrue(t, inspector.grantsCalled,
-		"OAuth path must call GetProfileGrants")
-	assertFalse(t, got.Comparison.HasMissing(),
-		"add_linodes implies linodes:read_write, so nothing is missing")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Kind != profiles.TokenKindOAuth {
+		t.Errorf("got.Kind = %v, want %v", got.Kind, profiles.TokenKindOAuth)
+	}
+
+	if !inspector.grantsCalled {
+		t.Error("inspector.grantsCalled = false, want true")
+	}
+
+	if got.Comparison.HasMissing() {
+		t.Error("got.Comparison.HasMissing() = true, want false")
+	}
 }
 
 // TestValidateScopesReportsMissing verifies that under-scoped tokens
@@ -113,14 +138,27 @@ func TestValidateScopesReportsMissing(t *testing.T) {
 	}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, required)
-	requireNoError(t, err, "missing scopes must not surface as an error")
-	requireNotNil(t, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertTrue(t, got.Comparison.HasMissing())
-	assertEqual(t, []profiles.Scope{
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if !got.Comparison.HasMissing() {
+		t.Error("got.Comparison.HasMissing() = false, want true")
+	}
+
+	if !reflect.DeepEqual(got.Comparison.Missing, []profiles.Scope{
 		profiles.ScopeLinodesReadWrite,
 		profiles.ScopeVolumesReadOnly,
-	}, got.Comparison.Missing)
+	}) {
+		t.Errorf("got.Comparison.Missing = %v, want %v", got.Comparison.Missing, []profiles.Scope{
+			profiles.ScopeLinodesReadWrite,
+			profiles.ScopeVolumesReadOnly,
+		})
+	}
 }
 
 // TestValidateScopesProfileErrorWrapped confirms that GetProfile
@@ -133,12 +171,21 @@ func TestValidateScopesProfileErrorWrapped(t *testing.T) {
 	inspector := &fakeInspector{profileErr: apiErr}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, nil)
-	requireError(t, err)
-	assertNil(t, got, "result must be nil on profile fetch failure")
-	requireErrorIs(t, err, profiles.ErrProfileFetchFailed,
-		"error must wrap profiles.ErrProfileFetchFailed for callers to pattern-match")
-	requireErrorIs(t, err, apiErr,
-		"wrapper must preserve the underlying API error in the chain")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+
+	if !errors.Is(err, profiles.ErrProfileFetchFailed) {
+		t.Fatalf("error = %v, want %v", err, profiles.ErrProfileFetchFailed)
+	}
+
+	if !errors.Is(err, apiErr) {
+		t.Fatalf("error = %v, want %v", err, apiErr)
+	}
 }
 
 // TestValidateScopesGrantsErrorWrapped covers the OAuth-path failure:
@@ -154,11 +201,21 @@ func TestValidateScopesGrantsErrorWrapped(t *testing.T) {
 	}
 
 	got, err := profiles.ValidateScopes(t.Context(), inspector, nil)
-	requireError(t, err)
-	assertNil(t, got)
-	requireErrorIs(t, err, profiles.ErrGrantsFetchFailed,
-		"OAuth-path failure must wrap profiles.ErrGrantsFetchFailed")
-	requireErrorIs(t, err, apiErr)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+
+	if !errors.Is(err, profiles.ErrGrantsFetchFailed) {
+		t.Fatalf("error = %v, want %v", err, profiles.ErrGrantsFetchFailed)
+	}
+
+	if !errors.Is(err, apiErr) {
+		t.Fatalf("error = %v, want %v", err, apiErr)
+	}
 }
 
 // TestTokenKindString locks in the user-facing names so log messages
@@ -166,7 +223,15 @@ func TestValidateScopesGrantsErrorWrapped(t *testing.T) {
 func TestTokenKindString(t *testing.T) {
 	t.Parallel()
 
-	assertEqual(t, "Unknown", profiles.TokenKindUnknown.String())
-	assertEqual(t, "PAT", profiles.TokenKindPAT.String())
-	assertEqual(t, "OAuth", profiles.TokenKindOAuth.String())
+	if profiles.TokenKindUnknown.String() != "Unknown" {
+		t.Errorf("profiles.TokenKindUnknown.String() = %v, want %v", profiles.TokenKindUnknown.String(), "Unknown")
+	}
+
+	if profiles.TokenKindPAT.String() != "PAT" {
+		t.Errorf("profiles.TokenKindPAT.String() = %v, want %v", profiles.TokenKindPAT.String(), "PAT")
+	}
+
+	if profiles.TokenKindOAuth.String() != "OAuth" {
+		t.Errorf("profiles.TokenKindOAuth.String() = %v, want %v", profiles.TokenKindOAuth.String(), "OAuth")
+	}
 }

@@ -1,6 +1,8 @@
 package server_test
 
 import (
+	"errors"
+	"slices"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/internal/config"
@@ -47,51 +49,76 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 	cfg := baseTestConfig()
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err, "default-profile server must construct cleanly")
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profiles.BuiltinDefault, srv.ActiveProfile().Name,
-		"unset ActiveProfile must resolve to the built-in default")
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
+
+	if srv.ActiveProfile().Name != profiles.BuiltinDefault {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profiles.BuiltinDefault)
+	}
 
 	names := toolNames(srv)
-	assertContainsf(t, names, toolInstancesList,
-		"default profile must expose read tools like %s", toolInstancesList)
-	assertContainsf(t, names, toolAccountPaymentGet,
-		"default profile must expose read tools like %s", toolAccountPaymentGet)
-	assertContainsf(t, names, toolVolumeTypeList,
-		"default profile must expose read tools like %s", toolVolumeTypeList)
-	assertContainsf(t, names, toolObjectEndpointsList,
-		"default profile must expose read tools like %s", toolObjectEndpointsList)
-	assertContainsf(t, names, toolInstanceVolumeList,
-		"default profile must expose read tools like %s", toolInstanceVolumeList)
-	assertNotContainsf(t, names, toolInstanceCreate,
-		"default profile must not expose write tools like %s", toolInstanceCreate)
-	assertNotContainsf(t, names, toolBucketAccessAllow,
-		"default profile must not expose write tools like %s", toolBucketAccessAllow)
-	assertNotContainsf(t, names, toolMonitorAlertCreate,
-		"default profile must not expose write tools like %s", toolMonitorAlertCreate)
-	assertNotContainsf(t, names, toolMonitorTokenCreate,
-		"default profile must not expose write tools like %s", toolMonitorTokenCreate)
-	assertNotContainsf(t, names, toolMonitorAlertDelete,
-		"default profile must not expose destructive tools like %s", toolMonitorAlertDelete)
-	assertNotContainsf(t, names, toolMonitorAlertUpdate,
-		"default profile must not expose write tools like %s", toolMonitorAlertUpdate)
+	if !slices.Contains(names, toolInstancesList) {
+		t.Errorf("names does not contain %v", toolInstancesList)
+	}
+
+	if !slices.Contains(names, toolAccountPaymentGet) {
+		t.Errorf("names does not contain %v", toolAccountPaymentGet)
+	}
+
+	if !slices.Contains(names, toolVolumeTypeList) {
+		t.Errorf("names does not contain %v", toolVolumeTypeList)
+	}
+
+	if !slices.Contains(names, toolObjectEndpointsList) {
+		t.Errorf("names does not contain %v", toolObjectEndpointsList)
+	}
+
+	if !slices.Contains(names, toolInstanceVolumeList) {
+		t.Errorf("names does not contain %v", toolInstanceVolumeList)
+	}
+
+	if slices.Contains(names, toolInstanceCreate) {
+		t.Errorf("names should not contain %v", toolInstanceCreate)
+	}
+
+	if slices.Contains(names, toolBucketAccessAllow) {
+		t.Errorf("names should not contain %v", toolBucketAccessAllow)
+	}
+
+	if slices.Contains(names, toolMonitorAlertCreate) {
+		t.Errorf("names should not contain %v", toolMonitorAlertCreate)
+	}
+
+	if slices.Contains(names, toolMonitorTokenCreate) {
+		t.Errorf("names should not contain %v", toolMonitorTokenCreate)
+	}
+
+	if slices.Contains(names, toolMonitorAlertDelete) {
+		t.Errorf("names should not contain %v", toolMonitorAlertDelete)
+	}
+
+	if slices.Contains(names, toolMonitorAlertUpdate) {
+		t.Errorf("names should not contain %v", toolMonitorAlertUpdate)
+	}
 
 	for _, info := range srv.ToolInfos() {
-		assertContainsf(
-			t,
-			[]profiles.Capability{profiles.CapRead, profiles.CapMeta},
-			info.Capability,
-			"tool %s registered under default profile has capability %s; default must allow only CapRead/CapMeta",
-			info.Name, info.Capability,
-		)
+		if !slices.Contains([]profiles.Capability{profiles.CapRead, profiles.CapMeta}, info.Capability) {
+			t.Errorf("collection does not contain %v", info.Capability)
+		}
 	}
 
 	// Filtering should drop a meaningful number of tools. The exact count
 	// drifts with new tool additions, so the assertion is a floor: at least
 	// one tool must have been filtered out, and the registered list must
 	// stay smaller than the full inventory.
-	requireNotEmpty(t, names, "default profile should still expose its read surface")
+	if len(names) == 0 {
+		t.Fatal("names is empty")
+	}
 }
 
 // TestNewFullAccessRegistersEverything verifies the opposite end of the
@@ -105,46 +132,76 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 	full := fullAccessConfig()
 
 	srv, err := server.New(full)
-	requireNoError(t, err, "full-access server must construct cleanly")
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profiles.BuiltinFullAccess, srv.ActiveProfile().Name)
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
+
+	if srv.ActiveProfile().Name != profiles.BuiltinFullAccess {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profiles.BuiltinFullAccess)
+	}
 
 	names := toolNames(srv)
-	assertContainsf(t, names, toolInstanceCreate,
-		"full-access must expose write tools like %s", toolInstanceCreate)
-	assertContainsf(t, names, toolInstancesList,
-		"full-access must continue to expose read tools like %s", toolInstancesList)
-	assertContainsf(t, names, toolVolumeTypeList,
-		"full-access must expose read tools like %s", toolVolumeTypeList)
-	assertContainsf(t, names, toolInstanceVolumeList,
-		"full-access must continue to expose read tools like %s", toolInstanceVolumeList)
-	assertContainsf(t, names, toolBucketAccessAllow,
-		"full-access must expose write tools like %s", toolBucketAccessAllow)
-	assertContainsf(t, names, toolMonitorAlertCreate,
-		"full-access must expose write tools like %s", toolMonitorAlertCreate)
-	assertContainsf(t, names, toolMonitorTokenCreate,
-		"full-access must expose write tools like %s", toolMonitorTokenCreate)
-	assertContainsf(t, names, toolMonitorAlertDelete,
-		"full-access must expose destructive tools like %s", toolMonitorAlertDelete)
-	assertContainsf(t, names, toolMonitorAlertUpdate,
-		"full-access must expose write tools like %s", toolMonitorAlertUpdate)
-	assertNotContains(t, names, toolAccountEntityTransferAccept,
-		"deprecated entity-transfer accept route must not be registered")
+	if !slices.Contains(names, toolInstanceCreate) {
+		t.Errorf("names does not contain %v", toolInstanceCreate)
+	}
+
+	if !slices.Contains(names, toolInstancesList) {
+		t.Errorf("names does not contain %v", toolInstancesList)
+	}
+
+	if !slices.Contains(names, toolVolumeTypeList) {
+		t.Errorf("names does not contain %v", toolVolumeTypeList)
+	}
+
+	if !slices.Contains(names, toolInstanceVolumeList) {
+		t.Errorf("names does not contain %v", toolInstanceVolumeList)
+	}
+
+	if !slices.Contains(names, toolBucketAccessAllow) {
+		t.Errorf("names does not contain %v", toolBucketAccessAllow)
+	}
+
+	if !slices.Contains(names, toolMonitorAlertCreate) {
+		t.Errorf("names does not contain %v", toolMonitorAlertCreate)
+	}
+
+	if !slices.Contains(names, toolMonitorTokenCreate) {
+		t.Errorf("names does not contain %v", toolMonitorTokenCreate)
+	}
+
+	if !slices.Contains(names, toolMonitorAlertDelete) {
+		t.Errorf("names does not contain %v", toolMonitorAlertDelete)
+	}
+
+	if !slices.Contains(names, toolMonitorAlertUpdate) {
+		t.Errorf("names does not contain %v", toolMonitorAlertUpdate)
+	}
+
+	if slices.Contains(names, toolAccountEntityTransferAccept) {
+		t.Errorf("names should not contain %v", toolAccountEntityTransferAccept)
+	}
 
 	for _, tool := range srv.Tools() {
-		assertNotEqual(t, toolAccountEntityTransferAccept, tool.Name(),
-			"deprecated entity-transfer accept handler must not be dispatchable")
+		if tool.Name() == toolAccountEntityTransferAccept {
+			t.Errorf("tool.Name() = %v, do not want %v", tool.Name(), toolAccountEntityTransferAccept)
+		}
 	}
 
 	// The full-access tool set must be a strict superset of the default
 	// tool set. Comparing against a default-profile sibling avoids hard
 	// coding a count that drifts with new tools.
 	defaultSrv, err := server.New(baseTestConfig())
-	requireNoError(t, err, "default sibling must construct cleanly")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertGreater(t, len(names), len(defaultSrv.Tools()),
-		"full-access must register strictly more tools than default")
+	if len(names) <= len(defaultSrv.Tools()) {
+		t.Errorf("got %v, want > %v", len(names), len(defaultSrv.Tools()))
+	}
 }
 
 // TestNewDisabledBuiltinFailsStartup confirms server construction refuses
@@ -161,10 +218,17 @@ func TestNewDisabledBuiltinFailsStartup(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	requireError(t, err, "construction must fail when active built-in is disabled")
-	assertNil(t, srv, "server must be nil when construction fails")
-	assertErrorIs(t, err, profiles.ErrActiveProfileDisabled,
-		"error must wrap profiles.ErrActiveProfileDisabled so callers can detect it")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if srv != nil {
+		t.Errorf("srv = %v, want nil", srv)
+	}
+
+	if !errors.Is(err, profiles.ErrActiveProfileDisabled) {
+		t.Errorf("error = %v, want %v", err, profiles.ErrActiveProfileDisabled)
+	}
 }
 
 // TestNewUnknownProfileFailsStartup confirms server construction refuses
@@ -178,10 +242,17 @@ func TestNewUnknownProfileFailsStartup(t *testing.T) {
 	cfg.ActiveProfile = "definitely-not-a-real-profile"
 
 	srv, err := server.New(cfg)
-	requireError(t, err, "construction must fail when active profile is unknown")
-	assertNil(t, srv, "server must be nil when construction fails")
-	assertErrorIs(t, err, profiles.ErrActiveProfileUnknown,
-		"error must wrap profiles.ErrActiveProfileUnknown so callers can detect it")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if srv != nil {
+		t.Errorf("srv = %v, want nil", srv)
+	}
+
+	if !errors.Is(err, profiles.ErrActiveProfileUnknown) {
+		t.Errorf("error = %v, want %v", err, profiles.ErrActiveProfileUnknown)
+	}
 }
 
 // TestNewUserDefinedProfileRegistersExactlyListedTools verifies that a
@@ -202,12 +273,28 @@ func TestNewUserDefinedProfileRegistersExactlyListedTools(t *testing.T) {
 	}
 
 	srv, err := server.New(cfg)
-	requireNoError(t, err, "user-defined profile must construct cleanly")
-	requireNotNil(t, srv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assertEqual(t, profileSingleTool, srv.ActiveProfile().Name)
+	if srv == nil {
+		t.Fatal("srv is nil")
+	}
+
+	if srv.ActiveProfile().Name != profileSingleTool {
+		t.Errorf("srv.ActiveProfile().Name = %v, want %v", srv.ActiveProfile().Name, profileSingleTool)
+	}
 
 	names := toolNames(srv)
-	assertElementsMatch(t, []string{toolVolumesList}, names,
-		"user-defined profile with one allowed tool must register exactly that tool")
+	{
+		gotEls := slices.Clone(names)
+		wantEls := slices.Clone([]string{toolVolumesList})
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("got %v, want %v (any order)", names, []string{toolVolumesList})
+		}
+	}
 }

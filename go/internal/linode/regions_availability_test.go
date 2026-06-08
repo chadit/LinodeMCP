@@ -2,14 +2,12 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
@@ -36,28 +34,57 @@ func TestClientListRegionsAvailabilitySuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/regions/availability", r.URL.Path, "request path should match the documented route")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointRegionsAvailability {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointRegionsAvailability)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    availability,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: len(availability),
-		}), "encoding availability response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.ListRegionsAvailability(t.Context())
 
-	require.NoError(t, err, "ListRegionsAvailability should succeed on 200 response")
-	require.Len(t, result, 2, "should return all availability entries")
-	assert.Equal(t, managedServiceRegion, result[0].Region)
-	assert.Equal(t, regionAvailabilityPlanStandard, result[0].Plan)
-	assert.True(t, result[0].Available)
-	assert.False(t, result[1].Available)
+	result, err := client.ListRegionsAvailability(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 2 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 2)
+	}
+
+	if result[0].Region != managedServiceRegion {
+		t.Errorf("result[0].Region = %v, want %v", result[0].Region, managedServiceRegion)
+	}
+
+	if result[0].Plan != regionAvailabilityPlanStandard {
+		t.Errorf("result[0].Plan = %v, want %v", result[0].Plan, regionAvailabilityPlanStandard)
+	}
+
+	if !result[0].Available {
+		t.Error("result[0].Available = false, want true")
+	}
+
+	if result[1].Available {
+		t.Error("result[1].Available = true, want false")
+	}
 }
 
 func TestClientListRegionsAvailabilityRetriesTransientError(t *testing.T) {
@@ -73,40 +100,67 @@ func TestClientListRegionsAvailabilityRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, "/regions/availability", r.URL.Path, "request path should match the documented route")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.URL.Path != endpointRegionsAvailability {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointRegionsAvailability)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.RegionAvailability{{Region: managedServiceRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
-		}), "encoding availability response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, singleRetryOpts()...)
-	result, err := client.ListRegionsAvailability(t.Context())
 
-	require.NoError(t, err, "read-only availability list should succeed after retry")
-	require.Len(t, result, 1, "should return availability entry after retry")
-	assert.Equal(t, int32(2), attempts, "should retry once after transient failure")
+	result, err := client.ListRegionsAvailability(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
+	}
+
+	if attempts != int32(2) {
+		t.Errorf("attempts = %v, want %v", attempts, int32(2))
+	}
 }
 
 func TestClientListRegionsAvailabilityAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/regions/availability", r.URL.Path, "request path should match the documented route")
+		if r.URL.Path != endpointRegionsAvailability {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointRegionsAvailability)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error response should not fail")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.ListRegionsAvailability(t.Context())
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "ListRegionsAvailability should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }
 
 func TestClientGetRegionAvailabilitySuccess(t *testing.T) {
@@ -115,65 +169,119 @@ func TestClientGetRegionAvailabilitySuccess(t *testing.T) {
 	availability := []linode.RegionAvailability{{Region: managedServiceRegion, Plan: regionAvailabilityPlanStandard, Available: true}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, "/regions/us-east/availability", r.URL.Path, "request path should match the documented route")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != endpointRegionUSEastAvailability {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointRegionUSEastAvailability)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData:    availability,
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: len(availability),
-		}), "encoding availability response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
 
-	require.NoError(t, err, "GetRegionAvailability should succeed on 200 response")
-	require.Len(t, result, 1, "should return all availability entries for the region")
-	assert.Equal(t, managedServiceRegion, result[0].Region)
-	assert.Equal(t, regionAvailabilityPlanStandard, result[0].Plan)
-	assert.True(t, result[0].Available)
+	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
+	}
+
+	if result[0].Region != managedServiceRegion {
+		t.Errorf("result[0].Region = %v, want %v", result[0].Region, managedServiceRegion)
+	}
+
+	if result[0].Plan != regionAvailabilityPlanStandard {
+		t.Errorf("result[0].Plan = %v, want %v", result[0].Plan, regionAvailabilityPlanStandard)
+	}
+
+	if !result[0].Available {
+		t.Error("result[0].Available = false, want true")
+	}
 }
 
 func TestClientGetRegionAvailabilityValidSlugWithHyphen(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/regions/br-gru/availability", r.URL.Path, "valid region slug should not be double encoded")
-		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.URL.Path != "/regions/br-gru/availability" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/regions/br-gru/availability")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.RegionAvailability{{Region: regionAvailabilityHyphenRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
-		}), "encoding availability response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	result, err := client.GetRegionAvailability(t.Context(), regionAvailabilityHyphenRegion)
 
-	require.NoError(t, err, "GetRegionAvailability should accept a valid hyphenated region slug")
-	require.Len(t, result, 1, "should return availability entry for the region")
-	assert.Equal(t, regionAvailabilityHyphenRegion, result[0].Region)
+	result, err := client.GetRegionAvailability(t.Context(), regionAvailabilityHyphenRegion)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
+	}
+
+	if result[0].Region != regionAvailabilityHyphenRegion {
+		t.Errorf("result[0].Region = %v, want %v", result[0].Region, regionAvailabilityHyphenRegion)
+	}
 }
 
 func TestClientGetRegionAvailabilityEscapesRegionID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/regions/us-east%2Fbad%3Fx=1/availability", r.URL.EscapedPath(), "request path should escape the region ID")
-		assert.Empty(t, r.URL.RawQuery, "escaped path parameter should not become query parameters")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []linode.RegionAvailability{}}), "encoding availability response should not fail")
+		if r.URL.EscapedPath() != "/regions/us-east%2Fbad%3Fx=1/availability" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/regions/us-east%2Fbad%3Fx=1/availability")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []linode.RegionAvailability{}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
-	_, err := client.GetRegionAvailability(t.Context(), "us-east/bad?x=1")
 
-	require.NoError(t, err, "GetRegionAvailability should escape path parameters")
+	_, err := client.GetRegionAvailability(t.Context(), "us-east/bad?x=1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientGetRegionAvailabilityRetriesTransientError(t *testing.T) {
@@ -189,38 +297,65 @@ func TestClientGetRegionAvailabilityRetriesTransientError(t *testing.T) {
 			return
 		}
 
-		assert.Equal(t, "/regions/us-east/availability", r.URL.Path, "request path should match the documented route")
-		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		if r.URL.Path != endpointRegionUSEastAvailability {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointRegionUSEastAvailability)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyData: []linode.RegionAvailability{{Region: managedServiceRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
-		}), "encoding availability response should not fail")
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, singleRetryOpts()...)
-	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
 
-	require.NoError(t, err, "read-only availability lookup should succeed after retry")
-	require.Len(t, result, 1, "should return availability entry after retry")
-	assert.Equal(t, int32(2), attempts, "should retry once after transient failure")
+	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
+	}
+
+	if attempts != int32(2) {
+		t.Errorf("attempts = %v, want %v", attempts, int32(2))
+	}
 }
 
 func TestClientGetRegionAvailabilityAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/regions/us-east/availability", r.URL.Path, "request path should match the documented route")
+		if r.URL.Path != endpointRegionUSEastAvailability {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointRegionUSEastAvailability)
+		}
+
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encoding error response should not fail")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
 	_, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	require.Error(t, err, "GetRegionAvailability should fail on 403 response")
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
 
-	var apiErr *linode.APIError
-	require.ErrorAs(t, err, &apiErr, "error should be APIError")
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
+	}
 }

@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -33,32 +35,73 @@ func TestClientUpdateAccountUserSuccess(t *testing.T) {
 	updated := linode.AccountUser{Username: newUsername, Email: accountUserUpdateEmail, Restricted: restricted, SSHKeys: sshKeys, UserType: accountUserTypeDefault}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
-		checkEmpty(t, r.URL.RawQuery, "request should not include query parameters")
-		checkEqual(t, "Bearer my-token", r.Header.Get("Authorization"), "request should include bearer token")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUpdateUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUpdateUsername)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != managedContactAuthHeader {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
+		}
 
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "decode request body")
-		checkEqual(t, accountUserUpdateEmail, body["email"], "email should be serialized")
-		checkEqual(t, restricted, body["restricted"], "restricted should be serialized")
-		checkEqual(t, newUsername, body["username"], "username should be serialized")
-		checkEqual(t, []any{accountUserUpdateSSHKey}, body["ssh_keys"], "ssh keys should be serialized")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(updated), "encode response body")
+		if !reflect.DeepEqual(body["email"], accountUserUpdateEmail) {
+			t.Errorf("got %v, want %v", body["email"], accountUserUpdateEmail)
+		}
+
+		if !reflect.DeepEqual(body["restricted"], restricted) {
+			t.Errorf("got %v, want %v", body["restricted"], restricted)
+		}
+
+		if !reflect.DeepEqual(body["username"], newUsername) {
+			t.Errorf("got %v, want %v", body["username"], newUsername)
+		}
+
+		if !reflect.DeepEqual(body["ssh_keys"], []any{accountUserUpdateSSHKey}) {
+			t.Errorf("got %v, want %v", body["ssh_keys"], []any{accountUserUpdateSSHKey})
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(updated); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
 	got, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "UpdateAccountUser should succeed on 200 response")
-	requireNotNil(t, got, "result should not be nil")
-	checkEqual(t, updated.Username, got.Username, "updated username should match")
-	checkEqual(t, updated.Email, got.Email, "updated email should match")
-	checkTrue(t, got.Restricted, "updated user should be restricted")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Username != updated.Username {
+		t.Errorf("got.Username = %v, want %v", got.Username, updated.Username)
+	}
+
+	if got.Email != updated.Email {
+		t.Errorf("got.Email = %v, want %v", got.Email, updated.Email)
+	}
+
+	if !got.Restricted {
+		t.Error("got.Restricted = false, want true")
+	}
 }
 
 func TestClientUpdateAccountUserSerializesEmptySSHKeys(t *testing.T) {
@@ -66,12 +109,23 @@ func TestClientUpdateAccountUserSerializesEmptySSHKeys(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		checkNoError(t, json.NewDecoder(r.Body).Decode(&body), "decode request body")
-		accountCheckContains(t, body, "ssh_keys", "ssh_keys should be serialized")
-		checkEmpty(t, body["ssh_keys"], "ssh keys should be empty")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUpdateUsername, Email: accountUserUpdateEmail}), "encode response body")
+		if _, ok := body["ssh_keys"]; !ok {
+			t.Errorf("body missing key %v", "ssh_keys")
+		}
+
+		if sshKeys, ok := body["ssh_keys"].([]any); !ok || len(sshKeys) != 0 {
+			t.Errorf("body[ssh_keys] = %v, want an empty array", body["ssh_keys"])
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUpdateUsername, Email: accountUserUpdateEmail}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -79,20 +133,36 @@ func TestClientUpdateAccountUserSerializesEmptySSHKeys(t *testing.T) {
 	sshKeys := []string{}
 
 	got, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, &linode.UpdateAccountUserRequest{SSHKeys: &sshKeys})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "UpdateAccountUser should allow clearing SSH keys")
-	requireNotNil(t, got, "result should not be nil")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
 }
 
 func TestClientUpdateAccountUserEscapesUsername(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/user%2Fname%3Fquery", r.URL.EscapedPath(), "request path should URL-escape username")
-		checkEmpty(t, r.URL.RawQuery, "escaped username must not create a query string")
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query", Email: accountUserUpdateEmail}), "encode response body")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.EscapedPath() != tcAccountUsersUser2Fname3Fquery {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), tcAccountUsersUser2Fname3Fquery)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: "user/name?query", Email: accountUserUpdateEmail}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -100,21 +170,37 @@ func TestClientUpdateAccountUserEscapesUsername(t *testing.T) {
 	email := accountUserUpdateEmail
 
 	got, err := client.UpdateAccountUser(t.Context(), "user/name?query", &linode.UpdateAccountUserRequest{Email: &email})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	requireNoError(t, err, "UpdateAccountUser should URL-escape username path params")
-	requireNotNil(t, got, "result should not be nil")
-	checkEqual(t, "user/name?query", got.Username, "username should match")
+	if got == nil {
+		t.Fatal("got is nil")
+	}
+
+	if got.Username != tcUserNameQuery {
+		t.Errorf("got.Username = %v, want %v", got.Username, tcUserNameQuery)
+	}
 }
 
 func TestClientUpdateAccountUserAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUpdateUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUpdateUsername)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}), "encode error response body")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -122,10 +208,22 @@ func TestClientUpdateAccountUserAPIError(t *testing.T) {
 	email := accountUserUpdateEmail
 
 	got, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, &linode.UpdateAccountUserRequest{Email: &email})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "UpdateAccountUser should propagate API errors")
-	checkNil(t, got, "result should be nil")
-	accountCheckForbiddenError(t, err)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != errForbidden {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
+	}
 }
 
 func TestClientUpdateAccountUserDoesNotRetryTransientError(t *testing.T) {
@@ -135,10 +233,20 @@ func TestClientUpdateAccountUserDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/account/users/"+accountUserUpdateUsername, r.URL.Path, "request path should include username")
+
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/account/users/"+accountUserUpdateUsername {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/users/"+accountUserUpdateUsername)
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserUpdateError}}}), "encode error response body")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryAccountUserUpdateError}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -146,7 +254,11 @@ func TestClientUpdateAccountUserDoesNotRetryTransientError(t *testing.T) {
 	email := accountUserUpdateEmail
 
 	_, err := client.UpdateAccountUser(t.Context(), accountUserUpdateUsername, &linode.UpdateAccountUserRequest{Email: &email})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
 
-	requireError(t, err, "UpdateAccountUser should return the transient error")
-	checkEqual(t, int32(1), requestCount.Load(), "mutating account user update must not be retried")
+	if requestCount.Load() != int32(1) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
+	}
 }

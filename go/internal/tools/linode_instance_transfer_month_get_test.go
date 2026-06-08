@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
@@ -22,9 +21,7 @@ const (
 	transferKeyMonth                   = "month"
 )
 
-func TestLinodeInstanceTransferMonthGetTool(t *testing.T) {
-	t.Parallel()
-
+func TestLinodeInstanceTransferMonthGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
@@ -32,16 +29,40 @@ func TestLinodeInstanceTransferMonthGetTool(t *testing.T) {
 	}
 	tool, capability, handler := tools.NewLinodeInstanceTransferMonthGetTool(cfg)
 
-	t.Run("definition", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, toolLinodeInstanceTransferMonthGet, tool.Name, "tool name should match")
-		assert.NotEmpty(t, tool.Description, "tool should have a description")
-		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
-		require.NotNil(t, handler, "handler should not be nil")
-		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
-		assert.Contains(t, tool.InputSchema.Properties, transferKeyYear, "schema should include year")
-		assert.Contains(t, tool.InputSchema.Properties, transferKeyMonth, "schema should include month")
-	})
+	t.Parallel()
+
+	if tool.Name != toolLinodeInstanceTransferMonthGet {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolLinodeInstanceTransferMonthGet)
+	}
+
+	if tool.Description == "" {
+		t.Error("tool.Description is empty")
+	}
+
+	if capability != profiles.CapRead {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+
+	for _, key := range []string{keyLinodeID, transferKeyYear, transferKeyMonth} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+}
+
+func TestLinodeInstanceTransferMonthGetToolValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeInstanceTransferMonthGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -56,48 +77,81 @@ func TestLinodeInstanceTransferMonthGetTool(t *testing.T) {
 		{name: "query month", args: map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: "1?query"}, wantContains: "month must be an integer"},
 		{name: "month too large", args: map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: 13}, wantContains: "month must be"},
 	}
-
 	for _, validationTest := range validationTests {
 		t.Run(validationTest.name, func(t *testing.T) {
 			t.Parallel()
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, validationTest.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			require.NoError(t, err, "handler should not return Go error")
-			require.NotNil(t, result, "handler should return a result")
-			assert.True(t, result.IsError, "result should be a tool error")
-			assertErrorContains(t, result, validationTest.wantContains)
+			if result == nil {
+				t.Fatal("result is nil")
+			}
+
+			if !result.IsError {
+				t.Error("result.IsError = false, want true")
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, validationTest.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, validationTest.wantContains)
+			}
 		})
 	}
+}
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
+func TestLinodeInstanceTransferMonthGetToolSuccess(t *testing.T) {
+	t.Parallel()
 
-		transfer := linode.Transfer{In: 1.5, Out: 2.5, Total: 4}
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/linode/instances/123/transfer/2024/1", r.URL.Path, "request path should match")
-			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(transfer), "encoding response should not fail")
-		}))
-		t.Cleanup(srv.Close)
-
-		srvCfg := &config.Config{
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-			},
+	transfer := linode.Transfer{In: 1.5, Out: 2.5, Total: 4}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceTransferMonthGetTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: 1}))
+		if r.URL.Path != "/linode/instances/123/transfer/2024/1" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/transfer/2024/1")
+		}
 
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.False(t, result.IsError, "result should not be a tool error")
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, `"total": 4`, "response should contain transfer total")
-	})
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(transfer); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeInstanceTransferMonthGetTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: 1}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, `"total": 4`) {
+		t.Errorf("textContent.Text does not contain %v", `"total": 4`)
+	}
 }

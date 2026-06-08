@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -43,13 +44,28 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolConfirmRequired(t *testing
 				_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg)
 
 				req := createRequestWithArgs(t, args)
+
 				result, err := handler(t.Context(), req)
-				requireNoError(t, err, "handler should return confirmation failures as tool errors")
-				requireNotNil(t, result, "result should not be nil")
-				assertTrue(t, result.IsError, "missing or invalid confirm should be an error result")
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+
+				if result == nil {
+					t.Fatal("result is nil")
+				}
+
+				if !result.IsError {
+					t.Error("result.IsError = false, want true")
+				}
+
 				textContent, ok := result.Content[0].(mcp.TextContent)
-				requireTrue(t, ok, "content should be TextContent")
-				assertContains(t, textContent.Text, "confirm=true", "response should require confirm=true")
+				if !ok {
+					t.Fatal("ok = false, want true")
+				}
+
+				if !strings.Contains(textContent.Text, "confirm=true") {
+					t.Errorf("textContent.Text does not contain %v", "confirm=true")
+				}
 			})
 		}
 	})

@@ -2,8 +2,10 @@ package linode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,17 +28,25 @@ func TestClientCreateStackScriptDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	_, err := client.CreateStackScript(t.Context(), &linode.CreateStackScriptRequest{Label: stackScriptLabelFixture, Script: "#!/bin/bash", Images: []string{privateImage15Fixture}})
 
-	requireError(t, err, "CreateStackScript should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "CreateStackScript must not retry and replay a mutating request")
+	_, err := client.CreateStackScript(t.Context(), &linode.CreateStackScriptRequest{Label: stackScriptLabelFixture, Script: "#!/bin/bash", Images: []string{privateImage15Fixture}})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 func TestClientUpdateStackScriptSuccess(t *testing.T) {
@@ -57,25 +67,56 @@ func TestClientUpdateStackScriptSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkEqual(t, http.MethodPut, r.Method, "request method should be PUT")
-		checkEqual(t, "/linode/stackscripts/12345", r.URL.Path, "request path should include StackScript ID")
-		checkEmpty(t, r.URL.RawQuery, "request query should be empty")
-		checkEqual(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		if r.Method != http.MethodPut {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if r.URL.Path != "/linode/stackscripts/12345" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/stackscripts/12345")
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		if r.Header.Get("Authorization") != "Bearer "+"test-token" {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+"test-token")
+		}
 
 		var body map[string]any
-		if !checkNoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
 			return
 		}
 
-		checkEqual(t, label, body[keyLabel])
-		checkEqual(t, script, body["script"])
-		checkEqual(t, []any{privateImage15Fixture}, body["images"])
-		checkEqual(t, description, body[keyDescription])
-		checkEqual(t, isPublic, body["is_public"])
-		checkEqual(t, revNote, body["rev_note"])
+		if !reflect.DeepEqual(body[keyLabel], label) {
+			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], label)
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		checkNoError(t, json.NewEncoder(w).Encode(linode.StackScript{
+		if !reflect.DeepEqual(body["script"], script) {
+			t.Errorf("got %v, want %v", body["script"], script)
+		}
+
+		if !reflect.DeepEqual(body["images"], []any{privateImage15Fixture}) {
+			t.Errorf("got %v, want %v", body["images"], []any{privateImage15Fixture})
+		}
+
+		if !reflect.DeepEqual(body[keyDescription], description) {
+			t.Errorf("body[keyDescription] = %v, want %v", body[keyDescription], description)
+		}
+
+		if !reflect.DeepEqual(body["is_public"], isPublic) {
+			t.Errorf("got %v, want %v", body["is_public"], isPublic)
+		}
+
+		if !reflect.DeepEqual(body["rev_note"], revNote) {
+			t.Errorf("got %v, want %v", body["rev_note"], revNote)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(linode.StackScript{
 			ID:       stackScriptIDFixture,
 			Label:    label,
 			Script:   script,
@@ -83,17 +124,30 @@ func TestClientUpdateStackScriptSuccess(t *testing.T) {
 			Updated:  stackScriptUpdatedFixture,
 			RevNote:  revNote,
 			IsPublic: isPublic,
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	result, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	requireNoError(t, err)
-	requireNotNil(t, result)
-	checkEqual(t, stackScriptIDFixture, result.ID)
-	checkEqual(t, label, result.Label)
+	result, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != stackScriptIDFixture {
+		t.Errorf("result.ID = %v, want %v", result.ID, stackScriptIDFixture)
+	}
+
+	if result.Label != label {
+		t.Errorf("result.Label = %v, want %v", result.Label, label)
+	}
 }
 
 func TestClientUpdateStackScriptRejectsInvalidID(t *testing.T) {
@@ -107,11 +161,15 @@ func TestClientUpdateStackScriptRejectsInvalidID(t *testing.T) {
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.UpdateStackScript(t.Context(), 0, &linode.UpdateStackScriptRequest{})
 
-	requireError(t, err, "UpdateStackScript should reject invalid IDs")
-	requireErrorIs(t, err, linode.ErrStackScriptIDPositive, "error should expose invalid StackScript ID sentinel")
-	checkEqual(t, false, called.Load(), "invalid StackScript ID should not reach upstream server")
+	_, err := client.UpdateStackScript(t.Context(), 0, &linode.UpdateStackScriptRequest{})
+	if !errors.Is(err, linode.ErrStackScriptIDPositive) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrStackScriptIDPositive)
+	}
+
+	if called.Load() != false {
+		t.Errorf("called.Load() = %v, want %v", called.Load(), false)
+	}
 }
 
 func TestClientUpdateStackScriptRejectsEmptyRequest(t *testing.T) {
@@ -125,11 +183,15 @@ func TestClientUpdateStackScriptRejectsEmptyRequest(t *testing.T) {
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, nil)
 
-	requireError(t, err, "UpdateStackScript should reject nil update requests")
-	requireErrorIs(t, err, linode.ErrStackScriptUpdateRequired, "error should expose empty update sentinel")
-	checkEqual(t, false, called.Load(), "empty StackScript update should not reach upstream server")
+	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, nil)
+	if !errors.Is(err, linode.ErrStackScriptUpdateRequired) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrStackScriptUpdateRequired)
+	}
+
+	if called.Load() != false {
+		t.Errorf("called.Load() = %v, want %v", called.Load(), false)
+	}
 }
 
 func TestClientUpdateStackScriptAPIError(t *testing.T) {
@@ -137,9 +199,12 @@ func TestClientUpdateStackScriptAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: "script is invalid"}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -149,8 +214,14 @@ func TestClientUpdateStackScriptAPIError(t *testing.T) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	apiErr := requireAPIError(t, err, "UpdateStackScript should return API errors")
-	checkEqual(t, "script is invalid", apiErr.Message)
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.APIError", err)
+	}
+
+	if apiErr.Message != "script is invalid" {
+		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, "script is invalid")
+	}
 }
 
 func TestClientUpdateStackScriptNetworkError(t *testing.T) {
@@ -166,8 +237,14 @@ func TestClientUpdateStackScriptNetworkError(t *testing.T) {
 	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	networkErr := requireNetworkError(t, err, "UpdateStackScript should wrap network errors")
-	checkEqual(t, "UpdateStackScript", networkErr.Operation)
+	networkErr, ok := errors.AsType[*linode.NetworkError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.NetworkError", err)
+	}
+
+	if networkErr.Operation != "UpdateStackScript" {
+		t.Errorf("networkErr.Operation = %v, want %v", networkErr.Operation, "UpdateStackScript")
+	}
 }
 
 func TestClientUpdateStackScriptHonorsCircuitBreakerWithoutRetry(t *testing.T) {
@@ -181,22 +258,35 @@ func TestClientUpdateStackScriptHonorsCircuitBreakerWithoutRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	cfg := &config.Config{Resilience: config.ResilienceConfig{CircuitBreakerThreshold: 1, CircuitBreakerTimeout: time.Hour}}
 	client := linode.NewClient(srv.URL, "test-token", cfg, linode.WithMaxRetries(2))
+
 	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
-	requireError(t, err, "first UpdateStackScript should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "UpdateStackScript must not retry and replay a mutating request")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 
 	_, err = client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
-	requireError(t, err, "second UpdateStackScript should be blocked by circuit breaker")
-	requireErrorIs(t, err, linode.ErrCircuitOpen, "open breaker rejects without calling upstream")
-	checkEqual(t, int32(1), calls.Load(), "open breaker must not invoke upstream")
+	if !errors.Is(err, linode.ErrCircuitOpen) {
+		t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
 
 func TestClientUpdateStackScriptDoesNotRetry(t *testing.T) {
@@ -207,9 +297,12 @@ func TestClientUpdateStackScriptDoesNotRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		checkNoError(t, json.NewEncoder(w).Encode(map[string]any{
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
-		}))
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -217,8 +310,13 @@ func TestClientUpdateStackScriptDoesNotRetry(t *testing.T) {
 	request := &linode.UpdateStackScriptRequest{Label: &label}
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
 
-	requireError(t, err, "UpdateStackScript should fail on 500 response")
-	checkEqual(t, int32(1), calls.Load(), "UpdateStackScript must not retry and replay a mutating request")
+	_, err := client.UpdateStackScript(t.Context(), stackScriptIDFixture, request)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if calls.Load() != int32(1) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
+	}
 }
