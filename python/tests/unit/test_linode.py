@@ -9272,8 +9272,46 @@ async def test_retryable_client_share_ipv4s_does_not_replay_errors() -> None:
     await client.close()
 
 
+async def test_client_assign_ips(linode_client: Client) -> None:
+    """Client.assign_ips sends POST /networking/ips/assign."""
+    assignments = [{"address": "192.0.2.1", "linode_id": 123}]
+    mock_response = MagicMock()
+    mock_response.json.return_value = {}
+
+    with patch.object(
+        linode_client,
+        "make_request",
+        new_callable=AsyncMock,
+    ) as mock_req:
+        mock_req.return_value = mock_response
+        result = await linode_client.assign_ips("us-east", assignments)
+
+    mock_req.assert_awaited_once_with(
+        "POST",
+        "/networking/ips/assign",
+        {"region": "us-east", "assignments": assignments},
+    )
+    assert result == {}
+
+
+async def test_client_assign_ips_network_error(linode_client: Client) -> None:
+    """Client.assign_ips raises NetworkError on HTTP failure."""
+    with patch.object(
+        linode_client,
+        "make_request",
+        new_callable=AsyncMock,
+    ) as mock_req:
+        mock_req.side_effect = httpx.ConnectError("connection refused")
+        with pytest.raises(NetworkError) as exc_info:
+            await linode_client.assign_ips(
+                "us-east", [{"address": "192.0.2.1", "linode_id": 123}]
+            )
+
+    assert "AssignIPs" in str(exc_info.value)
+
+
 async def test_client_assign_ipv4s(linode_client: Client) -> None:
-    """Client.assign_ipv4s sends POST /networking/ips/assign."""
+    """Client.assign_ipv4s sends POST /networking/ipv4/assign."""
     assignments = [{"address": "192.0.2.1", "linode_id": 123}]
     mock_response = MagicMock()
     mock_response.json.return_value = {}
@@ -9288,7 +9326,7 @@ async def test_client_assign_ipv4s(linode_client: Client) -> None:
 
     mock_req.assert_awaited_once_with(
         "POST",
-        "/networking/ips/assign",
+        "/networking/ipv4/assign",
         {"region": "us-east", "assignments": assignments},
     )
     assert result == {}
@@ -9308,6 +9346,25 @@ async def test_client_assign_ipv4s_network_error(linode_client: Client) -> None:
             )
 
     assert "AssignIPv4s" in str(exc_info.value)
+
+
+async def test_retryable_client_assign_ips_delegates_without_retry() -> None:
+    """RetryableClient.assign_ips should not replay assignment calls."""
+    client = RetryableClient(
+        "https://api.linode.com/v4", "test-token", RetryConfig(max_retries=3)
+    )
+    assignments = [{"address": "192.0.2.1", "linode_id": 123}]
+
+    with patch.object(
+        client.client, "assign_ips", new_callable=AsyncMock
+    ) as mock_assign:
+        mock_assign.side_effect = httpx.ConnectError("connection refused")
+        with pytest.raises(httpx.ConnectError):
+            await client.assign_ips("us-east", assignments)
+
+        mock_assign.assert_awaited_once_with("us-east", assignments)
+
+    await client.close()
 
 
 async def test_retryable_client_assign_ipv4s_delegates_without_retry() -> None:

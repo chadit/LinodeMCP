@@ -277,7 +277,7 @@ func TestInstanceRebuildTwoStagePlanThenApply(t *testing.T) {
 	rebuildArgs := map[string]any{
 		keyLinodeID: float64(123),
 		keyImage:    "linode/ubuntu24.04",
-		keyRootPass: "Abcdefgh1234",
+		keyRootPass: "Abcdefgh1234", // betterleaks:allow test fixture
 	}
 
 	planArgs := maps.Clone(rebuildArgs)
