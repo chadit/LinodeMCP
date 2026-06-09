@@ -127,7 +127,7 @@ func NewLinodePlacementGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_placement_group_delete",
-		"Deletes a placement group by its ID. This destructive action requires confirm=true.",
+		"Deletes a placement group by its ID. This destructive action requires confirm=true."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithString(
 				"group_id",
@@ -136,6 +136,8 @@ func NewLinodePlacementGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 			),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handlePlacementGroupDeleteRequest,
 	)

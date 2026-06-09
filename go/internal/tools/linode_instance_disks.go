@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeInstanceDiskListTool creates a tool for listing all disks on a Linode instance.
@@ -318,7 +319,7 @@ func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		cfg,
 		"linode_instance_disk_delete",
 		"Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
@@ -327,6 +328,8 @@ func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm deletion. This action is irreversible and all disk data will be lost. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleInstanceDiskDeleteRequest,
 	)
@@ -353,6 +356,7 @@ func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolR
 			return c.DeleteInstanceDisk(ctx, linodeID, diskID)
 		},
 		DependencyWalk: instanceDiskDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Disk"),
 	})
 }
 

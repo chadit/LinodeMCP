@@ -1,0 +1,932 @@
+package tools_test
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/internal/twostage"
+)
+
+const (
+	keyMode      = "mode"
+	keyPlanID    = "plan_id"
+	labelWebProd = "web-prod-01"
+	// tsCosmeticBump is the post-plan value a two-stage test writes into a
+	// hash-ignore field to prove a cosmetic change does not refuse the apply.
+	tsCosmeticBump = "2026-09-09T09:09:09"
+)
+
+// twoStageDeleteServer serves GET /linode/instances/123 from the supplied
+// state box (a test mutates it to simulate drift) and records each DELETE. The
+// atomics keep the handler goroutine race-clean against the test's reads and
+// writes between sequential calls.
+func twoStageDeleteServer(
+	t *testing.T,
+	state *atomic.Pointer[linode.Instance],
+	deleted *atomic.Bool,
+) *config.Config {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleted.Store(true)
+			w.WriteHeader(http.StatusOK)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(state.Load()); err != nil {
+			t.Errorf("encode state: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	return &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+}
+
+func instanceState() *atomic.Pointer[linode.Instance] {
+	box := &atomic.Pointer[linode.Instance]{}
+	box.Store(&linode.Instance{ID: 123, Label: labelWebProd, Status: statusRunning})
+
+	return box
+}
+
+// TestInstanceDeleteTwoStagePlanThenApply covers the happy path: plan returns a
+// plan_id and stores the plan without deleting; apply executes the delete and
+// consumes the plan so a second apply reports PLAN_NOT_FOUND.
+func TestInstanceDeleteTwoStagePlanThenApply(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if planResult.IsError {
+		t.Fatalf("plan IsError, text: %s", dryRunResultText(t, planResult))
+	}
+
+	if deleted.Load() {
+		t.Fatal("plan must not issue a DELETE")
+	}
+
+	plan := decodeBody(t, dryRunResultText(t, planResult))
+
+	id, _ := plan["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan response has no plan_id: %v", plan)
+	}
+
+	if store.Len() != 1 {
+		t.Fatalf("store.Len() = %d, want 1", store.Len())
+	}
+
+	applyResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     id,
+	}))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if applyResult.IsError {
+		t.Fatalf("apply IsError, text: %s", dryRunResultText(t, applyResult))
+	}
+
+	if !deleted.Load() {
+		t.Fatal("apply must issue a DELETE")
+	}
+
+	if !strings.Contains(dryRunResultText(t, applyResult), "removed successfully") {
+		t.Errorf("apply text does not confirm deletion: %s", dryRunResultText(t, applyResult))
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("store.Len() = %d, want 0 (plan consumed)", store.Len())
+	}
+
+	again, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     id,
+	}))
+	if err != nil {
+		t.Fatalf("second apply returned error: %v", err)
+	}
+
+	if !again.IsError || !strings.Contains(dryRunResultText(t, again), "PLAN_NOT_FOUND") {
+		t.Errorf("second apply should report PLAN_NOT_FOUND, got: %s", dryRunResultText(t, again))
+	}
+}
+
+// TestInstanceDeleteTwoStageApplyDrift covers refusal when the resource changed
+// between plan and apply: the re-fetched state hashes differently, so apply
+// reports PLAN_DRIFT_DETECTED and never deletes.
+func TestInstanceDeleteTwoStageApplyDrift(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	id := makePlan(ctx, t, handler)
+
+	state.Store(&linode.Instance{ID: 123, Label: "web-prod-01", Status: "offline"})
+
+	applyResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     id,
+	}))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if !applyResult.IsError || !strings.Contains(dryRunResultText(t, applyResult), "PLAN_DRIFT_DETECTED") {
+		t.Errorf("apply should report PLAN_DRIFT_DETECTED, got: %s", dryRunResultText(t, applyResult))
+	}
+
+	if deleted.Load() {
+		t.Error("drift must not issue a DELETE")
+	}
+}
+
+// TestInstanceDeleteTwoStageApplyUnknownPlan covers an apply that references a
+// plan id the store never held.
+func TestInstanceDeleteTwoStageApplyUnknownPlan(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     "plan_does_not_exist",
+	}))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if !result.IsError || !strings.Contains(dryRunResultText(t, result), "PLAN_NOT_FOUND") {
+		t.Errorf("apply should report PLAN_NOT_FOUND, got: %s", dryRunResultText(t, result))
+	}
+
+	if deleted.Load() {
+		t.Error("unknown plan must not issue a DELETE")
+	}
+}
+
+// TestInstanceDeleteTwoStageApplyExpired covers an apply after the plan TTL has
+// elapsed, simulated by advancing the store's clock.
+func TestInstanceDeleteTwoStageApplyExpired(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	current := time.Now()
+	store := twostage.NewPlanStore(twostage.WithClock(func() time.Time { return current }))
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	id := makePlan(ctx, t, handler)
+
+	current = time.Now().Add(10 * time.Minute)
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     id,
+	}))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if !result.IsError || !strings.Contains(dryRunResultText(t, result), "PLAN_EXPIRED") {
+		t.Errorf("apply should report PLAN_EXPIRED, got: %s", dryRunResultText(t, result))
+	}
+
+	if deleted.Load() {
+		t.Error("expired plan must not issue a DELETE")
+	}
+}
+
+// TestInstanceDeleteTwoStageApplyArgsMismatch covers an apply whose supplied
+// args differ from the stored plan args.
+func TestInstanceDeleteTwoStageApplyArgsMismatch(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	id := makePlan(ctx, t, handler)
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(999),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     id,
+	}))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if !result.IsError || !strings.Contains(dryRunResultText(t, result), "PLAN_ARGS_MISMATCH") {
+		t.Errorf("apply should report PLAN_ARGS_MISMATCH, got: %s", dryRunResultText(t, result))
+	}
+
+	if deleted.Load() {
+		t.Error("args mismatch must not issue a DELETE")
+	}
+}
+
+// makePlan runs a mode:"plan" call for instance 123 and returns its plan_id.
+func makePlan(
+	ctx context.Context,
+	t *testing.T,
+	handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error),
+) string {
+	t.Helper()
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("plan IsError, text: %s", dryRunResultText(t, result))
+	}
+
+	id, _ := decodeBody(t, dryRunResultText(t, result))["plan_id"].(string)
+	if id == "" {
+		t.Fatal("plan response has no plan_id")
+	}
+
+	return id
+}
+
+// TestInstanceDeleteTwoStageIgnoresCosmeticDrift confirms a change limited to a
+// hash-ignore field (Instance.updated) does not count as drift, so the apply
+// still executes.
+func TestInstanceDeleteTwoStageIgnoresCosmeticDrift(t *testing.T) {
+	t.Parallel()
+
+	state := &atomic.Pointer[linode.Instance]{}
+	state.Store(&linode.Instance{
+		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: "2026-01-01T00:00:00",
+	})
+
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	id := makePlan(ctx, t, handler)
+
+	// Only the cosmetic "updated" timestamp moves; this must not be drift.
+	state.Store(&linode.Instance{
+		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: tsCosmeticBump,
+	})
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModeApply,
+		keyPlanID:     id,
+	}))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("a cosmetic-only change must not refuse, got: %s", dryRunResultText(t, result))
+	}
+
+	if !deleted.Load() {
+		t.Error("apply after a cosmetic-only change must DELETE")
+	}
+}
+
+// twoStageJSONServer serves the current state map for GET and records each
+// DELETE, so one helper drives the plan/apply flow for any delete-by-ID tool
+// regardless of the resource type the tool fetches.
+func twoStageJSONServer(
+	t *testing.T,
+	state *atomic.Pointer[map[string]any],
+	deleted *atomic.Bool,
+) *config.Config {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleted.Store(true)
+			w.WriteHeader(http.StatusOK)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(state.Load()); err != nil {
+			t.Errorf("encode state: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	return &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+}
+
+// TestTwoStageDeleteToolsAcrossResources runs plan then apply against each
+// opted-in delete tool beyond instance (volume, LKE cluster), bumping only a
+// hash-ignore field between the two calls. Each tool must produce a plan_id,
+// skip the DELETE during plan, then execute it on apply despite the cosmetic
+// change, proving the tool is opted in and its per-type HashIgnore list works.
+func TestTwoStageDeleteToolsAcrossResources(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
+		idKey     string
+		idVal     any
+		baseState map[string]any
+	}{
+		{
+			name: "volume_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeVolumeDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyVolumeID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "data-01", keyStatus: statusActive, keyUpdated: "2025-12-01T00:00:00"},
+		},
+		{
+			name: "lke_cluster_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeLKEClusterDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyClusterID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "lke-prod", keyStatus: statusReady, keyUpdated: "2025-11-01T00:00:00"},
+		},
+		{
+			name: "firewall_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeFirewallDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyFirewallID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "fw-edge", keyStatus: statusEnabled, keyUpdated: "2025-10-01T00:00:00"},
+		},
+		{
+			name: "nodebalancer_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyNodeBalancerID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "nb-app", keyUpdated: "2025-09-01T00:00:00"},
+		},
+		{
+			name: "vpc_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeVPCDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyVPCID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "vpc-core", keyUpdated: "2025-08-01T00:00:00"},
+		},
+		{
+			name: "domain_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeDomainDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyDomainID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyStatus: statusActive, keyUpdated: "2025-07-01T00:00:00"},
+		},
+		{
+			name: "stackscript_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeStackScriptDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyStackScriptID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "deploy-web", "deployments_total": float64(7), keyUpdated: "2025-06-01T00:00:00"},
+		},
+		{
+			name: "sshkey_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeSSHKeyDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keySSHKeyID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "laptop-key", keyUpdated: "2025-05-01T00:00:00"},
+		},
+		{
+			name: "placement_group_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodePlacementGroupDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyPlacementGroupID,
+			idVal:     "123",
+			baseState: map[string]any{keyLabel: "pg-rack", keyUpdated: "2025-04-01T00:00:00"},
+		},
+		{
+			name: "image_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeImageDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyImageID,
+			idVal:     "private/123",
+			baseState: map[string]any{keyLabel: "golden-img", keyStatus: statusAvailable, keyUpdated: "2025-03-01T00:00:00"},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			base := maps.Clone(testCase.baseState)
+			state := &atomic.Pointer[map[string]any]{}
+			state.Store(&base)
+
+			deleted := &atomic.Bool{}
+			cfg := twoStageJSONServer(t, state, deleted)
+
+			store := twostage.NewPlanStore()
+			ctx := tools.WithPlanStore(t.Context(), store)
+			handler := testCase.handlerOf(cfg)
+
+			id := twoStagePlanID(ctx, t, handler, testCase.idKey, testCase.idVal, deleted, store)
+
+			// Bump only the cosmetic timestamp; the per-type HashIgnore list
+			// must keep this from registering as drift.
+			drifted := maps.Clone(base)
+			drifted[keyUpdated] = tsCosmeticBump
+			state.Store(&drifted)
+
+			applyResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+				testCase.idKey: testCase.idVal,
+				keyMode:        twostage.ModeApply,
+				keyPlanID:      id,
+			}))
+			if err != nil {
+				t.Fatalf("apply returned error: %v", err)
+			}
+
+			if applyResult.IsError {
+				t.Fatalf("a cosmetic-only change must not refuse, got: %s", dryRunResultText(t, applyResult))
+			}
+
+			if !deleted.Load() {
+				t.Error("apply must issue a DELETE")
+			}
+
+			if store.Len() != 0 {
+				t.Errorf("store.Len() = %d, want 0 (plan consumed)", store.Len())
+			}
+		})
+	}
+}
+
+// twoStagePlanID runs the plan call for a delete tool, asserts the plan did not
+// delete and was stored, and returns its plan_id for the follow-up apply.
+func twoStagePlanID(
+	ctx context.Context,
+	t *testing.T,
+	handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error),
+	idKey string,
+	idVal any,
+	deleted *atomic.Bool,
+	store *twostage.PlanStore,
+) string {
+	t.Helper()
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		idKey:   idVal,
+		keyMode: twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if planResult.IsError {
+		t.Fatalf("plan IsError: %s", dryRunResultText(t, planResult))
+	}
+
+	if deleted.Load() {
+		t.Fatal("plan must not issue a DELETE")
+	}
+
+	id, _ := decodeBody(t, dryRunResultText(t, planResult))["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan response has no plan_id")
+	}
+
+	if store.Len() != 1 {
+		t.Fatalf("store.Len() = %d, want 1", store.Len())
+	}
+
+	return id
+}
+
+// twoStageTwoIDPlanID runs the plan call for a two-ID delete tool, asserts the
+// plan did not delete and was stored, and returns its plan_id.
+func twoStageTwoIDPlanID(
+	ctx context.Context,
+	t *testing.T,
+	handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error),
+	outerKey, innerKey string,
+	deleted *atomic.Bool,
+	store *twostage.PlanStore,
+) string {
+	t.Helper()
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		outerKey: float64(10),
+		innerKey: float64(20),
+		keyMode:  twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if planResult.IsError {
+		t.Fatalf("plan IsError: %s", dryRunResultText(t, planResult))
+	}
+
+	if deleted.Load() {
+		t.Fatal("plan must not issue a DELETE")
+	}
+
+	id, _ := decodeBody(t, dryRunResultText(t, planResult))["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan response has no plan_id")
+	}
+
+	if store.Len() != 1 {
+		t.Fatalf("store.Len() = %d, want 1", store.Len())
+	}
+
+	return id
+}
+
+// TestTwoStageTwoIDDeleteTools is the two-ID analog of
+// TestTwoStageDeleteToolsAcrossResources: it drives each opted-in delete tool
+// that takes an (outer, inner) ID pair through plan then apply, bumping only a
+// hash-ignore field between the calls. The two-ID path
+// (RunDestructiveActionByTwoIDs) funnels into RunDestructiveAction, so the
+// same two-stage branch and HashIgnore handling apply.
+func TestTwoStageTwoIDDeleteTools(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
+		outerKey  string
+		innerKey  string
+		baseState map[string]any
+		cosmetic  string
+		driftVal  any
+	}{
+		{
+			name: "instance_disk_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeInstanceDiskDeleteTool(cfg)
+
+				return h
+			},
+			outerKey:  keyLinodeID,
+			innerKey:  keyDiskID,
+			baseState: map[string]any{keyLabel: "boot-disk", keyStatus: statusReady, keyUpdated: "2025-12-02T00:00:00"},
+			cosmetic:  keyUpdated,
+			driftVal:  tsCosmeticBump,
+		},
+		{
+			name: "vpc_subnet_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeVPCSubnetDeleteTool(cfg)
+
+				return h
+			},
+			outerKey:  keyVPCID,
+			innerKey:  keySubnetID,
+			baseState: map[string]any{keyLabel: "subnet-a", keyUpdated: "2025-11-02T00:00:00"},
+			cosmetic:  keyUpdated,
+			driftVal:  tsCosmeticBump,
+		},
+		{
+			name: "domain_record_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeDomainRecordDeleteTool(cfg)
+
+				return h
+			},
+			outerKey:  keyDomainID,
+			innerKey:  keyRecordID,
+			baseState: map[string]any{keyName: "www", keyUpdated: "2025-10-02T00:00:00"},
+			cosmetic:  keyUpdated,
+			driftVal:  tsCosmeticBump,
+		},
+		{
+			name: "lke_pool_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeLKEPoolDeleteTool(cfg)
+
+				return h
+			},
+			outerKey:  keyClusterID,
+			innerKey:  keyPoolID,
+			baseState: map[string]any{keyType: typeG6Standard1, "count": float64(3)},
+			cosmetic:  "nodes",
+			driftVal:  []any{map[string]any{keyStatus: statusReady}},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			base := maps.Clone(testCase.baseState)
+			state := &atomic.Pointer[map[string]any]{}
+			state.Store(&base)
+
+			deleted := &atomic.Bool{}
+			cfg := twoStageJSONServer(t, state, deleted)
+
+			store := twostage.NewPlanStore()
+			ctx := tools.WithPlanStore(t.Context(), store)
+			handler := testCase.handlerOf(cfg)
+
+			id := twoStageTwoIDPlanID(ctx, t, handler, testCase.outerKey, testCase.innerKey, deleted, store)
+
+			drifted := maps.Clone(base)
+			drifted[testCase.cosmetic] = testCase.driftVal
+			state.Store(&drifted)
+
+			applyResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+				testCase.outerKey: float64(10),
+				testCase.innerKey: float64(20),
+				keyMode:           twostage.ModeApply,
+				keyPlanID:         id,
+			}))
+			if err != nil {
+				t.Fatalf("apply returned error: %v", err)
+			}
+
+			if applyResult.IsError {
+				t.Fatalf("a cosmetic-only change must not refuse, got: %s", dryRunResultText(t, applyResult))
+			}
+
+			if !deleted.Load() {
+				t.Error("apply must issue a DELETE")
+			}
+
+			if store.Len() != 0 {
+				t.Errorf("store.Len() = %d, want 0 (plan consumed)", store.Len())
+			}
+		})
+	}
+}
+
+// TestTwoStageConfigTTLOverride confirms a two_stage.default_plan_ttl_seconds
+// override drives the plan's lifetime: the gap between created_at and
+// expires_at equals the configured value, not the 5-minute built-in default.
+func TestTwoStageConfigTTLOverride(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+
+	ttlSeconds := 60
+	cfg.TwoStage = config.TwoStageConfig{DefaultPlanTTLSeconds: &ttlSeconds}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	body := decodeBody(t, dryRunResultText(t, planResult))
+
+	created, errCreated := time.Parse(time.RFC3339, asString(body["created_at"]))
+	if errCreated != nil {
+		t.Fatalf("parse created_at: %v", errCreated)
+	}
+
+	expires, errExpires := time.Parse(time.RFC3339, asString(body["expires_at"]))
+	if errExpires != nil {
+		t.Fatalf("parse expires_at: %v", errExpires)
+	}
+
+	if got := expires.Sub(created); got != 60*time.Second {
+		t.Errorf("plan lifetime = %v, want 60s from the config override", got)
+	}
+}
+
+// TestTwoStageConfigOptOutFallsThrough confirms a two_stage.opt_in entry that
+// forces a CapDestroy tool out makes a mode:"plan" call fall through to the
+// normal single-step flow: no plan is stored and no delete fires.
+func TestTwoStageConfigOptOutFallsThrough(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+	cfg.TwoStage = config.TwoStageConfig{OptIn: map[string]bool{canRunDestroyTool: false}}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("opted-out tool must not store a plan, store.Len() = %d", store.Len())
+	}
+
+	if deleted.Load() {
+		t.Error("plan mode on an opted-out tool must not DELETE")
+	}
+
+	if !result.IsError {
+		t.Errorf("opted-out plan call should fall through to the confirm-required error, got: %s", dryRunResultText(t, result))
+	}
+}
+
+// TestTwoStageConfigPerToolTTLOverride confirms a two_stage.tool_ttl_seconds
+// entry drives that tool's plan lifetime, exercising the per-tool branch of the
+// settings builder (distinct from the default_plan_ttl_seconds path).
+func TestTwoStageConfigPerToolTTLOverride(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	deleted := &atomic.Bool{}
+	cfg := twoStageDeleteServer(t, state, deleted)
+	cfg.TwoStage = config.TwoStageConfig{
+		ToolTTLSeconds: map[string]int{canRunDestroyTool: 120},
+	}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	body := decodeBody(t, dryRunResultText(t, planResult))
+
+	created, errCreated := time.Parse(time.RFC3339, asString(body["created_at"]))
+	if errCreated != nil {
+		t.Fatalf("parse created_at: %v", errCreated)
+	}
+
+	expires, errExpires := time.Parse(time.RFC3339, asString(body["expires_at"]))
+	if errExpires != nil {
+		t.Fatalf("parse expires_at: %v", errExpires)
+	}
+
+	if got := expires.Sub(created); got != 120*time.Second {
+		t.Errorf("plan lifetime = %v, want 120s from the per-tool override", got)
+	}
+}
+
+// TestTwoStagePlanFetchError confirms a failed state fetch during plan returns
+// an error result and stores no plan, so there is nothing to apply.
+func TestTwoStagePlanFetchError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("handler returned transport error: %v", err)
+	}
+
+	if !result.IsError || !strings.Contains(dryRunResultText(t, result), "Failed to fetch state for plan") {
+		t.Errorf("plan with a failing fetch should error, got: %s", dryRunResultText(t, result))
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("no plan should be stored on fetch failure, Len = %d", store.Len())
+	}
+}
+
+func asString(value any) string {
+	s, _ := value.(string)
+
+	return s
+}
+
+func decodeBody(t *testing.T, text string) map[string]any {
+	t.Helper()
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(text), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	return body
+}

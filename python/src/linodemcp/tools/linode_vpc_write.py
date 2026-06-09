@@ -11,7 +11,12 @@ from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -19,6 +24,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -341,7 +348,8 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_delete tool."""
     return Tool(
         name="linode_vpc_delete",
-        description="Deletes a VPC. Pass dry_run=true to preview without deleting.",
+        description="Deletes a VPC. Pass dry_run=true to preview without deleting."
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -355,6 +363,8 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["vpc_id", "confirm"],
         },
@@ -401,6 +411,35 @@ async def _vpc_delete_dependency_walk(
     return details
 
 
+async def _vpc_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, vpc_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_vpc(vpc_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_vpc(vpc_id)
+        return {
+            "message": f"VPC {vpc_id} deleted",
+            "vpc_id": vpc_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_vpc_delete",
+        method="DELETE",
+        path=f"/vpcs/{vpc_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("VPC"),
+    )
+
+
 async def handle_linode_vpc_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -415,6 +454,10 @@ async def handle_linode_vpc_delete(
         vpc_id = int(vpc_id_str)
     except ValueError:
         return error_response("vpc_id must be a valid integer")
+
+    two_stage = await _vpc_delete_two_stage(arguments, cfg, vpc_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 
@@ -620,7 +663,8 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
         name="linode_vpc_subnet_delete",
         description=(
             "Deletes a VPC subnet. Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -635,6 +679,8 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
                 "vpc_id",
@@ -674,6 +720,36 @@ def _vpc_subnet_delete_dependency_walk(subnet_state: Any) -> DryRunDetails:
     return details
 
 
+async def _vpc_subnet_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, vpc_id: int, subnet_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_vpc_subnet(vpc_id, subnet_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_vpc_subnet(vpc_id, subnet_id)
+        return {
+            "message": f"Subnet {subnet_id} deleted from VPC {vpc_id}",
+            "vpc_id": vpc_id,
+            "subnet_id": subnet_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_vpc_subnet_delete",
+        method="DELETE",
+        path=f"/vpcs/{vpc_id}/subnets/{subnet_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("VPCSubnet"),
+    )
+
+
 async def handle_linode_vpc_subnet_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -684,6 +760,10 @@ async def handle_linode_vpc_subnet_delete(
     if isinstance(ids, list):
         return ids
     vpc_id, subnet_id = ids
+
+    two_stage = await _vpc_subnet_delete_two_stage(arguments, cfg, vpc_id, subnet_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

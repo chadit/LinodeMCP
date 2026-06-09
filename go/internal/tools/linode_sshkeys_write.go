@@ -168,12 +168,14 @@ func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_sshkey_delete",
-		"Deletes an SSH key from your Linode profile. This will not affect any instances already using this key. Pass dry_run=true to preview without deleting.",
+		"Deletes an SSH key from your Linode profile. This will not affect any instances already using this key. Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("sshkey_id", mcp.Required(), mcp.Description("The ID of the SSH key to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm SSH key deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeSSHKeyDeleteRequest,
 	)

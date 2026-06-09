@@ -7,7 +7,12 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -15,6 +20,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -233,7 +240,8 @@ def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes an SSH key from your Linode profile."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -255,10 +263,41 @@ def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["ssh_key_id", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _sshkey_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, ssh_key_id_int: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_ssh_key(ssh_key_id_int)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_ssh_key(ssh_key_id_int)
+        return {
+            "message": f"SSH key {ssh_key_id_int} deleted successfully",
+            "ssh_key_id": ssh_key_id_int,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_sshkey_delete",
+        method="DELETE",
+        path=f"/profile/sshkeys/{ssh_key_id_int}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("SSHKey"),
+    )
 
 
 async def handle_linode_sshkey_delete(
@@ -271,6 +310,10 @@ async def handle_linode_sshkey_delete(
         return error_response("ssh_key_id is required")
 
     ssh_key_id_int = int(ssh_key_id)
+
+    two_stage = await _sshkey_delete_two_stage(arguments, cfg, ssh_key_id_int)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

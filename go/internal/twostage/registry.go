@@ -24,15 +24,64 @@ import (
 // state drifts between plan and apply.
 const DefaultPlanTTL = 5 * time.Minute
 
-// OptedIn reports whether a tool participates in the two-stage flow. The
-// explicit registry overrides the capability default: CapDestroy and CapAdmin
-// default in, CapWrite defaults out (flip per tool in the registry), CapRead
-// and CapMeta are never opted in.
-func OptedIn(tool string, capability profiles.Capability) bool {
-	if override, ok := optedInOverrides()[tool]; ok {
+// Settings carries the operator-tunable two-stage parameters resolved from
+// config: the default plan lifetime plus per-tool TTL and opt-in overrides.
+// The zero value behaves exactly like the built-in defaults (DefaultPlanTTL
+// and the capability-default opt-in), so a caller without config can pass
+// Settings{} and get the same answers the package-level helpers give.
+type Settings struct {
+	// DefaultTTL overrides DefaultPlanTTL for every tool. Non-positive means
+	// "unset": fall back to DefaultPlanTTL.
+	DefaultTTL time.Duration
+	// ToolTTL overrides DefaultTTL for the named tools. A non-positive entry
+	// is ignored.
+	ToolTTL map[string]time.Duration
+	// OptIn forces a tool in (true) or out (false) of the flow by name,
+	// overriding the capability default.
+	OptIn map[string]bool
+}
+
+// OptedIn reports whether a tool participates in the two-stage flow under these
+// settings. An explicit OptIn entry wins; otherwise the capability default
+// applies: CapDestroy and CapAdmin opt in, everything else stays out.
+func (s Settings) OptedIn(tool string, capability profiles.Capability) bool {
+	if override, ok := s.OptIn[tool]; ok {
 		return override
 	}
 
+	return capabilityOptedIn(capability)
+}
+
+// PlanTTL returns the plan lifetime for a tool: an explicit per-tool override
+// wins, then DefaultTTL, then the built-in DefaultPlanTTL.
+func (s Settings) PlanTTL(tool string) time.Duration {
+	if ttl, ok := s.ToolTTL[tool]; ok && ttl > 0 {
+		return ttl
+	}
+
+	if s.DefaultTTL > 0 {
+		return s.DefaultTTL
+	}
+
+	return DefaultPlanTTL
+}
+
+// OptedIn reports whether a tool participates in the two-stage flow under the
+// built-in defaults (no config overrides). CapDestroy and CapAdmin default in;
+// CapRead, CapWrite, and CapMeta stay out.
+func OptedIn(tool string, capability profiles.Capability) bool {
+	return Settings{}.OptedIn(tool, capability)
+}
+
+// PlanTTL returns the built-in plan lifetime for a tool (DefaultPlanTTL),
+// ignoring any config overrides. Callers with config use Settings.PlanTTL.
+func PlanTTL(tool string) time.Duration {
+	return Settings{}.PlanTTL(tool)
+}
+
+// capabilityOptedIn is the capability default shared by Settings.OptedIn and
+// the package-level OptedIn: destructive and admin tools opt in, the rest out.
+func capabilityOptedIn(capability profiles.Capability) bool {
 	switch capability {
 	case profiles.CapDestroy, profiles.CapAdmin:
 		return true
@@ -41,28 +90,4 @@ func OptedIn(tool string, capability profiles.Capability) bool {
 	default:
 		return false
 	}
-}
-
-// optedInOverrides is the explicit per-tool registry. Only deviations from the
-// capability default belong here: a CapWrite tool that should opt in, or a
-// CapDestroy/CapAdmin tool that should opt out. CapDestroy and CapAdmin tools
-// need no entry; the capability default in OptedIn already covers them.
-// Phase 2 populates this as tools gain state-fetch support.
-func optedInOverrides() map[string]bool {
-	return map[string]bool{}
-}
-
-// PlanTTL returns the plan lifetime for a tool, honoring per-tool overrides
-// and falling back to DefaultPlanTTL. Tools with a larger blast radius can be
-// given more review time here.
-func PlanTTL(tool string) time.Duration {
-	if ttl, ok := planTTLOverrides()[tool]; ok {
-		return ttl
-	}
-
-	return DefaultPlanTTL
-}
-
-func planTTLOverrides() map[string]time.Duration {
-	return map[string]time.Duration{}
 }

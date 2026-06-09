@@ -11,7 +11,12 @@ from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -19,6 +24,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -283,7 +290,8 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes an LKE cluster and all associated resources."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -297,6 +305,8 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -342,6 +352,35 @@ async def _lke_cluster_delete_dependency_walk(
     return details
 
 
+async def _lke_cluster_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, cluster_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_lke_cluster(cluster_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_lke_cluster(cluster_id)
+        return {
+            "message": f"LKE cluster {cluster_id} deleted successfully",
+            "cluster_id": cluster_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_lke_cluster_delete",
+        method="DELETE",
+        path=f"/lke/clusters/{cluster_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("LKECluster"),
+    )
+
+
 async def handle_linode_lke_cluster_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -353,6 +392,10 @@ async def handle_linode_lke_cluster_delete(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    two_stage = await _lke_cluster_delete_two_stage(arguments, cfg, cluster_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 
@@ -737,7 +780,8 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes a node pool from an LKE cluster."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -755,6 +799,8 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
@@ -820,6 +866,36 @@ def _lke_pool_delete_dependency_walk(pool_state: Any) -> DryRunDetails:
     return details
 
 
+async def _lke_pool_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, cluster_id: int, pool_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_lke_node_pool(cluster_id, pool_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_lke_node_pool(cluster_id, pool_id)
+        return {
+            "message": f"Node pool {pool_id} deleted from cluster {cluster_id}",
+            "cluster_id": cluster_id,
+            "pool_id": pool_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_lke_pool_delete",
+        method="DELETE",
+        path=f"/lke/clusters/{cluster_id}/pools/{pool_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("LKENodePool"),
+    )
+
+
 async def handle_linode_lke_pool_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -828,6 +904,10 @@ async def handle_linode_lke_pool_delete(
     if isinstance(parsed, list):
         return parsed
     cluster_id, pool_id = parsed
+
+    two_stage = await _lke_pool_delete_two_stage(arguments, cfg, cluster_id, pool_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

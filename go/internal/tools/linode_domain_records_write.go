@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeDomainRecordCreateTool creates a tool for creating a domain record.
@@ -310,7 +311,7 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_domain_record_delete",
-		"Deletes a DNS record from a domain. Pass dry_run=true to preview without deleting.",
+		"Deletes a DNS record from a domain. Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("domain_id", mcp.Required(),
 				mcp.Description("The ID of the domain containing the record")),
@@ -319,6 +320,8 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm DNS record deletion. This action is irreversible. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeDomainRecordDeleteRequest,
 	)
@@ -341,5 +344,6 @@ func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.Cal
 		Execute: func(ctx context.Context, c *linode.Client, domainID, recordID int) error {
 			return c.DeleteDomainRecord(ctx, domainID, recordID)
 		},
+		HashIgnore: twostage.HashIgnoreFields("DomainRecord"),
 	})
 }

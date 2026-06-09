@@ -20,6 +20,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 	"github.com/chadit/LinodeMCP/pkg/contracts"
 )
 
@@ -88,6 +89,12 @@ type Server struct {
 	// main keep credential-only redaction behavior; production startup
 	// flips it to true unless the operator opts out.
 	auditRedactPII bool
+
+	// planStore holds outstanding two-stage plans for the life of the
+	// process. The capture middleware attaches it to every call's context
+	// so a two-stage-aware destroy handler can produce a plan and later
+	// apply it after a drift check. Start launches the TTL janitor.
+	planStore *twostage.PlanStore
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -112,6 +119,7 @@ func New(cfg *config.Config) (*Server, error) {
 		registered:    make(map[string]*toolWrapper),
 		draftRegistry: builder.NewRegistry(),
 		auditSink:     audit.NoopSink{},
+		planStore:     twostage.NewPlanStore(),
 	}
 
 	srv.allEntries = collectAllToolEntries(cfg)
@@ -416,6 +424,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	log.Printf("LinodeMCP server started")
 
+	// Reap expired two-stage plans for the life of the serve context.
+	s.planStore.StartJanitor(ctx, time.Minute)
+
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -589,6 +600,8 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 			ctx = tools.WithYoloAllowed(ctx)
 		}
 
+		ctx = tools.WithPlanStore(ctx, s.planStore)
+
 		result, err := handler(ctx, req)
 
 		finalizeAuditEvent(&evt, start, err)
@@ -650,6 +663,15 @@ func (s *Server) executionMode(req *mcp.CallToolRequest) (audit.Mode, bool) {
 		if allow {
 			return audit.ModeYolo, true
 		}
+	}
+
+	mode, _ := args["mode"].(string)
+	if mode == twostage.ModeApply {
+		return audit.ModeApply, false
+	}
+
+	if mode == twostage.ModePlan {
+		return audit.ModePlan, false
 	}
 
 	if dryRun, _ := args["dry_run"].(bool); dryRun {

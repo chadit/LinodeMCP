@@ -11,6 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 const (
@@ -281,13 +282,15 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		cfg,
 		"linode_lke_cluster_delete",
 		"Deletes an LKE cluster. WARNING: This is irreversible. All node pools, nodes, and associated resources will be deleted."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm deletion. This action is irreversible. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLKEClusterDeleteRequest,
 	)
@@ -310,6 +313,7 @@ func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 			return c.DeleteLKECluster(ctx, id)
 		},
 		DependencyWalk: lkeClusterDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("LKECluster"),
 	})
 }
 
@@ -634,7 +638,7 @@ func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		cfg,
 		"linode_lke_pool_delete",
 		"Deletes a node pool from an LKE cluster. All nodes in the pool will be removed."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -643,6 +647,8 @@ func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm pool deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLKEPoolDeleteRequest,
 	)
@@ -666,6 +672,7 @@ func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 			return c.DeleteLKENodePool(ctx, clusterID, poolID)
 		},
 		DependencyWalk: lkePoolDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("LKENodePool"),
 	})
 }
 

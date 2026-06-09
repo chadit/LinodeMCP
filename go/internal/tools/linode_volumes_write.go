@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeVolumeCreateTool creates a tool for creating a volume.
@@ -582,24 +583,11 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeVolumeDeleteTool creates a tool for deleting a volume.
 func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := newDeleteByIDTool(
 		"linode_volume_delete",
-		mcp.WithDescription("Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"volume_id",
-			mcp.Required(),
-			mcp.Description("The ID of the volume to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting.",
+		"volume_id",
+		"The ID of the volume to delete",
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -620,5 +608,6 @@ func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetVolume(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteVolume(ctx, id) },
 		DependencyWalk: volumeDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Volume"),
 	})
 }

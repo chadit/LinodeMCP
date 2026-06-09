@@ -27,7 +27,56 @@ const (
 	// confirm_bypass_dry_run to skip the preview explicitly.
 	paramConfirmedDryRun     = "confirmed_dry_run"
 	paramConfirmBypassDryRun = "confirm_bypass_dry_run"
+
+	// paramYolo is the request flag that bypasses preview and confirm. The
+	// server middleware honors it only when the active profile allows yolo.
+	paramYolo = "yolo"
+
+	// paramMode / paramPlanID drive the two-stage plan/apply flow on opted-in
+	// CapDestroy tools (see twostage_destroy.go). mode:"plan" returns a plan_id
+	// and a state hash; mode:"apply" with that plan_id re-checks for drift and
+	// executes.
+	paramMode       = "mode"
+	paramModeDesc   = "Two-stage flow: \"plan\" previews and returns a plan_id; \"apply\" with plan_id re-checks drift and executes. Omit for a single-step call."
+	paramPlanID     = "plan_id"
+	paramPlanIDDesc = "The plan_id returned by a mode:\"plan\" call, supplied with mode:\"apply\" to execute it."
+
+	// confirmDeleteDesc is the confirm-param description shared by the
+	// irreversible delete-by-ID tools (instance, volume, LKE cluster, ...).
+	confirmDeleteDesc = "Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true."
+
+	// twoStageNote is appended to every opted-in delete tool's description so
+	// the plan/apply flow shows up at the tool level, not only on the mode and
+	// plan_id params. See docs/two-stage-writes.md.
+	twoStageNote = " Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes."
 )
+
+// newDeleteByIDTool builds the schema common to every irreversible
+// delete-by-numeric-ID tool: environment, the ID param, confirm, dry_run, and
+// the two-stage mode/plan_id controls. The delete tools share this exact
+// shape, so building it in one place keeps their schemas in lockstep (and
+// keeps each constructor below the dupl linter's threshold). Uses the shared
+// confirmDeleteDesc; tools needing a resource-specific confirm message call
+// newDeleteByIDToolConfirm directly.
+func newDeleteByIDTool(name, description, idParam, idDesc string) mcp.Tool {
+	return newDeleteByIDToolConfirm(name, description, idParam, idDesc, confirmDeleteDesc)
+}
+
+// newDeleteByIDToolConfirm is newDeleteByIDTool with a caller-supplied confirm
+// description, for delete tools whose confirm text names a resource-specific
+// consequence (e.g. "this deletes all DNS records").
+func newDeleteByIDToolConfirm(name, description, idParam, idDesc, confirmDesc string) mcp.Tool {
+	return mcp.NewTool(
+		name,
+		mcp.WithDescription(description+twoStageNote),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(idParam, mcp.Required(), mcp.Description(idDesc)),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description(confirmDesc)),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+		mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
+	)
+}
 
 // liveConfigSource is the optional hot-reload provider. When set (by
 // main.go via SetLiveConfigSource), prepareClient reads through it on each

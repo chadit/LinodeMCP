@@ -51,6 +51,36 @@ DRY_RUN_PROP: dict[str, Any] = {
     ),
 }
 
+# Two-stage (plan/apply) schema fragments. Mirror the Go-side `paramMode`
+# and `paramPlanID`. Opted-in CapDestroy tools merge ``MODE_PROP`` and
+# ``PLAN_ID_PROP`` into their input schema so one wording is shared across
+# every delete tool.
+PARAM_MODE = "mode"
+MODE_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": (
+        'Two-stage flow: "plan" previews and returns a plan_id; "apply" '
+        "with plan_id re-checks drift and executes. Omit for a single-step "
+        "call."
+    ),
+}
+PARAM_PLAN_ID = "plan_id"
+PLAN_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": (
+        'The plan_id returned by a mode:"plan" call, supplied with '
+        'mode:"apply" to execute it.'
+    ),
+}
+
+# Appended to every opted-in delete tool's description so the plan/apply flow
+# shows up at the tool level, not only on the mode and plan_id params. Mirrors
+# the Go twoStageNote. See docs/two-stage-writes.md.
+TWO_STAGE_NOTE = (
+    ' Supports two-stage writes: mode="plan" returns a plan_id; mode="apply" '
+    "with that plan_id re-checks for drift, then executes."
+)
+
 
 def is_dry_run(arguments: dict[str, Any]) -> bool:
     """Report whether ``arguments[PARAM_DRY_RUN]`` is the literal True.
@@ -233,6 +263,28 @@ async def execute_tool(
             return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
         logger.exception("Unexpected error in tool handler")
         return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
+
+
+async def with_client[T](
+    cfg: Config,
+    arguments: dict[str, Any],
+    callback: Callable[[RetryableClient], Awaitable[T]],
+) -> T:
+    """Open a RetryableClient for the selected environment and run a callback.
+
+    Unlike execute_tool the result is returned raw (not JSON-wrapped) and
+    errors propagate, so callers such as the two-stage plan/apply flow handle
+    fetch failures themselves.
+    """
+    environment = arguments.get("environment", "")
+    selected_env = _select_environment(cfg, environment)
+    _validate_linode_config(selected_env)
+    async with RetryableClient(
+        selected_env.linode.api_url,
+        selected_env.linode.token,
+        _retry_config_from(cfg),
+    ) as client:
+        return await callback(client)
 
 
 async def execute_dry_run(

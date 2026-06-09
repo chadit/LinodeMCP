@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeDomainImportTool creates a tool for importing a domain zone.
@@ -376,24 +377,12 @@ func handleLinodeDomainUpdateDryRun(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
 func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := newDeleteByIDToolConfirm(
 		"linode_domain_delete",
-		mcp.WithDescription("Deletes a DNS domain and all its records. WARNING: This action is irreversible. Pass dry_run=true to preview without deleting."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"domain_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. This deletes all DNS records. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Deletes a DNS domain and all its records. WARNING: This action is irreversible. Pass dry_run=true to preview without deleting.",
+		"domain_id",
+		"The ID of the domain to delete",
+		"Must be set to true to confirm deletion. This deletes all DNS records. Ignored when dry_run=true.",
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -414,5 +403,6 @@ func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetDomain(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteDomain(ctx, id) },
 		DependencyWalk: domainDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Domain"),
 	})
 }

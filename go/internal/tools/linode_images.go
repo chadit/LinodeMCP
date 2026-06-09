@@ -81,11 +81,13 @@ func NewLinodeImageGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, f
 func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_image_delete",
-		mcp.WithDescription("Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting."),
+		mcp.WithDescription("Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting."+twoStageNote),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("image_id", mcp.Required(), mcp.Description("The image ID to delete, for example private/12345.")),
 		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm image deletion. Ignored when dry_run=true.")),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+		mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

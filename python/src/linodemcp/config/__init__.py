@@ -256,6 +256,24 @@ class AuditConfig:
 
 
 @dataclass
+class TwoStageConfig:
+    """Operator tuning for the plan/apply (two-stage write) flow.
+
+    Every field is optional: an empty block keeps the built-in behavior (a
+    5-minute plan TTL and the capability-default opt-in).
+    ``default_plan_ttl_seconds`` overrides the global plan lifetime;
+    ``tool_ttl_seconds`` overrides it per tool by name; ``opt_in`` forces a
+    tool in (True) or out (False) of the flow by name. Non-positive TTL values
+    are ignored and fall back to the next level (per-tool to default to
+    built-in).
+    """
+
+    default_plan_ttl_seconds: int | None = None
+    tool_ttl_seconds: dict[str, int] = field(default_factory=dict[str, int])
+    opt_in: dict[str, bool] = field(default_factory=dict[str, bool])
+
+
+@dataclass
 class Config:
     """Full LinodeMCP configuration."""
 
@@ -273,6 +291,7 @@ class Config:
         default_factory=dict[str, BuiltinOverride]
     )
     audit: AuditConfig = field(default_factory=AuditConfig)
+    two_stage: TwoStageConfig = field(default_factory=TwoStageConfig)
 
     def select_environment(self, user_input: str) -> EnvironmentConfig:
         """Select a Linode environment from the config."""
@@ -718,6 +737,38 @@ def _data_to_config(data: dict[str, Any]) -> Config:
             data.get("profiles_builtin_overrides")
         ),
         audit=_parse_audit(data.get("audit")),
+        two_stage=_parse_two_stage(data.get("two_stage")),
+    )
+
+
+def _parse_two_stage(raw: Any) -> TwoStageConfig:
+    """Build a TwoStageConfig from the raw ``two_stage`` block.
+
+    An absent block or any absent field keeps the built-in defaults. The
+    parser coerces types defensively (config can arrive from YAML or JSON);
+    non-positive TTL values are kept as-is and dropped later by the resolver.
+    """
+    data = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
+
+    ttl_raw = data.get("default_plan_ttl_seconds")
+    default_ttl = None if ttl_raw is None else int(ttl_raw)
+
+    tool_ttl_raw = data.get("tool_ttl_seconds")
+    tool_ttl_map = (
+        cast("dict[str, Any]", tool_ttl_raw) if isinstance(tool_ttl_raw, dict) else {}
+    )
+    tool_ttl = {str(tool): int(secs) for tool, secs in tool_ttl_map.items()}
+
+    opt_in_raw = data.get("opt_in")
+    opt_in_map = (
+        cast("dict[str, Any]", opt_in_raw) if isinstance(opt_in_raw, dict) else {}
+    )
+    opt_in = {str(tool): bool(flag) for tool, flag in opt_in_map.items()}
+
+    return TwoStageConfig(
+        default_plan_ttl_seconds=default_ttl,
+        tool_ttl_seconds=tool_ttl,
+        opt_in=opt_in,
     )
 
 

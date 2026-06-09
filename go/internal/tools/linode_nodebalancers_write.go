@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeNodeBalancerCreateTool creates a tool for creating a NodeBalancer.
@@ -172,13 +173,15 @@ func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		cfg,
 		"linode_nodebalancer_delete",
 		"Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("nodebalancer_id", mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeNodeBalancerDeleteRequest,
 	)
@@ -201,5 +204,6 @@ func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.Cal
 			return c.DeleteNodeBalancer(ctx, id)
 		},
 		DependencyWalk: nodebalancerDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("NodeBalancer"),
 	})
 }

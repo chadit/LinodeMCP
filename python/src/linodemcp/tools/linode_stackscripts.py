@@ -8,12 +8,19 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DESCRIPTION_TRUNCATE_LIMIT,
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -192,7 +199,7 @@ def create_linode_stackscript_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_stackscript_delete tool."""
     return Tool(
         name="linode_stackscript_delete",
-        description="Deletes a StackScript by ID.",
+        description="Deletes a StackScript by ID." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -212,10 +219,41 @@ def create_linode_stackscript_delete_tool() -> tuple[Tool, Capability]:
                     "description": "Set true to confirm this destructive operation.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["stackscript_id", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _stackscript_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, stackscript_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_stackscript(stackscript_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_stackscript(stackscript_id)
+        return {
+            "message": f"StackScript {stackscript_id} deleted successfully",
+            "stackscript_id": stackscript_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_stackscript_delete",
+        method="DELETE",
+        path=f"/linode/stackscripts/{stackscript_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("StackScript"),
+    )
 
 
 async def handle_linode_stackscript_delete(
@@ -225,6 +263,11 @@ async def handle_linode_stackscript_delete(
     stackscript_id = _parse_stackscript_id(arguments.get("stackscript_id"))
     if stackscript_id is None:
         return error_response("stackscript_id must be a positive integer")
+
+    two_stage = await _stackscript_delete_two_stage(arguments, cfg, stackscript_id)
+    if two_stage is not None:
+        return two_stage
+
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_stackscript_delete",

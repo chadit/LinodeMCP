@@ -8,7 +8,12 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -16,6 +21,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -448,7 +455,8 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
         name="linode_domain_record_delete",
         description=(
             "Deletes a DNS record. Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -469,10 +477,42 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["domain_id", "record_id", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _domain_record_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, domain_id: int, record_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_domain_record(domain_id, record_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_domain_record(domain_id, record_id)
+        return {
+            "message": f"DNS record {record_id} deleted successfully",
+            "domain_id": domain_id,
+            "record_id": record_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_domain_record_delete",
+        method="DELETE",
+        path=f"/domains/{domain_id}/records/{record_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("DomainRecord"),
+    )
 
 
 async def handle_linode_domain_record_delete(
@@ -489,6 +529,12 @@ async def handle_linode_domain_record_delete(
         return error_response("domain_id is required")
     if not record_id:
         return error_response("record_id is required")
+
+    two_stage = await _domain_record_delete_two_stage(
+        arguments, cfg, int(domain_id), int(record_id)
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

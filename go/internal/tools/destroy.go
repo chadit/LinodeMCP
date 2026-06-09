@@ -8,6 +8,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // Shared literals for destroy-tool response building. Extracted so
@@ -46,6 +47,12 @@ type DestructiveAction struct {
 	// only). The walk receives the already-fetched state so it can avoid a
 	// redundant GET.
 	DependencyWalk func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error)
+
+	// HashIgnore lists the cosmetic state fields stripped before the two-stage
+	// drift hash, so a plan does not refuse on a field that moves without a
+	// user-caused change. Nil hashes the whole state. Use
+	// twostage.HashIgnoreFields(resourceType) to populate it.
+	HashIgnore []string
 }
 
 // runDestructiveDryRun handles the dry-run branch of the destroy flow:
@@ -93,6 +100,10 @@ func RunDestructiveAction(
 	cfg *config.Config,
 	action *DestructiveAction,
 ) (*mcp.CallToolResult, error) {
+	if result, handled := runTwoStageBranch(ctx, request, cfg, action); handled {
+		return result, nil
+	}
+
 	if IsDryRun(request) {
 		return runDestructiveDryRun(ctx, request, cfg, action)
 	}
@@ -101,16 +112,7 @@ func RunDestructiveAction(
 		return result, nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if execErr := action.Execute(ctx, client); execErr != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("%s failed: %v", action.ToolName, execErr)), nil
-	}
-
-	return MarshalToolResponse(action.Success())
+	return executeDestroy(ctx, request, cfg, action)
 }
 
 // destroyCtxKey namespaces context values this package reads. The server
@@ -119,7 +121,10 @@ func RunDestructiveAction(
 // package global or a change to every caller's signature.
 type destroyCtxKey int
 
-const yoloAllowedCtxKey destroyCtxKey = iota
+const (
+	yoloAllowedCtxKey destroyCtxKey = iota
+	planStoreCtxKey
+)
 
 // WithYoloAllowed marks a context as permitted to bypass the destroy gate and
 // confirm requirement via yolo. The server middleware sets this only when the
@@ -134,6 +139,22 @@ func yoloAllowedFromContext(ctx context.Context) bool {
 	allowed, _ := ctx.Value(yoloAllowedCtxKey).(bool)
 
 	return allowed
+}
+
+// WithPlanStore attaches the server's two-stage plan store to a context so a
+// destroy handler can produce and consume plans. The server middleware sets it
+// on every call. Handlers that are not two-stage-aware ignore it.
+func WithPlanStore(ctx context.Context, store *twostage.PlanStore) context.Context {
+	return context.WithValue(ctx, planStoreCtxKey, store)
+}
+
+// PlanStoreFromContext returns the plan store the server attached, or nil when
+// two-stage is not wired (for example in unit tests that call a handler
+// directly). A nil store means the handler uses its single-step path.
+func PlanStoreFromContext(ctx context.Context) *twostage.PlanStore {
+	store, _ := ctx.Value(planStoreCtxKey).(*twostage.PlanStore)
+
+	return store
 }
 
 // requireDestroyConfirmation enforces the Phase 3 bypass-dry-run gate for
@@ -213,6 +234,10 @@ type DestructiveActionByID struct {
 	// dry-run after FetchState. It receives the parsed ID and fetched state.
 	// Nil keeps the Phase 1 preview (would_execute + current_state only).
 	DependencyWalk func(ctx context.Context, client *linode.Client, id int, state any) (DryRunDetails, error)
+
+	// HashIgnore lists cosmetic state fields stripped before the two-stage
+	// drift hash. Use twostage.HashIgnoreFields(resourceType) to populate it.
+	HashIgnore []string
 }
 
 // RunDestructiveActionWithID is the single-ID convenience wrapper over
@@ -256,6 +281,7 @@ func RunDestructiveActionWithID(
 			}
 		},
 		DependencyWalk: walk,
+		HashIgnore:     params.HashIgnore,
 	})
 }
 
@@ -282,6 +308,10 @@ type DestructiveActionByTwoIDs struct {
 	// dry-run after FetchState. It receives both parsed IDs and the fetched
 	// state. Nil keeps the Phase 1 preview (would_execute + current_state).
 	DependencyWalk func(ctx context.Context, client *linode.Client, outerID, innerID int, state any) (DryRunDetails, error)
+
+	// HashIgnore lists cosmetic state fields stripped before the two-stage
+	// drift hash. Use twostage.HashIgnoreFields(resourceType) to populate it.
+	HashIgnore []string
 }
 
 // RunDestructiveActionByTwoIDs is the two-int-ID convenience wrapper
@@ -333,6 +363,7 @@ func RunDestructiveActionByTwoIDs(
 			}
 		},
 		DependencyWalk: walk,
+		HashIgnore:     params.HashIgnore,
 	})
 }
 

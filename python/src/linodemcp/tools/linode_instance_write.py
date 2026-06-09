@@ -9,13 +9,20 @@ from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -853,7 +860,8 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a Linode instance. WARNING: This is destructive and cannot "
             "be undone. All data will be lost. Pass dry_run=true to preview "
             "without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -874,6 +882,8 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -964,11 +974,48 @@ async def _instance_delete_dependency_walk(
     return details
 
 
+async def _instance_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    instance_id = arguments.get("instance_id", 0)
+    if not instance_id:
+        return _error_response("instance_id is required")
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_instance(int(instance_id))
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_instance(int(instance_id))
+        return {
+            "message": f"Instance {instance_id} deleted successfully",
+            "instance_id": instance_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_instance_delete",
+        method="DELETE",
+        path=f"/linode/instances/{int(instance_id)}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("Instance"),
+    )
+
+
 async def handle_linode_instance_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_delete tool request."""
     instance_id = arguments.get("instance_id", 0)
+
+    two_stage = await _instance_delete_two_stage(arguments, cfg)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         if not instance_id:

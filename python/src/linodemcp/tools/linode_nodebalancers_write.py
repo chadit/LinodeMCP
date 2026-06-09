@@ -10,7 +10,12 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -18,6 +23,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -646,7 +653,8 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a NodeBalancer. WARNING: This removes the load balancer "
             "and all its configurations."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -662,6 +670,8 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["nodebalancer_id", "confirm"],
         },
@@ -705,6 +715,35 @@ async def _nodebalancer_delete_dependency_walk(
     return details
 
 
+async def _nodebalancer_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, nodebalancer_id_int: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_nodebalancer(nodebalancer_id_int)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_nodebalancer(nodebalancer_id_int)
+        return {
+            "message": f"NodeBalancer {nodebalancer_id_int} deleted successfully",
+            "nodebalancer_id": nodebalancer_id_int,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_nodebalancer_delete",
+        method="DELETE",
+        path=f"/nodebalancers/{nodebalancer_id_int}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("NodeBalancer"),
+    )
+
+
 async def handle_linode_nodebalancer_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -718,6 +757,12 @@ async def handle_linode_nodebalancer_delete(
         return error_response("nodebalancer_id is required")
 
     nodebalancer_id_int = int(nodebalancer_id)
+
+    two_stage = await _nodebalancer_delete_two_stage(
+        arguments, cfg, nodebalancer_id_int
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

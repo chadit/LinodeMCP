@@ -8,6 +8,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from mcp.server import Server as MCPServer
@@ -46,6 +47,8 @@ from linodemcp.tools.linode_profile_draft import (
 )
 from linodemcp.tools.linode_profile_draft_mutate import set_mutator_catalog_provider
 from linodemcp.tools.linode_profile_draft_save import set_save_config_path_provider
+from linodemcp.twostage import reset_plan_store, set_plan_store
+from linodemcp.twostage.store import PlanStore
 from linodemcp.version import VERSION as LINODEMCP_VERSION
 
 if TYPE_CHECKING:
@@ -271,6 +274,7 @@ class Server:
         # cfg.audit.redact_pii at startup (default True unless the
         # operator opts out).
         self._audit_redact_pii: bool = False
+        self._plan_store = PlanStore()
         self._idle = asyncio.Event()
         self._idle.set()
 
@@ -351,6 +355,11 @@ class Server:
         Go executionMode). yolo wins only when permitted."""
         if self._yolo_active(arguments):
             return Mode.YOLO
+        mode = arguments.get("mode")
+        if mode == "apply":
+            return Mode.APPLY
+        if mode == "plan":
+            return Mode.PLAN
         if arguments.get("dry_run") is True:
             return Mode.DRY_RUN
         if arguments.get("confirm_bypass_dry_run") is True:
@@ -390,6 +399,7 @@ class Server:
         )
         event.set_mode(self._execution_mode(arguments), "")
 
+        plan_store_token = set_plan_store(self._plan_store)
         try:
             result = await self._dispatch_inner(name, arguments)
             event.finalize(Status.SUCCESS, _elapsed_ms(start_ns), "", "")
@@ -407,6 +417,7 @@ class Server:
             self._audit_sink.write(event)
             raise
         finally:
+            reset_plan_store(plan_store_token)
             self._inflight -= 1
             if self._inflight == 0:
                 self._idle.set()
@@ -504,7 +515,13 @@ class Server:
             case "version":
                 return await handle_version(arguments)
             case _ if name in self._config_handlers:
-                if name in self._destroy_tools and arguments.get("dry_run") is not True:
+                two_stage_mode = arguments.get("mode") in ("plan", "apply")
+                gated = (
+                    name in self._destroy_tools
+                    and arguments.get("dry_run") is not True
+                    and not two_stage_mode
+                )
+                if gated:
                     if self._yolo_active(arguments):
                         # Permitted yolo bypasses the gate AND the handler's
                         # per-handler confirm requirement.
@@ -625,9 +642,13 @@ class Server:
             self._active_profile.name,
         )
 
-        async with stdio_server() as (read_stream, write_stream):
-            await self.mcp.run(
-                read_stream,
-                write_stream,
-                self.mcp.create_initialization_options(),
-            )
+        janitor = self._plan_store.start_janitor(timedelta(minutes=1))
+        try:
+            async with stdio_server() as (read_stream, write_stream):
+                await self.mcp.run(
+                    read_stream,
+                    write_stream,
+                    self.mcp.create_initialization_options(),
+                )
+        finally:
+            janitor.cancel()

@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeVPCCreateTool creates a tool for creating a new VPC.
@@ -199,13 +200,15 @@ func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		cfg,
 		"linode_vpc_delete",
 		"Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("vpc_id", mcp.Required(),
 				mcp.Description("The ID of the VPC to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm deletion. This action is irreversible and deletes all subnets. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleVPCDeleteRequest,
 	)
@@ -228,6 +231,7 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 			return c.DeleteVPC(ctx, id)
 		},
 		DependencyWalk: vpcDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("VPC"),
 	})
 }
 
@@ -418,7 +422,7 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		cfg,
 		"linode_vpc_subnet_delete",
 		"Deletes a subnet from a VPC. WARNING: This is irreversible."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("vpc_id", mcp.Required(),
 				mcp.Description("The ID of the VPC containing the subnet")),
@@ -427,6 +431,8 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm subnet deletion. This action is irreversible. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleVPCSubnetDeleteRequest,
 	)
@@ -450,5 +456,6 @@ func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 			return c.DeleteVPCSubnet(ctx, vpcID, subnetID)
 		},
 		DependencyWalk: vpcSubnetDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("VPCSubnet"),
 	})
 }

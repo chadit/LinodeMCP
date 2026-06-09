@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeInstanceBootTool creates a tool for booting a Linode instance.
@@ -368,27 +369,11 @@ func buildDefaultRoute(ipv4, ipv6 bool) *linode.InterfaceDefaultRoute {
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.
 func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := newDeleteByIDTool(
 		"linode_instance_delete",
-		mcp.WithDescription("Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"instance_id",
-			mcp.Required(),
-			mcp.Description("The ID of the Linode instance to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(
-			paramDryRun,
-			mcp.Description(paramDryRunDesc),
-		),
+		"Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting.",
+		"instance_id",
+		"The ID of the Linode instance to delete",
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -409,6 +394,7 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetInstance(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteInstance(ctx, id) },
 		DependencyWalk: instanceDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Instance"),
 	})
 }
 

@@ -10,7 +10,12 @@ from mcp.types import Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -18,6 +23,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from mcp.types import TextContent
@@ -215,7 +222,7 @@ def create_linode_placement_group_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_placement_group_delete tool."""
     return Tool(
         name="linode_placement_group_delete",
-        description="Deletes a placement group",
+        description="Deletes a placement group" + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -223,6 +230,8 @@ def create_linode_placement_group_delete_tool() -> tuple[Tool, Capability]:
                 "group_id": _GROUP_ID_PROP,
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["group_id", "confirm"],
         },
@@ -259,10 +268,45 @@ def _placement_group_delete_dependency_walk(group_state: Any) -> DryRunDetails:
     return details
 
 
+async def _placement_group_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    group_id = _parse_positive_int(arguments.get("group_id"), "group_id")
+    if isinstance(group_id, list):
+        return group_id
+    gid = group_id
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_placement_group(gid)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_placement_group(gid)
+        return {"message": f"Placement group {gid} deleted successfully"}
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_placement_group_delete",
+        method="DELETE",
+        path=f"/placement/groups/{gid}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("PlacementGroup"),
+    )
+
+
 async def handle_linode_placement_group_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_placement_group_delete tool request."""
+    two_stage = await _placement_group_delete_two_stage(arguments, cfg)
+    if two_stage is not None:
+        return two_stage
+
     if is_dry_run(arguments):
         group_id = _parse_positive_int(arguments.get("group_id"), "group_id")
         if isinstance(group_id, list):

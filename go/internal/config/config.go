@@ -120,6 +120,20 @@ type Config struct {
 	Profiles                 map[string]UserProfileConfig `json:"profiles"                   yaml:"profiles"`
 	ProfilesBuiltinOverrides map[string]BuiltinOverride   `json:"profiles_builtin_overrides" yaml:"profiles_builtin_overrides"`
 	Audit                    AuditConfig                  `json:"audit"                      yaml:"audit"`
+	TwoStage                 TwoStageConfig               `json:"two_stage"                  yaml:"two_stage"`
+}
+
+// TwoStageConfig tunes the plan/apply (two-stage write) flow. Every field is
+// optional: an empty block keeps the built-in behavior (a 5-minute plan TTL
+// and the capability-default opt-in). DefaultPlanTTLSeconds overrides the
+// global plan lifetime; ToolTTLSeconds overrides it per tool by name; OptIn
+// forces a tool in or out of the flow by name (a CapWrite tool set true opts
+// in, a CapDestroy/CapAdmin tool set false opts out). Non-positive TTL values
+// are ignored and fall back to the next level (per-tool → default → built-in).
+type TwoStageConfig struct {
+	DefaultPlanTTLSeconds *int            `json:"default_plan_ttl_seconds" yaml:"default_plan_ttl_seconds"`
+	ToolTTLSeconds        map[string]int  `json:"tool_ttl_seconds"         yaml:"tool_ttl_seconds"`
+	OptIn                 map[string]bool `json:"opt_in"                   yaml:"opt_in"`
 }
 
 // AuditConfig holds audit-log settings. The JSONL sink is always on

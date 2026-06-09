@@ -29,6 +29,8 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 | [Profiles](docs/profiles.md) | Restrict which tools an AI client can see and use; token-scope validation; the built-in profiles |
 | [Profile recipes](docs/profile-recipes.md) | Copy-paste profile starting points for common setups |
 | [Dry-run & safety](docs/dry-run.md) | Preview any mutator, bypass-confirm on destructive calls, profile pre-check, and yolo |
+| [Two-stage writes](docs/two-stage-writes.md) | Plan a destructive call, review it, then apply it by id; the server refuses if the resource drifted |
+| [State drift](docs/state-drift.md) | What drift detection catches and how to read each refusal |
 | [Audit log](docs/audit-log.md) | What the AI did: event schema, sinks, retention, redaction, and the query tools |
 | [Audit reports](docs/audit-reports.md) | The custom-report filter grammar with worked examples |
 | [Host integrations](docs/host-integrations/README.md) | Wiring Claude Desktop / Claude Code / Gemini / Copilot and their slash commands |
@@ -488,6 +490,14 @@ Every mutating tool can be previewed before it runs, and destructive calls are g
 - **Yolo** — a profile with `allow_yolo: true` (only the break-glass `emergency` built-in) lets `yolo: true` skip both the preview gate and confirm.
 
 Each call's safety path is recorded in the audit log's `mode` field (`normal` / `dry_run` / `bypass_dry_run` / `yolo`). Full reference: [docs/dry-run.md](docs/dry-run.md).
+
+## Two-stage writes
+
+A dry-run shows what a destructive call would do, but nothing ties that preview to the call you run next, so the resource can change in between. Two-stage writes close that gap. Pass `mode: "plan"` to a delete tool to get back a `plan_id` plus the current state; pass `mode: "apply"` with that `plan_id` to run it. Before applying, the server re-reads the resource and refuses if it changed since the plan (`PLAN_DRIFT_DETECTED`), expired (`PLAN_EXPIRED`, five minutes by default), was already used, or never existed (`PLAN_NOT_FOUND`).
+
+Cosmetic fields (server-side timestamps, telemetry counters) are stripped before the drift check, so a benign `updated` bump doesn't cause a needless refusal. Plans are single-use, in-memory, and session-scoped; a restart drops them. Fifteen delete tools are opted in today. Tune the lifetime and opt-in per tool with a `two_stage` config block. Plan and apply each record a `mode` in the audit log.
+
+Full reference: [docs/two-stage-writes.md](docs/two-stage-writes.md). Drift refusals and recovery: [docs/state-drift.md](docs/state-drift.md).
 
 ## Auditing
 

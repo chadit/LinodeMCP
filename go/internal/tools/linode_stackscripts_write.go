@@ -11,6 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeStackScriptCreateTool creates a tool for creating a StackScript.
@@ -144,24 +145,12 @@ func stackScriptCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Crea
 
 // NewLinodeStackScriptDeleteTool creates a tool for deleting a StackScript.
 func NewLinodeStackScriptDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := newDeleteByIDToolConfirm(
 		"linode_stackscript_delete",
-		mcp.WithDescription("Deletes a StackScript. WARNING: This permanently removes the StackScript from your account."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"stackscript_id",
-			mcp.Required(),
-			mcp.Description("The ID of the StackScript to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Deletes a StackScript. WARNING: This permanently removes the StackScript from your account.",
+		"stackscript_id",
+		"The ID of the StackScript to delete",
+		"Must be set to true to confirm deletion. Ignored when dry_run=true.",
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -190,6 +179,7 @@ func handleLinodeStackScriptDeleteRequest(ctx context.Context, request *mcp.Call
 		SuccessFormat:  "StackScript %d deleted successfully",
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetStackScript(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteStackScript(ctx, id) },
+		HashIgnore:     twostage.HashIgnoreFields("StackScript"),
 	})
 }
 

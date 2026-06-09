@@ -12,12 +12,19 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -108,7 +115,7 @@ def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_delete tool."""
     return Tool(
         name="linode_image_delete",
-        description="Deletes a private Linode image by ID.",
+        description="Deletes a private Linode image by ID." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -127,6 +134,8 @@ def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
                     "description": "Set true to confirm this destructive operation.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["image_id", "confirm"],
         },
@@ -2450,6 +2459,32 @@ async def handle_linode_image_get(
     return await execute_tool(cfg, arguments, "retrieve Linode image", _call)
 
 
+async def _image_delete_two_stage(
+    arguments: dict[str, Any], cfg: Any, image_id_str: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_image(image_id_str)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image(image_id_str)
+        return {"message": "Private image deleted"}
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_image_delete",
+        method="DELETE",
+        path=f"/images/{quote(image_id_str, safe='')}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("Image"),
+    )
+
+
 async def handle_linode_image_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
@@ -2460,6 +2495,10 @@ async def handle_linode_image_delete(
         return error_response(image_id_error)
 
     image_id_str = cast("str", image_id).strip()
+
+    two_stage = await _image_delete_two_stage(arguments, cfg, image_id_str)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         return build_dry_run_response(

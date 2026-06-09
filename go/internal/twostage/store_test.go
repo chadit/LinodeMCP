@@ -1,9 +1,12 @@
 package twostage_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/chadit/LinodeMCP/internal/twostage"
@@ -35,6 +38,40 @@ func TestPlanStorePutAndGet(t *testing.T) {
 	if store.Len() != 1 {
 		t.Errorf("Len = %d, want 1", store.Len())
 	}
+}
+
+// TestStartJanitorSweepsExpiredPlans drives the background sweeper under
+// synctest's synthetic clock: a plan that expires while the janitor ticks is
+// dropped without any explicit Sweep call. The expiry clock is an atomic so
+// the janitor goroutine and the test don't race on it.
+func TestStartJanitorSweepsExpiredPlans(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+
+		clock := &atomic.Pointer[time.Time]{}
+		clock.Store(&base)
+
+		store := twostage.NewPlanStore(twostage.WithClock(func() time.Time { return *clock.Load() }))
+		store.Put(&twostage.PlanEntry{ID: planX, ExpiresAt: base.Add(time.Minute)})
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		store.StartJanitor(ctx, time.Second)
+
+		// Move the clock past the plan's expiry, then let one tick elapse.
+		future := base.Add(2 * time.Minute)
+		clock.Store(&future)
+
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+
+		if store.Len() != 0 {
+			t.Errorf("janitor did not sweep the expired plan, Len = %d", store.Len())
+		}
+	})
 }
 
 func TestPlanStoreGetUnknownReturnsNotFound(t *testing.T) {

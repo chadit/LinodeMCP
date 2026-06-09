@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeFirewallCreateTool creates a tool for creating a firewall.
@@ -216,12 +217,14 @@ func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		cfg,
 		"linode_firewall_delete",
 		"Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("firewall_id", mcp.Required(), mcp.Description("The ID of the firewall to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeFirewallDeleteRequest,
 	)
@@ -244,5 +247,6 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToo
 			return c.DeleteFirewall(ctx, id)
 		},
 		DependencyWalk: firewallDeleteDependencyWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Firewall"),
 	})
 }
