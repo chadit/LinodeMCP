@@ -220,7 +220,7 @@ func TestResolveExhaustiveDeterministic(t *testing.T) {
 		second := twostage.Resolve(req)
 
 		if first != second {
-			t.Fatalf("Resolve not deterministic for %+v: %+v vs %+v", req, first, second)
+			t.Fatalf("Resolve not reproducible for %+v: %+v vs %+v", req, first, second)
 		}
 	}
 }

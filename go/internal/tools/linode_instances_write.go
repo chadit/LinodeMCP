@@ -398,12 +398,17 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 	})
 }
 
+// toolInstanceResize is the resize tool's name, referenced by the constructor,
+// the two-stage action, and the dry-run preview, so it lives in one place.
+const toolInstanceResize = "linode_instance_resize"
+
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
 func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_resize",
-		"Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing.",
+		toolInstanceResize,
+		"Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing."+
+			" Pass dry_run=true to preview without resizing."+twoStageOptInNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("instance_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to resize")),
@@ -416,6 +421,8 @@ func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm resize. This operation causes downtime. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeInstanceResizeRequest,
 	)
@@ -423,11 +430,113 @@ func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapWrite, handler
 }
 
+// instanceResizeState is the drift-relevant projection a resize plan hashes:
+// the instance's current type plus each disk's id, size, and filesystem. A real
+// change to any of these between plan and apply refuses the apply. Cosmetic
+// instance fields (updated, status, last_seen_ipv4) are excluded by
+// construction, so resize needs no hash-ignore list.
+type instanceResizeState struct {
+	Type  string                   `json:"type"`
+	Disks []instanceResizeDiskInfo `json:"disks"`
+}
+
+// instanceResizeDiskInfo is one disk's drift-relevant fields. Disk sizes matter
+// because allow_auto_disk resizes them as part of the plan change.
+type instanceResizeDiskInfo struct {
+	ID         int    `json:"id"`
+	Size       int    `json:"size"`
+	Filesystem string `json:"filesystem"`
+}
+
+// fetchInstanceResizeState builds the composite resize projection: the instance
+// plus its disks. Resize affects both, so the drift hash must cover both.
+func fetchInstanceResizeState(ctx context.Context, client *linode.Client, instanceID int) (any, error) {
+	instance, err := client.GetInstance(ctx, instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("get instance for resize plan: %w", err)
+	}
+
+	disks, err := client.ListInstanceDisks(ctx, instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("list disks for resize plan: %w", err)
+	}
+
+	snapshot := make([]instanceResizeDiskInfo, len(disks))
+	for i := range disks {
+		snapshot[i] = instanceResizeDiskInfo{
+			ID:         disks[i].ID,
+			Size:       disks[i].Size,
+			Filesystem: disks[i].Filesystem,
+		}
+	}
+
+	return &instanceResizeState{Type: instance.Type, Disks: snapshot}, nil
+}
+
+// resizeStateType reads the from-type out of whichever state shape the resize
+// walk receives: the composite projection on the two-stage path, the bare
+// instance on the dry-run path.
+func resizeStateType(state any) string {
+	switch typed := state.(type) {
+	case *instanceResizeState:
+		if typed != nil {
+			return typed.Type
+		}
+	case *linode.Instance:
+		if typed != nil {
+			return typed.Type
+		}
+	}
+
+	return ""
+}
+
+// newInstanceResizeAction packages resize as a two-stage action. Capability is
+// CapWrite, so the flow stays opt-in: a plan/apply call resizes only when an
+// operator enables linode_instance_resize via the two_stage config block.
+func newInstanceResizeAction(instanceID int, instanceType string, req linode.ResizeInstanceRequest) *DestructiveAction {
+	return &DestructiveAction{
+		ToolName:   toolInstanceResize,
+		Capability: profiles.CapWrite,
+		Method:     httpMethodPost,
+		Path:       fmt.Sprintf("/linode/instances/%d/resize", instanceID),
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return fetchInstanceResizeState(ctx, c, instanceID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.ResizeInstance(ctx, instanceID, req)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("Instance %d resize to %s initiated successfully", instanceID, instanceType),
+				"instance_id":      instanceID,
+				"new_type":         instanceType,
+			}
+		},
+		DependencyWalk: func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+			return instanceResizeSideEffects(ctx, resizeStateType(state), instanceType)
+		},
+	}
+}
+
 func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	instanceType := request.GetString("type", "")
 	allowAutoDisk := request.GetBool("allow_auto_disk", false)
 	migrationType := request.GetString("migration_type", "")
+
+	req := linode.ResizeInstanceRequest{
+		Type:          instanceType,
+		AllowAutoDisk: allowAutoDisk,
+		MigrationType: migrationType,
+	}
+
+	if instanceID != 0 && instanceType != "" {
+		action := newInstanceResizeAction(instanceID, instanceType, req)
+		if result, handled := runTwoStageBranch(ctx, request, cfg, action); handled {
+			return result, nil
+		}
+	}
 
 	if IsDryRun(request) {
 		if instanceID == 0 {
@@ -438,11 +547,11 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError("type is required"), nil
 		}
 
-		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_resize", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, toolInstanceResize, httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/resize", instanceID),
 			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, instanceID) },
 			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
-				return instanceResizeSideEffects(ctx, state, instanceType)
+				return instanceResizeSideEffects(ctx, resizeStateType(state), instanceType)
 			})
 	}
 
@@ -461,12 +570,6 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	req := linode.ResizeInstanceRequest{
-		Type:          instanceType,
-		AllowAutoDisk: allowAutoDisk,
-		MigrationType: migrationType,
 	}
 
 	if err := client.ResizeInstance(ctx, instanceID, req); err != nil {

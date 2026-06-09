@@ -85,7 +85,7 @@ description: Show recent LinodeMCP audit events filtered by tool name (glob).
 Read `$ARGUMENTS`. The first word selects the filter dimension; the rest is
 the filter value. Supported dimensions today:
 
-- `tool <glob>` — pass `$2` as the `tool` argument to `linode_audit_recent`
+- `tool <glob>`: pass `$2` as the `tool` argument to `linode_audit_recent`
   (e.g. `tool linode_instance_*`, `tool linode_database_*`)
 
 Unknown dimensions: tell the user the supported list and stop. Do not guess

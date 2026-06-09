@@ -369,6 +369,9 @@ async def _lke_cluster_delete_two_stage(
             "cluster_id": cluster_id,
         }
 
+    async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+        return await _lke_cluster_delete_dependency_walk(client, cluster_id)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -378,6 +381,7 @@ async def _lke_cluster_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("LKECluster"),
+        dependency_walk=_ts_walk,
     )
 
 
@@ -884,6 +888,9 @@ async def _lke_pool_delete_two_stage(
             "pool_id": pool_id,
         }
 
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _lke_pool_delete_dependency_walk(state)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -893,6 +900,7 @@ async def _lke_pool_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("LKENodePool"),
+        dependency_walk=_ts_walk,
     )
 
 

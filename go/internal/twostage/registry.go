@@ -43,7 +43,11 @@ type Settings struct {
 
 // OptedIn reports whether a tool participates in the two-stage flow under these
 // settings. An explicit OptIn entry wins; otherwise the capability default
-// applies: CapDestroy and CapAdmin opt in, everything else stays out.
+// applies: only CapDestroy opts in. Every CapDestroy tool that reaches the
+// two-stage branch routes through the shared destroy flow, so the default is
+// accurate, no opted-in tool fails to honor plan/apply. Other capabilities
+// (a CapWrite tool like instance_resize, or any CapAdmin tool) opt in only
+// through an explicit OptIn entry, so they never claim a flow they cannot run.
 func (s Settings) OptedIn(tool string, capability profiles.Capability) bool {
 	if override, ok := s.OptIn[tool]; ok {
 		return override
@@ -67,8 +71,8 @@ func (s Settings) PlanTTL(tool string) time.Duration {
 }
 
 // OptedIn reports whether a tool participates in the two-stage flow under the
-// built-in defaults (no config overrides). CapDestroy and CapAdmin default in;
-// CapRead, CapWrite, and CapMeta stay out.
+// built-in defaults (no config overrides). Only CapDestroy defaults in; every
+// other capability stays out until an explicit config opt-in.
 func OptedIn(tool string, capability profiles.Capability) bool {
 	return Settings{}.OptedIn(tool, capability)
 }
@@ -80,12 +84,16 @@ func PlanTTL(tool string) time.Duration {
 }
 
 // capabilityOptedIn is the capability default shared by Settings.OptedIn and
-// the package-level OptedIn: destructive and admin tools opt in, the rest out.
+// the package-level OptedIn. Only CapDestroy opts in, because every CapDestroy
+// tool that reaches the two-stage branch routes through the shared destroy flow
+// and so can honor plan/apply. CapAdmin tools do not route through that flow, so
+// opting them in by default would advertise a flow they cannot run; they (and a
+// CapWrite tool like instance_resize) opt in only via an explicit config entry.
 func capabilityOptedIn(capability profiles.Capability) bool {
 	switch capability {
-	case profiles.CapDestroy, profiles.CapAdmin:
+	case profiles.CapDestroy:
 		return true
-	case profiles.CapUnknown, profiles.CapRead, profiles.CapWrite, profiles.CapMeta:
+	case profiles.CapUnknown, profiles.CapRead, profiles.CapWrite, profiles.CapMeta, profiles.CapAdmin:
 		return false
 	default:
 		return false

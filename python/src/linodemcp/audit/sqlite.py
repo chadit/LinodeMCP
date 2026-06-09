@@ -76,7 +76,7 @@ class SQLiteSink:
     """Write audit events to a SQLite database.
 
     Synchronous inserts, matching the JSONL sink; the spec's 100ms
-    batching is a later optimization. Write failures are best-effort:
+    batching is a later speedup. Write failures are best-effort:
     they log and drop, leaving the JSONL sink as the durable record.
     """
 

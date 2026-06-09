@@ -9,12 +9,19 @@ from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -226,7 +233,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
         description=(
             "Rebuilds a Linode instance with a new image."
             " All data on existing disks will be destroyed."
-            " Pass dry_run=true to preview without rebuilding."
+            " Pass dry_run=true to preview without rebuilding." + TWO_STAGE_NOTE
         ),
         inputSchema={
             "type": "object",
@@ -262,6 +269,8 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
                 "instance_id",
@@ -311,6 +320,41 @@ async def _instance_rebuild_side_effects_walk(
     return details
 
 
+async def _instance_rebuild_two_stage(
+    arguments: dict[str, Any], cfg: Config, instance_id: int, image: str, root_pass: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_instance(instance_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        return await client.rebuild_instance(
+            instance_id,
+            image=image,
+            root_pass=root_pass,
+            authorized_keys=arguments.get("authorized_keys"),
+            authorized_users=arguments.get("authorized_users"),
+        )
+
+    async def _ts_walk(client: RetryableClient, state: Any) -> DryRunDetails:
+        return await _instance_rebuild_side_effects_walk(client, instance_id, state)
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_instance_rebuild",
+        method="POST",
+        path=f"/linode/instances/{instance_id}/rebuild",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("Instance"),
+        dependency_walk=_ts_walk,
+    )
+
+
 async def handle_linode_instance_rebuild(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -320,12 +364,14 @@ async def handle_linode_instance_rebuild(
         return iid
 
     image = arguments.get("image", "")
-    if not image:
-        return _error_response("image is required")
-
     root_pass = arguments.get("root_pass", "")
-    if not root_pass:
-        return _error_response("root_pass is required")
+    for field_name, value in (("image", image), ("root_pass", root_pass)):
+        if not value:
+            return _error_response(f"{field_name} is required")
+
+    two_stage = await _instance_rebuild_two_stage(arguments, cfg, iid, image, root_pass)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

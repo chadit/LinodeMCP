@@ -17,7 +17,7 @@ import (
 // The Phase 8.5 `_draft_save` handler uses this to re-read the
 // config fresh from disk (avoiding races with concurrent edits) and
 // to pass the same path to `config.WriteAtomic`. Provided as a
-// function so tests can supply a deterministic stand-in.
+// function so tests can supply a reproducible stand-in.
 type ConfigPathProvider func() string
 
 // isBuiltinProfileName reports whether the given name matches a

@@ -13,7 +13,7 @@ import (
 
 // CatalogSnapshot returns the full tool catalog. The Phase 8.4
 // `_draft_add_tools` handler uses this to expand wildcards. Provided
-// as a function type so tests can supply deterministic fixtures
+// as a function type so tests can supply reproducible fixtures
 // without spinning up a Server.
 type CatalogSnapshot func() []profiles.ToolDescriptor
 

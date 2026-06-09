@@ -14,7 +14,7 @@ import (
 // ActiveProfileProvider returns the profile the server is currently running
 // under. Injected (rather than read from a global) so linode_profile_can_run
 // reflects hot-reload profile swaps at call time and tests can supply a
-// deterministic fixture without standing up a Server.
+// reproducible fixture without standing up a Server.
 type ActiveProfileProvider func() profiles.Profile
 
 const (

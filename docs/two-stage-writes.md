@@ -40,12 +40,23 @@ it, stores a single-use plan, and hands back a preview:
   "environment": "prod",
   "would_execute": { "method": "DELETE", "path": "/volumes/12345" },
   "current_state": { "id": 12345, "label": "data", "linode_id": 999, "size": 80 },
-  "current_state_hash": "sha256:9f86d0..."
+  "current_state_hash": "sha256:9f86d0...",
+  "dependencies": [
+    { "kind": "instance", "id": 999, "label": "web-01", "action": "detached",
+      "note": "Volume is attached; it detaches from this instance before deletion." }
+  ],
+  "warnings": ["Volume is currently attached to an instance; it will be detached as part of deletion."]
 }
 ```
 
 A plan never mutates anything. Like a dry-run, it only issues `GET` calls to
 populate `current_state`. No delete happens until you apply.
+
+A plan is a superset of a detailed dry-run: it runs the same dependency walk, so
+when a tool has one the plan body carries `dependencies`, `side_effects`,
+`billing_delta`, and `warnings` right alongside the state hash. You review the
+blast radius and the exact resource you'll apply against in one response. Tools
+without a walk just omit those fields.
 
 ### Apply
 
@@ -99,8 +110,9 @@ gives you the preview that `dry_run` would, plus a `plan_id` to apply against.
 
 ## Which tools are opted in
 
-The destructive (`CapDestroy`) delete tools that can read their own state are
-opted in. Today that's fifteen tools:
+The opt-in default is by capability: a destructive (`CapDestroy`) tool that
+routes through the shared destroy flow opts in, so plan/apply works for it. The
+delete tools are the core of that surface:
 
 `linode_instance_delete`, `linode_volume_delete`, `linode_lke_cluster_delete`,
 `linode_firewall_delete`, `linode_nodebalancer_delete`, `linode_vpc_delete`,
@@ -108,6 +120,17 @@ opted in. Today that's fifteen tools:
 `linode_sshkey_delete`, `linode_placement_group_delete`,
 `linode_instance_disk_delete`, `linode_vpc_subnet_delete`,
 `linode_domain_record_delete`, and `linode_lke_pool_delete`.
+
+`linode_instance_rebuild` is also `CapDestroy` (a rebuild wipes every disk), so
+it's opted in too. Its plan walks the instance's disks the same way its dry-run
+does.
+
+`CapAdmin` tools do not route through this flow, so they stay out by default,
+opting them in would advertise a flow they can't run. Other capabilities stay
+out unless you name them in `opt_in`. `linode_instance_resize` is the notable
+write-tool case: it's `CapWrite`, so it's single-step until you opt it in (see
+below), at which point a resize plan covers both the instance plan and its disk
+layout.
 
 A tool that isn't opted in ignores `mode` and `plan_id` and behaves like an
 ordinary single-step call.
@@ -129,14 +152,17 @@ two_stage:
   # Force a tool in or out of the flow by name, overriding the capability
   # default. Optional.
   opt_in:
-    linode_image_delete: false
+    linode_image_delete: false      # take a destructive tool out
+    linode_instance_resize: true    # pull a write tool in
 ```
 
 Resolution order for a tool's plan lifetime: a `tool_ttl_seconds` entry wins,
 then `default_plan_ttl_seconds`, then the built-in five minutes. A non-positive
 value at any level is ignored and falls through to the next. The `opt_in` map
 overrides the capability default per tool: set a destructive tool to `false` to
-take it out of the flow, or a write tool to `true` to pull it in.
+take it out of the flow, or a write tool like `linode_instance_resize` to `true`
+to pull it in. The capability default itself only opts in `CapDestroy` tools;
+everything else waits for an explicit `opt_in` entry.
 
 ## Audit trail
 

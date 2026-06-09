@@ -219,14 +219,16 @@ def test_capability_boundary() -> None:
         assert resolve(req).branch == Branch.SINGLE_STEP
 
 
-def test_resolve_is_deterministic() -> None:
+def test_resolve_is_reproducible() -> None:
     for req in _all_requests():
         assert resolve(req) == resolve(req)
 
 
 def test_opted_in_capability_defaults() -> None:
     assert opted_in("linode_x", Capability.Destroy) is True
-    assert opted_in("linode_x", Capability.Admin) is True
+    # Admin opts out by default: no admin tool is wired for two-stage, so
+    # claiming it would advertise a flow it cannot run.
+    assert opted_in("linode_x", Capability.Admin) is False
     assert opted_in("linode_x", Capability.Write) is False
     assert opted_in("linode_x", Capability.Read) is False
     assert opted_in("linode_x", Capability.Meta) is False

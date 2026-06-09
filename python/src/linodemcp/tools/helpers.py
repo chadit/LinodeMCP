@@ -81,6 +81,14 @@ TWO_STAGE_NOTE = (
     "with that plan_id re-checks for drift, then executes."
 )
 
+# Variant for a tool whose two-stage flow is off until an operator enables it
+# (e.g. instance_resize, a CapWrite tool that does not opt in by default).
+TWO_STAGE_OPT_IN_NOTE = (
+    ' Supports two-stage writes when enabled in the two_stage config: mode="plan"'
+    ' returns a plan_id; mode="apply" with that plan_id re-checks for drift, then'
+    " executes."
+)
+
 
 def is_dry_run(arguments: dict[str, Any]) -> bool:
     """Report whether ``arguments[PARAM_DRY_RUN]`` is the literal True.

@@ -376,7 +376,7 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 }
 
 // jsonEntry mirrors Profile's field shape with explicit JSON tags so the
-// catalog export is deterministic and snake_cased. Field order, names, and
+// catalog export is reproducible and snake_cased. Field order, names, and
 // types match Profile exactly, which lets BuiltinCatalogJSON convert a
 // Profile value into a jsonEntry without copying field-by-field.
 type jsonEntry struct {

@@ -16,7 +16,7 @@ import (
 
 // Tests cover the limiter as a primitive (NewRateLimiter + Wait) and as
 // wired into Client through makeRequest. Time-dependent behavior runs under
-// testing/synctest so refill progression is deterministic.
+// testing/synctest so refill progression is reproducible.
 
 // rateLimitBurstTest is the per-minute rate used by the burst test. Sized
 // small so synctest cycles fast.

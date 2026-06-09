@@ -795,6 +795,7 @@ async def _volume_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Volume"),
+        dependency_walk=_volume_delete_dependency_walk,
     )
 
 

@@ -402,7 +402,7 @@ def builtin_profiles(catalog: Sequence[ToolDescriptor]) -> dict[str, Profile]:
     Pure function: no I/O, no global state mutation. Call once per
     server-start (Phase 4 wiring) or per test. The returned dict's
     insertion order matches ``_PROFILE_BLUEPRINTS``, which is the order
-    used by the parity test for deterministic JSON output.
+    used by the parity test for reproducible JSON output.
     """
     profiles: dict[str, Profile] = {}
     for name, blueprint in _PROFILE_BLUEPRINTS.items():

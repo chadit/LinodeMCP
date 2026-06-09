@@ -8,6 +8,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
@@ -53,6 +54,23 @@ type DestructiveAction struct {
 	// user-caused change. Nil hashes the whole state. Use
 	// twostage.HashIgnoreFields(resourceType) to populate it.
 	HashIgnore []string
+
+	// Capability is the action's profile capability, consulted by the two-stage
+	// branch to decide opt-in. The zero value (CapUnknown) is treated as
+	// CapDestroy, since every delete tool leaves this unset. A CapWrite action
+	// (e.g. instance_resize) sets it so the flow stays opt-in by default.
+	Capability profiles.Capability
+}
+
+// capability returns the action's capability, defaulting an unset (zero) value
+// to CapDestroy so the existing delete tools keep their behavior without each
+// setting the field.
+func (a *DestructiveAction) capability() profiles.Capability {
+	if a.Capability == profiles.CapUnknown {
+		return profiles.CapDestroy
+	}
+
+	return a.Capability
 }
 
 // runDestructiveDryRun handles the dry-run branch of the destroy flow:

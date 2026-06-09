@@ -320,16 +320,11 @@ func volumeDetachSideEffects(ctx context.Context, state any) (DryRunDetails, err
 // instanceResizeSideEffects is the Tier B walk for linode_instance_resize. It
 // names the type change (from the fetched state to the requested type) and
 // warns about the reboot and billing change.
-func instanceResizeSideEffects(ctx context.Context, state any, targetType string) (DryRunDetails, error) {
+func instanceResizeSideEffects(ctx context.Context, fromType, targetType string) (DryRunDetails, error) {
 	var details DryRunDetails
 
 	if err := ctx.Err(); err != nil {
 		return details, fmt.Errorf("resize side-effect walk canceled: %w", err)
-	}
-
-	var fromType string
-	if instance, ok := state.(*linode.Instance); ok && instance != nil {
-		fromType = instance.Type
 	}
 
 	effect := fmt.Sprintf(

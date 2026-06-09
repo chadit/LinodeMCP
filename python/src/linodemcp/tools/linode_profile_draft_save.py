@@ -53,7 +53,7 @@ _BUILTIN_PROFILE_NAMES: frozenset[str] = frozenset(
 
 
 # Bridge for the config path. The server installs ``config.get_config_path``
-# (or equivalent) at startup; tests install a deterministic path via
+# (or equivalent) at startup; tests install a reproducible path via
 # :func:`set_save_config_path_provider`. Phase 8.5 reads from this
 # fresh on every call so concurrent edits don't get stomped.
 _config_path_provider: Callable[[], str] | None = None

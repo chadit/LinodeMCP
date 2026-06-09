@@ -55,7 +55,7 @@ func DraftAsUserProfile(draft *Draft) config.UserProfileConfig {
 // AllowedTools and RemovedTools is empty.
 //
 // The returned slices are sorted ascending so the response is
-// deterministic regardless of map iteration order.
+// reproducible regardless of map iteration order.
 func ComputeDiff(
 	name string,
 	draftCfg *config.UserProfileConfig,

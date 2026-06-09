@@ -49,6 +49,11 @@ const (
 	// the plan/apply flow shows up at the tool level, not only on the mode and
 	// plan_id params. See docs/two-stage-writes.md.
 	twoStageNote = " Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes."
+
+	// twoStageOptInNote is the variant for a tool whose two-stage flow is off
+	// until an operator enables it (e.g. instance_resize, a CapWrite tool that
+	// does not opt in by capability default). See docs/two-stage-writes.md.
+	twoStageOptInNote = " Supports two-stage writes when enabled in the two_stage config: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes."
 )
 
 // newDeleteByIDTool builds the schema common to every irreversible

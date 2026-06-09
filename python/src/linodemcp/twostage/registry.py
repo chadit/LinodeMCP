@@ -1,8 +1,11 @@
 """Two-stage opt-in registry and per-tool TTLs.
 
-Mirrors ``go/internal/twostage/registry.go``. CapDestroy and CapAdmin
-tools default into the two-stage flow; CapWrite defaults out and can be
-flipped per tool; CapRead and CapMeta are never opted in.
+Mirrors ``go/internal/twostage/registry.go``. Only CapDestroy tools default
+into the two-stage flow, because every CapDestroy tool that reaches the flow
+routes through the shared destroy path and so can honor plan/apply. Other
+capabilities (a CapWrite tool like instance_resize, or any CapAdmin tool) opt
+in only via an explicit per-tool config entry, so none claims a flow it cannot
+run.
 """
 
 from __future__ import annotations
@@ -35,12 +38,15 @@ class Settings:
         """Report whether a tool participates in the two-stage flow.
 
         An explicit ``opt_in`` entry wins; otherwise the capability default
-        applies (Destroy and Admin opt in, everything else stays out).
+        applies: only Destroy opts in. CapAdmin tools do not route through the
+        two-stage flow, so opting them in by default would advertise a flow
+        they cannot run; they (and a CapWrite tool like instance_resize) opt in
+        only through an explicit entry.
         """
         override = self.opt_in.get(tool)
         if override is not None:
             return override
-        return capability in (Capability.Destroy, Capability.Admin)
+        return capability is Capability.Destroy
 
     def plan_ttl(self, tool: str) -> timedelta:
         """Return the plan lifetime for a tool.

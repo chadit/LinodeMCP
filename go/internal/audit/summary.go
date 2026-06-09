@@ -74,7 +74,7 @@ func ValidateGroupBy(groupBy []string) ([]string, error) {
 
 // Summarize aggregates events into per-bucket counts grouped by the
 // given columns. groupBy must already be validated. Rows are sorted by
-// count descending, then by their grouped values, for deterministic
+// count descending, then by their grouped values, for reproducible
 // output.
 func Summarize(events []Event, groupBy []string) []SummaryRow {
 	counts := make(map[string]int, len(events))

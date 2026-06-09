@@ -57,7 +57,7 @@ func WithSweepInterval(interval time.Duration) RetentionSweeperOption {
 }
 
 // WithSweepClock overrides the time source so tests can pin "now"
-// and exercise the cutoff boundary deterministically.
+// and exercise the cutoff boundary reproducibly.
 func WithSweepClock(clock func() time.Time) RetentionSweeperOption {
 	return func(s *RetentionSweeper) {
 		if clock != nil {

@@ -10,7 +10,7 @@ Three MCP tools wrap the in-memory draft registry from Phase 8.1:
 All three carry ``Capability.Meta`` so the profile filter always
 admits them; they never touch the Linode API. Handlers read the live
 registry and profile resolver through module-level bridges the server
-installs at startup. Tests inject deterministic stand-ins via
+installs at startup. Tests inject reproducible stand-ins via
 :func:`set_draft_registry` and :func:`set_profile_resolver`.
 """
 

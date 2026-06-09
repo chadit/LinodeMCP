@@ -2,10 +2,10 @@
 
 Mirrors ``go/internal/tools/linode_profile_builder_test.go``. Tests
 define behavior contracts (CapMeta tag, filter semantics, JSON shape,
-deterministic ordering) rather than just exercising current code paths.
+reproducible ordering) rather than just exercising current code paths.
 
 The handlers read their catalog via a module-level bridge. The
-``_install_fixture_catalog`` autouse fixture installs a deterministic
+``_install_fixture_catalog`` autouse fixture installs a reproducible
 provider and resets the bridge after each test so state never bleeds.
 """
 
@@ -52,7 +52,7 @@ def fixture_catalog() -> list[ToolDescriptor]:
 
 @pytest.fixture(autouse=True)
 def install_fixture_catalog() -> Iterator[None]:
-    """Install the deterministic catalog and reset the bridge afterward.
+    """Install the reproducible catalog and reset the bridge afterward.
 
     The module-level bridge state would otherwise bleed across tests
     (and across files, since the production server module touches the

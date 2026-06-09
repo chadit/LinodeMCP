@@ -67,7 +67,7 @@ type JSONLSinkOption func(*JSONLSink)
 
 // WithClock returns a JSONLSinkOption that overrides the time
 // source used for rotation timing. A nil clock is ignored. The
-// override exists so deterministic tests can flip the rotation
+// override exists so reproducible tests can flip the rotation
 // trigger without waiting on real wall-clock midnight.
 func WithClock(clock func() time.Time) JSONLSinkOption {
 	return func(s *JSONLSink) {

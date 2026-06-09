@@ -9,12 +9,12 @@ path each call took).
 
 Four related features are covered here:
 
-1. **Dry-run** — preview any mutator without performing it.
-2. **Bypass-confirm** — a destructive call must have been previewed (or explicitly
+1. **Dry-run**: preview any mutator without performing it.
+2. **Bypass-confirm**: a destructive call must have been previewed (or explicitly
    waive the preview) before it executes.
-3. **Pre-check** — ask, before running a sequence, which calls the active profile
+3. **Pre-check**: ask, before running a sequence, which calls the active profile
    would permit.
-4. **Yolo** — a per-profile break-glass mode that skips both the preview gate and
+4. **Yolo**: a per-profile break-glass mode that skips both the preview gate and
    the confirm requirement.
 
 ## Dry-run
@@ -41,7 +41,7 @@ performs no mutation; it returns what *would* happen instead.
 A dry-run only ever issues read (`GET`) calls to populate `current_state` and the
 dependency walk. It never writes. Two identical dry-runs return identical results
 (modulo timestamps and any real state drift between them). There is no plan ID and
-nothing to "apply" — to actually run the call, the model invokes the tool again
+nothing to "apply". To actually run the call, the model invokes the tool again
 without `dry_run`. (The apply-by-id flow is the separate two-stage-writes spec.)
 
 ### Response fields
@@ -49,7 +49,7 @@ without `dry_run`. (The apply-by-id flow is the separate two-stage-writes spec.)
 | Field | When present | Meaning |
 | --- | --- | --- |
 | `would_execute` | always | the HTTP method + path the real call would issue |
-| `current_state` | when the resource exists | the resource as it is now (credential-safe: secrets are never surfaced — token/credential previews fetch the parent resource's metadata, never the secret) |
+| `current_state` | when the resource exists | the resource as it is now (credential-safe: secrets are never surfaced, since token/credential previews fetch the parent resource's metadata, never the secret) |
 | `dependencies` | Tier A destroys | other resources the call cascades to: each has `kind`, `id`, `label`, `action` (`detached`/`released`/`removed`/`cascade_deleted`), and a `note` |
 | `side_effects` | Tier B creates/updates | plain-language description of what changes |
 | `billing_delta` | some Tier A/B | estimated monthly cost change |
@@ -62,12 +62,12 @@ All of `dependencies` / `side_effects` / `billing_delta` / `warnings` are option
 
 Tools are tiered by blast radius, which sets how rich the preview is:
 
-- **Tier A — full dependency walk.** High-blast destroys that cascade across
+- **Tier A, full dependency walk.** High-blast destroys that cascade across
   dependent resources (instance/volume/LKE-cluster/firewall/domain/nodebalancer/
   VPC deletes, etc.). These populate `dependencies[]`.
-- **Tier B — side effects.** Creates and updates surface `side_effects[]` (and
+- **Tier B, side effects.** Creates and updates surface `side_effects[]` (and
   `billing_delta`/`warnings` where relevant).
-- **Tier C — state-only.** Single-resource operations with no cross-resource
+- **Tier C, state-only.** Single-resource operations with no cross-resource
   cascade (e.g. token/credential deletes). The preview carries `current_state` +
   `would_execute` only, by design.
 
@@ -79,7 +79,7 @@ advertise `dry_run`.
 ## Bypass-confirm (destructive calls)
 
 `CapDestroy` tools already require `confirm: true`. On top of that, a real
-destructive call must show it previewed the operation — otherwise it is rejected:
+destructive call must show it previewed the operation, otherwise it is rejected:
 
 ```text
 linode_instance_delete is destructive. Either:
@@ -93,8 +93,8 @@ So a destructive execution needs one of:
 
 | Flags (with `confirm: true`) | Outcome |
 | --- | --- |
-| `confirmed_dry_run: true` | proceed — the model asserts it ran a dry-run for this exact call |
-| `confirm_bypass_dry_run: true` | proceed — the model explicitly skips the preview |
+| `confirmed_dry_run: true` | proceed: the model asserts it ran a dry-run for this exact call |
+| `confirm_bypass_dry_run: true` | proceed: the model explicitly skips the preview |
 | neither | rejected with the message above |
 
 Two guard rails:
@@ -107,7 +107,7 @@ Two guard rails:
 
 Detection is client-asserted: the server trusts `confirmed_dry_run` rather than
 tracking session state. The defense against a model that lies is **observability**,
-not server-side gatekeeping — the [audit log](./audit-log.md) records both the
+not server-side gatekeeping, the [audit log](./audit-log.md) records both the
 dry-run and the apply (and the `mode`, below), so a destructive call with no
 preceding dry-run is visible after the fact.
 
@@ -143,7 +143,7 @@ execution.
 ```
 
 Pre-check inspects only the tool **name** and the optional `environment` arg
-against the active profile — not resource IDs, token scope, or resource existence.
+against the active profile, not resource IDs, token scope, or resource existence.
 It is advice; the model is free to ignore it. The three refusal reasons are
 `"tool name not registered"`, `"tool not in profile's allowed_tools"` (with an
 optional `(CapXxx)` annotation that splits it into the `capability_block` summary
@@ -179,5 +179,5 @@ linode_audit_recent  with  {"capability": "destroy"}
 
 ## See also
 
-- [profiles.md](./profiles.md) — what the active profile permits, and `allow_yolo`
-- [audit-log.md](./audit-log.md) — the event schema, the `mode` field, and queries
+- [profiles.md](./profiles.md): what the active profile permits, and `allow_yolo`
+- [audit-log.md](./audit-log.md): the event schema, the `mode` field, and queries

@@ -46,6 +46,11 @@ class PlanEntry:
     planned_at: datetime
     expires_at: datetime
     apply: Callable[[], Awaitable[list[TextContent]]]
+    # Normalized top-level field map of the planned state (hash-ignore fields
+    # already stripped). On a drift refusal the apply path diffs it against the
+    # re-fetched state to name the changed fields. None when the state did not
+    # serialize to a JSON object. Mirrors the Go PlanEntry.StateFields.
+    state_fields: dict[str, Any] | None = None
 
 
 def _wall_clock() -> datetime:

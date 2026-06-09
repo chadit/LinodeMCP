@@ -55,6 +55,13 @@ _FETCH_ERRORS = (
 
 type _FetchState = Callable[[RetryableClient], Awaitable[Any]]
 type _Execute = Callable[[RetryableClient], Awaitable[dict[str, Any]]]
+# Per-tool dependency walk run at plan time. Mirrors the dry-run details_fn:
+# given a live client and the fetched state, it returns the same DryRunDetails
+# (dependencies / side_effects / billing_delta / warnings) the dry-run path
+# surfaces, so a plan reads like a dry-run preview.
+type _DependencyWalk = Callable[
+    [RetryableClient, Any], Awaitable[helpers.DryRunDetails]
+]
 
 
 def _json_default(obj: object) -> Any:
@@ -63,21 +70,46 @@ def _json_default(obj: object) -> Any:
     return str(obj)
 
 
-def _state_hash(state: Any, hash_ignore: list[str]) -> str:
+def _state_hash_and_fields(
+    state: Any, hash_ignore: list[str]
+) -> tuple[str, dict[str, Any] | None]:
+    """Hash the state for drift detection and return its normalized top-level
+    field map with hash-ignore fields stripped. The map lets the apply path
+    name the changed fields on a drift refusal; it is None when the state does
+    not serialize to a JSON object. Plan and apply both call this, so the hash
+    is identical on both sides. Mirrors the Go stateHashAndFields.
+    """
     serialized = json.dumps(state, sort_keys=True, default=_json_default)
-    if hash_ignore:
-        serialized = _strip_hash_fields(serialized, hash_ignore)
-    return "sha256:" + hashlib.sha256(serialized.encode()).hexdigest()
-
-
-def _strip_hash_fields(serialized: str, hash_ignore: list[str]) -> str:
     parsed = json.loads(serialized)
     if not isinstance(parsed, dict):
-        return serialized
+        return "sha256:" + hashlib.sha256(serialized.encode()).hexdigest(), None
+
     obj = cast("dict[str, Any]", parsed)
     for field in hash_ignore:
         obj.pop(field, None)
-    return json.dumps(obj, sort_keys=True)
+
+    stripped = json.dumps(obj, sort_keys=True)
+    return "sha256:" + hashlib.sha256(stripped.encode()).hexdigest(), obj
+
+
+def _changed_field_names(
+    planned: dict[str, Any] | None, current: dict[str, Any] | None
+) -> list[str]:
+    """Return the sorted top-level keys whose values differ between the planned
+    and current field maps. Drives the changed-fields list in a drift refusal.
+    Returns an empty list when either map is None (no per-field diff available).
+    """
+    if planned is None or current is None:
+        return []
+
+    def encode(value: Any) -> str:
+        return json.dumps(value, sort_keys=True, default=_json_default)
+
+    keys = set(planned) | set(current)
+    changed = [
+        key for key in keys if encode(planned.get(key)) != encode(current.get(key))
+    ]
+    return sorted(changed)
 
 
 def _non_control_args(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -88,7 +120,10 @@ def _text(message: str) -> list[TextContent]:
     return [TextContent(type="text", text=message)]
 
 
-def _refusal(err_code: str, plan_id: str) -> list[TextContent]:
+def _refusal(
+    err_code: str, plan_id: str, changed_fields: list[str] | None = None
+) -> list[TextContent]:
+    changed = ", ".join(changed_fields) if changed_fields else "one or more fields"
     messages = {
         twostage.ERR_PLAN_EXPIRED: (
             f"PLAN_EXPIRED: plan {plan_id!r} has expired. "
@@ -100,7 +135,8 @@ def _refusal(err_code: str, plan_id: str) -> list[TextContent]:
         ),
         twostage.ERR_PLAN_DRIFT: (
             f"PLAN_DRIFT_DETECTED: the resource changed since plan {plan_id!r} "
-            'was created. Create a new plan with mode: "plan" and review first.'
+            f"was created (changed fields: {changed}). "
+            'Create a new plan with mode: "plan" and review first.'
         ),
     }
     default = (
@@ -120,12 +156,18 @@ async def run_two_stage_destroy(
     fetch_state: _FetchState,
     execute: _Execute,
     hash_ignore: list[str] | None = None,
+    dependency_walk: _DependencyWalk | None = None,
+    capability: Capability = Capability.Destroy,
 ) -> list[TextContent] | None:
     """Handle plan/apply for a destroy tool, or None to fall through.
 
     Returns None when two-stage does not apply: a yolo call (it dominates via
     the server's single-step path), no plan store on the context, a call
     without mode:"plan"/"apply", or a tool that is not opted in.
+
+    capability is the tool's profile capability, consulted at the opt-in gate.
+    It defaults to Destroy (every delete tool), so a CapWrite tool like
+    instance_resize passes Capability.Write to stay opt-in by config only.
     """
     if arguments.get("yolo") is True:
         return None
@@ -139,7 +181,7 @@ async def run_two_stage_destroy(
         return None
 
     settings = _two_stage_settings(cfg)
-    if not settings.opted_in(tool_name, Capability.Destroy):
+    if not settings.opted_in(tool_name, capability):
         return None
 
     ignore = hash_ignore or []
@@ -155,9 +197,10 @@ async def run_two_stage_destroy(
             store,
             ignore,
             settings,
+            dependency_walk,
         )
 
-    return await _run_apply(cfg, arguments, fetch_state, store, ignore)
+    return await _run_apply(cfg, arguments, fetch_state, store, ignore, capability)
 
 
 def _two_stage_settings(cfg: Config) -> twostage.Settings:
@@ -198,13 +241,26 @@ async def _run_plan(
     store: PlanStore,
     hash_ignore: list[str],
     settings: twostage.Settings,
+    dependency_walk: _DependencyWalk | None,
 ) -> list[TextContent]:
+    # Fetch the state and run the dependency walk under one client so the plan
+    # body reads like a dry-run preview (dependencies / side_effects /
+    # billing_delta / warnings). Mirrors the Go runPlan + planDependencies.
+    async def _fetch_and_walk(
+        client: RetryableClient,
+    ) -> tuple[Any, helpers.DryRunDetails]:
+        state = await fetch_state(client)
+        details: helpers.DryRunDetails = {}
+        if dependency_walk is not None:
+            details = await dependency_walk(client, state)
+        return state, details
+
     try:
-        state = await helpers.with_client(cfg, arguments, fetch_state)
+        state, details = await helpers.with_client(cfg, arguments, _fetch_and_walk)
     except _FETCH_ERRORS as exc:
         return _text(f"Failed to fetch state for plan: {exc}")
 
-    state_hash = _state_hash(state, hash_ignore)
+    state_hash, state_fields = _state_hash_and_fields(state, hash_ignore)
     plan_id = twostage.new_plan_id()
     now = datetime.now(UTC)
     expires = now + settings.plan_ttl(tool_name)
@@ -223,10 +279,11 @@ async def _run_plan(
             planned_at=now,
             expires_at=expires,
             apply=_apply,
+            state_fields=state_fields,
         )
     )
 
-    body = {
+    body: dict[str, Any] = {
         "plan_id": plan_id,
         "created_at": now.isoformat(),
         "expires_at": expires.isoformat(),
@@ -235,6 +292,7 @@ async def _run_plan(
         "would_execute": {"method": method, "path": path},
         "current_state": state,
         "current_state_hash": state_hash,
+        **details,
     }
     return [
         TextContent(type="text", text=json.dumps(body, indent=2, default=_json_default))
@@ -247,9 +305,10 @@ async def _run_apply(
     fetch_state: _FetchState,
     store: PlanStore,
     hash_ignore: list[str],
+    capability: Capability,
 ) -> list[TextContent]:
     plan_id = arguments.get("plan_id", "")
-    lookup, entry, error = await _classify_plan(
+    lookup, entry, changed_fields, error = await _classify_plan(
         cfg, arguments, fetch_state, store, plan_id, hash_ignore
     )
     if error is not None:
@@ -257,7 +316,7 @@ async def _run_apply(
 
     decision = twostage.resolve(
         twostage.Request(
-            capability=Capability.Destroy,
+            capability=capability,
             two_stage_opted_in=True,
             mode=twostage.MODE_APPLY,
             plan_id=plan_id,
@@ -265,7 +324,7 @@ async def _run_apply(
         )
     )
     if decision.branch != twostage.Branch.APPLY or entry is None:
-        return _refusal(decision.err_code, plan_id)
+        return _refusal(decision.err_code, plan_id, changed_fields)
 
     result = await entry.apply()
     await store.remove(plan_id)
@@ -279,17 +338,20 @@ async def _classify_plan(
     store: PlanStore,
     plan_id: str,
     hash_ignore: list[str],
-) -> tuple[twostage.PlanLookup, PlanEntry | None, list[TextContent] | None]:
+) -> tuple[twostage.PlanLookup, PlanEntry | None, list[str], list[TextContent] | None]:
+    # The third element is the list of changed top-level field names, populated
+    # only on a drift verdict so the refusal can name them. Mirrors the Go
+    # classifyPlan, whose fourth return is the changed-field slice.
     try:
         entry = await store.get(plan_id)
     except PlanNotFoundError:
-        return twostage.PlanLookup.UNKNOWN, None, None
+        return twostage.PlanLookup.UNKNOWN, None, [], None
     except PlanExpiredError:
-        return twostage.PlanLookup.EXPIRED, None, None
+        return twostage.PlanLookup.EXPIRED, None, [], None
 
     supplied = _non_control_args(arguments)
     if supplied and supplied != entry.args:
-        return twostage.PlanLookup.ARGS_MISMATCH, entry, None
+        return twostage.PlanLookup.ARGS_MISMATCH, entry, [], None
 
     try:
         state = await helpers.with_client(cfg, arguments, fetch_state)
@@ -297,10 +359,13 @@ async def _classify_plan(
         return (
             twostage.PlanLookup.NOT_APPLICABLE,
             None,
+            [],
             _text(f"Failed to re-fetch state for apply: {exc}"),
         )
 
-    if _state_hash(state, hash_ignore) != entry.state_hash:
-        return twostage.PlanLookup.DRIFTED, entry, None
+    current_hash, current_fields = _state_hash_and_fields(state, hash_ignore)
+    if current_hash != entry.state_hash:
+        changed = _changed_field_names(entry.state_fields, current_fields)
+        return twostage.PlanLookup.DRIFTED, entry, changed, None
 
-    return twostage.PlanLookup.VALID, entry, None
+    return twostage.PlanLookup.VALID, entry, [], None

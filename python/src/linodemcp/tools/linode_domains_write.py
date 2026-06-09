@@ -531,6 +531,9 @@ async def _domain_delete_two_stage(
             "domain_id": domain_id,
         }
 
+    async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+        return await _domain_delete_dependency_walk(client, int(domain_id))
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -540,6 +543,7 @@ async def _domain_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Domain"),
+        dependency_walk=_ts_walk,
     )
 
 

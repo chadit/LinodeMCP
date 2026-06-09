@@ -15,6 +15,7 @@ from linodemcp.tools.helpers import (
     PARAM_PLAN_ID,
     PLAN_ID_PROP,
     TWO_STAGE_NOTE,
+    TWO_STAGE_OPT_IN_NOTE,
     DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
@@ -995,6 +996,9 @@ async def _instance_delete_two_stage(
             "instance_id": instance_id,
         }
 
+    async def _ts_walk(client: RetryableClient, state: Any) -> DryRunDetails:
+        return await _instance_delete_dependency_walk(client, int(instance_id), state)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -1004,6 +1008,7 @@ async def _instance_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Instance"),
+        dependency_walk=_ts_walk,
     )
 
 
@@ -1246,6 +1251,7 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
         description=(
             "Resizes a Linode instance to a different plan. "
             "WARNING: This may cause downtime and billing changes."
+            + TWO_STAGE_OPT_IN_NOTE
         ),
         inputSchema={
             "type": "object",
@@ -1281,17 +1287,29 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["instance_id", "type", "confirm"],
         },
     ), Capability.Write
 
 
-def _instance_resize_side_effects(state: Any, target_type: str) -> DryRunDetails:
+def _resize_from_type(state: Any) -> str:
+    """Read the current instance type from whichever state shape the resize walk
+    receives: the bare instance on the dry-run path (attribute access) or the
+    composite projection dict on the two-stage path.
+    """
+    if isinstance(state, dict):
+        state_map = cast("dict[str, Any]", state)
+        return str(state_map.get("type", ""))
+    return str(getattr(state, "type", ""))
+
+
+def _instance_resize_side_effects(from_type: str, target_type: str) -> DryRunDetails:
     """Phase 2 Tier B walk for instance resize. Names the type change (from the
     fetched state to the requested type) and warns about reboot and billing.
     """
-    from_type = getattr(state, "type", "")
     if from_type:
         effect = (
             f"Instance resizes from type {from_type} to {target_type}; it "
@@ -1308,6 +1326,76 @@ def _instance_resize_side_effects(state: Any, target_type: str) -> DryRunDetails
     }
 
 
+async def _fetch_instance_resize_state(
+    client: RetryableClient, instance_id: int
+) -> Any:
+    """Build the composite resize projection: the instance type plus each disk's
+    id, size, and filesystem. Resize affects both the plan and the disks, so the
+    drift hash must cover both. The projection holds only drift-relevant fields,
+    so cosmetic instance changes never refuse an apply and no hash-ignore list is
+    needed. Mirrors the Go fetchInstanceResizeState.
+    """
+    instance = await client.get_instance(instance_id)
+    try:
+        disks: list[dict[str, Any]] = await client.list_instance_disks(instance_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        msg = f"list disks for resize plan: {exc}"
+        raise ValueError(msg) from exc
+
+    disk_snapshot = [
+        {
+            "id": disk.get("id"),
+            "size": disk.get("size"),
+            "filesystem": disk.get("filesystem"),
+        }
+        for disk in disks
+    ]
+    return {"type": _resize_from_type(instance), "disks": disk_snapshot}
+
+
+async def _instance_resize_two_stage(
+    arguments: dict[str, Any], cfg: Config, instance_id: int, instance_type: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through.
+
+    Capability is Write, so resize stays opt-in: a plan/apply call resizes only
+    when an operator enables linode_instance_resize in the two_stage config.
+    """
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await _fetch_instance_resize_state(client, instance_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.resize_instance(
+            instance_id=instance_id,
+            instance_type=instance_type,
+            allow_auto_disk_resize=arguments.get("allow_auto_disk_resize", True),
+            migration_type=arguments.get("migration_type", "warm"),
+        )
+        return {
+            "message": f"Instance {instance_id} resize to {instance_type} initiated",
+            "instance_id": instance_id,
+            "new_type": instance_type,
+        }
+
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _instance_resize_side_effects(_resize_from_type(state), instance_type)
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_instance_resize",
+        method="POST",
+        path=f"/linode/instances/{instance_id}/resize",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        dependency_walk=_ts_walk,
+        capability=Capability.Write,
+    )
+
+
 async def handle_linode_instance_resize(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1320,13 +1408,21 @@ async def handle_linode_instance_resize(
     if not instance_type:
         return _error_response("type is required")
 
+    two_stage = await _instance_resize_two_stage(
+        arguments, cfg, int(instance_id), str(instance_type)
+    )
+    if two_stage is not None:
+        return two_stage
+
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance(int(instance_id))
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
-            return _instance_resize_side_effects(state, str(instance_type))
+            return _instance_resize_side_effects(
+                _resize_from_type(state), str(instance_type)
+            )
 
         return await execute_dry_run(
             cfg,

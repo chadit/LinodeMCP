@@ -27,6 +27,11 @@ type PlanEntry struct {
 	Tool        string
 	Environment string
 	StateHash   string
+	// StateFields is the normalized top-level field map of the planned state
+	// (hash-ignore fields already stripped). On a drift refusal the apply path
+	// diffs it against the re-fetched state to report which fields changed. Nil
+	// when the state did not serialize to a JSON object.
+	StateFields map[string]any
 	PlannedAt   time.Time
 	ExpiresAt   time.Time
 }

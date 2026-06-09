@@ -66,7 +66,7 @@ INSERT OR IGNORE INTO events (
 // audit.sqlite config block; when enabled it runs alongside the JSONL
 // sink behind a MultiSink. Writes are synchronous, matching the JSONL
 // sink; the Performance section's 100ms batching is a later
-// optimization if benchmarks require it.
+// speedup if benchmarks require it.
 //
 // Write failures are best-effort: they route to the configured error
 // handler and are dropped, leaving the JSONL sink as the durable

@@ -9,7 +9,7 @@ rate limits. Pre-check is advice, not a transactional plan.
 
 The handler reads the live tool catalog and the active profile through two
 module-level bridges the server installs at startup. Tests inject
-deterministic fixtures via :func:`set_can_run_catalog_provider` and
+reproducible fixtures via :func:`set_can_run_catalog_provider` and
 :func:`set_can_run_active_profile_provider`. The bridges live on a small
 holder object so the setters mutate an attribute rather than rebinding a
 module global (no ``global`` statement, no lint suppression needed).

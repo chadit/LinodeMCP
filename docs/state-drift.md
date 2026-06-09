@@ -35,13 +35,16 @@ tells you what to do.
 ### `PLAN_DRIFT_DETECTED`
 
 ```text
-PLAN_DRIFT_DETECTED: the resource changed since plan "plan_018f..." was created.
-Create a new plan with mode: "plan" and review before applying.
+PLAN_DRIFT_DETECTED: the resource changed since plan "plan_018f..." was created
+(changed fields: status). Create a new plan with mode: "plan" and review first.
 ```
 
-The resource moved in a way that isn't cosmetic. Re-plan, look at the new
-`current_state`, and decide whether you still want to delete it. Don't reuse the
-old plan id.
+The resource moved in a way that isn't cosmetic. The message names the top-level
+fields that differ (here, `status`), so you can see what moved without diffing
+the two states by hand. When the plan couldn't capture a per-field map (the state
+wasn't a JSON object), it falls back to "one or more fields". Re-plan, look at the
+new `current_state`, and decide whether you still want to delete it. Don't reuse
+the old plan id.
 
 ### `PLAN_EXPIRED`
 

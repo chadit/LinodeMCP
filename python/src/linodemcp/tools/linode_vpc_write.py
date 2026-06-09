@@ -428,6 +428,9 @@ async def _vpc_delete_two_stage(
             "vpc_id": vpc_id,
         }
 
+    async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+        return await _vpc_delete_dependency_walk(client, vpc_id)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -437,6 +440,7 @@ async def _vpc_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("VPC"),
+        dependency_walk=_ts_walk,
     )
 
 
@@ -738,6 +742,9 @@ async def _vpc_subnet_delete_two_stage(
             "subnet_id": subnet_id,
         }
 
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _vpc_subnet_delete_dependency_walk(state)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -747,6 +754,7 @@ async def _vpc_subnet_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("VPCSubnet"),
+        dependency_walk=_ts_walk,
     )
 
 

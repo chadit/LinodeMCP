@@ -19,7 +19,7 @@ func TestOptedInCapabilityDefaults(t *testing.T) {
 		want       bool
 	}{
 		{"destroy opts in", profiles.CapDestroy, true},
-		{"admin opts in", profiles.CapAdmin, true},
+		{"admin opts out (no admin tool is wired for two-stage)", profiles.CapAdmin, false},
 		{"write opts out", profiles.CapWrite, false},
 		{"read never opts in", profiles.CapRead, false},
 		{"meta never opts in", profiles.CapMeta, false},

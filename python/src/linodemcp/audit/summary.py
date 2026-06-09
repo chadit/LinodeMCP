@@ -83,7 +83,7 @@ def validate_group_by(group_by: list[str] | None) -> list[str]:
 def summarize(events: list[Event], group_by: list[str]) -> list[SummaryRow]:
     """Aggregate events into per-bucket counts grouped by the given
     columns. ``group_by`` must already be validated. Rows are sorted by
-    count descending, then by grouped values, for deterministic output.
+    count descending, then by grouped values, for reproducible output.
     """
     accessors = [(name, _column_accessor(name)) for name in group_by]
     counts: dict[tuple[str, ...], int] = {}

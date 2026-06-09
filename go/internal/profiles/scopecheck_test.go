@@ -277,7 +277,7 @@ func TestCompareScopesAllPresent(t *testing.T) {
 
 // TestCompareScopesMissingReportsGap verifies the missing-set path:
 // the token lacks a scope the profile needs. Missing is sorted so the
-// error message stays deterministic.
+// error message stays reproducible.
 func TestCompareScopesMissingReportsGap(t *testing.T) {
 	t.Parallel()
 

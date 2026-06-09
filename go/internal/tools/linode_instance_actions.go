@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeInstanceCloneTool creates a tool for cloning a Linode instance.
@@ -255,7 +256,7 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		cfg,
 		"linode_instance_rebuild",
 		"Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance."+
-			" Pass dry_run=true to preview without rebuilding.",
+			" Pass dry_run=true to preview without rebuilding."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to rebuild")),
@@ -272,6 +273,8 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm rebuild. WARNING: This destroys ALL existing data. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleInstanceRebuildRequest,
 	)
@@ -350,6 +353,7 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 			}
 		},
 		DependencyWalk: instanceRebuildSideEffectsWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Instance"),
 	})
 }
 

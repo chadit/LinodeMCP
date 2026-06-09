@@ -28,7 +28,7 @@ const (
 	dnsCategory = "dns"
 )
 
-// fixtureCatalog returns a deterministic three-tool catalog used by the
+// fixtureCatalog returns a reproducible three-tool catalog used by the
 // builder-tool tests. Includes one tool per category surface the
 // filters care about (compute write, dns read, core meta) so the
 // filter assertions exercise both inclusion and exclusion paths.
@@ -396,8 +396,8 @@ func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 	}
 }
 
-// TestListCategoriesSortedByName locks the deterministic-output
-// contract. JSON map iteration order is non-deterministic, so the
+// TestListCategoriesSortedByName locks the reproducible-output
+// contract. JSON map iteration order is non-reproducible, so the
 // handler explicitly sorts. A refactor that drops the sort would
 // cause the cross-language parity test to flake.
 func TestListCategoriesSortedByName(t *testing.T) {

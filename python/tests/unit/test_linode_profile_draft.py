@@ -4,7 +4,7 @@ Mirrors ``go/internal/tools/linode_profile_draft_test.go``. Tests
 define behavior contracts (CapMeta tag, error sentinels, idempotency,
 JSON shape) rather than just exercising the current code path.
 
-Each test installs a deterministic Registry + resolver via the
+Each test installs a reproducible Registry + resolver via the
 module-level bridge. The ``install_fixtures`` autouse fixture resets
 both bridges after each test so state never bleeds across files (the
 production server module touches the same singletons).
@@ -60,7 +60,7 @@ def fixture_source_profile() -> Profile:
 
 @pytest.fixture(autouse=True)
 def install_fixtures() -> Iterator[Registry]:
-    """Install a deterministic Registry + resolver for each test.
+    """Install a reproducible Registry + resolver for each test.
 
     Yields the Registry so individual tests can inspect post-call
     state (e.g. confirm a draft was created or removed). The bridge

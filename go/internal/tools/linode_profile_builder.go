@@ -15,7 +15,7 @@ import (
 
 // CatalogProvider returns the full server tool catalog. The Phase 8.2
 // builder tools take this as an injected dependency rather than a
-// global so test code can supply a deterministic fixture. The provider
+// global so test code can supply a reproducible fixture. The provider
 // runs at handler call time so hot-reload changes to the catalog are
 // reflected without re-registering the tool.
 type CatalogProvider func() []profiles.ToolDescriptor

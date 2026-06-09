@@ -15,7 +15,7 @@ touch the Linode API.
 
 The handlers read the live tool catalog through a module-level bridge
 (``_catalog_provider``) the server installs at startup. Tests inject
-deterministic fixtures via :func:`set_tool_catalog_provider`.
+reproducible fixtures via :func:`set_tool_catalog_provider`.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 
 # Bridge module state. The Phase 4 server installs the provider during
-# __init__; tests install a deterministic stand-in via
+# __init__; tests install a reproducible stand-in via
 # set_tool_catalog_provider. ``None`` is the default; handlers that
 # fire before the bridge is wired return an empty catalog rather than
 # raising, so unit tests against the handlers can opt into providing a
@@ -190,7 +190,7 @@ async def handle_linode_profile_list_categories(
 
     Counts include every category a tool carries (a tool that appears
     in two categories contributes 1 to each). Sorted by name so the
-    output is deterministic and the cross-language parity test can
+    output is reproducible and the cross-language parity test can
     compare directly.
     """
     entries = _resolve_catalog()

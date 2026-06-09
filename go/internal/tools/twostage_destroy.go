@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
@@ -56,6 +58,14 @@ type planResponse struct {
 	WouldExecute     DryRunRequest `json:"would_execute"`
 	CurrentState     any           `json:"current_state"`
 	CurrentStateHash string        `json:"current_state_hash"`
+
+	// Dependency-walk enrichment, mirroring the dry-run response so a plan is
+	// a strict superset of a dry-run. A tool with no DependencyWalk leaves
+	// these unset (omitempty), keeping the shape stable.
+	Dependencies []DryRunDependency  `json:"dependencies,omitempty"`
+	SideEffects  []string            `json:"side_effects,omitempty"`
+	BillingDelta *DryRunBillingDelta `json:"billing_delta,omitempty"`
+	Warnings     []string            `json:"warnings,omitempty"`
 }
 
 // runTwoStageBranch handles the plan and apply branches for a destroy tool. It
@@ -83,7 +93,7 @@ func runTwoStageBranch(
 		return nil, false
 	}
 
-	if !twoStageSettings(cfg).OptedIn(action.ToolName, profiles.CapDestroy) {
+	if !twoStageSettings(cfg).OptedIn(action.ToolName, action.capability()) {
 		return nil, false
 	}
 
@@ -113,7 +123,7 @@ func runPlan(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for plan: %v", fetchErr))
 	}
 
-	hash, hashErr := stateHash(state, action.HashIgnore)
+	hash, fields, hashErr := stateHashAndFields(state, action.HashIgnore)
 	if hashErr != nil {
 		return mcp.NewToolResultError(hashErr.Error())
 	}
@@ -121,6 +131,11 @@ func runPlan(
 	planID, idErr := twostage.NewPlanID()
 	if idErr != nil {
 		return mcp.NewToolResultError(idErr.Error())
+	}
+
+	details, walkErr := planDependencies(ctx, client, action, state)
+	if walkErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to compute plan dependencies: %v", walkErr))
 	}
 
 	now := time.Now()
@@ -133,6 +148,7 @@ func runPlan(
 		Environment: env,
 		Args:        nonControlArgs(request.GetArguments()),
 		StateHash:   hash,
+		StateFields: fields,
 		PlannedAt:   now,
 		ExpiresAt:   expires,
 		Apply: func(applyCtx context.Context) (*mcp.CallToolResult, error) {
@@ -140,7 +156,22 @@ func runPlan(
 		},
 	})
 
-	return buildPlanResponse(planID, now, expires, action, env, state, hash)
+	return buildPlanResponse(planID, now, expires, action, env, state, hash, &details)
+}
+
+// planDependencies runs the action's dependency walk (if any) so the plan
+// response is a strict superset of a dry-run. A nil walk yields empty details.
+func planDependencies(
+	ctx context.Context,
+	client *linode.Client,
+	action *DestructiveAction,
+	state any,
+) (DryRunDetails, error) {
+	if action.DependencyWalk == nil {
+		return DryRunDetails{}, nil
+	}
+
+	return action.DependencyWalk(ctx, client, state)
 }
 
 // runApply classifies the referenced plan, resolves the branch, and either runs
@@ -154,20 +185,20 @@ func runApply(
 ) *mcp.CallToolResult {
 	planID := request.GetString(paramPlanID, "")
 
-	lookup, entry, errResult := classifyPlan(ctx, request, cfg, action, store, planID)
+	lookup, entry, changedFields, errResult := classifyPlan(ctx, request, cfg, action, store, planID)
 	if errResult != nil {
 		return errResult
 	}
 
 	decision := twostage.Resolve(twostage.Request{
-		Capability:      profiles.CapDestroy,
+		Capability:      action.capability(),
 		TwoStageOptedIn: true,
 		Mode:            twostage.ModeApply,
 		PlanID:          planID,
 		PlanLookup:      lookup,
 	})
 	if decision.Branch != twostage.BranchApply {
-		return refusalResult(decision.ErrCode, planID)
+		return refusalResult(decision.ErrCode, planID, changedFields)
 	}
 
 	result, applyErr := entry.Apply(ctx)
@@ -191,42 +222,42 @@ func classifyPlan(
 	action *DestructiveAction,
 	store *twostage.PlanStore,
 	planID string,
-) (twostage.PlanLookup, *twostage.PlanEntry, *mcp.CallToolResult) {
+) (twostage.PlanLookup, *twostage.PlanEntry, []string, *mcp.CallToolResult) {
 	entry, lookupErr := store.Get(planID)
 	if errors.Is(lookupErr, twostage.ErrPlanExpired) {
-		return twostage.PlanLookupExpired, nil, nil
+		return twostage.PlanLookupExpired, nil, nil, nil
 	}
 
 	if lookupErr != nil {
-		return twostage.PlanLookupUnknown, nil, nil
+		return twostage.PlanLookupUnknown, nil, nil, nil
 	}
 
 	supplied := nonControlArgs(request.GetArguments())
 	if len(supplied) > 0 && !argsEqual(supplied, entry.Args) {
-		return twostage.PlanLookupArgsMismatch, entry, nil
+		return twostage.PlanLookupArgsMismatch, entry, nil, nil
 	}
 
 	client, clientErr := prepareClient(request, cfg)
 	if clientErr != nil {
-		return twostage.PlanLookupNotApplicable, nil, mcp.NewToolResultError(clientErr.Error())
+		return twostage.PlanLookupNotApplicable, nil, nil, mcp.NewToolResultError(clientErr.Error())
 	}
 
 	state, fetchErr := action.FetchState(ctx, client)
 	if fetchErr != nil {
-		return twostage.PlanLookupNotApplicable, nil,
+		return twostage.PlanLookupNotApplicable, nil, nil,
 			mcp.NewToolResultError(fmt.Sprintf("Failed to re-fetch state for apply: %v", fetchErr))
 	}
 
-	hash, hashErr := stateHash(state, action.HashIgnore)
+	hash, fields, hashErr := stateHashAndFields(state, action.HashIgnore)
 	if hashErr != nil {
-		return twostage.PlanLookupNotApplicable, nil, mcp.NewToolResultError(hashErr.Error())
+		return twostage.PlanLookupNotApplicable, nil, nil, mcp.NewToolResultError(hashErr.Error())
 	}
 
 	if hash != entry.StateHash {
-		return twostage.PlanLookupDrifted, entry, nil
+		return twostage.PlanLookupDrifted, entry, changedFieldNames(entry.StateFields, fields), nil
 	}
 
-	return twostage.PlanLookupValid, entry, nil
+	return twostage.PlanLookupValid, entry, nil, nil
 }
 
 // executeDestroy runs the real delete: prepare the client, execute, and marshal
@@ -254,37 +285,29 @@ func executeDestroy(
 // fields stripped first, so a plan does not refuse on drift the user never
 // caused. Go's json.Marshal sorts map keys, so the same state always encodes
 // the same way.
-func stateHash(state any, ignore []string) (string, error) {
+// stateHashAndFields hashes a resource's state for drift detection and also
+// returns its normalized top-level field map with the hash-ignore fields
+// stripped. The map lets the apply path report which fields changed on a drift
+// refusal. It is nil when the state does not serialize to a JSON object (for
+// example a bare array), in which case the whole payload is hashed and no
+// per-field diff is available. Plan and apply both call this, so the hash is
+// computed identically on both sides.
+func stateHashAndFields(state any, ignore []string) (string, map[string]any, error) {
 	data, err := json.Marshal(state)
 	if err != nil {
-		return "", fmt.Errorf("marshal state for hash: %w", err)
+		return "", nil, fmt.Errorf("marshal state for hash: %w", err)
 	}
 
-	if len(ignore) > 0 {
-		data, err = stripHashFields(data, ignore)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	sum := sha256.Sum256(data)
-
-	return "sha256:" + hex.EncodeToString(sum[:]), nil
-}
-
-// stripHashFields removes the named top-level fields from a JSON object before
-// it is hashed. A non-object payload (for example a JSON array) is returned
-// unchanged, so the hash still covers it.
-func stripHashFields(data []byte, ignore []string) ([]byte, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 || trimmed[0] != '{' {
-		// Not a JSON object (for example an array); hash the payload whole.
-		return data, nil
+		sum := sha256.Sum256(data)
+
+		return "sha256:" + hex.EncodeToString(sum[:]), nil, nil
 	}
 
 	var obj map[string]any
 	if err := json.Unmarshal(data, &obj); err != nil {
-		return nil, fmt.Errorf("unmarshal state for hash strip: %w", err)
+		return "", nil, fmt.Errorf("unmarshal state for hash: %w", err)
 	}
 
 	for _, field := range ignore {
@@ -293,10 +316,56 @@ func stripHashFields(data []byte, ignore []string) ([]byte, error) {
 
 	stripped, err := json.Marshal(obj)
 	if err != nil {
-		return nil, fmt.Errorf("re-marshal stripped state for hash: %w", err)
+		return "", nil, fmt.Errorf("re-marshal stripped state for hash: %w", err)
 	}
 
-	return stripped, nil
+	sum := sha256.Sum256(stripped)
+
+	return "sha256:" + hex.EncodeToString(sum[:]), obj, nil
+}
+
+// changedFieldNames returns the sorted top-level keys whose values differ
+// between the planned and current field maps (added, removed, or changed). It
+// drives the changed-fields list in a drift refusal. Comparison is by canonical
+// JSON encoding, so key ordering within nested objects is irrelevant. Returns
+// nil when either map is nil (no per-field diff available).
+func changedFieldNames(planned, current map[string]any) []string {
+	if planned == nil || current == nil {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(planned)+len(current))
+	for key := range planned {
+		seen[key] = struct{}{}
+	}
+
+	for key := range current {
+		seen[key] = struct{}{}
+	}
+
+	var changed []string
+
+	for key := range seen {
+		if !jsonEqual(planned[key], current[key]) {
+			changed = append(changed, key)
+		}
+	}
+
+	slices.Sort(changed)
+
+	return changed
+}
+
+// jsonEqual reports whether two values have the same canonical JSON encoding.
+func jsonEqual(left, right any) bool {
+	leftBytes, leftErr := json.Marshal(left)
+	rightBytes, rightErr := json.Marshal(right)
+
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+
+	return bytes.Equal(leftBytes, rightBytes)
 }
 
 // buildPlanResponse renders the plan preview a mode:"plan" call returns.
@@ -307,6 +376,7 @@ func buildPlanResponse(
 	environment string,
 	state any,
 	hash string,
+	details *DryRunDetails,
 ) *mcp.CallToolResult {
 	result, err := MarshalToolResponse(planResponse{
 		PlanID:           planID,
@@ -317,6 +387,10 @@ func buildPlanResponse(
 		WouldExecute:     DryRunRequest{Method: action.Method, Path: action.Path},
 		CurrentState:     state,
 		CurrentStateHash: hash,
+		Dependencies:     details.Dependencies,
+		SideEffects:      details.SideEffects,
+		BillingDelta:     details.BillingDelta,
+		Warnings:         details.Warnings,
 	})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error())
@@ -327,7 +401,7 @@ func buildPlanResponse(
 
 // refusalResult maps an apply refusal code to a message that tells the model
 // how to recover.
-func refusalResult(errCode, planID string) *mcp.CallToolResult {
+func refusalResult(errCode, planID string, changedFields []string) *mcp.CallToolResult {
 	switch errCode {
 	case twostage.ErrCodePlanExpired:
 		return mcp.NewToolResultError(fmt.Sprintf(
@@ -339,9 +413,15 @@ func refusalResult(errCode, planID string) *mcp.CallToolResult {
 				"Apply without passing args (the plan retains them), or create a new plan.", planID,
 		))
 	case twostage.ErrCodePlanDrift:
+		changed := "one or more fields"
+		if len(changedFields) > 0 {
+			changed = strings.Join(changedFields, ", ")
+		}
+
 		return mcp.NewToolResultError(fmt.Sprintf(
-			"PLAN_DRIFT_DETECTED: the resource changed since plan %q was created. "+
-				"Create a new plan with mode: \"plan\" and review before applying.", planID,
+			"PLAN_DRIFT_DETECTED: the resource changed since plan %q was created "+
+				"(changed fields: %s). Create a new plan with mode: \"plan\" and review "+
+				"before applying.", planID, changed,
 		))
 	default:
 		return mcp.NewToolResultError(fmt.Sprintf(

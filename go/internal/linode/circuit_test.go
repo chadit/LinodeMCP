@@ -15,7 +15,7 @@ import (
 
 // Tests drive the breaker through linode.NewCircuitBreaker and the public
 // Client API. Time-dependent transitions run under testing/synctest so
-// cooldown progression is deterministic, not wall-clock.
+// cooldown progression is reproducible, not wall-clock.
 
 func TestCircuitBreakerDisabledWhenThresholdZero(t *testing.T) {
 	t.Parallel()

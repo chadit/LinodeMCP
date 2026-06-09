@@ -174,12 +174,290 @@ func TestInstanceDeleteTwoStageApplyDrift(t *testing.T) {
 		t.Fatalf("apply returned error: %v", err)
 	}
 
-	if !applyResult.IsError || !strings.Contains(dryRunResultText(t, applyResult), "PLAN_DRIFT_DETECTED") {
-		t.Errorf("apply should report PLAN_DRIFT_DETECTED, got: %s", dryRunResultText(t, applyResult))
+	driftText := dryRunResultText(t, applyResult)
+	if !applyResult.IsError || !strings.Contains(driftText, "PLAN_DRIFT_DETECTED") {
+		t.Errorf("apply should report PLAN_DRIFT_DETECTED, got: %s", driftText)
+	}
+
+	// The refusal must name the field that drifted (only Status changed here).
+	if !strings.Contains(driftText, "status") {
+		t.Errorf("drift refusal should name the changed field 'status', got: %s", driftText)
 	}
 
 	if deleted.Load() {
 		t.Error("drift must not issue a DELETE")
+	}
+}
+
+// TestTwoStagePlanIncludesDependencies confirms a mode:"plan" response is a
+// richer dry-run: it runs the tool's dependency walk and carries the resulting
+// dependencies and warnings, the same enrichment dry_run:true produces.
+func TestTwoStagePlanIncludesDependencies(t *testing.T) {
+	t.Parallel()
+
+	base := map[string]any{
+		keyLabel:       "data-01",
+		keyStatus:      statusActive,
+		keyLinodeID:    float64(999),
+		"linode_label": "web-01",
+	}
+	state := &atomic.Pointer[map[string]any]{}
+	state.Store(&base)
+
+	deleted := &atomic.Bool{}
+	cfg := twoStageJSONServer(t, state, deleted)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyVolumeID: float64(123),
+		keyMode:     twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	body := decodeBody(t, dryRunResultText(t, planResult))
+
+	deps, ok := body["dependencies"].([]any)
+	if !ok || len(deps) == 0 {
+		t.Fatalf("plan response should carry the walk's dependencies, got: %v", body["dependencies"])
+	}
+
+	if _, ok := body["warnings"].([]any); !ok {
+		t.Errorf("plan response should carry the walk's warnings, got: %v", body["warnings"])
+	}
+}
+
+// rebuildServer serves GET /linode/instances/123 (and its disk list, which the
+// rebuild dependency walk reads) from the state box and records the POST that
+// applies the rebuild, returning the instance body so the client decode passes.
+func rebuildServer(
+	t *testing.T,
+	state *atomic.Pointer[linode.Instance],
+	rebuilt *atomic.Bool,
+) *config.Config {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/rebuild") {
+			rebuilt.Store(true)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(state.Load()); err != nil {
+			t.Errorf("encode state: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	return &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+}
+
+// TestInstanceRebuildTwoStagePlanThenApply proves the CapDestroy rebuild action,
+// which routes through the shared destroy flow, honors plan/apply: the plan
+// produces an id and runs the dependency walk (so the body carries warnings)
+// without rebuilding, and the apply issues the POST.
+func TestInstanceRebuildTwoStagePlanThenApply(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	rebuilt := &atomic.Bool{}
+	cfg := rebuildServer(t, state, rebuilt)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceRebuildTool(cfg)
+
+	rebuildArgs := map[string]any{
+		keyLinodeID: float64(123),
+		keyImage:    "linode/ubuntu24.04",
+		keyRootPass: "Abcdefgh1234",
+	}
+
+	planArgs := maps.Clone(rebuildArgs)
+	planArgs[keyMode] = twostage.ModePlan
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, planArgs))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if planResult.IsError {
+		t.Fatalf("plan IsError, text: %s", dryRunResultText(t, planResult))
+	}
+
+	if rebuilt.Load() {
+		t.Fatal("plan must not issue a rebuild")
+	}
+
+	plan := decodeBody(t, dryRunResultText(t, planResult))
+
+	id, _ := plan["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan response has no plan_id: %v", plan)
+	}
+
+	if _, ok := plan["warnings"].([]any); !ok {
+		t.Errorf("rebuild plan should carry the walk's warnings, got: %v", plan["warnings"])
+	}
+
+	applyArgs := maps.Clone(rebuildArgs)
+	applyArgs[keyMode] = twostage.ModeApply
+	applyArgs[keyPlanID] = id
+
+	applyResult, err := handler(ctx, createRequestWithArgs(t, applyArgs))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if applyResult.IsError {
+		t.Fatalf("apply IsError, text: %s", dryRunResultText(t, applyResult))
+	}
+
+	if !rebuilt.Load() {
+		t.Fatal("apply must issue a rebuild")
+	}
+
+	if !strings.Contains(dryRunResultText(t, applyResult), "rebuilt with image") {
+		t.Errorf("apply text does not confirm rebuild: %s", dryRunResultText(t, applyResult))
+	}
+}
+
+// resizeServer serves the GET instance and GET disks that the resize composite
+// fetch reads, and records the POST that applies the resize. The disk list is
+// stable across plan and apply, so only an intentional change would drift.
+func resizeServer(
+	t *testing.T,
+	state *atomic.Pointer[linode.Instance],
+	resized *atomic.Bool,
+) *config.Config {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/resize"):
+			resized.Store(true)
+			w.WriteHeader(http.StatusOK)
+		case strings.HasSuffix(r.URL.Path, "/disks"):
+			disks := map[string]any{keyData: []any{map[string]any{"id": 1, keySize: 25600, "filesystem": "ext4"}}}
+			if err := json.NewEncoder(w).Encode(disks); err != nil {
+				t.Errorf("encode disks: %v", err)
+			}
+		default:
+			if err := json.NewEncoder(w).Encode(state.Load()); err != nil {
+				t.Errorf("encode state: %v", err)
+			}
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	return &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+}
+
+// TestInstanceResizeTwoStageOptInPlanThenApply proves the CapWrite resize tool
+// runs plan/apply once an operator opts it in via the two_stage config, and the
+// plan carries the resize side-effects produced by the dependency walk.
+func TestInstanceResizeTwoStageOptInPlanThenApply(t *testing.T) {
+	t.Parallel()
+
+	box := &atomic.Pointer[linode.Instance]{}
+	box.Store(&linode.Instance{ID: 123, Label: labelWebProd, Type: typeG6Nanode1, Status: statusRunning})
+
+	resized := &atomic.Bool{}
+	cfg := resizeServer(t, box, resized)
+	cfg.TwoStage = config.TwoStageConfig{OptIn: map[string]bool{"linode_instance_resize": true}}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
+
+	resizeArgs := map[string]any{keyInstanceID: float64(123), keyType: typeG6Standard1}
+
+	planArgs := maps.Clone(resizeArgs)
+	planArgs[keyMode] = twostage.ModePlan
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, planArgs))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if planResult.IsError {
+		t.Fatalf("plan IsError, text: %s", dryRunResultText(t, planResult))
+	}
+
+	if resized.Load() {
+		t.Fatal("plan must not issue a resize")
+	}
+
+	plan := decodeBody(t, dryRunResultText(t, planResult))
+
+	id, _ := plan["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan response has no plan_id: %v", plan)
+	}
+
+	if _, ok := plan["side_effects"].([]any); !ok {
+		t.Errorf("resize plan should carry the walk's side_effects, got: %v", plan["side_effects"])
+	}
+
+	applyArgs := maps.Clone(resizeArgs)
+	applyArgs[keyMode] = twostage.ModeApply
+	applyArgs[keyPlanID] = id
+
+	applyResult, err := handler(ctx, createRequestWithArgs(t, applyArgs))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if applyResult.IsError {
+		t.Fatalf("apply IsError, text: %s", dryRunResultText(t, applyResult))
+	}
+
+	if !resized.Load() {
+		t.Fatal("apply must issue a resize")
+	}
+}
+
+// TestInstanceResizeTwoStageDefaultOff proves resize stays single-step until an
+// operator opts it in: a mode:"plan" call without the config override falls
+// through and stores no plan, because CapWrite does not opt in by default.
+func TestInstanceResizeTwoStageDefaultOff(t *testing.T) {
+	t.Parallel()
+
+	box := &atomic.Pointer[linode.Instance]{}
+	box.Store(&linode.Instance{ID: 123, Type: typeG6Nanode1})
+
+	resized := &atomic.Bool{}
+	cfg := resizeServer(t, box, resized)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
+
+	if _, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyType:       typeG6Standard1,
+		keyMode:       twostage.ModePlan,
+	})); err != nil {
+		t.Fatalf("plan call returned error: %v", err)
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("resize is opt-in; a default plan call must store nothing, store.Len() = %d", store.Len())
+	}
+
+	if resized.Load() {
+		t.Error("plan mode must not resize")
 	}
 }
 

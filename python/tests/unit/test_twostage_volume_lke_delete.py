@@ -159,6 +159,15 @@ def _state(updated: str) -> dict[str, Any]:
     return {"id": 123, "status": "active", "updated": updated}
 
 
+def _stub_walk_calls(client: AsyncMock) -> None:
+    """Stub the sub-fetches the firewall and NodeBalancer plan-time dependency
+    walks make so they return empty device/config lists. Harmless for the other
+    parametrized cases, whose walks read straight from the fetched state.
+    """
+    client.list_firewall_devices.return_value = {"data": []}
+    client.list_nodebalancer_configs.return_value = {"data": []}
+
+
 @pytest.mark.parametrize(
     ("handler", "id_key", "id_val", "fetch_attr", "delete_attr"), _ALL_CASES
 )
@@ -172,6 +181,7 @@ async def test_plan_then_apply(
     mock_linode_client: AsyncMock,
 ) -> None:
     getattr(mock_linode_client, fetch_attr).return_value = _state("2026-01-01T00:00:00")
+    _stub_walk_calls(mock_linode_client)
     delete = getattr(mock_linode_client, delete_attr)
 
     store = PlanStore()
@@ -207,6 +217,7 @@ async def test_apply_ignores_cosmetic_drift(
 ) -> None:
     fetch = getattr(mock_linode_client, fetch_attr)
     fetch.return_value = _state("2026-01-01T00:00:00")
+    _stub_walk_calls(mock_linode_client)
 
     store = PlanStore()
     token = set_plan_store(store)

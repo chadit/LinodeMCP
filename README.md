@@ -22,7 +22,7 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 
 ## Documentation
 
-**For users & operators** — running, configuring, and trusting the server:
+**For users & operators**, running, configuring, and trusting the server:
 
 | Doc | What it covers |
 |-----|----------------|
@@ -35,9 +35,9 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 | [Audit reports](docs/audit-reports.md) | The custom-report filter grammar with worked examples |
 | [Host integrations](docs/host-integrations/README.md) | Wiring Claude Desktop / Claude Code / Gemini / Copilot and their slash commands |
 
-**For implementers & contributors** — working on the code:
+**For implementers & contributors**, working on the code:
 
-- [Development](#development) — build, test, and lint commands for both implementations
+- [Development](#development): build, test, and lint commands for both implementations
 - [Project layout](#project-layout) and [key design decisions](#key-design-decisions)
 
 ## Installation
@@ -483,10 +483,10 @@ For the full reference (schema, capability tags, builder workflow, token-scope v
 
 Every mutating tool can be previewed before it runs, and destructive calls are gated so a resource can't be deleted or replaced without first previewing it (or explicitly opting out):
 
-- **Dry-run** — pass `dry_run: true` to any write/destroy/admin tool to get back `would_execute` + `current_state` (plus dependency cascades, side effects, billing deltas, and warnings) without mutating anything. Coverage is build-enforced by a capability invariant test.
-- **Bypass-confirm** — a `CapDestroy` call must either set `confirmed_dry_run: true` (it previewed first) or `confirm_bypass_dry_run: true` (explicitly skip the preview) alongside `confirm: true`, or it's rejected with guidance.
-- **Pre-check** — `linode_profile_can_run` reports which calls in a planned sequence the active profile would permit, so the model can bail before partial execution.
-- **Yolo** — a profile with `allow_yolo: true` (only the break-glass `emergency` built-in) lets `yolo: true` skip both the preview gate and confirm.
+- **Dry-run**: pass `dry_run: true` to any write/destroy/admin tool to get back `would_execute` + `current_state` (plus dependency cascades, side effects, billing deltas, and warnings) without mutating anything. Coverage is build-enforced by a capability invariant test.
+- **Bypass-confirm**: a `CapDestroy` call must either set `confirmed_dry_run: true` (it previewed first) or `confirm_bypass_dry_run: true` (explicitly skip the preview) alongside `confirm: true`, or it's rejected with guidance.
+- **Pre-check**: `linode_profile_can_run` reports which calls in a planned sequence the active profile would permit, so the model can bail before partial execution.
+- **Yolo**: a profile with `allow_yolo: true` (only the break-glass `emergency` built-in) lets `yolo: true` skip both the preview gate and confirm.
 
 Each call's safety path is recorded in the audit log's `mode` field (`normal` / `dry_run` / `bypass_dry_run` / `yolo`). Full reference: [docs/dry-run.md](docs/dry-run.md).
 
@@ -494,7 +494,7 @@ Each call's safety path is recorded in the audit log's `mode` field (`normal` / 
 
 A dry-run shows what a destructive call would do, but nothing ties that preview to the call you run next, so the resource can change in between. Two-stage writes close that gap. Pass `mode: "plan"` to a delete tool to get back a `plan_id` plus the current state; pass `mode: "apply"` with that `plan_id` to run it. Before applying, the server re-reads the resource and refuses if it changed since the plan (`PLAN_DRIFT_DETECTED`), expired (`PLAN_EXPIRED`, five minutes by default), was already used, or never existed (`PLAN_NOT_FOUND`).
 
-Cosmetic fields (server-side timestamps, telemetry counters) are stripped before the drift check, so a benign `updated` bump doesn't cause a needless refusal. Plans are single-use, in-memory, and session-scoped; a restart drops them. Fifteen delete tools are opted in today. Tune the lifetime and opt-in per tool with a `two_stage` config block. Plan and apply each record a `mode` in the audit log.
+A plan is a superset of a detailed dry-run: it runs the same dependency walk, so the plan body carries `dependencies`, `side_effects`, `billing_delta`, and `warnings` alongside the state hash. A drift refusal names the top-level fields that changed. Cosmetic fields (server-side timestamps, telemetry counters) are stripped before the drift check, so a benign `updated` bump doesn't cause a needless refusal. Plans are single-use, in-memory, and session-scoped; a restart drops them. Destructive delete tools opt in by default, as does `linode_instance_rebuild`; a write tool like `linode_instance_resize` opts in via the `two_stage` config block, which also tunes lifetime and opt-in per tool. Plan and apply each record a `mode` in the audit log.
 
 Full reference: [docs/two-stage-writes.md](docs/two-stage-writes.md). Drift refusals and recovery: [docs/state-drift.md](docs/state-drift.md).
 

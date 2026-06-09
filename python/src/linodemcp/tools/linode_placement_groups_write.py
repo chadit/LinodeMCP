@@ -287,6 +287,9 @@ async def _placement_group_delete_two_stage(
         await client.delete_placement_group(gid)
         return {"message": f"Placement group {gid} deleted successfully"}
 
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _placement_group_delete_dependency_walk(state)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -296,6 +299,7 @@ async def _placement_group_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("PlacementGroup"),
+        dependency_walk=_ts_walk,
     )
 
 

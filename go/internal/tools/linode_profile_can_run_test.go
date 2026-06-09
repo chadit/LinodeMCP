@@ -27,7 +27,7 @@ const (
 	canRunKeyEnv  = "environment"
 )
 
-// canRunFixtureCatalog is a deterministic catalog covering one tool per
+// canRunFixtureCatalog is a reproducible catalog covering one tool per
 // capability the pre-check distinguishes.
 func canRunFixtureCatalog() []profiles.ToolDescriptor {
 	return []profiles.ToolDescriptor{

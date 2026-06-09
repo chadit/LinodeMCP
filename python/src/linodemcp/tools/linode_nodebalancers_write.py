@@ -732,6 +732,9 @@ async def _nodebalancer_delete_two_stage(
             "nodebalancer_id": nodebalancer_id_int,
         }
 
+    async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+        return await _nodebalancer_delete_dependency_walk(client, nodebalancer_id_int)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -741,6 +744,7 @@ async def _nodebalancer_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("NodeBalancer"),
+        dependency_walk=_ts_walk,
     )
 
 
