@@ -6,9 +6,8 @@ package profiles
 // User-defined profiles arrive from config in later phases and reuse this
 // same struct.
 //
-// Field semantics match the cross-language spec in
-// .claude/tmp/builtin_profiles_spec.md so the Python implementation produces
-// an identical catalog for the parity test.
+// Field semantics match the Python implementation field-for-field so both
+// produce an identical catalog, which the cross-language parity test verifies.
 type Profile struct {
 	// Name is the unique identifier, lower-kebab-case.
 	Name string

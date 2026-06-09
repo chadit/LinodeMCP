@@ -39,7 +39,6 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 
 - [Development](#development) — build, test, and lint commands for both implementations
 - [Project layout](#project-layout) and [key design decisions](#key-design-decisions)
-- [`.claude/CLAUDE.md`](.claude/CLAUDE.md) — project conventions, the "adding a new tool" checklist, and redaction-list parity rules
 
 ## Installation
 

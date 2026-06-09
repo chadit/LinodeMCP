@@ -2,10 +2,9 @@
 
 The resolver consumes a parsed ``Config`` plus a synthetic tool registry
 and returns a ``Profile`` whose ``allowed_tools`` is the explicit, expanded
-list Phase 4 will pass to the registration filter. Tests below exercise
-every spec case from ``.claude/tmp/phase3_config_spec.md``'s "Tests"
-section, using synthetic descriptors so failures point at the resolver
-rather than at whatever lives in the live registry today.
+list Phase 4 will pass to the registration filter. Tests below exercise the
+active-profile resolution cases using synthetic descriptors, so failures
+point at the resolver rather than at whatever lives in the live registry today.
 """
 
 from __future__ import annotations

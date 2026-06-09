@@ -195,8 +195,6 @@ What the profile system does NOT protect against:
 - The MCP client itself (Claude Code, Claude Desktop, etc.) is trusted to relay only what the user typed. A malicious host could substitute requests after the model produces them; the profile filter doesn't see substitution at that layer.
 - The Linode API itself enforces token scopes independently. If the profile permits a tool but the token doesn't carry the scope, the API call fails with a 403. The token-scope validator surfaces this at startup; without it, the failure happens mid-call.
 
-For the long-form decision record on process-per-profile alternatives that were considered and rejected, see the "Considered alternatives" section in `.claude/specs/profiles/requirements.md`.
-
 ## Related
 
 - [host-integrations/](./host-integrations/README.md): wiring profiles into Claude Code, Claude Desktop, and other MCP hosts.

@@ -11,8 +11,7 @@ imports ``linodemcp.profiles`` for the ``Capability`` enum; importing the
 server here would create a cycle. Callers (tests, the server) pass in the
 descriptors they assemble locally.
 
-Cross-language parity rules live in ``.claude/tmp/builtin_profiles_spec.md``
-and are exercised by tests in both implementations.
+Cross-language parity rules are exercised by tests in both implementations.
 """
 
 from __future__ import annotations
@@ -52,7 +51,7 @@ class ToolDescriptor:
 # Tool prefix categories. Order matters: the resolver checks longer, more
 # specific prefixes before shorter ones so ``linode_instance_backup_*`` lands
 # in ``compute_deep`` instead of being captured by ``linode_instance_`` in
-# ``compute``. See ``.claude/tmp/builtin_profiles_spec.md`` for the rules.
+# ``compute``.
 #
 # The spec defines ``compute``, ``compute_actions``, and ``compute_deep``
 # as three categories but allows collapsing the first two; every built-in

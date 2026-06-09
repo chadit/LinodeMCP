@@ -22,7 +22,6 @@ class Profile:
 
     Fields mirror the Go ``profiles.Profile`` struct field-for-field so the
     cross-language parity test can compare JSON exports without translation.
-    See ``.claude/tmp/builtin_profiles_spec.md`` for the canonical shape.
     """
 
     name: str

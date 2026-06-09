@@ -68,10 +68,9 @@ const (
 // Mode is the execution-path enumeration.
 type Mode string
 
-// Event is one audit record per tool call. Fields match the wire
-// format defined in `.claude/specs/audit-log/requirements.md`. All
-// fields are non-optional in the JSON encoding (null for genuinely
-// absent values rather than omitted).
+// Event is one audit record per tool call. All fields are non-optional
+// in the JSON encoding (null for genuinely absent values rather than
+// omitted) so every record has the same shape.
 type Event struct {
 	TS                   time.Time      `json:"ts"`
 	TSUnixNS             int64          `json:"ts_unix_ns"`
