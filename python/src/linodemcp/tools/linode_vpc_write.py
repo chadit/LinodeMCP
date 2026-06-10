@@ -881,7 +881,8 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
         name="linode_ipv6_range_delete",
         description=(
             "Deletes an IPv6 range. Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -895,10 +896,41 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [_IPV6_RANGE_KEY, "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _ipv6_range_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, ipv6_range: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_ipv6_range(ipv6_range)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_ipv6_range(ipv6_range)
+        return {
+            "message": f"IPv6 range {ipv6_range} deleted",
+            _IPV6_RANGE_KEY: ipv6_range,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_ipv6_range_delete",
+        method="DELETE",
+        path=f"/networking/ipv6/ranges/{ipv6_range}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("IPv6Range"),
+    )
 
 
 async def handle_linode_ipv6_range_delete(
@@ -909,6 +941,10 @@ async def handle_linode_ipv6_range_delete(
     if not isinstance(range_value, str) or not range_value.strip():
         return error_response("range is required")
     ipv6_range = range_value.strip()
+
+    two_stage = await _ipv6_range_delete_two_stage(arguments, cfg, ipv6_range)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

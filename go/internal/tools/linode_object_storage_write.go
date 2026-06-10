@@ -11,6 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeObjectStorageBucketCreateTool creates a tool for creating an Object Storage bucket.
@@ -119,13 +120,15 @@ func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, profi
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_object_storage_bucket_delete",
-		"Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first. Pass dry_run=true to preview without deleting.",
+		"Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first. Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithString("region", mcp.Required(), mcp.Description("Region of the bucket to delete")),
 			mcp.WithString("label", mcp.Required(), mcp.Description("Label of the bucket to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleObjectStorageBucketDeleteRequest,
 	)
@@ -147,6 +150,9 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.Ca
 		Execute: func(ctx context.Context, c *linode.Client, region, label string) error {
 			return c.DeleteObjectStorageBucket(ctx, region, label)
 		},
+		// A bucket carries no cosmetic timestamp, so the whole state is
+		// hashed; the unknown "ObjectStorageBucket" key returns nil.
+		HashIgnore: twostage.HashIgnoreFields("ObjectStorageBucket"),
 	})
 }
 
@@ -628,7 +634,7 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallT
 func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_key_delete",
-		mcp.WithDescription("Revokes an Object Storage access key permanently. Pass dry_run=true to preview without revoking."),
+		mcp.WithDescription("Revokes an Object Storage access key permanently. Pass dry_run=true to preview without revoking."+twoStageNote),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -644,6 +650,8 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 			mcp.Description("Must be set to true to confirm key revocation. This action is permanent. Ignored when dry_run=true."),
 		),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+		mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -672,7 +680,8 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallT
 		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetObjectStorageKey(ctx, id)
 		},
-		Execute: func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteObjectStorageKey(ctx, id) },
+		Execute:    func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteObjectStorageKey(ctx, id) },
+		HashIgnore: twostage.HashIgnoreFields("ObjectStorageKey"),
 	})
 }
 
@@ -796,7 +805,7 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 		cfg,
 		"linode_object_storage_ssl_delete",
 		"Deletes the SSL/TLS certificate from an Object Storage bucket. "+
-			"Requires confirm=true to proceed. Pass dry_run=true to preview without deleting.",
+			"Requires confirm=true to proceed. Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithString("region", mcp.Required(),
 				mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')")),
@@ -804,6 +813,8 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to proceed. This removes the SSL certificate from the bucket. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleObjectStorageSSLDeleteRequest,
 	)
@@ -825,6 +836,10 @@ func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallT
 		Execute: func(ctx context.Context, c *linode.Client, region, label string) error {
 			return c.DeleteBucketSSL(ctx, region, label)
 		},
+		// Bucket SSL state is just a boolean flag with no cosmetic field, so
+		// the whole state is hashed; the unknown "ObjectStorageSSL" key
+		// returns nil.
+		HashIgnore: twostage.HashIgnoreFields("ObjectStorageSSL"),
 	})
 }
 

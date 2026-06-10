@@ -121,6 +121,21 @@ delete tools are the core of that surface:
 `linode_instance_disk_delete`, `linode_vpc_subnet_delete`,
 `linode_domain_record_delete`, and `linode_lke_pool_delete`.
 
+A second wave of `CapDestroy` tools is wired the same way:
+
+`linode_database_instance_delete`, `linode_database_postgresql_instance_delete`,
+`linode_firewall_device_delete`, `linode_image_sharegroup_delete`,
+`linode_image_sharegroup_token_delete`, `linode_instance_backups_cancel`,
+`linode_instance_ip_delete`, `linode_instance_password_reset`,
+`linode_ipv6_range_delete`, `linode_lke_kubeconfig_delete`,
+`linode_lke_node_delete`, `linode_lke_service_token_delete`,
+`linode_object_storage_bucket_delete`, `linode_object_storage_key_delete`,
+`linode_object_storage_ssl_delete`, `linode_tag_delete`, and
+`linode_vlan_delete`. A few of these execute via POST rather than DELETE
+(`linode_instance_backups_cancel` cancels the backup service,
+`linode_instance_password_reset` resets the root password); the plan still
+captures the pre-call state and the apply re-checks it for drift.
+
 `linode_instance_rebuild` is also `CapDestroy` (a rebuild wipes every disk), so
 it's opted in too. Its plan walks the instance's disks the same way its dry-run
 does.

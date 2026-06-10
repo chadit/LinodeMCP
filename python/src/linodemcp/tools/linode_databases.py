@@ -12,12 +12,19 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -586,7 +593,8 @@ def create_linode_database_mysql_instance_delete_tool() -> tuple[Tool, Capabilit
         description=(
             "Deletes a MySQL Managed Database. Pass dry_run=true to preview "
             "without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -601,6 +609,8 @@ def create_linode_database_mysql_instance_delete_tool() -> tuple[Tool, Capabilit
                     "description": "Must be true to confirm database deletion.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -664,7 +674,8 @@ def create_linode_database_postgresql_instance_delete_tool() -> tuple[Tool, Capa
         description=(
             "Deletes a PostgreSQL Managed Database. Pass dry_run=true to "
             "preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -679,6 +690,8 @@ def create_linode_database_postgresql_instance_delete_tool() -> tuple[Tool, Capa
                     "description": "Must be true to confirm database deletion.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -1393,6 +1406,31 @@ async def handle_linode_database_postgresql_instance_create(
     )
 
 
+async def _mysql_instance_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, instance_id: int, delete_path: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_database_mysql_instance(instance_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        return await client.delete_mysql_database_instance(instance_id)
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_database_mysql_instance_delete",
+        method="DELETE",
+        path=delete_path,
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("DatabaseInstance"),
+    )
+
+
 async def handle_linode_database_mysql_instance_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1404,6 +1442,12 @@ async def handle_linode_database_mysql_instance_delete(
 
     encoded_instance_id = quote(str(instance_id), safe="")
     delete_path = f"/databases/mysql/instances/{encoded_instance_id}"
+
+    two_stage = await _mysql_instance_delete_two_stage(
+        arguments, cfg, instance_id, delete_path
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1609,6 +1653,31 @@ async def handle_linode_database_postgresql_instances_list(
     )
 
 
+async def _postgresql_instance_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, instance_id: int, delete_path: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_database_postgresql_instance(instance_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        return await client.delete_postgresql_database_instance(instance_id)
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_database_postgresql_instance_delete",
+        method="DELETE",
+        path=delete_path,
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("DatabaseInstance"),
+    )
+
+
 async def handle_linode_database_postgresql_instance_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1620,6 +1689,12 @@ async def handle_linode_database_postgresql_instance_delete(
 
     encoded_instance_id = quote(str(instance_id), safe="")
     delete_path = f"/databases/postgresql/instances/{encoded_instance_id}"
+
+    two_stage = await _postgresql_instance_delete_two_stage(
+        arguments, cfg, instance_id, delete_path
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         return build_dry_run_response(

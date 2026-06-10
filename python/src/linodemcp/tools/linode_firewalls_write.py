@@ -442,7 +442,8 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a device assignment from a Cloud Firewall. "
             "WARNING: This operation requires confirmation."
             " Pass dry_run=true to preview without removing."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -462,10 +463,42 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["firewall_id", "device_id", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _firewall_device_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, firewall_id: int, device_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_firewall_device(firewall_id, device_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_firewall_device(firewall_id, device_id)
+        return {
+            "message": "Firewall device deleted successfully",
+            "firewall_id": firewall_id,
+            "device_id": device_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_firewall_device_delete",
+        method="DELETE",
+        path=f"/networking/firewalls/{firewall_id}/devices/{device_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("FirewallDevice"),
+    )
 
 
 async def handle_linode_firewall_device_delete(
@@ -484,6 +517,12 @@ async def handle_linode_firewall_device_delete(
 
     firewall_id_value = cast("int", firewall_id)
     device_id_value = cast("int", device_id)
+
+    two_stage = await _firewall_device_delete_two_stage(
+        arguments, cfg, firewall_id_value, device_id_value
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

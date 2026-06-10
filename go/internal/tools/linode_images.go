@@ -13,6 +13,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 const (
@@ -77,24 +78,46 @@ func NewLinodeImageGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, f
 	return tool, profiles.CapRead, handler
 }
 
-// NewLinodeImageDeleteTool creates a tool for deleting a private image.
-func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// newImageTwoStageDeleteTool builds a two-stage-capable image-family delete
+// tool. The resource-specific identifier option (image_id, sharegroup_id,
+// token_uuid) is passed in so the otherwise-identical constructors route
+// through one builder and stay below dupl's threshold.
+func newImageTwoStageDeleteTool(
+	cfg *config.Config,
+	name string,
+	description string,
+	idOption mcp.ToolOption,
+	confirmDescription string,
+	handle func(context.Context, *mcp.CallToolRequest, *config.Config) (*mcp.CallToolResult, error),
+) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_delete",
-		mcp.WithDescription("Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting."+twoStageNote),
+		name,
+		mcp.WithDescription(description+twoStageNote),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("image_id", mcp.Required(), mcp.Description("The image ID to delete, for example private/12345.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm image deletion. Ignored when dry_run=true.")),
+		idOption,
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description(confirmDescription)),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
 		mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageDeleteRequest(ctx, &request, cfg)
+		return handle(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapDestroy, handler
+}
+
+// NewLinodeImageDeleteTool creates a tool for deleting a private image.
+func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return newImageTwoStageDeleteTool(
+		cfg,
+		"linode_image_delete",
+		"Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting.",
+		mcp.WithString("image_id", mcp.Required(), mcp.Description("The image ID to delete, for example private/12345.")),
+		"Must be true to confirm image deletion. Ignored when dry_run=true.",
+		handleImageDeleteRequest,
+	)
 }
 
 // NewLinodeImageShareGroupsListTool creates a tool for listing image share groups.
@@ -220,20 +243,14 @@ func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profi
 
 // NewLinodeImageShareGroupDeleteTool creates a tool for deleting an owned image share group.
 func NewLinodeImageShareGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	return newImageTwoStageDeleteTool(
+		cfg,
 		"linode_image_sharegroup_delete",
-		mcp.WithDescription("Deletes an owned image share group by ID. WARNING: members lose access to images in the group. Pass dry_run=true to preview without deleting."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		"Deletes an owned image share group by ID. WARNING: members lose access to images in the group. Pass dry_run=true to preview without deleting.",
 		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric ID of the image share group to delete.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm share group deletion. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Must be true to confirm share group deletion. Ignored when dry_run=true.",
+		handleImageShareGroupDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupDeleteRequest(ctx, &request, cfg)
-	}
-
-	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeImageShareGroupImageDeleteTool creates a tool for revoking a shared image from an owned image share group.
@@ -272,20 +289,14 @@ func NewLinodeImageShareGroupTokenGetTool(cfg *config.Config) (mcp.Tool, profile
 
 // NewLinodeImageShareGroupTokenDeleteTool creates a tool for removing one image share group token.
 func NewLinodeImageShareGroupTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	return newImageTwoStageDeleteTool(
+		cfg,
 		"linode_image_sharegroup_token_delete",
-		mcp.WithDescription("Removes a single image share group membership token by token UUID. Pass dry_run=true to preview without removing."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		"Removes a single image share group membership token by token UUID. Pass dry_run=true to preview without removing.",
 		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm token removal. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Must be true to confirm token removal. Ignored when dry_run=true.",
+		handleImageShareGroupTokenDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupTokenDeleteRequest(ctx, &request, cfg)
-	}
-
-	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeImageShareGroupMemberTokenDeleteTool creates a tool for revoking one accepted image share group membership token.
@@ -601,6 +612,7 @@ func handleImageShareGroupDeleteRequest(ctx context.Context, request *mcp.CallTo
 				responseKeyMessage: fmt.Sprintf("Image share group %d removed successfully", shareGroupID),
 			}
 		},
+		HashIgnore: twostage.HashIgnoreFields("ImageShareGroup"),
 	})
 }
 
@@ -723,6 +735,7 @@ func handleImageShareGroupTokenDeleteRequest(ctx context.Context, request *mcp.C
 				responseKeyMessage: "Image share group token removed successfully",
 			}
 		},
+		HashIgnore: twostage.HashIgnoreFields("ImageShareGroupToken"),
 	})
 }
 

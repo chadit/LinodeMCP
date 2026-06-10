@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 const (
@@ -202,12 +203,14 @@ func NewLinodeIPv6RangeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		cfg,
 		"linode_ipv6_range_delete",
 		"Deletes an IPv6 range. WARNING: This changes networking configuration and may affect routing."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithString(paramIPv6Range, mcp.Required(), mcp.Description("IPv6 range prefix, for example 2001:0db8::/64.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm IPv6 range deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleIPv6RangeDeleteRequest,
 	)
@@ -238,5 +241,8 @@ func handleIPv6RangeDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 				"range":            ipv6Range,
 			}
 		},
+		// An IPv6 range carries no cosmetic timestamp, so the whole state is
+		// hashed; the unknown "IPv6Range" key returns nil.
+		HashIgnore: twostage.HashIgnoreFields("IPv6Range"),
 	})
 }

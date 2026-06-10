@@ -11,6 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 const (
@@ -69,7 +70,7 @@ func NewLinodeVLANDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vlan_delete",
-		"Deletes one VLAN by region and label. Pass dry_run=true to preview without deleting.",
+		"Deletes one VLAN by region and label. Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithString("region_id", mcp.Required(),
 				mcp.Description("The region ID for the VLAN, for example us-east.")),
@@ -78,6 +79,8 @@ func NewLinodeVLANDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm deleting the VLAN. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeVLANDeleteRequest,
 	)
@@ -118,6 +121,9 @@ func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 				"label":            label,
 			}
 		},
+		// A VLAN carries no cosmetic timestamp, so the whole state is hashed;
+		// the unknown "VLAN" key returns nil.
+		HashIgnore: twostage.HashIgnoreFields("VLAN"),
 	})
 }
 
@@ -619,7 +625,7 @@ func NewLinodeFirewallDeviceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 		cfg,
 		"linode_firewall_device_delete",
 		"Removes one device assignment from a Cloud Firewall."+
-			" Pass dry_run=true to preview without removing.",
+			" Pass dry_run=true to preview without removing."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose device assignment should be removed.")),
@@ -628,6 +634,8 @@ func NewLinodeFirewallDeviceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm firewall device removal. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeFirewallDeviceDeleteRequest,
 	)
@@ -663,6 +671,7 @@ func handleLinodeFirewallDeviceDeleteRequest(ctx context.Context, request *mcp.C
 		Execute: func(ctx context.Context, c *linode.Client, firewallID, deviceID int) error {
 			return c.DeleteFirewallDevice(ctx, firewallID, deviceID)
 		},
+		HashIgnore: twostage.HashIgnoreFields("FirewallDevice"),
 	})
 }
 

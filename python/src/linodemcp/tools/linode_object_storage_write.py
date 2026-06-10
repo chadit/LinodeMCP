@@ -11,13 +11,20 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -238,7 +245,8 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
             " WARNING: This is irreversible."
             " All objects must be removed first."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -264,10 +272,42 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _object_storage_bucket_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, region: str, label: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_object_storage_bucket(region, label)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_object_storage_bucket(region, label)
+        return {
+            "message": f"Bucket '{label}' in {region} deleted successfully",
+            "region": region,
+            "label": label,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_object_storage_bucket_delete",
+        method="DELETE",
+        path=f"/object-storage/buckets/{region}/{label}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("ObjectStorageBucket"),
+    )
 
 
 async def handle_linode_object_storage_bucket_delete(
@@ -284,6 +324,12 @@ async def handle_linode_object_storage_bucket_delete(
         return _error_response("region is required")
     if not label:
         return _error_response("label is required")
+
+    two_stage = await _object_storage_bucket_delete_two_stage(
+        arguments, cfg, region, label
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 
@@ -703,7 +749,8 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Revokes an Object Storage access key permanently. Pass "
             "dry_run=true to preview without revoking."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -725,6 +772,8 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["key_id", "confirm"],
         },
@@ -911,6 +960,35 @@ async def handle_linode_object_storage_key_update(
     return await execute_tool(cfg, arguments, f"update access key {key_id}", _call)
 
 
+async def _object_storage_key_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, key_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_object_storage_key(key_id=key_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_object_storage_key(key_id=key_id)
+        return {
+            "message": f"Access key {key_id} revoked successfully",
+            "key_id": key_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_object_storage_key_delete",
+        method="DELETE",
+        path=f"/object-storage/keys/{key_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("ObjectStorageKey"),
+    )
+
+
 async def handle_linode_object_storage_key_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -924,6 +1002,10 @@ async def handle_linode_object_storage_key_delete(
         return _error_response("key_id is required and must be a positive integer")
 
     key_id = int(key_id_raw)
+
+    two_stage = await _object_storage_key_delete_two_stage(arguments, cfg, key_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 
@@ -1440,7 +1522,8 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
             " Storage bucket."
             " Requires confirm=true to proceed."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -1468,10 +1551,44 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _object_storage_ssl_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, region: str, label: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_bucket_ssl(region, label)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_bucket_ssl(region, label)
+        return {
+            "message": (
+                f"SSL certificate deleted from bucket '{label}' in region '{region}'"
+            ),
+            "region": region,
+            "bucket": label,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_object_storage_ssl_delete",
+        method="DELETE",
+        path=f"/object-storage/buckets/{region}/{label}/ssl",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("ObjectStorageSSL"),
+    )
 
 
 async def handle_linode_object_storage_ssl_delete(
@@ -1488,6 +1605,12 @@ async def handle_linode_object_storage_ssl_delete(
         return _error_response("region is required")
     if not label:
         return _error_response("label is required")
+
+    two_stage = await _object_storage_ssl_delete_two_stage(
+        arguments, cfg, region, label
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

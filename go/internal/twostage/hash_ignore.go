@@ -19,6 +19,11 @@ func HashIgnoreFields(resourceType string) []string {
 // hashing for every resource type below.
 const fieldUpdated = "updated"
 
+// fieldCreated is the server-side creation timestamp; some list-derived states
+// re-serialize it inconsistently, so it is stripped alongside fieldUpdated for
+// the resource types that carry it.
+const fieldCreated = "created"
+
 func hashIgnoreByType() map[string][]string {
 	return map[string][]string{
 		// Instance.updated bumps on unrelated account activity; the watchdog and
@@ -29,7 +34,7 @@ func hashIgnoreByType() map[string][]string {
 		"Volume": {fieldUpdated, "last_seen_ipv4"},
 
 		// LKE cluster status and timestamps churn as nodes recycle.
-		"LKECluster": {fieldUpdated, "created"},
+		"LKECluster": {fieldUpdated, fieldCreated},
 
 		// Firewall.updated bumps when attached devices change state.
 		"Firewall": {fieldUpdated},
@@ -60,5 +65,24 @@ func hashIgnoreByType() map[string][]string {
 		// LKE pool node list churns as nodes recycle; the pool itself is the
 		// delete target, so the member nodes are telemetry, not user intent.
 		"LKENodePool": {"nodes"},
+
+		// DatabaseInstance.updated bumps on maintenance and config changes
+		// unrelated to deleting the instance.
+		"DatabaseInstance": {fieldUpdated},
+
+		// ImageShareGroup.updated bumps as members and shared images change.
+		"ImageShareGroup": {fieldUpdated},
+
+		// A share-group token delete fetches its parent share group, whose
+		// updated timestamp moves as membership churns.
+		"ImageShareGroupToken": {fieldUpdated},
+
+		// FirewallDevice.updated bumps when the attached entity changes state.
+		"FirewallDevice": {fieldUpdated},
+
+		// Kubeconfig and service-token deletes fetch the parent LKE cluster,
+		// whose updated and created timestamps move as nodes recycle.
+		"LKEKubeconfig":   {fieldUpdated, fieldCreated},
+		"LKEServiceToken": {fieldUpdated, fieldCreated},
 	}
 }

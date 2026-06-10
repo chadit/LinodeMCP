@@ -1025,7 +1025,8 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes a specific node from an LKE cluster."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -1043,6 +1044,8 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
@@ -1098,6 +1101,40 @@ def _lke_node_delete_dependency_walk(node_state: Any) -> DryRunDetails:
     return details
 
 
+async def _lke_node_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, cluster_id: int, node_id: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_lke_node(cluster_id, node_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_lke_node(cluster_id, node_id)
+        return {
+            "message": f"Node {node_id} deleted from cluster {cluster_id}",
+            "cluster_id": cluster_id,
+            "node_id": node_id,
+        }
+
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _lke_node_delete_dependency_walk(state)
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_lke_node_delete",
+        method="DELETE",
+        path=f"/lke/clusters/{cluster_id}/nodes/{node_id}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("LKENode"),
+        dependency_walk=_ts_walk,
+    )
+
+
 async def handle_linode_lke_node_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1106,6 +1143,10 @@ async def handle_linode_lke_node_delete(
     if isinstance(parsed, list):
         return parsed
     cluster_id, node_id = parsed
+
+    two_stage = await _lke_node_delete_two_stage(arguments, cfg, cluster_id, node_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 
@@ -1215,7 +1256,8 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes and regenerates the kubeconfig for an LKE cluster."
             " Pass dry_run=true to preview without regenerating."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -1223,10 +1265,43 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _lke_kubeconfig_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, cluster_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        # Fetch the cluster (not the kubeconfig) so plan/apply surface cluster
+        # metadata without exposing credential material.
+        return await client.get_lke_cluster(cluster_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_lke_kubeconfig(cluster_id)
+        return {
+            "message": f"Kubeconfig for cluster {cluster_id} regenerated",
+            "cluster_id": cluster_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_lke_kubeconfig_delete",
+        method="DELETE",
+        path=f"/lke/clusters/{cluster_id}/kubeconfig",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("LKEKubeconfig"),
+    )
 
 
 async def handle_linode_lke_kubeconfig_delete(
@@ -1240,6 +1315,10 @@ async def handle_linode_lke_kubeconfig_delete(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    two_stage = await _lke_kubeconfig_delete_two_stage(arguments, cfg, cluster_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         # Fetch the cluster (not the kubeconfig contents) so dry_run
@@ -1277,7 +1356,8 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes the service token for an LKE cluster."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -1285,10 +1365,43 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
     ), Capability.Destroy
+
+
+async def _lke_service_token_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, cluster_id: int
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        # Fetch the cluster (not the service token) so plan/apply surface
+        # cluster metadata without exposing the token credential.
+        return await client.get_lke_cluster(cluster_id)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_lke_service_token(cluster_id)
+        return {
+            "message": f"Service token for cluster {cluster_id} deleted",
+            "cluster_id": cluster_id,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_lke_service_token_delete",
+        method="DELETE",
+        path=f"/lke/clusters/{cluster_id}/servicetoken",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("LKEServiceToken"),
+    )
 
 
 async def handle_linode_lke_service_token_delete(
@@ -1302,6 +1415,10 @@ async def handle_linode_lke_service_token_delete(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    two_stage = await _lke_service_token_delete_two_stage(arguments, cfg, cluster_id)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         # Fetch the cluster (not the service token) so dry_run surfaces

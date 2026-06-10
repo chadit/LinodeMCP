@@ -9,13 +9,20 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -57,7 +64,8 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vlan_delete tool."""
     return Tool(
         name="linode_vlan_delete",
-        description="Deletes a VLAN. Pass dry_run=true to preview without deleting.",
+        description="Deletes a VLAN. Pass dry_run=true to preview without deleting."
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -77,6 +85,8 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["region_id", "label", "confirm"],
         },
@@ -93,6 +103,50 @@ def _find_vlan(
     return None
 
 
+async def _fetch_vlan_state(
+    client: RetryableClient, region_id: str, label: str
+) -> dict[str, Any]:
+    """Resolve a VLAN by region+label. VLANs expose only a list endpoint, so
+    this lists and filters; raises ValueError when no VLAN matches.
+    """
+    vlans: list[dict[str, Any]] = await client.list_vlans()
+    match = _find_vlan(vlans, region_id, label)
+    if match is None:
+        msg = f"VLAN not found: {label} in region {region_id}"
+        raise ValueError(msg)
+    return match
+
+
+async def _vlan_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, region_id: str, label: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await _fetch_vlan_state(client, region_id, label)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_vlan(region_id, label)
+        return {
+            "message": f"VLAN {label} in region {region_id} deleted successfully",
+            "region_id": region_id,
+            "label": label,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_vlan_delete",
+        method="DELETE",
+        path=f"/networking/vlans/{region_id}/{label}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("VLAN"),
+    )
+
+
 async def handle_linode_vlan_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -106,6 +160,10 @@ async def handle_linode_vlan_delete(
         return error_response("region_id is required")
     if not label:
         return error_response("label is required")
+
+    two_stage = await _vlan_delete_two_stage(arguments, cfg, region_id, label)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         # VLANs expose only a list endpoint, so the dry-run fetch lists

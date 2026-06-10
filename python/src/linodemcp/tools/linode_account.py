@@ -13,7 +13,12 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -21,6 +26,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 _CHILD_ACCOUNT_EUUID_PATTERN = re.compile(
     r"^[A-Za-z0-9]{8}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{16}$"
@@ -3905,7 +3912,7 @@ def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_tag_delete tool."""
     return Tool(
         name="linode_account_tag_delete",
-        description="Deletes a Linode account tag by label.",
+        description="Deletes a Linode account tag by label." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -3919,20 +3926,55 @@ def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:
                     "description": "Set true to confirm this destructive operation.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["tag_label", "confirm"],
         },
     ), Capability.Destroy
 
 
+async def _account_tag_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, tag_label: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.list_tagged_objects(tag_label)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, str]:
+        await client.delete_tag(tag_label)
+        return {"message": f"Tag '{tag_label}' deleted successfully"}
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_account_tag_delete",
+        method="DELETE",
+        path=f"/tags/{tag_label}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("Tag"),
+    )
+
+
 async def handle_linode_account_tag_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_tag_delete tool request."""
+    # Every branch needs a valid tag_label, so validate it once up front.
+    tag_label_raw = arguments.get("tag_label")
+    if not isinstance(tag_label_raw, str) or not tag_label_raw.strip():
+        return error_response("tag_label is required")
+    tag_label = tag_label_raw
+
+    two_stage = await _account_tag_delete_two_stage(arguments, cfg, tag_label)
+    if two_stage is not None:
+        return two_stage
+
     if is_dry_run(arguments):
-        tag_label = arguments.get("tag_label")
-        if not isinstance(tag_label, str) or not tag_label.strip():
-            return error_response("tag_label is required")
         return build_dry_run_response(
             "linode_account_tag_delete",
             arguments.get("environment", ""),
@@ -3941,9 +3983,6 @@ async def handle_linode_account_tag_delete(
             None,
         )
 
-    tag_label = arguments.get("tag_label")
-    if not isinstance(tag_label, str) or not tag_label.strip():
-        return error_response("tag_label is required")
     if not arguments.get("confirm"):
         return error_response("This deletes a tag. Set confirm=true to proceed.")
 

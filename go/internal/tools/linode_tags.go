@@ -11,6 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 const (
@@ -43,11 +44,13 @@ func NewLinodeTagDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_tag_delete",
-		"Deletes a tag from all objects on the account.",
+		"Deletes a tag from all objects on the account."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithString(tagLabelParam, mcp.Required(), mcp.Description("Tag label to delete.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm tag deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLinodeTagDeleteRequest,
 	)
@@ -95,6 +98,9 @@ func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		Success: func() any {
 			return map[string]string{"deleted": tagLabel}
 		},
+		// ListTaggedObjects returns a paginated list, not a single object,
+		// so the whole payload is hashed; the unknown "Tag" key returns nil.
+		HashIgnore: twostage.HashIgnoreFields("Tag"),
 	})
 }
 

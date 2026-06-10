@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeInstanceIPListTool creates a tool for listing all IP addresses for a Linode instance.
@@ -266,7 +267,7 @@ func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		cfg,
 		"linode_instance_ip_delete",
 		"Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
@@ -275,6 +276,8 @@ func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm IP removal. This action is irreversible. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleInstanceIPDeleteRequest,
 	)
@@ -311,5 +314,8 @@ func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 				"address":          address,
 			}
 		},
+		// An IP address record carries no cosmetic timestamp, so the whole
+		// state is hashed; the unknown "InstanceIP" key returns nil.
+		HashIgnore: twostage.HashIgnoreFields("InstanceIP"),
 	})
 }

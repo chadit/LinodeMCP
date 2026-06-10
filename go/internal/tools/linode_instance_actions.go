@@ -437,7 +437,7 @@ func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.
 		cfg,
 		"linode_instance_password_reset",
 		"Resets the root password on a Linode instance. The instance must be powered off."+
-			" Pass dry_run=true to preview without resetting.",
+			" Pass dry_run=true to preview without resetting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
@@ -446,6 +446,8 @@ func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm password reset. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleInstancePasswordResetRequest,
 	)
@@ -482,5 +484,6 @@ func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallTo
 			return c.ResetInstancePassword(ctx, id, rootPass)
 		},
 		DependencyWalk: instancePasswordResetSideEffectsWalk,
+		HashIgnore:     twostage.HashIgnoreFields("Instance"),
 	})
 }

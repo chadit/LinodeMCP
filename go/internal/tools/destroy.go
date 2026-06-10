@@ -400,6 +400,10 @@ type DestructiveActionByRegionLabel struct {
 	SuccessFormat  string
 	FetchState     func(ctx context.Context, client *linode.Client, region, label string) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, region, label string) error
+
+	// HashIgnore lists cosmetic state fields stripped before the two-stage
+	// drift hash. Use twostage.HashIgnoreFields(resourceType) to populate it.
+	HashIgnore []string
 }
 
 // RunDestructiveActionByRegionLabel is the (region, label) convenience
@@ -442,5 +446,6 @@ func RunDestructiveActionByRegionLabel(
 				params.SuccessKey:  label,
 			}
 		},
+		HashIgnore: params.HashIgnore,
 	})
 }

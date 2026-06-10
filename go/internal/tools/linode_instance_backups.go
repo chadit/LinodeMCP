@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 // NewLinodeInstanceBackupListTool creates a tool for listing all backups for a Linode instance.
@@ -396,13 +397,15 @@ func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.
 		"linode_instance_backups_cancel",
 		"Cancels the backup service for a Linode instance. "+
 			"WARNING: This permanently deletes all existing backups for the instance."+
-			" Pass dry_run=true to preview without canceling.",
+			" Pass dry_run=true to preview without canceling."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm cancellation. All existing backups will be permanently deleted. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleInstanceBackupsCancelRequest,
 	)
@@ -424,5 +427,8 @@ func handleInstanceBackupsCancelRequest(ctx context.Context, request *mcp.CallTo
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.CancelInstanceBackups(ctx, id)
 		},
+		// The plan fetches the parent instance, so reuse the Instance
+		// hash-ignore list to drop its self-moving telemetry fields.
+		HashIgnore: twostage.HashIgnoreFields("Instance"),
 	})
 }

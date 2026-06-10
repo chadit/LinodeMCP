@@ -740,7 +740,7 @@ func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		cfg,
 		"linode_lke_node_delete",
 		"Deletes a specific node from an LKE cluster. The node will be removed and may be replaced depending on pool settings."+
-			" Pass dry_run=true to preview without deleting.",
+			" Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -749,6 +749,8 @@ func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm node deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLKENodeDeleteRequest,
 	)
@@ -786,6 +788,9 @@ func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 			}
 		},
 		DependencyWalk: lkeNodeDeleteDependencyWalk,
+		// An LKE node record carries no cosmetic timestamp, so the whole
+		// state is hashed; the unknown "LKENode" key returns nil.
+		HashIgnore: twostage.HashIgnoreFields("LKENode"),
 	})
 }
 
@@ -853,13 +858,15 @@ func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		cfg,
 		"linode_lke_kubeconfig_delete",
 		"Deletes and regenerates the kubeconfig for an LKE cluster. Existing kubeconfig files will stop working."+
-			" Pass dry_run=true to preview without regenerating.",
+			" Pass dry_run=true to preview without regenerating."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm kubeconfig deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLKEKubeconfigDeleteRequest,
 	)
@@ -884,6 +891,7 @@ func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallTool
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteLKEKubeconfig(ctx, id)
 		},
+		HashIgnore: twostage.HashIgnoreFields("LKEKubeconfig"),
 	})
 }
 
@@ -893,13 +901,15 @@ func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.
 		cfg,
 		"linode_lke_service_token_delete",
 		"Deletes and regenerates the service token for an LKE cluster. Existing tokens will stop working."+
-			" Pass dry_run=true to preview without regenerating.",
+			" Pass dry_run=true to preview without regenerating."+twoStageNote,
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm service token deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 		},
 		handleLKEServiceTokenDeleteRequest,
 	)
@@ -923,6 +933,7 @@ func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallTo
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteLKEServiceToken(ctx, id)
 		},
+		HashIgnore: twostage.HashIgnoreFields("LKEServiceToken"),
 	})
 }
 

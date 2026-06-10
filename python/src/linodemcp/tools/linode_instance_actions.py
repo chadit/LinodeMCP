@@ -499,7 +499,8 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
         description=(
             "Resets the root password for a Linode instance."
             " Pass dry_run=true to preview without resetting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -511,6 +512,8 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
                 "instance_id",
@@ -539,6 +542,39 @@ def _instance_password_reset_side_effects_walk(state: Any) -> DryRunDetails:
     return details
 
 
+async def _instance_password_reset_two_stage(
+    arguments: dict[str, Any], cfg: Config, iid: int, root_pass: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_instance(iid)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.reset_instance_password(iid, root_pass)
+        return {
+            "message": f"Password reset for instance {iid}",
+            "instance_id": iid,
+        }
+
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _instance_password_reset_side_effects_walk(state)
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_instance_password_reset",
+        method="POST",
+        path=f"/linode/instances/{iid}/password",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("Instance"),
+        dependency_walk=_ts_walk,
+    )
+
+
 async def handle_linode_instance_password_reset(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -550,6 +586,10 @@ async def handle_linode_instance_password_reset(
     root_pass = arguments.get("root_pass", "")
     if not root_pass:
         return _error_response("root_pass is required")
+
+    two_stage = await _instance_password_reset_two_stage(arguments, cfg, iid, root_pass)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

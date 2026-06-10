@@ -204,7 +204,7 @@ def create_linode_images_sharegroup_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_delete tool."""
     return Tool(
         name="linode_images_sharegroup_delete",
-        description="Deletes a single image share group by UUID.",
+        description="Deletes a single image share group by UUID." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -223,6 +223,8 @@ def create_linode_images_sharegroup_delete_tool() -> tuple[Tool, Capability]:
                     "description": "Set true to confirm this destructive operation.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["sharegroup_id", "confirm"],
         },
@@ -711,7 +713,7 @@ def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capabili
     """Create the linode_images_sharegroups_token_delete tool."""
     return Tool(
         name="linode_images_sharegroups_token_delete",
-        description="Deletes an image share group token by UUID.",
+        description="Deletes an image share group token by UUID." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -730,6 +732,8 @@ def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capabili
                     "description": "Set true to confirm this destructive operation.",
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": ["token_uuid", "confirm"],
         },
@@ -1560,6 +1564,34 @@ async def handle_linode_images_sharegroups_list(
     return await execute_tool(cfg, arguments, "list image share groups", _call)
 
 
+async def _images_sharegroups_token_delete_two_stage(
+    arguments: dict[str, Any], cfg: Any, token_uuid_str: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        # Resolve the token to its parent share group rather than the token
+        # entity, so plan/apply never surface the token secret to the model.
+        return await client.get_image_sharegroup_by_token(token_uuid_str)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image_sharegroup_token(token_uuid=token_uuid_str)
+        return {"message": "Image share group token deleted"}
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_images_sharegroups_token_delete",
+        method="DELETE",
+        path=f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("ImageShareGroupToken"),
+    )
+
+
 async def handle_linode_images_sharegroups_token_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
@@ -1570,6 +1602,12 @@ async def handle_linode_images_sharegroups_token_delete(
         return error_response(uuid_error)
 
     token_uuid_str = cast("str", token_uuid).strip()
+
+    two_stage = await _images_sharegroups_token_delete_two_stage(
+        arguments, cfg, token_uuid_str
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1699,6 +1737,32 @@ def _image_sharegroup_token_update_label_error(value: Any) -> str | None:
     return None
 
 
+async def _images_sharegroup_delete_two_stage(
+    arguments: dict[str, Any], cfg: Any, sharegroup_id_str: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_image_sharegroup(sharegroup_id_str)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image_sharegroup(sharegroup_id_str)
+        return {"message": "Image share group deleted"}
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_images_sharegroup_delete",
+        method="DELETE",
+        path=f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("ImageShareGroup"),
+    )
+
+
 async def handle_linode_images_sharegroup_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
@@ -1709,6 +1773,12 @@ async def handle_linode_images_sharegroup_delete(
         return error_response(id_error)
 
     sharegroup_id_str = cast("str", sharegroup_id).strip()
+
+    two_stage = await _images_sharegroup_delete_two_stage(
+        arguments, cfg, sharegroup_id_str
+    )
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
         return build_dry_run_response(

@@ -8,13 +8,20 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    MODE_PROP,
     PARAM_DRY_RUN,
+    PARAM_MODE,
+    PARAM_PLAN_ID,
+    PLAN_ID_PROP,
+    TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.twostage_destroy import run_two_stage_destroy
+from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -564,7 +571,8 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes an IP address from a Linode instance."
             " Pass dry_run=true to preview without deleting."
-        ),
+        )
+        + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
             "properties": {
@@ -582,6 +590,8 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
+                PARAM_MODE: MODE_PROP,
+                PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
                 "instance_id",
@@ -590,6 +600,36 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
             ],
         },
     ), Capability.Destroy
+
+
+async def _instance_ip_delete_two_stage(
+    arguments: dict[str, Any], cfg: Config, iid: int, address: str
+) -> list[TextContent] | None:
+    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
+    if arguments.get("mode") not in ("plan", "apply"):
+        return None
+
+    async def _ts_fetch(client: RetryableClient) -> Any:
+        return await client.get_instance_ip(iid, address)
+
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_instance_ip(iid, address)
+        return {
+            "message": f"IP {address} deleted from instance {iid}",
+            "instance_id": iid,
+            "address": address,
+        }
+
+    return await run_two_stage_destroy(
+        cfg,
+        arguments,
+        tool_name="linode_instance_ip_delete",
+        method="DELETE",
+        path=f"/linode/instances/{iid}/ips/{address}",
+        fetch_state=_ts_fetch,
+        execute=_ts_call,
+        hash_ignore=hash_ignore_fields("InstanceIP"),
+    )
 
 
 async def handle_linode_instance_ip_delete(
@@ -603,6 +643,10 @@ async def handle_linode_instance_ip_delete(
     address = _parse_ip_address_argument(arguments)
     if isinstance(address, list):
         return address
+
+    two_stage = await _instance_ip_delete_two_stage(arguments, cfg, iid, address)
+    if two_stage is not None:
+        return two_stage
 
     if is_dry_run(arguments):
 

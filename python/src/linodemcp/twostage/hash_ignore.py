@@ -10,6 +10,7 @@ hashed.
 from __future__ import annotations
 
 _FIELD_UPDATED = "updated"
+_FIELD_CREATED = "created"
 
 _HASH_IGNORE_BY_TYPE: dict[str, list[str]] = {
     # Instance.updated bumps on unrelated account activity; the watchdog and
@@ -18,7 +19,7 @@ _HASH_IGNORE_BY_TYPE: dict[str, list[str]] = {
     # Volume.updated bumps on attach/detach bookkeeping unrelated to delete.
     "Volume": [_FIELD_UPDATED, "last_seen_ipv4"],
     # LKE cluster timestamps churn as nodes recycle.
-    "LKECluster": [_FIELD_UPDATED, "created"],
+    "LKECluster": [_FIELD_UPDATED, _FIELD_CREATED],
     # Firewall.updated bumps when attached devices change state.
     "Firewall": [_FIELD_UPDATED],
     # NodeBalancer.transfer carries running bandwidth counters that move
@@ -40,6 +41,20 @@ _HASH_IGNORE_BY_TYPE: dict[str, list[str]] = {
     # LKE pool node list churns as nodes recycle; the pool itself is the
     # delete target, so the member nodes are telemetry, not user intent.
     "LKENodePool": ["nodes"],
+    # DatabaseInstance.updated bumps on maintenance and config changes
+    # unrelated to deleting the instance.
+    "DatabaseInstance": [_FIELD_UPDATED],
+    # ImageShareGroup.updated bumps as members and shared images change.
+    "ImageShareGroup": [_FIELD_UPDATED],
+    # A share-group token delete fetches its parent share group, whose
+    # updated timestamp moves as membership churns.
+    "ImageShareGroupToken": [_FIELD_UPDATED],
+    # FirewallDevice.updated bumps when the attached entity changes state.
+    "FirewallDevice": [_FIELD_UPDATED],
+    # Kubeconfig and service-token deletes fetch the parent LKE cluster,
+    # whose updated and created timestamps move as nodes recycle.
+    "LKEKubeconfig": [_FIELD_UPDATED, _FIELD_CREATED],
+    "LKEServiceToken": [_FIELD_UPDATED, _FIELD_CREATED],
 }
 
 

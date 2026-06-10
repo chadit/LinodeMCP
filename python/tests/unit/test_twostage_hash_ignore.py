@@ -12,11 +12,12 @@ import pytest
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 _UPDATED = "updated"
+_CREATED = "created"
 
 _CASES = [
     ("Instance", [_UPDATED, "last_seen_ipv4", "watchdog_enabled", "host_uuid"]),
     ("Volume", [_UPDATED, "last_seen_ipv4"]),
-    ("LKECluster", [_UPDATED, "created"]),
+    ("LKECluster", [_UPDATED, _CREATED]),
     ("Firewall", [_UPDATED]),
     ("NodeBalancer", [_UPDATED, "transfer"]),
     ("VPC", [_UPDATED]),
@@ -26,6 +27,12 @@ _CASES = [
     ("VPCSubnet", [_UPDATED]),
     ("DomainRecord", [_UPDATED]),
     ("LKENodePool", ["nodes"]),
+    ("DatabaseInstance", [_UPDATED]),
+    ("ImageShareGroup", [_UPDATED]),
+    ("ImageShareGroupToken", [_UPDATED]),
+    ("FirewallDevice", [_UPDATED]),
+    ("LKEKubeconfig", [_UPDATED, _CREATED]),
+    ("LKEServiceToken", [_UPDATED, _CREATED]),
 ]
 
 

@@ -13,7 +13,10 @@ import (
 func TestHashIgnoreFields(t *testing.T) {
 	t.Parallel()
 
-	const fieldUpdated = "updated"
+	const (
+		fieldUpdated = "updated"
+		fieldCreated = "created"
+	)
 
 	cases := []struct {
 		resourceType string
@@ -21,7 +24,7 @@ func TestHashIgnoreFields(t *testing.T) {
 	}{
 		{"Instance", []string{fieldUpdated, "last_seen_ipv4", "watchdog_enabled", "host_uuid"}},
 		{"Volume", []string{fieldUpdated, "last_seen_ipv4"}},
-		{"LKECluster", []string{fieldUpdated, "created"}},
+		{"LKECluster", []string{fieldUpdated, fieldCreated}},
 		{"Firewall", []string{fieldUpdated}},
 		{"NodeBalancer", []string{fieldUpdated, "transfer"}},
 		{"VPC", []string{fieldUpdated}},
@@ -31,6 +34,12 @@ func TestHashIgnoreFields(t *testing.T) {
 		{"VPCSubnet", []string{fieldUpdated}},
 		{"DomainRecord", []string{fieldUpdated}},
 		{"LKENodePool", []string{"nodes"}},
+		{"DatabaseInstance", []string{fieldUpdated}},
+		{"ImageShareGroup", []string{fieldUpdated}},
+		{"ImageShareGroupToken", []string{fieldUpdated}},
+		{"FirewallDevice", []string{fieldUpdated}},
+		{"LKEKubeconfig", []string{fieldUpdated, fieldCreated}},
+		{"LKEServiceToken", []string{fieldUpdated, fieldCreated}},
 	}
 
 	for _, testCase := range cases {

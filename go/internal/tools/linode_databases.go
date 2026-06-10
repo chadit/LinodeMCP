@@ -12,6 +12,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/twostage"
 )
 
 const (
@@ -421,35 +422,52 @@ func newDatabaseInstanceUpdateTool(
 
 // NewLinodeDatabaseInstanceDeleteTool creates a tool for deleting one MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	return newDatabaseInstanceDeleteTool(
+		cfg,
 		"linode_database_instance_delete",
-		mcp.WithDescription("Deletes a MySQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to delete.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database deletion. This action is irreversible. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Deletes a MySQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting.",
+		"The MySQL Managed Database instance ID to delete.",
+		"Must be true to confirm database deletion. This action is irreversible. Ignored when dry_run=true.",
+		handleDatabaseInstanceDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseInstanceDeleteRequest(ctx, &request, cfg)
-	}
-
-	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeDatabasePostgreSQLInstanceDeleteTool creates a tool for deleting one PostgreSQL Managed Database instance.
 func NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	return newDatabaseInstanceDeleteTool(
+		cfg,
 		"linode_database_postgresql_instance_delete",
-		mcp.WithDescription("Deletes a PostgreSQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting."),
+		"Deletes a PostgreSQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting.",
+		"The PostgreSQL Managed Database instance ID to delete.",
+		"Must be true to confirm PostgreSQL database deletion. This action is irreversible. Ignored when dry_run=true.",
+		handleDatabasePostgreSQLInstanceDeleteRequest,
+	)
+}
+
+// newDatabaseInstanceDeleteTool builds the two-stage-capable delete tool shared
+// by the MySQL and PostgreSQL database delete handlers. Routing both through one
+// builder keeps the structurally identical constructors below dupl's threshold.
+func newDatabaseInstanceDeleteTool(
+	cfg *config.Config,
+	name string,
+	description string,
+	instanceIDDescription string,
+	confirmDescription string,
+	handle func(context.Context, *mcp.CallToolRequest, *config.Config) (*mcp.CallToolResult, error),
+) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		name,
+		mcp.WithDescription(description+twoStageNote),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID to delete.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm PostgreSQL database deletion. This action is irreversible. Ignored when dry_run=true.")),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description(instanceIDDescription)),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description(confirmDescription)),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
+		mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabasePostgreSQLInstanceDeleteRequest(ctx, &request, cfg)
+		return handle(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapDestroy, handler
@@ -1117,6 +1135,7 @@ func handleDatabaseInstanceDeleteRequest(ctx context.Context, request *mcp.CallT
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteDatabaseInstance(ctx, id)
 		},
+		HashIgnore: twostage.HashIgnoreFields("DatabaseInstance"),
 	})
 }
 
@@ -1138,6 +1157,7 @@ func handleDatabasePostgreSQLInstanceDeleteRequest(ctx context.Context, request 
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteDatabasePostgreSQLInstance(ctx, id)
 		},
+		HashIgnore: twostage.HashIgnoreFields("DatabaseInstance"),
 	})
 }
 
