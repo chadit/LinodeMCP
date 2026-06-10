@@ -229,6 +229,96 @@ async def handle_linode_ipv4_share(
     return await execute_tool(cfg, arguments, "share IPv4 addresses", _call)
 
 
+def create_linode_networking_ips_share_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ips_share tool."""
+    return Tool(
+        name="linode_networking_ips_share",
+        description="Shares IP addresses with a Linode",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "ips": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of IP addresses to share (required)",
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "description": "Linode ID to share the IPs with (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm sharing IPs.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["ips", "linode_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _parse_ips_share(
+    arguments: dict[str, Any],
+) -> tuple[list[str], int] | list[TextContent]:
+    """Parse ips and linode_id; return the pair or an error response."""
+    ips = arguments.get("ips")
+    linode_id = arguments.get("linode_id")
+    if not isinstance(ips, list):
+        return error_response("ips must be a non-empty list of IP addresses")
+    raw_ips = cast("list[object]", ips)
+    if len(raw_ips) == 0:
+        return error_response("ips must be a non-empty list of IP addresses")
+    if not all(isinstance(ip, str) and ip for ip in raw_ips):
+        return error_response("ips entries must be non-empty strings")
+    typed_ips = [ip for ip in raw_ips if isinstance(ip, str)]
+    if linode_id is None:
+        return error_response("linode_id is required")
+    if not isinstance(linode_id, int):
+        return error_response("linode_id must be an integer")
+    return typed_ips, linode_id
+
+
+async def handle_linode_networking_ips_share(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ips_share tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_ips_share(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        return build_dry_run_response(
+            "linode_networking_ips_share",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/ips/share",
+            None,
+            request_body={"ips": parsed[0], "linode_id": parsed[1]},
+        )
+
+    confirm = arguments.get("confirm", False)
+    if confirm is not True:
+        return error_response(
+            "This modifies network state. Set confirm=true to proceed."
+        )
+
+    parsed = _parse_ips_share(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    typed_ips, linode_id = parsed
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.share_ips(typed_ips, linode_id)
+        return {
+            "message": f"IP addresses shared with Linode {linode_id}",
+            "linode_id": linode_id,
+            "ips": typed_ips,
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "share IP addresses", _call)
+
+
 def create_linode_ipv4_assign_tool() -> tuple[Tool, Capability]:
     """Create the linode_ipv4_assign tool."""
     return Tool(

@@ -16515,6 +16515,66 @@ async def test_ipv4_share_rejects_missing_linode_id(
     assert "linode_id" in text.lower()
 
 
+async def test_networking_ips_share_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Networking IP share tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_networking_ips_share_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ips_share" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_networking_ips_share" in srv.registered_tool_names
+
+
+async def test_networking_ips_share_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Networking IP share is callable through server dispatch."""
+    response_data = {"success": True, "shared": ["192.0.2.10"]}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.share_ips.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ips_share",
+            {
+                "confirm": True,
+                "ips": ["192.0.2.10"],
+                "linode_id": 12345,
+            },
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["linode_id"] == 12345
+    assert result_json["ips"] == ["192.0.2.10"]
+    mock_client.share_ips.assert_awaited_once_with(["192.0.2.10"], 12345)
+
+
+async def test_networking_ips_share_rejects_missing_confirm(
+    sample_config: Config,
+) -> None:
+    """Networking IP share rejects calls without confirm=true."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ips_share",
+            {
+                "ips": ["192.0.2.10"],
+                "linode_id": 12345,
+            },
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
 async def test_networking_ip_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
