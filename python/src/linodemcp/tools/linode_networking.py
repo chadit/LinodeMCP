@@ -329,7 +329,7 @@ async def handle_linode_ipv4_assign(
             "linode_ipv4_assign",
             arguments.get("environment", ""),
             "POST",
-            "/networking/ips/assign",
+            "/networking/ipv4/assign",
             None,
             request_body=request_body,
         )
