@@ -17,7 +17,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-const imageShareGroupImagesAddToolName = "linode_image_sharegroup_images_add"
+const imageShareGroupImagesAddToolName = "linode_image_sharegroup_image_add"
 
 func TestLinodeImageShareGroupImagesAddToolDefinition(t *testing.T) {
 	t.Parallel()

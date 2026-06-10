@@ -19,7 +19,7 @@ const (
 func NewLinodeProfileSecurityQuestionsAnswerTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_profile_security_questions_answer",
+		"linode_profile_security_question_answer",
 		"Answers security questions for the authenticated profile. Pass dry_run=true to preview without submitting.",
 		[]mcp.ToolOption{
 			mcp.WithString(profileSecurityQuestionsParam, mcp.Required(),
@@ -43,7 +43,7 @@ func handleLinodeProfileSecurityQuestionsAnswerRequest(ctx context.Context, requ
 	if IsDryRun(request) {
 		redactedReq := &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: "[redacted]"}
 
-		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_security_questions_answer", httpMethodPost,
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_security_question_answer", httpMethodPost,
 			profileSecurityQuestionsPath, redactedReq, nil,
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
 				return profileSecurityQuestionsAnswerSideEffects(ctx)

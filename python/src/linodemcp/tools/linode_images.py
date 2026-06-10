@@ -49,10 +49,10 @@ def _optional_int_argument(
     return value
 
 
-def create_linode_images_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_list tool."""
+def create_linode_image_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_list tool."""
     return Tool(
-        name="linode_images_list",
+        name="linode_image_list",
         description=(
             "Lists all available Linode images (OS images and custom images) "
             "with optional filtering by type, public status, or deprecated status"
@@ -142,10 +142,10 @@ def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
-def create_linode_image_sharegroups_by_image_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_image_sharegroups_by_image_list tool."""
+def create_linode_image_sharegroup_by_image_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_by_image_list tool."""
     return Tool(
-        name="linode_image_sharegroups_by_image_list",
+        name="linode_image_sharegroup_by_image_list",
         description="Lists share groups for a Linode image.",
         inputSchema={
             "type": "object",
@@ -170,10 +170,10 @@ def create_linode_image_sharegroups_by_image_list_tool() -> tuple[Tool, Capabili
     ), Capability.Read
 
 
-def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroups_list tool."""
+def create_linode_image_sharegroup_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_list tool."""
     return Tool(
-        name="linode_images_sharegroups_list",
+        name="linode_image_sharegroup_list",
         description="Lists image share groups available to the account.",
         inputSchema={
             "type": "object",
@@ -200,10 +200,10 @@ def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_images_sharegroup_delete_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_delete tool."""
+def create_linode_image_sharegroup_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_delete tool."""
     return Tool(
-        name="linode_images_sharegroup_delete",
+        name="linode_image_sharegroup_delete",
         description="Deletes a single image share group by UUID." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
@@ -277,10 +277,10 @@ def create_linode_image_sharegroup_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_get tool."""
+def create_linode_image_sharegroup_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_get tool."""
     return Tool(
-        name="linode_images_sharegroup_get",
+        name="linode_image_sharegroup_get",
         description="Gets a single image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -301,10 +301,10 @@ def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_images_sharegroup_images_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_images_list tool."""
+def create_linode_image_sharegroup_image_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_image_list tool."""
     return Tool(
-        name="linode_images_sharegroup_images_list",
+        name="linode_image_sharegroup_image_list",
         description="Lists images available in an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -330,10 +330,10 @@ def create_linode_images_sharegroup_images_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
-def create_linode_images_sharegroup_members_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_members_list tool."""
+def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_member_list tool."""
     return Tool(
-        name="linode_images_sharegroup_members_list",
+        name="linode_image_sharegroup_member_list",
         description="Lists members of an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -359,10 +359,10 @@ def create_linode_images_sharegroup_members_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-def create_linode_images_sharegroup_member_token_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_member_token_get tool."""
+def create_linode_image_sharegroup_member_token_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_member_token_get tool."""
     return Tool(
-        name="linode_images_sharegroup_member_token_get",
+        name="linode_image_sharegroup_member_token_get",
         description="Gets a membership token from an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -397,17 +397,17 @@ def create_linode_images_sharegroup_member_token_get_tool() -> tuple[Tool, Capab
     ), Capability.Read
 
 
-def create_linode_images_sharegroup_member_token_delete_tool() -> tuple[
+def create_linode_image_sharegroup_member_token_delete_tool() -> tuple[
     Tool, Capability
 ]:
-    """Create the linode_images_sharegroup_member_token_delete tool."""
+    """Create the linode_image_sharegroup_member_token_delete tool."""
     uuid_pattern = (
         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
         "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
         "[0-9a-fA-F]{12}$"
     )
     return Tool(
-        name="linode_images_sharegroup_member_token_delete",
+        name="linode_image_sharegroup_member_token_delete",
         description="Revokes a membership token from an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -439,17 +439,17 @@ def create_linode_images_sharegroup_member_token_delete_tool() -> tuple[
     ), Capability.Destroy
 
 
-def create_linode_images_sharegroup_member_token_update_tool() -> tuple[
+def create_linode_image_sharegroup_member_token_update_tool() -> tuple[
     Tool, Capability
 ]:
-    """Create the linode_images_sharegroup_member_token_update tool."""
+    """Create the linode_image_sharegroup_member_token_update tool."""
     uuid_pattern = (
         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
         "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
         "[0-9a-fA-F]{12}$"
     )
     return Tool(
-        name="linode_images_sharegroup_member_token_update",
+        name="linode_image_sharegroup_member_token_update",
         description="Updates a membership token label in an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -486,10 +486,10 @@ def create_linode_images_sharegroup_member_token_update_tool() -> tuple[
     ), Capability.Write
 
 
-def create_linode_images_sharegroup_members_add_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_members_add tool."""
+def create_linode_image_sharegroup_member_add_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_member_add tool."""
     return Tool(
-        name="linode_images_sharegroup_members_add",
+        name="linode_image_sharegroup_member_add",
         description="Adds members to an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -530,12 +530,12 @@ def create_linode_images_sharegroup_members_add_tool() -> tuple[Tool, Capability
     ), Capability.Write
 
 
-def create_linode_images_sharegroup_image_delete_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_image_delete tool."""
+def create_linode_image_sharegroup_image_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_image_delete tool."""
     # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
     # unlike neighboring membership/token routes that use UUIDs.
     return Tool(
-        name="linode_images_sharegroup_image_delete",
+        name="linode_image_sharegroup_image_delete",
         description="Revokes access to one shared image from an image share group.",
         inputSchema={
             "type": "object",
@@ -569,12 +569,12 @@ def create_linode_images_sharegroup_image_delete_tool() -> tuple[Tool, Capabilit
     ), Capability.Destroy
 
 
-def create_linode_images_sharegroup_image_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_image_update tool."""
+def create_linode_image_sharegroup_image_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_image_update tool."""
     # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
     # unlike neighboring membership/token routes that use UUIDs.
     return Tool(
-        name="linode_images_sharegroup_image_update",
+        name="linode_image_sharegroup_image_update",
         description=(
             "Updates a shared image label or description by share group and image ID."
         ),
@@ -621,10 +621,10 @@ def create_linode_images_sharegroup_image_update_tool() -> tuple[Tool, Capabilit
     ), Capability.Write
 
 
-def create_linode_images_sharegroup_images_add_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_images_add tool."""
+def create_linode_image_sharegroup_image_add_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_image_add tool."""
     return Tool(
-        name="linode_images_sharegroup_images_add",
+        name="linode_image_sharegroup_image_add",
         description="Adds images to an image share group by UUID.",
         inputSchema={
             "type": "object",
@@ -669,10 +669,10 @@ def create_linode_images_sharegroup_images_add_tool() -> tuple[Tool, Capability]
     ), Capability.Write
 
 
-def create_linode_images_sharegroup_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroup_update tool."""
+def create_linode_image_sharegroup_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_update tool."""
     return Tool(
-        name="linode_images_sharegroup_update",
+        name="linode_image_sharegroup_update",
         description="Updates an image share group label or description by UUID.",
         inputSchema={
             "type": "object",
@@ -709,10 +709,10 @@ def create_linode_images_sharegroup_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroups_token_delete tool."""
+def create_linode_image_sharegroup_token_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_token_delete tool."""
     return Tool(
-        name="linode_images_sharegroups_token_delete",
+        name="linode_image_sharegroup_token_delete",
         description="Deletes an image share group token by UUID." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
@@ -740,10 +740,10 @@ def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capabili
     ), Capability.Destroy
 
 
-def create_linode_images_sharegroups_tokens_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroups_tokens_list tool."""
+def create_linode_image_sharegroup_token_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_token_list tool."""
     return Tool(
-        name="linode_images_sharegroups_tokens_list",
+        name="linode_image_sharegroup_token_list",
         description="Lists image share group tokens for the user.",
         inputSchema={
             "type": "object",
@@ -759,10 +759,10 @@ def create_linode_images_sharegroups_tokens_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-def create_linode_images_sharegroups_token_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroups_token_get tool."""
+def create_linode_image_sharegroup_token_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_token_get tool."""
     return Tool(
-        name="linode_images_sharegroups_token_get",
+        name="linode_image_sharegroup_token_get",
         description="Gets a single image share group token by UUID.",
         inputSchema={
             "type": "object",
@@ -783,12 +783,10 @@ def create_linode_images_sharegroups_token_get_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
-def create_linode_images_sharegroups_token_sharegroup_get_tool() -> tuple[
-    Tool, Capability
-]:
-    """Create the linode_images_sharegroups_token_sharegroup_get tool."""
+def create_linode_image_sharegroup_by_token_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_by_token_get tool."""
     return Tool(
-        name="linode_images_sharegroups_token_sharegroup_get",
+        name="linode_image_sharegroup_by_token_get",
         description="Gets the image share group associated with a token UUID.",
         inputSchema={
             "type": "object",
@@ -809,12 +807,10 @@ def create_linode_images_sharegroups_token_sharegroup_get_tool() -> tuple[
     ), Capability.Read
 
 
-def create_linode_images_sharegroups_token_sharegroup_images_list_tool() -> tuple[
-    Tool, Capability
-]:
-    """Create the linode_images_sharegroups_token_sharegroup_images_list tool."""
+def create_linode_image_sharegroup_token_image_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_token_image_list tool."""
     return Tool(
-        name="linode_images_sharegroups_token_sharegroup_images_list",
+        name="linode_image_sharegroup_token_image_list",
         description="Lists images available through an image share group token UUID.",
         inputSchema={
             "type": "object",
@@ -835,10 +831,10 @@ def create_linode_images_sharegroups_token_sharegroup_images_list_tool() -> tupl
     ), Capability.Read
 
 
-def create_linode_images_sharegroups_token_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroups_token_update tool."""
+def create_linode_image_sharegroup_token_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_token_update tool."""
     return Tool(
-        name="linode_images_sharegroups_token_update",
+        name="linode_image_sharegroup_token_update",
         description="Updates an image share group token label by UUID.",
         inputSchema={
             "type": "object",
@@ -868,10 +864,10 @@ def create_linode_images_sharegroups_token_update_tool() -> tuple[Tool, Capabili
     ), Capability.Write
 
 
-def create_linode_images_sharegroups_token_create_tool() -> tuple[Tool, Capability]:
-    """Create the linode_images_sharegroups_token_create tool."""
+def create_linode_image_sharegroup_token_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_token_create tool."""
     return Tool(
-        name="linode_images_sharegroups_token_create",
+        name="linode_image_sharegroup_token_create",
         description="Creates a token for sharing images with another share group.",
         inputSchema={
             "type": "object",
@@ -1512,10 +1508,10 @@ async def handle_linode_image_create(
     return await execute_tool(cfg, arguments, "create Linode image", _call)
 
 
-async def handle_linode_image_sharegroups_by_image_list(
+async def handle_linode_image_sharegroup_by_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_image_sharegroups_by_image_list tool request."""
+    """Handle linode_image_sharegroup_by_image_list tool request."""
     image_id = arguments.get("image_id")
     image_err = _image_id_error(image_id)
     if image_err is not None:
@@ -1539,10 +1535,10 @@ async def handle_linode_image_sharegroups_by_image_list(
     return await execute_tool(cfg, arguments, "list image share groups by image", _call)
 
 
-async def handle_linode_images_sharegroups_list(
+async def handle_linode_image_sharegroup_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_list tool request."""
+    """Handle linode_image_sharegroup_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1583,7 +1579,7 @@ async def _images_sharegroups_token_delete_two_stage(
     return await run_two_stage_destroy(
         cfg,
         arguments,
-        tool_name="linode_images_sharegroups_token_delete",
+        tool_name="linode_image_sharegroup_token_delete",
         method="DELETE",
         path=f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
         fetch_state=_ts_fetch,
@@ -1592,10 +1588,10 @@ async def _images_sharegroups_token_delete_two_stage(
     )
 
 
-async def handle_linode_images_sharegroups_token_delete(
+async def handle_linode_image_sharegroup_token_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_token_delete tool request."""
+    """Handle linode_image_sharegroup_token_delete tool request."""
     token_uuid = arguments.get("token_uuid")
     uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
     if uuid_error is not None:
@@ -1611,7 +1607,7 @@ async def handle_linode_images_sharegroups_token_delete(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroups_token_delete",
+            "linode_image_sharegroup_token_delete",
             arguments.get("environment", ""),
             "DELETE",
             f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
@@ -1631,10 +1627,10 @@ async def handle_linode_images_sharegroups_token_delete(
     return await execute_tool(cfg, arguments, "delete image share group token", _call)
 
 
-async def handle_linode_images_sharegroups_tokens_list(
+async def handle_linode_image_sharegroup_token_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_tokens_list tool request."""
+    """Handle linode_image_sharegroup_token_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_image_sharegroup_tokens()
@@ -1754,7 +1750,7 @@ async def _images_sharegroup_delete_two_stage(
     return await run_two_stage_destroy(
         cfg,
         arguments,
-        tool_name="linode_images_sharegroup_delete",
+        tool_name="linode_image_sharegroup_delete",
         method="DELETE",
         path=f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
         fetch_state=_ts_fetch,
@@ -1763,10 +1759,10 @@ async def _images_sharegroup_delete_two_stage(
     )
 
 
-async def handle_linode_images_sharegroup_delete(
+async def handle_linode_image_sharegroup_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_delete tool request."""
+    """Handle linode_image_sharegroup_delete tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -1782,7 +1778,7 @@ async def handle_linode_images_sharegroup_delete(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_delete",
+            "linode_image_sharegroup_delete",
             arguments.get("environment", ""),
             "DELETE",
             f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
@@ -1802,10 +1798,10 @@ async def handle_linode_images_sharegroup_delete(
     return await execute_tool(cfg, arguments, "delete image share group", _call)
 
 
-async def handle_linode_images_sharegroup_get(
+async def handle_linode_image_sharegroup_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_get tool request."""
+    """Handle linode_image_sharegroup_get tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -1823,10 +1819,10 @@ async def handle_linode_images_sharegroup_get(
     return await execute_tool(cfg, arguments, "get image share group", _call)
 
 
-async def handle_linode_images_sharegroup_images_list(
+async def handle_linode_image_sharegroup_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_images_list request."""
+    """Handle linode_image_sharegroup_image_list request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -1849,10 +1845,10 @@ async def handle_linode_images_sharegroup_images_list(
     return await execute_tool(cfg, arguments, "list image share group images", _call)
 
 
-async def handle_linode_images_sharegroup_members_list(
+async def handle_linode_image_sharegroup_member_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_members_list request."""
+    """Handle linode_image_sharegroup_member_list request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -1875,10 +1871,10 @@ async def handle_linode_images_sharegroup_members_list(
     return await execute_tool(cfg, arguments, "list image share group members", _call)
 
 
-async def handle_linode_images_sharegroup_member_token_get(
+async def handle_linode_image_sharegroup_member_token_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_member_token_get request."""
+    """Handle linode_image_sharegroup_member_token_get request."""
     sharegroup_id = arguments.get("sharegroup_id")
     sharegroup_error = _image_sharegroup_id_error(sharegroup_id)
     if sharegroup_error is not None:
@@ -1906,10 +1902,10 @@ async def handle_linode_images_sharegroup_member_token_get(
     )
 
 
-async def handle_linode_images_sharegroup_member_token_delete(
+async def handle_linode_image_sharegroup_member_token_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_member_token_delete tool request."""
+    """Handle linode_image_sharegroup_member_token_delete tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     sharegroup_error = _image_sharegroup_id_error(sharegroup_id)
     if sharegroup_error is not None:
@@ -1925,7 +1921,7 @@ async def handle_linode_images_sharegroup_member_token_delete(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_member_token_delete",
+            "linode_image_sharegroup_member_token_delete",
             arguments.get("environment", ""),
             "DELETE",
             (
@@ -1953,10 +1949,10 @@ async def handle_linode_images_sharegroup_member_token_delete(
     )
 
 
-async def handle_linode_images_sharegroup_member_token_update(
+async def handle_linode_image_sharegroup_member_token_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_member_token_update tool request."""
+    """Handle linode_image_sharegroup_member_token_update tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     sharegroup_error = _image_sharegroup_id_error(sharegroup_id)
     if sharegroup_error is not None:
@@ -1977,7 +1973,7 @@ async def handle_linode_images_sharegroup_member_token_update(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_member_token_update",
+            "linode_image_sharegroup_member_token_update",
             arguments.get("environment", ""),
             "PUT",
             (
@@ -2009,10 +2005,10 @@ async def handle_linode_images_sharegroup_member_token_update(
     )
 
 
-async def handle_linode_images_sharegroup_image_delete(
+async def handle_linode_image_sharegroup_image_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_image_delete tool request."""
+    """Handle linode_image_sharegroup_image_delete tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if sharegroup_error is not None:
@@ -2028,7 +2024,7 @@ async def handle_linode_images_sharegroup_image_delete(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_image_delete",
+            "linode_image_sharegroup_image_delete",
             arguments.get("environment", ""),
             "DELETE",
             (
@@ -2055,10 +2051,10 @@ async def handle_linode_images_sharegroup_image_delete(
     )
 
 
-async def handle_linode_images_sharegroup_image_update(
+async def handle_linode_image_sharegroup_image_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_image_update tool request."""
+    """Handle linode_image_sharegroup_image_update tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
@@ -2080,7 +2076,7 @@ async def handle_linode_images_sharegroup_image_update(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_image_update",
+            "linode_image_sharegroup_image_update",
             arguments.get("environment", ""),
             "PUT",
             (
@@ -2112,10 +2108,10 @@ async def handle_linode_images_sharegroup_image_update(
     return await execute_tool(cfg, arguments, "update shared image", _call)
 
 
-async def handle_linode_images_sharegroup_members_add(
+async def handle_linode_image_sharegroup_member_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_members_add tool request."""
+    """Handle linode_image_sharegroup_member_add tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -2130,7 +2126,7 @@ async def handle_linode_images_sharegroup_members_add(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_members_add",
+            "linode_image_sharegroup_member_add",
             arguments.get("environment", ""),
             "POST",
             f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}/members",
@@ -2156,10 +2152,10 @@ async def handle_linode_images_sharegroup_members_add(
     return await execute_tool(cfg, arguments, "add members to image share group", _call)
 
 
-async def handle_linode_images_sharegroup_images_add(
+async def handle_linode_image_sharegroup_image_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_images_add tool request."""
+    """Handle linode_image_sharegroup_image_add tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -2174,7 +2170,7 @@ async def handle_linode_images_sharegroup_images_add(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_images_add",
+            "linode_image_sharegroup_image_add",
             arguments.get("environment", ""),
             "POST",
             f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}/images",
@@ -2198,10 +2194,10 @@ async def handle_linode_images_sharegroup_images_add(
     return await execute_tool(cfg, arguments, "add images to image share group", _call)
 
 
-async def handle_linode_images_sharegroup_update(
+async def handle_linode_image_sharegroup_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroup_update tool request."""
+    """Handle linode_image_sharegroup_update tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
     id_error = _image_sharegroup_id_error(sharegroup_id)
     if id_error is not None:
@@ -2219,7 +2215,7 @@ async def handle_linode_images_sharegroup_update(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroup_update",
+            "linode_image_sharegroup_update",
             arguments.get("environment", ""),
             "PUT",
             f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
@@ -2247,10 +2243,10 @@ async def handle_linode_images_sharegroup_update(
     return await execute_tool(cfg, arguments, "update image share group", _call)
 
 
-async def handle_linode_images_sharegroups_token_get(
+async def handle_linode_image_sharegroup_token_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_token_get tool request."""
+    """Handle linode_image_sharegroup_token_get tool request."""
     token_uuid = arguments.get("token_uuid")
     uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
     if uuid_error is not None:
@@ -2268,10 +2264,10 @@ async def handle_linode_images_sharegroups_token_get(
     return await execute_tool(cfg, arguments, "get image share group token", _call)
 
 
-async def handle_linode_images_sharegroups_token_sharegroup_get(
+async def handle_linode_image_sharegroup_by_token_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_token_sharegroup_get tool request."""
+    """Handle linode_image_sharegroup_by_token_get tool request."""
     token_uuid = arguments.get("token_uuid")
     uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
     if uuid_error is not None:
@@ -2289,10 +2285,10 @@ async def handle_linode_images_sharegroups_token_sharegroup_get(
     return await execute_tool(cfg, arguments, "get image share group by token", _call)
 
 
-async def handle_linode_images_sharegroups_token_sharegroup_images_list(
+async def handle_linode_image_sharegroup_token_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_token_sharegroup_images_list request."""
+    """Handle linode_image_sharegroup_token_image_list request."""
     token_uuid = arguments.get("token_uuid")
     uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
     if uuid_error is not None:
@@ -2317,10 +2313,10 @@ async def handle_linode_images_sharegroups_token_sharegroup_images_list(
     )
 
 
-async def handle_linode_images_sharegroups_token_update(
+async def handle_linode_image_sharegroup_token_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_token_update tool request."""
+    """Handle linode_image_sharegroup_token_update tool request."""
     token_uuid = arguments.get("token_uuid")
     uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
     if uuid_error is not None:
@@ -2336,7 +2332,7 @@ async def handle_linode_images_sharegroups_token_update(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_images_sharegroups_token_update",
+            "linode_image_sharegroup_token_update",
             arguments.get("environment", ""),
             "PUT",
             f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
@@ -2362,10 +2358,10 @@ async def handle_linode_images_sharegroups_token_update(
     return await execute_tool(cfg, arguments, "update image share group token", _call)
 
 
-async def handle_linode_images_sharegroups_token_create(
+async def handle_linode_image_sharegroup_token_create(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_sharegroups_token_create tool request."""
+    """Handle linode_image_sharegroup_token_create tool request."""
     uuid_value = arguments.get("valid_for_sharegroup_uuid")
     uuid_error = _image_sharegroup_token_create_uuid_error(uuid_value)
     if uuid_error is not None:
@@ -2384,7 +2380,7 @@ async def handle_linode_images_sharegroups_token_create(
         if label_str is not None:
             request_body["label"] = label_str
         return build_dry_run_response(
-            "linode_images_sharegroups_token_create",
+            "linode_image_sharegroup_token_create",
             arguments.get("environment", ""),
             "POST",
             "/images/sharegroups/tokens",
@@ -2592,10 +2588,10 @@ async def handle_linode_image_delete(
     return await execute_tool(cfg, arguments, "delete private image", _call)
 
 
-async def handle_linode_images_list(
+async def handle_linode_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_images_list tool request."""
+    """Handle linode_image_list tool request."""
     type_filter: str = arguments.get("type", "")
     is_public_filter: str | bool = arguments.get("is_public", "")
     deprecated_filter: str = arguments.get("deprecated", "")

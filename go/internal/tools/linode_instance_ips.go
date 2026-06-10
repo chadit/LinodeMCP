@@ -174,7 +174,7 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 func NewLinodeInstanceIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_ip_update_rdns",
+		"linode_instance_ip_update",
 		"Updates the reverse DNS for a specific IP address on a Linode instance.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -225,7 +225,7 @@ func handleInstanceIPUpdateRDNSRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_ip_update_rdns", "PUT",
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_ip_update", "PUT",
 			fmt.Sprintf("/linode/instances/%d/ips/%s", linodeID, address),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetInstanceIP(ctx, linodeID, address)

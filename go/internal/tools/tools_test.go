@@ -375,8 +375,8 @@ func TestLinodeProfileTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, _, handler := tools.NewLinodeProfileTool(cfg)
 
-		if tool.Name != "linode_profile" {
-			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile")
+		if tool.Name != "linode_profile_get" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_get")
 		}
 
 		if tool.Description == "" {
@@ -477,8 +477,8 @@ func TestLinodeProfilePreferencesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeProfilePreferencesTool(cfg)
 
-	if tool.Name != "linode_profile_preferences" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_preferences")
+	if tool.Name != "linode_profile_preferences_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_preferences_get")
 	}
 
 	if capability != profiles.CapRead {
@@ -784,8 +784,8 @@ func TestLinodeAccountTool(t *testing.T) {
 		cfg := &config.Config{}
 		tool, _, handler := tools.NewLinodeAccountTool(cfg)
 
-		if tool.Name != "linode_account" {
-			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account")
+		if tool.Name != "linode_account_get" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_get")
 		}
 
 		if tool.Description == "" {
@@ -867,8 +867,8 @@ func TestLinodeAccountTransferToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountTransferTool(cfg)
 
-	if tool.Name != "linode_account_transfer" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_transfer")
+	if tool.Name != "linode_account_transfer_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_transfer_get")
 	}
 
 	if capability != profiles.CapRead {
@@ -1028,8 +1028,8 @@ func TestLinodeAccountTransferToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_transfer") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_transfer")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_transfer_get") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_transfer_get")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -1044,8 +1044,8 @@ func TestLinodeAccountSettingsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountSettingsTool(cfg)
 
-	if tool.Name != "linode_account_settings" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_settings")
+	if tool.Name != "linode_account_settings_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_settings_get")
 	}
 
 	if capability != profiles.CapRead {
@@ -1217,8 +1217,8 @@ func TestLinodeAccountAgreementsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountAgreementsTool(cfg)
 
-	if tool.Name != "linode_account_agreements" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_agreements")
+	if tool.Name != "linode_account_agreement_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_agreement_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -1378,8 +1378,8 @@ func TestLinodeAccountMaintenanceToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountMaintenanceTool(cfg)
 
-	if tool.Name != "linode_account_maintenance" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_maintenance")
+	if tool.Name != "linode_account_maintenance_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_maintenance_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -1573,8 +1573,8 @@ func TestLinodeAccountMaintenanceToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_maintenance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_maintenance")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_maintenance_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_maintenance_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -1589,8 +1589,8 @@ func TestLinodeMaintenancePoliciesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeMaintenancePoliciesTool(cfg)
 
-	if tool.Name != "linode_maintenance_policies" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_maintenance_policies")
+	if tool.Name != "linode_maintenance_policy_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_maintenance_policy_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -1783,8 +1783,8 @@ func TestLinodeMaintenancePoliciesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_maintenance_policies") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_maintenance_policies")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_maintenance_policy_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_maintenance_policy_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -2014,8 +2014,8 @@ func TestLinodeAccountNotificationsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountNotificationsTool(cfg)
 
-	if tool.Name != "linode_account_notifications" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_notifications")
+	if tool.Name != "linode_account_notification_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_notification_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -2163,8 +2163,8 @@ func TestLinodeAccountNotificationsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_notifications") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_notifications")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_notification_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_notification_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -2227,8 +2227,8 @@ func TestLinodeBetasToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeBetasTool(cfg)
 
-	if tool.Name != "linode_betas" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_betas")
+	if tool.Name != "linode_beta_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_beta_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -2389,8 +2389,8 @@ func TestLinodeBetasToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_betas") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_betas")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_beta_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_beta_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -2688,8 +2688,8 @@ func TestLinodeAccountBetasToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountBetasTool(cfg)
 
-	if tool.Name != "linode_account_betas" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_betas")
+	if tool.Name != "linode_account_beta_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_beta_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -2840,8 +2840,8 @@ func TestLinodeAccountBetasToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_betas") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_betas")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_beta_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_beta_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -3098,8 +3098,8 @@ func TestLinodeProfileSecurityQuestionsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 
 	tool, capability, handler := tools.NewLinodeProfileSecurityQuestionsTool(cfg)
-	if tool.Name != "linode_profile_security_questions" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_security_questions")
+	if tool.Name != "linode_profile_security_question_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_security_question_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -3226,8 +3226,8 @@ func TestLinodeProfileSecurityQuestionsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_security_questions") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_security_questions")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_security_question_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_security_question_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -3242,8 +3242,8 @@ func TestLinodeProfileDevicesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 
 	tool, capability, handler := tools.NewLinodeProfileDevicesTool(cfg)
-	if tool.Name != "linode_profile_devices" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_devices")
+	if tool.Name != "linode_profile_device_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_device_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -3372,8 +3372,8 @@ func TestLinodeProfileDevicesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_devices") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_devices")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_device_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_device_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -4568,8 +4568,8 @@ func TestLinodeProfileAppsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 
 	tool, capability, handler := tools.NewLinodeProfileAppsTool(cfg)
-	if tool.Name != "linode_profile_apps" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_apps")
+	if tool.Name != "linode_profile_app_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_app_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -4712,8 +4712,8 @@ func TestLinodeProfileAppsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_apps") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_apps")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_app_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_app_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -4778,8 +4778,8 @@ func TestLinodeAccountOAuthClientsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 
 	tool, capability, handler := tools.NewLinodeAccountOAuthClientsTool(cfg)
-	if tool.Name != "linode_account_oauth_clients" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_clients")
+	if tool.Name != "linode_account_oauth_client_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -4916,8 +4916,8 @@ func TestLinodeAccountOAuthClientsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_oauth_clients") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_oauth_clients")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_oauth_client_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_oauth_client_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5198,8 +5198,8 @@ func TestLinodeAccountEventsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountEventsTool(cfg)
 
-	if tool.Name != "linode_account_events" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_events")
+	if tool.Name != "linode_account_event_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_event_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -5326,8 +5326,8 @@ func TestLinodeAccountEventsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_events") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_events")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_event_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_event_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5392,8 +5392,8 @@ func TestLinodeAccountUsersToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountUsersTool(cfg)
 
-	if tool.Name != "linode_account_users" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_users")
+	if tool.Name != "linode_account_user_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_user_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -5533,8 +5533,8 @@ func TestLinodeAccountUsersToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_users") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_users")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_user_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_user_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5599,8 +5599,8 @@ func TestLinodeAccountLoginsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountLoginsTool(cfg)
 
-	if tool.Name != "linode_account_logins" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_logins")
+	if tool.Name != "linode_account_login_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_login_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -5740,8 +5740,8 @@ func TestLinodeAccountLoginsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_logins") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_logins")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_login_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_login_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -6208,8 +6208,8 @@ func TestLinodeAccountChildAccountsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountChildAccountsTool(cfg)
 
-	if tool.Name != "linode_account_child_accounts" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_accounts")
+	if tool.Name != "linode_account_child_account_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_account_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -6367,8 +6367,8 @@ func TestLinodeAccountChildAccountsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_child_accounts") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_child_accounts")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_child_account_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_child_account_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -8549,8 +8549,8 @@ func TestLinodeAccountOAuthClientResetSecretToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
 
-	if tool.Name != "linode_account_oauth_client_reset_secret" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_reset_secret")
+	if tool.Name != "linode_account_oauth_client_secret_reset" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_secret_reset")
 	}
 
 	if capability != profiles.CapAdmin {
@@ -8772,8 +8772,8 @@ func TestLinodeAccountOAuthClientResetSecretToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to reset linode_account_oauth_client_reset_secret") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to reset linode_account_oauth_client_reset_secret")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to reset linode_account_oauth_client_secret_reset") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to reset linode_account_oauth_client_secret_reset")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -9046,8 +9046,8 @@ func TestLinodeAccountInvoiceItemsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
 
-	if tool.Name != "linode_account_invoice_items" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoice_items")
+	if tool.Name != "linode_account_invoice_item_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoice_item_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -9191,8 +9191,8 @@ func TestLinodeAccountInvoiceItemsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoice_items") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoice_items")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoice_item_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoice_item_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -9258,8 +9258,8 @@ func TestLinodeAccountPaymentMethodsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountPaymentMethodsTool(cfg)
 
-	if tool.Name != "linode_account_payment_methods" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_methods")
+	if tool.Name != "linode_account_payment_method_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_method_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -9413,8 +9413,8 @@ func TestLinodeAccountPaymentMethodsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_payment_methods") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_payment_methods")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_payment_method_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_payment_method_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -10377,8 +10377,8 @@ func TestLinodeAccountPaymentsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountPaymentsTool(cfg)
 
-	if tool.Name != "linode_account_payments" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payments")
+	if tool.Name != "linode_account_payment_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -10532,8 +10532,8 @@ func TestLinodeAccountPaymentsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_payments") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_payments")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_payment_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_payment_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -10800,8 +10800,8 @@ func TestLinodeAccountInvoicesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountInvoicesTool(cfg)
 
-	if tool.Name != "linode_account_invoices" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoices")
+	if tool.Name != "linode_account_invoice_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoice_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -10955,8 +10955,8 @@ func TestLinodeAccountInvoicesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoices") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoices")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoice_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoice_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -11021,8 +11021,8 @@ func TestLinodeAccountServiceTransfersToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountServiceTransfersTool(cfg)
 
-	if tool.Name != "linode_account_service_transfers" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfers")
+	if tool.Name != "linode_account_service_transfer_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -11187,8 +11187,8 @@ func TestLinodeAccountServiceTransfersToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_service_transfers") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_service_transfers")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_service_transfer_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_service_transfer_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -12910,8 +12910,8 @@ func TestLinodeAccountChildAccountTokenToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
 
-	if tool.Name != "linode_account_child_account_token" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_account_token")
+	if tool.Name != "linode_account_child_account_token_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_account_token_create")
 	}
 
 	if capability != profiles.CapAdmin {
@@ -13153,8 +13153,8 @@ func TestLinodeAccountChildAccountTokenToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_child_account_token") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_child_account_token")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_child_account_token_create") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_child_account_token_create")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -13440,8 +13440,8 @@ func TestLinodeAccountAvailabilityToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
 
-	if tool.Name != "linode_account_availability" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_availability")
+	if tool.Name != "linode_account_availability_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_availability_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -13588,8 +13588,8 @@ func TestLinodeAccountAvailabilityToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_availability") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_availability")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_availability_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_availability_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -13655,8 +13655,8 @@ func TestLinodeAccountAgreementsAcknowledgeToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
 
-	if tool.Name != "linode_account_agreements_acknowledge" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_agreements_acknowledge")
+	if tool.Name != "linode_account_agreement_acknowledge" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_agreement_acknowledge")
 	}
 
 	if capability != profiles.CapAdmin {
@@ -14814,8 +14814,8 @@ func TestLinodeImageShareGroupTokensListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeImageShareGroupTokensListTool(cfg)
 
-	if tool.Name != "linode_image_sharegroup_tokens_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_tokens_list")
+	if tool.Name != "linode_image_sharegroup_token_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_token_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -15019,8 +15019,8 @@ func TestLinodeImageShareGroupsListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
 
-	if tool.Name != "linode_image_sharegroups_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroups_list")
+	if tool.Name != "linode_image_sharegroup_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_list")
 	}
 
 	if capability != profiles.CapRead {

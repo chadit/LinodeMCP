@@ -246,8 +246,8 @@ func TestLinodeManagedIssuesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeManagedIssuesTool(cfg)
 
-	if tool.Name != "linode_managed_issues" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_issues")
+	if tool.Name != "linode_managed_issue_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_issue_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -431,8 +431,8 @@ func TestLinodeManagedIssuesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_issues") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_issues")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_issue_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_issue_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

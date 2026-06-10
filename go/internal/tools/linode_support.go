@@ -13,7 +13,7 @@ import (
 
 const (
 	supportTicketGetToolName     = "linode_support_ticket_get"
-	supportTicketRepliesToolName = "linode_support_ticket_replies"
+	supportTicketRepliesToolName = "linode_support_ticket_reply_list"
 	supportTicketIDParam         = "ticket_id"
 	errSupportTicketIDMissing    = "ticket_id is required"
 	errSupportTicketIDPositive   = "ticket_id must be a positive integer"
@@ -70,7 +70,7 @@ func getSupportTicket(ctx context.Context, client *linode.Client, ticketID int) 
 func NewLinodeSupportTicketsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_support_tickets",
+		"linode_support_ticket_list",
 		"Lists support tickets for the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -115,7 +115,7 @@ func handleLinodeSupportTicketsRequest(ctx context.Context, request *mcp.CallToo
 		return MarshalToolResponse(tickets)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_support_tickets: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_support_ticket_list: " + listFailure.Error()), nil
 }
 
 func supportTicketsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

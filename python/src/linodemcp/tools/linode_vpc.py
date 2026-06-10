@@ -37,10 +37,10 @@ _IPV6_RANGE_PROP: dict[str, Any] = {
 }
 
 
-def create_linode_vpcs_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_vpcs_list tool."""
+def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_vpc_list tool."""
     return Tool(
-        name="linode_vpcs_list",
+        name="linode_vpc_list",
         description="Lists all VPCs on the account",
         inputSchema={
             "type": "object",
@@ -51,10 +51,10 @@ def create_linode_vpcs_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_vpcs_list(
+async def handle_linode_vpc_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_vpcs_list tool request."""
+    """Handle linode_vpc_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         vpcs = await client.list_vpcs()
@@ -128,10 +128,10 @@ async def handle_linode_ipv6_range_get(
     return await execute_tool(cfg, arguments, "get IPv6 range", _call)
 
 
-def create_linode_ipv6_ranges_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_ipv6_ranges_list tool."""
+def create_linode_ipv6_range_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_ipv6_range_list tool."""
     return Tool(
-        name="linode_ipv6_ranges_list",
+        name="linode_ipv6_range_list",
         description="Lists all IPv6 ranges on the account",
         inputSchema={
             "type": "object",
@@ -142,10 +142,10 @@ def create_linode_ipv6_ranges_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_ipv6_ranges_list(
+async def handle_linode_ipv6_range_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_ipv6_ranges_list tool request."""
+    """Handle linode_ipv6_range_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         response = await client.list_ipv6_ranges()
@@ -155,10 +155,10 @@ async def handle_linode_ipv6_ranges_list(
     return await execute_tool(cfg, arguments, "list IPv6 ranges", _call)
 
 
-def create_linode_ipv6_pools_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_ipv6_pools_list tool."""
+def create_linode_ipv6_pool_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_ipv6_pool_list tool."""
     return Tool(
-        name="linode_ipv6_pools_list",
+        name="linode_ipv6_pool_list",
         description="Lists all IPv6 pools on the account",
         inputSchema={
             "type": "object",
@@ -169,10 +169,10 @@ def create_linode_ipv6_pools_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_ipv6_pools_list(
+async def handle_linode_ipv6_pool_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_ipv6_pools_list tool request."""
+    """Handle linode_ipv6_pool_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         response = await client.list_ipv6_pools()
@@ -182,10 +182,10 @@ async def handle_linode_ipv6_pools_list(
     return await execute_tool(cfg, arguments, "list IPv6 pools", _call)
 
 
-def create_linode_vpc_ips_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_vpc_ips_list tool."""
+def create_linode_vpc_ip_all_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_vpc_ip_all_list tool."""
     return Tool(
-        name="linode_vpc_ips_list",
+        name="linode_vpc_ip_all_list",
         description="Lists all VPC IP addresses across all VPCs",
         inputSchema={
             "type": "object",
@@ -196,10 +196,10 @@ def create_linode_vpc_ips_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_vpc_ips_list(
+async def handle_linode_vpc_ip_all_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_vpc_ips_list tool request."""
+    """Handle linode_vpc_ip_all_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         ips = await client.list_vpc_ips()
@@ -243,10 +243,10 @@ async def handle_linode_vpc_ip_list(
     return await execute_tool(cfg, arguments, "list VPC IPs", _call)
 
 
-def create_linode_vpc_subnets_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_vpc_subnets_list tool."""
+def create_linode_vpc_subnet_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_vpc_subnet_list tool."""
     return Tool(
-        name="linode_vpc_subnets_list",
+        name="linode_vpc_subnet_list",
         description="Lists subnets for a specific VPC",
         inputSchema={
             "type": "object",
@@ -259,10 +259,10 @@ def create_linode_vpc_subnets_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_vpc_subnets_list(
+async def handle_linode_vpc_subnet_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_vpc_subnets_list tool request."""
+    """Handle linode_vpc_subnet_list tool request."""
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
         return error_response("vpc_id is required")

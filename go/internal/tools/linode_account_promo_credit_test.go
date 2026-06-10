@@ -28,8 +28,8 @@ func TestLinodeAccountPromoCreditToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeAccountPromoCreditTool(cfg)
 
-	if tool.Name != "linode_account_promo_credit" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_promo_credit")
+	if tool.Name != "linode_account_promo_credit_add" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_promo_credit_add")
 	}
 
 	if capability != profiles.CapAdmin {
@@ -175,8 +175,8 @@ func TestLinodeAccountPromoCreditToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to apply linode_account_promo_credit") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to apply linode_account_promo_credit")
+	if !strings.Contains(textContent.Text, "Failed to apply linode_account_promo_credit_add") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to apply linode_account_promo_credit_add")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

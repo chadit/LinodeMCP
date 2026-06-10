@@ -151,7 +151,7 @@ func NewLinodeManagedContactDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_contacts",
+		"linode_managed_contact_list",
 		"Lists contacts configured for Linode Managed service alerts.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -167,7 +167,7 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_linode_settings",
+		"linode_managed_linode_settings_list",
 		"Lists Managed service settings for Linodes on the account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -183,7 +183,7 @@ func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.
 func NewLinodeManagedStatsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_stats",
+		"linode_managed_stats_get",
 		"Lists Linode Managed statistics from the last 24 hours.",
 		nil,
 		handleLinodeManagedStatsRequest,
@@ -310,7 +310,7 @@ func NewLinodeManagedServiceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 func NewLinodeManagedServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_services",
+		"linode_managed_service_list",
 		"Lists services monitored by Linode Managed.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -342,7 +342,7 @@ func NewLinodeManagedIssueGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 func NewLinodeManagedIssuesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_issues",
+		"linode_managed_issue_list",
 		"Lists recent and ongoing issues detected by Linode Managed service monitors.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -539,7 +539,7 @@ func handleLinodeManagedContactsRequest(ctx context.Context, request *mcp.CallTo
 		return MarshalToolResponse(contacts)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_contacts: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_contact_list: " + listFailure.Error()), nil
 }
 
 func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -574,7 +574,7 @@ func handleLinodeManagedLinodeSettingsRequest(ctx context.Context, request *mcp.
 		return MarshalToolResponse(settings)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_linode_settings: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_linode_settings_list: " + listFailure.Error()), nil
 }
 
 func managedLinodeSettingsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -604,7 +604,7 @@ func handleLinodeManagedStatsRequest(ctx context.Context, request *mcp.CallToolR
 		return MarshalToolResponse(stats)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_stats: " + getFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_stats_get: " + getFailure.Error()), nil
 }
 
 func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1053,7 +1053,7 @@ func handleLinodeManagedServicesRequest(ctx context.Context, request *mcp.CallTo
 		return MarshalToolResponse(services)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_services: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_service_list: " + listFailure.Error()), nil
 }
 
 func managedServicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -1131,7 +1131,7 @@ func handleLinodeManagedIssuesRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(issues)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_issues: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_issue_list: " + listFailure.Error()), nil
 }
 
 func managedIssuesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

@@ -287,8 +287,8 @@ func TestLinodeVPCIPsListTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		if tool.Name != "linode_vpc_ips_list" {
-			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_vpc_ips_list")
+		if tool.Name != "linode_vpc_ip_all_list" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_vpc_ip_all_list")
 		}
 
 		if tool.Description == "" {

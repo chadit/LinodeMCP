@@ -10,15 +10,15 @@ import (
 func TestLongviewCategory(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_longview_plan"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_longview_plan_get"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_longview_types"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_longview_type_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_longview_subscriptions"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_longview_subscription_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
@@ -30,11 +30,11 @@ func TestLongviewCategory(t *testing.T) {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_monitor_alert_definitions"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_alert_definition_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_monitor_alert_channels"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_alert_channel_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 }

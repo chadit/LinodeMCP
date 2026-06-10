@@ -22,8 +22,8 @@ func TestLinodeNodeBalancerTypesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeNodeBalancerTypesTool(cfg)
 
-	if tool.Name != "linode_nodebalancer_types" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_types")
+	if tool.Name != "linode_nodebalancer_type_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_type_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -157,8 +157,8 @@ func TestLinodeNodeBalancerTypesToolApiError(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_nodebalancer_types") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_nodebalancer_types")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_nodebalancer_type_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_nodebalancer_type_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

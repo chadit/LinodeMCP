@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from linodemcp.tools.linode_account import handle_linode_account_tag_delete
+from linodemcp.tools.linode_account import handle_linode_tag_delete
 from linodemcp.tools.linode_databases import (
     handle_linode_database_mysql_instance_delete,
     handle_linode_database_postgresql_instance_delete,
@@ -25,8 +25,8 @@ from linodemcp.tools.linode_firewalls_write import (
     handle_linode_firewall_device_delete,
 )
 from linodemcp.tools.linode_images import (
-    handle_linode_images_sharegroup_delete,
-    handle_linode_images_sharegroups_token_delete,
+    handle_linode_image_sharegroup_delete,
+    handle_linode_image_sharegroup_token_delete,
 )
 from linodemcp.tools.linode_instance_actions import (
     handle_linode_instance_password_reset,
@@ -89,7 +89,7 @@ _CASES = [
         id="database_postgresql",
     ),
     pytest.param(
-        handle_linode_images_sharegroup_delete,
+        handle_linode_image_sharegroup_delete,
         {"sharegroup_id": "22222222-2222-2222-2222-222222222222"},
         "get_image_sharegroup",
         {
@@ -102,7 +102,7 @@ _CASES = [
         id="image_sharegroup",
     ),
     pytest.param(
-        handle_linode_images_sharegroups_token_delete,
+        handle_linode_image_sharegroup_token_delete,
         {"token_uuid": _TOKEN_UUID},
         "get_image_sharegroup_by_token",
         {"uuid": "sg-uuid", "label": "share", "updated": "2026-01-01T00:00:00"},
@@ -201,7 +201,7 @@ _CASES = [
         id="object_storage_ssl",
     ),
     pytest.param(
-        handle_linode_account_tag_delete,
+        handle_linode_tag_delete,
         {"tag_label": "prod"},
         "list_tagged_objects",
         {"data": [], "page": 1, "pages": 1, "results": 0},

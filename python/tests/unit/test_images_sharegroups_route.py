@@ -14,43 +14,43 @@ from linodemcp.profiles import Capability, Scope, required_scopes
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
     create_linode_image_delete_tool,
+    create_linode_image_sharegroup_by_image_list_tool,
+    create_linode_image_sharegroup_by_token_get_tool,
     create_linode_image_sharegroup_create_tool,
-    create_linode_image_sharegroups_by_image_list_tool,
-    create_linode_images_sharegroup_image_delete_tool,
-    create_linode_images_sharegroup_image_update_tool,
-    create_linode_images_sharegroup_images_add_tool,
-    create_linode_images_sharegroup_images_list_tool,
-    create_linode_images_sharegroup_member_token_delete_tool,
-    create_linode_images_sharegroup_member_token_get_tool,
-    create_linode_images_sharegroup_member_token_update_tool,
-    create_linode_images_sharegroup_members_add_tool,
-    create_linode_images_sharegroup_members_list_tool,
-    create_linode_images_sharegroups_list_tool,
-    create_linode_images_sharegroups_token_delete_tool,
-    create_linode_images_sharegroups_token_get_tool,
-    create_linode_images_sharegroups_token_sharegroup_get_tool,
-    create_linode_images_sharegroups_token_sharegroup_images_list_tool,
-    create_linode_images_sharegroups_token_update_tool,
-    create_linode_images_sharegroups_tokens_list_tool,
+    create_linode_image_sharegroup_image_add_tool,
+    create_linode_image_sharegroup_image_delete_tool,
+    create_linode_image_sharegroup_image_list_tool,
+    create_linode_image_sharegroup_image_update_tool,
+    create_linode_image_sharegroup_list_tool,
+    create_linode_image_sharegroup_member_add_tool,
+    create_linode_image_sharegroup_member_list_tool,
+    create_linode_image_sharegroup_member_token_delete_tool,
+    create_linode_image_sharegroup_member_token_get_tool,
+    create_linode_image_sharegroup_member_token_update_tool,
+    create_linode_image_sharegroup_token_delete_tool,
+    create_linode_image_sharegroup_token_get_tool,
+    create_linode_image_sharegroup_token_image_list_tool,
+    create_linode_image_sharegroup_token_list_tool,
+    create_linode_image_sharegroup_token_update_tool,
     handle_linode_image_delete,
+    handle_linode_image_sharegroup_by_image_list,
+    handle_linode_image_sharegroup_by_token_get,
     handle_linode_image_sharegroup_create,
-    handle_linode_image_sharegroups_by_image_list,
-    handle_linode_images_sharegroup_image_delete,
-    handle_linode_images_sharegroup_image_update,
-    handle_linode_images_sharegroup_images_add,
-    handle_linode_images_sharegroup_images_list,
-    handle_linode_images_sharegroup_member_token_delete,
-    handle_linode_images_sharegroup_member_token_get,
-    handle_linode_images_sharegroup_member_token_update,
-    handle_linode_images_sharegroup_members_add,
-    handle_linode_images_sharegroup_members_list,
-    handle_linode_images_sharegroups_list,
-    handle_linode_images_sharegroups_token_delete,
-    handle_linode_images_sharegroups_token_get,
-    handle_linode_images_sharegroups_token_sharegroup_get,
-    handle_linode_images_sharegroups_token_sharegroup_images_list,
-    handle_linode_images_sharegroups_token_update,
-    handle_linode_images_sharegroups_tokens_list,
+    handle_linode_image_sharegroup_image_add,
+    handle_linode_image_sharegroup_image_delete,
+    handle_linode_image_sharegroup_image_list,
+    handle_linode_image_sharegroup_image_update,
+    handle_linode_image_sharegroup_list,
+    handle_linode_image_sharegroup_member_add,
+    handle_linode_image_sharegroup_member_list,
+    handle_linode_image_sharegroup_member_token_delete,
+    handle_linode_image_sharegroup_member_token_get,
+    handle_linode_image_sharegroup_member_token_update,
+    handle_linode_image_sharegroup_token_delete,
+    handle_linode_image_sharegroup_token_get,
+    handle_linode_image_sharegroup_token_image_list,
+    handle_linode_image_sharegroup_token_list,
+    handle_linode_image_sharegroup_token_update,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -313,9 +313,9 @@ async def test_retryable_client_list_image_sharegroups_uses_read_retry() -> None
 
 def test_create_linode_image_sharegroups_by_image_list_tool_schema() -> None:
     """Tool schema exposes the documented image_id path param."""
-    tool, capability = create_linode_image_sharegroups_by_image_list_tool()
+    tool, capability = create_linode_image_sharegroup_by_image_list_tool()
 
-    assert tool.name == "linode_image_sharegroups_by_image_list"
+    assert tool.name == "linode_image_sharegroup_by_image_list"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["image_id"]
     assert tool.inputSchema["properties"]["image_id"]["pattern"] == (
@@ -335,7 +335,7 @@ async def test_handle_linode_image_sharegroups_by_image_list_success(
         "results": 1,
     }
 
-    result = await handle_linode_image_sharegroups_by_image_list(
+    result = await handle_linode_image_sharegroup_by_image_list(
         {"image_id": "private/12345"}, sample_config
     )
 
@@ -371,7 +371,7 @@ async def test_handle_linode_image_sharegroups_by_image_list_rejects_bad_image_i
     image_id: Any, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed image IDs before client calls."""
-    result = await handle_linode_image_sharegroups_by_image_list(
+    result = await handle_linode_image_sharegroup_by_image_list(
         {"image_id": image_id}, sample_config
     )
 
@@ -383,25 +383,25 @@ def test_linode_image_sharegroups_by_image_list_registered() -> None:
     """Dynamic registry exports the by-image sharegroups tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_image_sharegroups_by_image_list"]
+    entry = entries["linode_image_sharegroup_by_image_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_image_sharegroups_by_image_list"
-    assert entry.handle_fn is handle_linode_image_sharegroups_by_image_list
+    assert entry.tool.name == "linode_image_sharegroup_by_image_list"
+    assert entry.handle_fn is handle_linode_image_sharegroup_by_image_list
 
 
 def test_linode_image_sharegroups_by_image_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroups_by_image_list", Capability.Read)
+    scopes = required_scopes("linode_image_sharegroup_by_image_list", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
-    assert "linode_image_sharegroups_by_image_list" in FEATURE_TOOLS_LIST
+    assert "linode_image_sharegroup_by_image_list" in FEATURE_TOOLS_LIST
 
 
 def test_create_linode_images_sharegroups_list_tool_schema() -> None:
     """Tool schema exposes the documented pagination params."""
-    tool, capability = create_linode_images_sharegroups_list_tool()
+    tool, capability = create_linode_image_sharegroup_list_tool()
 
-    assert tool.name == "linode_images_sharegroups_list"
+    assert tool.name == "linode_image_sharegroup_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
@@ -420,7 +420,7 @@ async def test_handle_linode_images_sharegroups_list_success(
         "results": 7,
     }
 
-    result = await handle_linode_images_sharegroups_list(
+    result = await handle_linode_image_sharegroup_list(
         {"page": 2, "page_size": 50}, sample_config
     )
 
@@ -455,7 +455,7 @@ async def test_handle_linode_images_sharegroups_list_rejects_invalid_pagination(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects invalid pagination before creating a client call."""
-    result = await handle_linode_images_sharegroups_list(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.list_image_sharegroups.assert_not_called()
@@ -465,15 +465,15 @@ def test_linode_images_sharegroups_list_registered() -> None:
     """Dynamic registry exports the new tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_list"]
+    entry = entries["linode_image_sharegroup_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroups_list"
-    assert entry.handle_fn is handle_linode_images_sharegroups_list
+    assert entry.tool.name == "linode_image_sharegroup_list"
+    assert entry.handle_fn is handle_linode_image_sharegroup_list
 
 
 def test_linode_images_sharegroups_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_images_sharegroups_list", Capability.Read)
+    scopes = required_scopes("linode_image_sharegroup_list", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
 
@@ -876,9 +876,9 @@ async def test_retryable_client_get_image_sharegroup_token_uses_read_retry() -> 
 
 def test_create_linode_images_sharegroups_token_get_tool_schema() -> None:
     """Tool schema requires the documented token UUID path param."""
-    tool, capability = create_linode_images_sharegroups_token_get_tool()
+    tool, capability = create_linode_image_sharegroup_token_get_tool()
 
-    assert tool.name == "linode_images_sharegroups_token_get"
+    assert tool.name == "linode_image_sharegroup_token_get"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "token_uuid"}
     assert tool.inputSchema["required"] == ["token_uuid"]
@@ -896,7 +896,7 @@ async def test_handle_linode_images_sharegroups_token_get_success(
         "created": "2026-01-01T00:00:00",
     }
 
-    result = await handle_linode_images_sharegroups_token_get(
+    result = await handle_linode_image_sharegroup_token_get(
         {"token_uuid": f" {token_uuid} "}, sample_config
     )
 
@@ -929,7 +929,7 @@ async def test_handle_linode_images_sharegroups_token_get_rejects_invalid_token_
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed token UUIDs before the client call."""
-    result = await handle_linode_images_sharegroups_token_get(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_token_get(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.get_image_sharegroup_token.assert_not_called()
@@ -939,22 +939,22 @@ def test_linode_images_sharegroups_token_get_registered() -> None:
     """Dynamic registry exports the token get tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_token_get"]
+    entry = entries["linode_image_sharegroup_token_get"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroups_token_get"
-    assert entry.handle_fn is handle_linode_images_sharegroups_token_get
+    assert entry.tool.name == "linode_image_sharegroup_token_get"
+    assert entry.handle_fn is handle_linode_image_sharegroup_token_get
 
 
 def test_linode_images_sharegroups_token_get_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_images_sharegroups_token_get", Capability.Read)
+    scopes = required_scopes("linode_image_sharegroup_token_get", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
 
 
 def test_linode_images_sharegroups_token_get_in_version_features() -> None:
     """Version metadata advertises the token get tool."""
-    assert "linode_images_sharegroups_token_get" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_token_get" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -1030,9 +1030,9 @@ async def test_retryable_client_get_image_sharegroup_by_token_uses_read_retry() 
 
 def test_create_linode_images_sharegroups_token_sharegroup_get_tool_schema() -> None:
     """Tool schema requires the documented token UUID path param."""
-    tool, capability = create_linode_images_sharegroups_token_sharegroup_get_tool()
+    tool, capability = create_linode_image_sharegroup_by_token_get_tool()
 
-    assert tool.name == "linode_images_sharegroups_token_sharegroup_get"
+    assert tool.name == "linode_image_sharegroup_by_token_get"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "token_uuid"}
     assert tool.inputSchema["required"] == ["token_uuid"]
@@ -1049,7 +1049,7 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_get_success(
         "label": "shared-images",
     }
 
-    result = await handle_linode_images_sharegroups_token_sharegroup_get(
+    result = await handle_linode_image_sharegroup_by_token_get(
         {"token_uuid": f" {token_uuid} "}, sample_config
     )
 
@@ -1083,9 +1083,7 @@ async def test_handle_token_sharegroup_get_rejects_invalid_uuid(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed token UUIDs before the client call."""
-    result = await handle_linode_images_sharegroups_token_sharegroup_get(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_by_token_get(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.get_image_sharegroup_by_token.assert_not_called()
@@ -1095,26 +1093,22 @@ def test_linode_images_sharegroups_token_sharegroup_get_registered() -> None:
     """Dynamic registry exports the share group by token tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_token_sharegroup_get"]
+    entry = entries["linode_image_sharegroup_by_token_get"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroups_token_sharegroup_get"
-    assert entry.handle_fn is handle_linode_images_sharegroups_token_sharegroup_get
+    assert entry.tool.name == "linode_image_sharegroup_by_token_get"
+    assert entry.handle_fn is handle_linode_image_sharegroup_by_token_get
 
 
 def test_linode_images_sharegroups_token_sharegroup_get_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes(
-        "linode_images_sharegroups_token_sharegroup_get", Capability.Read
-    )
+    scopes = required_scopes("linode_image_sharegroup_by_token_get", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
 
 
 def test_linode_images_sharegroups_token_sharegroup_get_in_version_features() -> None:
     """Version metadata advertises the share group by token tool."""
-    assert "linode_images_sharegroups_token_sharegroup_get" in FEATURE_TOOLS_LIST.split(
-        ","
-    )
+    assert "linode_image_sharegroup_by_token_get" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -1197,11 +1191,9 @@ async def test_retryable_list_images_by_token_uses_read_retry() -> None:
 
 def test_create_token_sharegroup_images_list_tool_schema() -> None:
     """Tool schema requires the documented token UUID path param."""
-    tool, capability = (
-        create_linode_images_sharegroups_token_sharegroup_images_list_tool()
-    )
+    tool, capability = create_linode_image_sharegroup_token_image_list_tool()
 
-    assert tool.name == "linode_images_sharegroups_token_sharegroup_images_list"
+    assert tool.name == "linode_image_sharegroup_token_image_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "token_uuid"}
     assert tool.inputSchema["required"] == ["token_uuid"]
@@ -1220,7 +1212,7 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_images_list_suc
         "results": 1,
     }
 
-    result = await handle_linode_images_sharegroups_token_sharegroup_images_list(
+    result = await handle_linode_image_sharegroup_token_image_list(
         {"token_uuid": f" {token_uuid} "}, sample_config
     )
 
@@ -1255,7 +1247,7 @@ async def test_handle_token_sharegroup_images_list_rejects_invalid_uuid(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed token UUIDs before the client call."""
-    result = await handle_linode_images_sharegroups_token_sharegroup_images_list(
+    result = await handle_linode_image_sharegroup_token_image_list(
         arguments, sample_config
     )
 
@@ -1267,18 +1259,16 @@ def test_linode_images_sharegroups_token_sharegroup_images_list_registered() -> 
     """Dynamic registry exports the images by token tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_token_sharegroup_images_list"]
+    entry = entries["linode_image_sharegroup_token_image_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroups_token_sharegroup_images_list"
-    assert (
-        entry.handle_fn is handle_linode_images_sharegroups_token_sharegroup_images_list
-    )
+    assert entry.tool.name == "linode_image_sharegroup_token_image_list"
+    assert entry.handle_fn is handle_linode_image_sharegroup_token_image_list
 
 
 def test_token_sharegroup_images_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
     scopes = required_scopes(
-        "linode_images_sharegroups_token_sharegroup_images_list", Capability.Read
+        "linode_image_sharegroup_token_image_list", Capability.Read
     )
 
     assert scopes == [Scope.ImagesReadOnly]
@@ -1288,7 +1278,7 @@ def test_token_sharegroup_images_list_in_version_features() -> None:
     """Version metadata advertises the images by token tool."""
     features = FEATURE_TOOLS_LIST.split(",")
 
-    assert "linode_images_sharegroups_token_sharegroup_images_list" in features
+    assert "linode_image_sharegroup_token_image_list" in features
 
 
 @pytest.mark.asyncio
@@ -1388,9 +1378,9 @@ async def test_retryable_list_image_sharegroup_members_uses_read_retry() -> None
 
 def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
     """Tool schema requires the documented sharegroup UUID path param."""
-    tool, capability = create_linode_images_sharegroup_members_list_tool()
+    tool, capability = create_linode_image_sharegroup_member_list_tool()
 
-    assert tool.name == "linode_images_sharegroup_members_list"
+    assert tool.name == "linode_image_sharegroup_member_list"
     assert capability is Capability.Read
     sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
     assert set(tool.inputSchema["properties"]) == {"environment", "sharegroup_id"}
@@ -1411,7 +1401,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
         "results": 1,
     }
 
-    result = await handle_linode_images_sharegroup_members_list(
+    result = await handle_linode_image_sharegroup_member_list(
         {"sharegroup_id": f" {sharegroup_id} "}, sample_config
     )
 
@@ -1437,7 +1427,7 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
     sharegroup_id = "22222222-2222-4222-8222-222222222222"
     mock_linode_client.list_image_sharegroup_members.return_value = {}
 
-    result = await handle_linode_images_sharegroup_members_list(
+    result = await handle_linode_image_sharegroup_member_list(
         {"sharegroup_id": sharegroup_id}, sample_config
     )
 
@@ -1472,9 +1462,7 @@ async def test_handle_linode_images_sharegroup_members_list_rejects_invalid_uuid
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed sharegroup UUIDs before the client call."""
-    result = await handle_linode_images_sharegroup_members_list(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_member_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.list_image_sharegroup_members.assert_not_called()
@@ -1484,22 +1472,22 @@ def test_linode_images_sharegroup_members_list_registered() -> None:
     """Dynamic registry exports the members by share group tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_members_list"]
+    entry = entries["linode_image_sharegroup_member_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroup_members_list"
-    assert entry.handle_fn is handle_linode_images_sharegroup_members_list
+    assert entry.tool.name == "linode_image_sharegroup_member_list"
+    assert entry.handle_fn is handle_linode_image_sharegroup_member_list
 
 
 def test_linode_images_sharegroup_members_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_images_sharegroup_members_list", Capability.Read)
+    scopes = required_scopes("linode_image_sharegroup_member_list", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
 
 
 def test_linode_images_sharegroup_members_list_in_version_features() -> None:
     """Version metadata advertises the members by share group tool."""
-    assert "linode_images_sharegroup_members_list" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_member_list" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -1612,9 +1600,9 @@ async def test_retryable_get_image_sharegroup_member_token_uses_read_retry() -> 
 
 def test_create_linode_images_sharegroup_member_token_get_tool_schema() -> None:
     """Tool schema requires both documented path params."""
-    tool, capability = create_linode_images_sharegroup_member_token_get_tool()
+    tool, capability = create_linode_image_sharegroup_member_token_get_tool()
 
-    assert tool.name == "linode_images_sharegroup_member_token_get"
+    assert tool.name == "linode_image_sharegroup_member_token_get"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {
         "environment",
@@ -1641,7 +1629,7 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
         "created": "2026-01-01T00:00:00",
     }
 
-    result = await handle_linode_images_sharegroup_member_token_get(
+    result = await handle_linode_image_sharegroup_member_token_get(
         {"sharegroup_id": f" {sharegroup_id} ", "token_uuid": f" {token_uuid} "},
         sample_config,
     )
@@ -1699,7 +1687,7 @@ async def test_member_token_get_rejects_invalid_path_params(
     mock_linode_client: AsyncMock,
 ) -> None:
     """Handler rejects malformed path params before the client call."""
-    result = await handle_linode_images_sharegroup_member_token_get(
+    result = await handle_linode_image_sharegroup_member_token_get(
         {"sharegroup_id": sharegroup_id, "token_uuid": token_uuid}, sample_config
     )
 
@@ -1711,16 +1699,16 @@ def test_linode_images_sharegroup_member_token_get_registered() -> None:
     """Dynamic registry exports the member token get tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_member_token_get"]
+    entry = entries["linode_image_sharegroup_member_token_get"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroup_member_token_get"
-    assert entry.handle_fn is handle_linode_images_sharegroup_member_token_get
+    assert entry.tool.name == "linode_image_sharegroup_member_token_get"
+    assert entry.handle_fn is handle_linode_image_sharegroup_member_token_get
 
 
 def test_linode_images_sharegroup_member_token_get_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
     scopes = required_scopes(
-        "linode_images_sharegroup_member_token_get", Capability.Read
+        "linode_image_sharegroup_member_token_get", Capability.Read
     )
 
     assert scopes == [Scope.ImagesReadOnly]
@@ -1728,7 +1716,7 @@ def test_linode_images_sharegroup_member_token_get_scopes_to_images_read() -> No
 
 def test_linode_images_sharegroup_member_token_get_in_version_features() -> None:
     """Version metadata advertises the member token get tool."""
-    assert "linode_images_sharegroup_member_token_get" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_member_token_get" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -1876,9 +1864,9 @@ async def test_retryable_member_token_update_delegates_once() -> None:
 
 def test_create_linode_images_sharegroup_member_token_update_tool_schema() -> None:
     """Tool schema requires both path params, label, and confirm."""
-    tool, capability = create_linode_images_sharegroup_member_token_update_tool()
+    tool, capability = create_linode_image_sharegroup_member_token_update_tool()
 
-    assert tool.name == "linode_images_sharegroup_member_token_update"
+    assert tool.name == "linode_image_sharegroup_member_token_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == [
         "sharegroup_id",
@@ -1907,7 +1895,7 @@ async def test_handle_linode_images_sharegroup_member_token_update_success(
         "label": "renamed-member",
     }
 
-    result = await handle_linode_images_sharegroup_member_token_update(
+    result = await handle_linode_image_sharegroup_member_token_update(
         {
             "sharegroup_id": f" {sharegroup_id} ",
             "token_uuid": f" {token_uuid} ",
@@ -1945,7 +1933,7 @@ async def test_member_token_update_requires_true_confirm(
     if bad_confirm is not None:
         arguments["confirm"] = bad_confirm
 
-    result = await handle_linode_images_sharegroup_member_token_update(
+    result = await handle_linode_image_sharegroup_member_token_update(
         arguments, sample_config
     )
 
@@ -1993,7 +1981,7 @@ async def test_member_token_update_rejects_invalid_path_params(
     mock_linode_client: AsyncMock,
 ) -> None:
     """Handler rejects malformed path params before the client call."""
-    result = await handle_linode_images_sharegroup_member_token_update(
+    result = await handle_linode_image_sharegroup_member_token_update(
         {
             "sharegroup_id": sharegroup_id,
             "token_uuid": token_uuid,
@@ -2013,7 +2001,7 @@ async def test_member_token_update_rejects_invalid_label(
     bad_label: object, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler requires a non-empty label before the client call."""
-    result = await handle_linode_images_sharegroup_member_token_update(
+    result = await handle_linode_image_sharegroup_member_token_update(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
             "token_uuid": "11111111-1111-4111-8111-111111111111",
@@ -2033,7 +2021,7 @@ async def test_image_sharegroup_member_token_update_dry_run_previews_without_con
     sample_config: Any,
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_images_sharegroup_member_token_update(
+    result = await handle_linode_image_sharegroup_member_token_update(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
             "token_uuid": "11111111-1111-4111-8111-111111111111",
@@ -2054,7 +2042,7 @@ async def test_image_sharegroup_member_token_update_dry_run_returns_encoded_prev
     sharegroup_id = "22222222-2222-4222-8222-222222222222"
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
-    result = await handle_linode_images_sharegroup_member_token_update(
+    result = await handle_linode_image_sharegroup_member_token_update(
         {
             "sharegroup_id": sharegroup_id,
             "token_uuid": token_uuid,
@@ -2067,7 +2055,7 @@ async def test_image_sharegroup_member_token_update_dry_run_returns_encoded_prev
 
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert body["tool"] == "linode_images_sharegroup_member_token_update"
+    assert body["tool"] == "linode_image_sharegroup_member_token_update"
     assert body["would_execute"]["method"] == "PUT"
     assert body["would_execute"]["path"] == (
         f"/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
@@ -2080,16 +2068,16 @@ def test_linode_images_sharegroup_member_token_update_registered() -> None:
     """Dynamic registry exports the member token update tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_member_token_update"]
+    entry = entries["linode_image_sharegroup_member_token_update"]
     assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_images_sharegroup_member_token_update"
-    assert entry.handle_fn is handle_linode_images_sharegroup_member_token_update
+    assert entry.tool.name == "linode_image_sharegroup_member_token_update"
+    assert entry.handle_fn is handle_linode_image_sharegroup_member_token_update
 
 
 def test_linode_images_sharegroup_member_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = required_scopes(
-        "linode_images_sharegroup_member_token_update", Capability.Write
+        "linode_image_sharegroup_member_token_update", Capability.Write
     )
 
     assert scopes == [Scope.ImagesReadWrite]
@@ -2097,7 +2085,7 @@ def test_linode_images_sharegroup_member_token_update_scopes_to_images_write() -
 
 def test_linode_images_sharegroup_member_token_update_in_version_features() -> None:
     """Version metadata advertises the member token update tool."""
-    assert "linode_images_sharegroup_member_token_update" in FEATURE_TOOLS_LIST.split(
+    assert "linode_image_sharegroup_member_token_update" in FEATURE_TOOLS_LIST.split(
         ","
     )
 
@@ -2206,9 +2194,9 @@ async def test_retryable_member_token_delete_delegates_once() -> None:
 
 def test_create_linode_images_sharegroup_member_token_delete_tool_schema() -> None:
     """Tool schema requires both path params, confirm, and dry_run."""
-    tool, capability = create_linode_images_sharegroup_member_token_delete_tool()
+    tool, capability = create_linode_image_sharegroup_member_token_delete_tool()
 
-    assert tool.name == "linode_images_sharegroup_member_token_delete"
+    assert tool.name == "linode_image_sharegroup_member_token_delete"
     assert capability is Capability.Destroy
     assert tool.inputSchema["required"] == [
         "sharegroup_id",
@@ -2231,7 +2219,7 @@ async def test_handle_linode_images_sharegroup_member_token_delete_success(
     sharegroup_id = "22222222-2222-4222-8222-222222222222"
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
-    result = await handle_linode_images_sharegroup_member_token_delete(
+    result = await handle_linode_image_sharegroup_member_token_delete(
         {
             "sharegroup_id": f" {sharegroup_id} ",
             "token_uuid": f" {token_uuid} ",
@@ -2261,7 +2249,7 @@ async def test_member_token_delete_requires_true_confirm(
     if bad_confirm is not None:
         arguments["confirm"] = bad_confirm
 
-    result = await handle_linode_images_sharegroup_member_token_delete(
+    result = await handle_linode_image_sharegroup_member_token_delete(
         arguments, sample_config
     )
 
@@ -2309,7 +2297,7 @@ async def test_member_token_delete_rejects_invalid_path_params(
     mock_linode_client: AsyncMock,
 ) -> None:
     """Handler rejects malformed path params before the client call."""
-    result = await handle_linode_images_sharegroup_member_token_delete(
+    result = await handle_linode_image_sharegroup_member_token_delete(
         {
             "sharegroup_id": sharegroup_id,
             "token_uuid": token_uuid,
@@ -2327,7 +2315,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_previews_without_con
     sample_config: Any,
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_images_sharegroup_member_token_delete(
+    result = await handle_linode_image_sharegroup_member_token_delete(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
             "token_uuid": "11111111-1111-4111-8111-111111111111",
@@ -2347,7 +2335,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_returns_encoded_prev
     sharegroup_id = "22222222-2222-4222-8222-222222222222"
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
-    result = await handle_linode_images_sharegroup_member_token_delete(
+    result = await handle_linode_image_sharegroup_member_token_delete(
         {
             "sharegroup_id": sharegroup_id,
             "token_uuid": token_uuid,
@@ -2359,7 +2347,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_returns_encoded_prev
 
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert body["tool"] == "linode_images_sharegroup_member_token_delete"
+    assert body["tool"] == "linode_image_sharegroup_member_token_delete"
     assert body["would_execute"] == {
         "method": "DELETE",
         "path": f"/images/sharegroups/{sharegroup_id}/members/{token_uuid}",
@@ -2371,16 +2359,16 @@ def test_linode_images_sharegroup_member_token_delete_registered() -> None:
     """Dynamic registry exports the member token delete tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_member_token_delete"]
+    entry = entries["linode_image_sharegroup_member_token_delete"]
     assert entry.capability is Capability.Destroy
-    assert entry.tool.name == "linode_images_sharegroup_member_token_delete"
-    assert entry.handle_fn is handle_linode_images_sharegroup_member_token_delete
+    assert entry.tool.name == "linode_image_sharegroup_member_token_delete"
+    assert entry.handle_fn is handle_linode_image_sharegroup_member_token_delete
 
 
 def test_linode_images_sharegroup_member_token_delete_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = required_scopes(
-        "linode_images_sharegroup_member_token_delete", Capability.Destroy
+        "linode_image_sharegroup_member_token_delete", Capability.Destroy
     )
 
     assert scopes == [Scope.ImagesReadWrite]
@@ -2388,7 +2376,7 @@ def test_linode_images_sharegroup_member_token_delete_scopes_to_images_write() -
 
 def test_linode_images_sharegroup_member_token_delete_in_version_features() -> None:
     """Version metadata advertises the member token delete tool."""
-    assert "linode_images_sharegroup_member_token_delete" in FEATURE_TOOLS_LIST.split(
+    assert "linode_image_sharegroup_member_token_delete" in FEATURE_TOOLS_LIST.split(
         ","
     )
 
@@ -2552,9 +2540,9 @@ async def test_retryable_delete_image_sharegroup_image_delegates_once() -> None:
 
 def test_create_linode_images_sharegroup_image_delete_tool_schema() -> None:
     """Delete-image tool schema exposes path params, confirm, and dry_run."""
-    tool, capability = create_linode_images_sharegroup_image_delete_tool()
+    tool, capability = create_linode_image_sharegroup_image_delete_tool()
 
-    assert tool.name == "linode_images_sharegroup_image_delete"
+    assert tool.name == "linode_image_sharegroup_image_delete"
     assert capability is Capability.Destroy
     schema = tool.inputSchema
     assert schema["required"] == ["sharegroup_id", "image_id", "confirm"]
@@ -2571,7 +2559,7 @@ async def test_handle_linode_images_sharegroup_image_delete_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler revokes one shared image and returns a success message."""
-    result = await handle_linode_images_sharegroup_image_delete(
+    result = await handle_linode_image_sharegroup_image_delete(
         {"sharegroup_id": 123, "image_id": 456, "confirm": True},
         sample_config,
     )
@@ -2592,9 +2580,7 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_non_true_con
     if confirm is not None:
         arguments["confirm"] = confirm
 
-    result = await handle_linode_images_sharegroup_image_delete(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_image_delete(arguments, sample_config)
 
     assert "Set confirm=true" in result[0].text
     mock_linode_client.delete_image_sharegroup_image.assert_not_called()
@@ -2645,9 +2631,7 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_invalid_path
     expected_error: str,
 ) -> None:
     """Handler rejects malformed path params before client calls."""
-    result = await handle_linode_images_sharegroup_image_delete(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_image_delete(arguments, sample_config)
 
     assert expected_error in result[0].text
     mock_linode_client.delete_image_sharegroup_image.assert_not_called()
@@ -2658,13 +2642,13 @@ async def test_handle_linode_images_sharegroup_image_delete_dry_run(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry run previews the destructive request without a client call."""
-    result = await handle_linode_images_sharegroup_image_delete(
+    result = await handle_linode_image_sharegroup_image_delete(
         {"sharegroup_id": 123, "image_id": 456, "confirm": True, "dry_run": True},
         sample_config,
     )
 
     payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_images_sharegroup_image_delete"
+    assert payload["tool"] == "linode_image_sharegroup_image_delete"
     assert payload["would_execute"] == {
         "method": "DELETE",
         "path": "/images/sharegroups/123/images/456",
@@ -2676,24 +2660,22 @@ def test_linode_images_sharegroup_image_delete_registered() -> None:
     """Dynamic registry exports the delete-image tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_image_delete"]
+    entry = entries["linode_image_sharegroup_image_delete"]
     assert entry.capability is Capability.Destroy
-    assert entry.tool.name == "linode_images_sharegroup_image_delete"
-    assert entry.handle_fn is handle_linode_images_sharegroup_image_delete
+    assert entry.tool.name == "linode_image_sharegroup_image_delete"
+    assert entry.handle_fn is handle_linode_image_sharegroup_image_delete
 
 
 def test_linode_images_sharegroup_image_delete_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes(
-        "linode_images_sharegroup_image_delete", Capability.Destroy
-    )
+    scopes = required_scopes("linode_image_sharegroup_image_delete", Capability.Destroy)
 
     assert scopes == [Scope.ImagesReadWrite]
 
 
 def test_linode_images_sharegroup_image_delete_in_version_features() -> None:
     """Version metadata advertises the delete-image tool."""
-    assert "linode_images_sharegroup_image_delete" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_image_delete" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -2816,9 +2798,9 @@ async def test_retryable_add_image_sharegroup_images_delegates_once() -> None:
 
 def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
     """Tool schema requires UUID path, images body, and confirm."""
-    tool, capability = create_linode_images_sharegroup_images_add_tool()
+    tool, capability = create_linode_image_sharegroup_image_add_tool()
 
-    assert tool.name == "linode_images_sharegroup_images_add"
+    assert tool.name == "linode_image_sharegroup_image_add"
     assert capability is Capability.Write
     assert set(tool.inputSchema["properties"]) == {
         "environment",
@@ -2843,7 +2825,7 @@ async def test_handle_linode_images_sharegroup_images_add_success(
     images = [{"id": "private/ubuntu", "label": "Private Ubuntu"}]
     mock_linode_client.add_image_sharegroup_images.return_value = {"images": images}
 
-    result = await handle_linode_images_sharegroup_images_add(
+    result = await handle_linode_image_sharegroup_image_add(
         {"sharegroup_id": f" {sharegroup_id} ", "images": images, "confirm": True},
         sample_config,
     )
@@ -2871,7 +2853,7 @@ async def test_handle_linode_images_sharegroup_images_add_requires_literal_confi
     if confirm is not None:
         arguments["confirm"] = confirm
 
-    result = await handle_linode_images_sharegroup_images_add(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_image_add(arguments, sample_config)
 
     assert result[0].text.startswith("Error: This adds images")
     mock_linode_client.add_image_sharegroup_images.assert_not_called()
@@ -2896,7 +2878,7 @@ async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_uuid(
     """Handler rejects malformed sharegroup UUIDs before the client call."""
     arguments = {**arguments, "images": [{"id": "private/ubuntu"}], "confirm": True}
 
-    result = await handle_linode_images_sharegroup_images_add(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_image_add(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.add_image_sharegroup_images.assert_not_called()
@@ -2910,7 +2892,7 @@ async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_body(
     images: object, message: str, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects invalid images payloads before confirm/client calls."""
-    result = await handle_linode_images_sharegroup_images_add(
+    result = await handle_linode_image_sharegroup_image_add(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
             "images": images,
@@ -2931,7 +2913,7 @@ async def test_handle_linode_images_sharegroup_images_add_dry_run(
     sharegroup_id = "22222222-2222-4222-8222-222222222222"
     images = [{"id": "private/ubuntu"}]
 
-    result = await handle_linode_images_sharegroup_images_add(
+    result = await handle_linode_image_sharegroup_image_add(
         {
             "sharegroup_id": sharegroup_id,
             "images": images,
@@ -2942,7 +2924,7 @@ async def test_handle_linode_images_sharegroup_images_add_dry_run(
     )
 
     payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_images_sharegroup_images_add"
+    assert payload["tool"] == "linode_image_sharegroup_image_add"
     assert payload["would_execute"]["method"] == "POST"
     assert payload["would_execute"]["path"] == (
         f"/images/sharegroups/{sharegroup_id}/images"
@@ -2955,22 +2937,22 @@ def test_linode_images_sharegroup_images_add_registered() -> None:
     """Dynamic registry exports the add-images tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_images_add"]
+    entry = entries["linode_image_sharegroup_image_add"]
     assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_images_sharegroup_images_add"
-    assert entry.handle_fn is handle_linode_images_sharegroup_images_add
+    assert entry.tool.name == "linode_image_sharegroup_image_add"
+    assert entry.handle_fn is handle_linode_image_sharegroup_image_add
 
 
 def test_linode_images_sharegroup_images_add_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_images_sharegroup_images_add", Capability.Write)
+    scopes = required_scopes("linode_image_sharegroup_image_add", Capability.Write)
 
     assert scopes == [Scope.ImagesReadWrite]
 
 
 def test_linode_images_sharegroup_images_add_in_version_features() -> None:
     """Version metadata advertises the add-images tool."""
-    assert "linode_images_sharegroup_images_add" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_image_add" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -3102,9 +3084,9 @@ async def test_retryable_add_members_to_image_sharegroup_delegates_once() -> Non
 
 def test_create_linode_images_sharegroup_members_add_tool_schema() -> None:
     """Tool schema requires UUID path, label/token body, and confirm."""
-    tool, capability = create_linode_images_sharegroup_members_add_tool()
+    tool, capability = create_linode_image_sharegroup_member_add_tool()
 
-    assert tool.name == "linode_images_sharegroup_members_add"
+    assert tool.name == "linode_image_sharegroup_member_add"
     assert capability is Capability.Write
     assert set(tool.inputSchema["properties"]) == {
         "environment",
@@ -3134,7 +3116,7 @@ async def test_handle_linode_images_sharegroup_members_add_success(
         "member": {"label": "team-a"}
     }
 
-    result = await handle_linode_images_sharegroup_members_add(
+    result = await handle_linode_image_sharegroup_member_add(
         {
             "sharegroup_id": f" {sharegroup_id} ",
             "label": "team-a",
@@ -3168,7 +3150,7 @@ async def test_handle_linode_images_sharegroup_members_add_requires_literal_conf
     if confirm is not None:
         arguments["confirm"] = confirm
 
-    result = await handle_linode_images_sharegroup_members_add(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_member_add(arguments, sample_config)
 
     assert result[0].text.startswith("Error: This adds members")
     mock_linode_client.add_members_to_image_sharegroup.assert_not_called()
@@ -3198,7 +3180,7 @@ async def test_handle_linode_images_sharegroup_members_add_rejects_invalid_uuid(
         "confirm": True,
     }
 
-    result = await handle_linode_images_sharegroup_members_add(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_member_add(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.add_members_to_image_sharegroup.assert_not_called()
@@ -3223,7 +3205,7 @@ async def test_handle_linode_images_sharegroup_members_add_rejects_invalid_body(
     mock_linode_client: AsyncMock,
 ) -> None:
     """Handler rejects invalid label/token body fields before client calls."""
-    result = await handle_linode_images_sharegroup_members_add(
+    result = await handle_linode_image_sharegroup_member_add(
         {
             "sharegroup_id": "22222222-2222-4222-8222-222222222222",
             "confirm": True,
@@ -3243,7 +3225,7 @@ async def test_handle_linode_images_sharegroup_members_add_dry_run(
     """Dry run previews the encoded mutating request without client call."""
     sharegroup_id = "22222222-2222-4222-8222-222222222222"
 
-    result = await handle_linode_images_sharegroup_members_add(
+    result = await handle_linode_image_sharegroup_member_add(
         {
             "sharegroup_id": sharegroup_id,
             "label": "team-a",
@@ -3255,7 +3237,7 @@ async def test_handle_linode_images_sharegroup_members_add_dry_run(
     )
 
     payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_images_sharegroup_members_add"
+    assert payload["tool"] == "linode_image_sharegroup_member_add"
     assert payload["would_execute"]["method"] == "POST"
     assert payload["would_execute"]["path"] == (
         f"/images/sharegroups/{sharegroup_id}/members"
@@ -3271,29 +3253,29 @@ def test_linode_images_sharegroup_members_add_registered() -> None:
     """Dynamic registry exports the add-members tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_members_add"]
+    entry = entries["linode_image_sharegroup_member_add"]
     assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_images_sharegroup_members_add"
-    assert entry.handle_fn is handle_linode_images_sharegroup_members_add
+    assert entry.tool.name == "linode_image_sharegroup_member_add"
+    assert entry.handle_fn is handle_linode_image_sharegroup_member_add
 
 
 def test_linode_images_sharegroup_members_add_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_images_sharegroup_members_add", Capability.Write)
+    scopes = required_scopes("linode_image_sharegroup_member_add", Capability.Write)
 
     assert scopes == [Scope.ImagesReadWrite]
 
 
 def test_linode_images_sharegroup_members_add_in_version_features() -> None:
     """Version metadata advertises the add-members tool."""
-    assert "linode_images_sharegroup_members_add" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_member_add" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_linode_images_sharegroup_images_list_tool_schema() -> None:
     """Tool schema requires the documented sharegroup UUID path param."""
-    tool, capability = create_linode_images_sharegroup_images_list_tool()
+    tool, capability = create_linode_image_sharegroup_image_list_tool()
 
-    assert tool.name == "linode_images_sharegroup_images_list"
+    assert tool.name == "linode_image_sharegroup_image_list"
     assert capability is Capability.Read
     sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
     assert set(tool.inputSchema["properties"]) == {"environment", "sharegroup_id"}
@@ -3314,7 +3296,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
         "results": 1,
     }
 
-    result = await handle_linode_images_sharegroup_images_list(
+    result = await handle_linode_image_sharegroup_image_list(
         {"sharegroup_id": f" {sharegroup_id} "}, sample_config
     )
 
@@ -3349,7 +3331,7 @@ async def test_handle_linode_images_sharegroup_images_list_rejects_invalid_uuid(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed sharegroup UUIDs before the client call."""
-    result = await handle_linode_images_sharegroup_images_list(arguments, sample_config)
+    result = await handle_linode_image_sharegroup_image_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.list_image_sharegroup_images.assert_not_called()
@@ -3359,22 +3341,22 @@ def test_linode_images_sharegroup_images_list_registered() -> None:
     """Dynamic registry exports the images by share group tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_images_list"]
+    entry = entries["linode_image_sharegroup_image_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroup_images_list"
-    assert entry.handle_fn is handle_linode_images_sharegroup_images_list
+    assert entry.tool.name == "linode_image_sharegroup_image_list"
+    assert entry.handle_fn is handle_linode_image_sharegroup_image_list
 
 
 def test_linode_images_sharegroup_images_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_images_sharegroup_images_list", Capability.Read)
+    scopes = required_scopes("linode_image_sharegroup_image_list", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
 
 
 def test_linode_images_sharegroup_images_list_in_version_features() -> None:
     """Version metadata advertises the images by share group tool."""
-    assert "linode_images_sharegroup_images_list" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_image_list" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -3462,9 +3444,9 @@ async def test_retryable_client_update_image_sharegroup_token_delegates_once() -
 
 def test_create_linode_images_sharegroups_token_update_tool_schema() -> None:
     """Tool schema requires token UUID, label, and confirm."""
-    tool, capability = create_linode_images_sharegroups_token_update_tool()
+    tool, capability = create_linode_image_sharegroup_token_update_tool()
 
-    assert tool.name == "linode_images_sharegroups_token_update"
+    assert tool.name == "linode_image_sharegroup_token_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["token_uuid", "label", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -3483,7 +3465,7 @@ async def test_handle_linode_images_sharegroups_token_update_success(
         "label": "renamed-token",
     }
 
-    result = await handle_linode_images_sharegroups_token_update(
+    result = await handle_linode_image_sharegroup_token_update(
         {"token_uuid": f" {token_uuid} ", "label": " renamed-token ", "confirm": True},
         sample_config,
     )
@@ -3515,9 +3497,7 @@ async def test_handle_linode_images_sharegroups_token_update_requires_true_confi
     if bad_confirm is not None:
         arguments["confirm"] = bad_confirm
 
-    result = await handle_linode_images_sharegroups_token_update(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_token_update(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     assert "confirm=true" in result[0].text
@@ -3543,9 +3523,7 @@ async def test_handle_linode_images_sharegroups_token_update_rejects_invalid_tok
     """Handler rejects malformed token UUIDs before the client call."""
     arguments = {"label": "renamed-token", "confirm": True, **bad_uuid}
 
-    result = await handle_linode_images_sharegroups_token_update(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_token_update(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.update_image_sharegroup_token.assert_not_called()
@@ -3557,7 +3535,7 @@ async def test_handle_linode_images_sharegroups_token_update_rejects_invalid_lab
     bad_label: object, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler requires a non-empty label before the client call."""
-    result = await handle_linode_images_sharegroups_token_update(
+    result = await handle_linode_image_sharegroup_token_update(
         {
             "token_uuid": "11111111-1111-4111-8111-111111111111",
             "label": bad_label,
@@ -3576,7 +3554,7 @@ async def test_image_sharegroup_token_update_dry_run_previews_without_confirm(
     sample_config: Any,
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_images_sharegroups_token_update(
+    result = await handle_linode_image_sharegroup_token_update(
         {
             "token_uuid": "11111111-1111-4111-8111-111111111111",
             "label": "renamed-token",
@@ -3595,7 +3573,7 @@ async def test_image_sharegroup_token_update_dry_run_returns_encoded_preview(
     """dry_run=true previews token update without calling the client."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
-    result = await handle_linode_images_sharegroups_token_update(
+    result = await handle_linode_image_sharegroup_token_update(
         {
             "token_uuid": token_uuid,
             "label": "renamed-token",
@@ -3607,7 +3585,7 @@ async def test_image_sharegroup_token_update_dry_run_returns_encoded_preview(
 
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert body["tool"] == "linode_images_sharegroups_token_update"
+    assert body["tool"] == "linode_image_sharegroup_token_update"
     assert body["would_execute"]["method"] == "PUT"
     assert body["would_execute"]["path"] == f"/images/sharegroups/tokens/{token_uuid}"
     assert body["would_execute"]["body"] == {"label": "renamed-token"}
@@ -3618,22 +3596,22 @@ def test_linode_images_sharegroups_token_update_registered() -> None:
     """Dynamic registry exports the token update tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_token_update"]
+    entry = entries["linode_image_sharegroup_token_update"]
     assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_images_sharegroups_token_update"
-    assert entry.handle_fn is handle_linode_images_sharegroups_token_update
+    assert entry.tool.name == "linode_image_sharegroup_token_update"
+    assert entry.handle_fn is handle_linode_image_sharegroup_token_update
 
 
 def test_linode_images_sharegroups_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_images_sharegroups_token_update", Capability.Write)
+    scopes = required_scopes("linode_image_sharegroup_token_update", Capability.Write)
 
     assert scopes == [Scope.ImagesReadWrite]
 
 
 def test_linode_images_sharegroups_token_update_in_version_features() -> None:
     """Version metadata advertises the token update tool."""
-    assert "linode_images_sharegroups_token_update" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_token_update" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -3707,9 +3685,9 @@ async def test_retryable_client_delete_image_sharegroup_token_delegates_once() -
 
 def test_create_linode_images_sharegroups_token_delete_tool_schema() -> None:
     """Tool schema requires token UUID and confirm."""
-    tool, capability = create_linode_images_sharegroups_token_delete_tool()
+    tool, capability = create_linode_image_sharegroup_token_delete_tool()
 
-    assert tool.name == "linode_images_sharegroups_token_delete"
+    assert tool.name == "linode_image_sharegroup_token_delete"
     assert capability is Capability.Destroy
     assert tool.inputSchema["required"] == ["token_uuid", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -3723,7 +3701,7 @@ async def test_handle_linode_images_sharegroups_token_delete_success(
     """Handler deletes a token through the client."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
-    result = await handle_linode_images_sharegroups_token_delete(
+    result = await handle_linode_image_sharegroup_token_delete(
         {"token_uuid": f" {token_uuid} ", "confirm": True}, sample_config
     )
 
@@ -3746,9 +3724,7 @@ async def test_handle_linode_images_sharegroups_token_delete_requires_true_confi
     if bad_confirm is not None:
         arguments["confirm"] = bad_confirm
 
-    result = await handle_linode_images_sharegroups_token_delete(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_token_delete(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     assert "confirm=true" in result[0].text
@@ -3774,9 +3750,7 @@ async def test_handle_linode_images_sharegroups_token_delete_rejects_invalid_tok
     """Handler rejects malformed token UUIDs before the client call."""
     arguments = {"confirm": True, **bad_uuid}
 
-    result = await handle_linode_images_sharegroups_token_delete(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_token_delete(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.delete_image_sharegroup_token.assert_not_called()
@@ -3787,7 +3761,7 @@ async def test_image_sharegroup_token_delete_dry_run_previews_without_confirm(
     sample_config: Any,
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_images_sharegroups_token_delete(
+    result = await handle_linode_image_sharegroup_token_delete(
         {
             "token_uuid": "11111111-1111-4111-8111-111111111111",
             "dry_run": True,
@@ -3805,7 +3779,7 @@ async def test_image_sharegroup_token_delete_dry_run_returns_encoded_preview(
     """dry_run=true previews token delete without calling the client."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
-    result = await handle_linode_images_sharegroups_token_delete(
+    result = await handle_linode_image_sharegroup_token_delete(
         {
             "token_uuid": token_uuid,
             "confirm": True,
@@ -3816,7 +3790,7 @@ async def test_image_sharegroup_token_delete_dry_run_returns_encoded_preview(
 
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert body["tool"] == "linode_images_sharegroups_token_delete"
+    assert body["tool"] == "linode_image_sharegroup_token_delete"
     assert body["would_execute"]["method"] == "DELETE"
     assert body["would_execute"]["path"] == f"/images/sharegroups/tokens/{token_uuid}"
     mock_linode_client.delete_image_sharegroup_token.assert_not_called()
@@ -3826,31 +3800,29 @@ def test_linode_images_sharegroups_token_delete_registered() -> None:
     """Dynamic registry exports the token delete tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_token_delete"]
+    entry = entries["linode_image_sharegroup_token_delete"]
     assert entry.capability is Capability.Destroy
-    assert entry.tool.name == "linode_images_sharegroups_token_delete"
-    assert entry.handle_fn is handle_linode_images_sharegroups_token_delete
+    assert entry.tool.name == "linode_image_sharegroup_token_delete"
+    assert entry.handle_fn is handle_linode_image_sharegroup_token_delete
 
 
 def test_linode_images_sharegroups_token_delete_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes(
-        "linode_images_sharegroups_token_delete", Capability.Destroy
-    )
+    scopes = required_scopes("linode_image_sharegroup_token_delete", Capability.Destroy)
 
     assert scopes == [Scope.ImagesReadWrite]
 
 
 def test_linode_images_sharegroups_token_delete_in_version_features() -> None:
     """Version metadata advertises the token delete tool."""
-    assert "linode_images_sharegroups_token_delete" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_token_delete" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
     """Tool schema exposes only the documented environment argument."""
-    tool, capability = create_linode_images_sharegroups_tokens_list_tool()
+    tool, capability = create_linode_image_sharegroup_token_list_tool()
 
-    assert tool.name == "linode_images_sharegroups_tokens_list"
+    assert tool.name == "linode_image_sharegroup_token_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment"}
     assert "required" not in tool.inputSchema
@@ -3873,7 +3845,7 @@ async def test_handle_linode_images_sharegroups_tokens_list_success(
         "results": 1,
     }
 
-    result = await handle_linode_images_sharegroups_tokens_list({}, sample_config)
+    result = await handle_linode_image_sharegroup_token_list({}, sample_config)
 
     payload = json.loads(result[0].text)
     assert payload == {
@@ -3896,22 +3868,22 @@ def test_linode_images_sharegroups_tokens_list_registered() -> None:
     """Dynamic registry exports the token list tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroups_tokens_list"]
+    entry = entries["linode_image_sharegroup_token_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_images_sharegroups_tokens_list"
-    assert entry.handle_fn is handle_linode_images_sharegroups_tokens_list
+    assert entry.tool.name == "linode_image_sharegroup_token_list"
+    assert entry.handle_fn is handle_linode_image_sharegroup_token_list
 
 
 def test_linode_images_sharegroups_tokens_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_images_sharegroups_tokens_list", Capability.Read)
+    scopes = required_scopes("linode_image_sharegroup_token_list", Capability.Read)
 
     assert scopes == [Scope.ImagesReadOnly]
 
 
 def test_linode_images_sharegroups_tokens_list_in_version_features() -> None:
     """Version metadata advertises the token list tool."""
-    assert "linode_images_sharegroups_tokens_list" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_token_list" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio
@@ -4059,9 +4031,9 @@ async def test_retryable_client_update_image_sharegroup_image_delegates_once() -
 
 def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
     """Tool schema exposes both path params, body fields, confirm, and dry_run."""
-    tool, capability = create_linode_images_sharegroup_image_update_tool()
+    tool, capability = create_linode_image_sharegroup_image_update_tool()
 
-    assert tool.name == "linode_images_sharegroup_image_update"
+    assert tool.name == "linode_image_sharegroup_image_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
     assert tool.inputSchema["properties"]["sharegroup_id"]["minimum"] == 1
@@ -4084,7 +4056,7 @@ async def test_handle_linode_images_sharegroup_image_update_success(
         "label": "new-label",
     }
 
-    result = await handle_linode_images_sharegroup_image_update(
+    result = await handle_linode_image_sharegroup_image_update(
         {
             "sharegroup_id": sharegroup_id,
             "image_id": image_id,
@@ -4114,7 +4086,7 @@ async def test_handle_linode_images_sharegroup_image_update_description_only_suc
         "description": "new description",
     }
 
-    result = await handle_linode_images_sharegroup_image_update(
+    result = await handle_linode_image_sharegroup_image_update(
         {
             "sharegroup_id": 123,
             "image_id": 1234,
@@ -4148,9 +4120,7 @@ async def test_handle_linode_images_sharegroup_image_update_requires_literal_con
     if confirm_value is not None:
         arguments["confirm"] = confirm_value
 
-    result = await handle_linode_images_sharegroup_image_update(
-        arguments, sample_config
-    )
+    result = await handle_linode_image_sharegroup_image_update(arguments, sample_config)
 
     assert (
         result[0].text
@@ -4181,7 +4151,7 @@ async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_path
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects malformed numeric share group and image IDs."""
-    result = await handle_linode_images_sharegroup_image_update(
+    result = await handle_linode_image_sharegroup_image_update(
         {**arguments, "label": "new-label", "confirm": True}, sample_config
     )
 
@@ -4210,7 +4180,7 @@ async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_body
     mock_linode_client: AsyncMock,
 ) -> None:
     """Handler rejects invalid body fields before confirm/client calls."""
-    result = await handle_linode_images_sharegroup_image_update(
+    result = await handle_linode_image_sharegroup_image_update(
         {
             "sharegroup_id": 123,
             "image_id": 1234,
@@ -4232,7 +4202,7 @@ async def test_handle_linode_images_sharegroup_image_update_dry_run(
     sharegroup_id = 123
     image_id = 1234
 
-    result = await handle_linode_images_sharegroup_image_update(
+    result = await handle_linode_image_sharegroup_image_update(
         {
             "sharegroup_id": sharegroup_id,
             "image_id": image_id,
@@ -4244,7 +4214,7 @@ async def test_handle_linode_images_sharegroup_image_update_dry_run(
     )
 
     payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_images_sharegroup_image_update"
+    assert payload["tool"] == "linode_image_sharegroup_image_update"
     assert payload["would_execute"]["method"] == "PUT"
     assert payload["would_execute"]["path"] == ("/images/sharegroups/123/images/1234")
     assert payload["would_execute"]["body"] == {"description": "new description"}
@@ -4255,22 +4225,22 @@ def test_linode_images_sharegroup_image_update_registered() -> None:
     """Dynamic registry exports the shared-image update tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_images_sharegroup_image_update"]
+    entry = entries["linode_image_sharegroup_image_update"]
     assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_images_sharegroup_image_update"
-    assert entry.handle_fn is handle_linode_images_sharegroup_image_update
+    assert entry.tool.name == "linode_image_sharegroup_image_update"
+    assert entry.handle_fn is handle_linode_image_sharegroup_image_update
 
 
 def test_linode_images_sharegroup_image_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_images_sharegroup_image_update", Capability.Write)
+    scopes = required_scopes("linode_image_sharegroup_image_update", Capability.Write)
 
     assert scopes == [Scope.ImagesReadWrite]
 
 
 def test_linode_images_sharegroup_image_update_in_version_features() -> None:
     """Version metadata advertises the shared-image update tool."""
-    assert "linode_images_sharegroup_image_update" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_image_sharegroup_image_update" in FEATURE_TOOLS_LIST.split(",")
 
 
 @pytest.mark.asyncio

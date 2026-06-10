@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	managedServicesToolName    = "linode_managed_services"
+	managedServicesToolName    = "linode_managed_service_list"
 	managedServicesToolPath    = "/managed/services"
 	managedServicesToolLabel   = "prod-1"
 	managedServicesToolAddress = "https://example.org"
@@ -228,8 +228,8 @@ func TestLinodeManagedServicesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_services") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_services")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_service_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_service_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

@@ -27,10 +27,10 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_stackscripts_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_stackscripts_list tool."""
+def create_linode_stackscript_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_stackscript_list tool."""
     return Tool(
-        name="linode_stackscripts_list",
+        name="linode_stackscript_list",
         description=(
             "Lists StackScripts. By default returns your own StackScripts. "
             "Can filter by public status, ownership, or label."
@@ -66,10 +66,10 @@ def create_linode_stackscripts_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_stackscripts_list(
+async def handle_linode_stackscript_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_stackscripts_list tool request."""
+    """Handle linode_stackscript_list tool request."""
     is_public_filter = arguments.get("is_public", "")
     mine_filter = arguments.get("mine", "")
     label_contains = arguments.get("label_contains", "")

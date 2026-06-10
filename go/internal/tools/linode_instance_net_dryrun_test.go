@@ -56,8 +56,8 @@ func TestLinodeInstanceFirewallsUpdateToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_instance_firewalls_update") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_instance_firewalls_update")
+		if !reflect.DeepEqual(body["tool"], "linode_instance_firewall_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_instance_firewall_update")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -190,8 +190,8 @@ func TestLinodeInstanceIPUpdateRDNSToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_instance_ip_update_rdns") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_instance_ip_update_rdns")
+		if !reflect.DeepEqual(body["tool"], "linode_instance_ip_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_instance_ip_update")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)

@@ -18,15 +18,15 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_config_update_tool,
     create_linode_instance_interface_delete_tool,
     create_linode_instance_interface_get_tool,
+    create_linode_instance_interface_list_tool,
     create_linode_instance_interface_settings_get_tool,
-    create_linode_instance_interfaces_list_tool,
     handle_linode_instance_config_interface_add,
     handle_linode_instance_config_interface_delete,
     handle_linode_instance_config_update,
     handle_linode_instance_interface_delete,
     handle_linode_instance_interface_get,
+    handle_linode_instance_interface_list,
     handle_linode_instance_interface_settings_get,
-    handle_linode_instance_interfaces_list,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -146,7 +146,7 @@ async def test_handle_linode_instance_interfaces_list_success(
         "page": 1,
     }
 
-    result = await handle_linode_instance_interfaces_list(
+    result = await handle_linode_instance_interface_list(
         {"linode_id": 123}, sample_config
     )
 
@@ -159,7 +159,7 @@ async def test_handle_linode_instance_interfaces_list_success(
 async def test_handle_linode_instance_interfaces_list_rejects_invalid_linode_id(
     linode_id: Any, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    result = await handle_linode_instance_interfaces_list(
+    result = await handle_linode_instance_interface_list(
         {"linode_id": linode_id}, sample_config
     )
 
@@ -301,10 +301,10 @@ def test_linode_instance_interface_settings_get_registered_and_exported() -> Non
 
 
 def test_create_linode_instance_interfaces_list_tool_schema() -> None:
-    tool, capability = create_linode_instance_interfaces_list_tool()
+    tool, capability = create_linode_instance_interface_list_tool()
 
     assert capability is Capability.Read
-    assert tool.name == "linode_instance_interfaces_list"
+    assert tool.name == "linode_instance_interface_list"
     assert tool.inputSchema["required"] == ["linode_id"]
     assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
 
@@ -312,11 +312,11 @@ def test_create_linode_instance_interfaces_list_tool_schema() -> None:
 def test_linode_instance_interfaces_list_registered_and_exported() -> None:
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_instance_interfaces_list"]
+    entry = entries["linode_instance_interface_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_instance_interfaces_list"
-    assert entry.handle_fn is handle_linode_instance_interfaces_list
-    assert "linode_instance_interfaces_list" in FEATURE_TOOLS_LIST
+    assert entry.tool.name == "linode_instance_interface_list"
+    assert entry.handle_fn is handle_linode_instance_interface_list
+    assert "linode_instance_interface_list" in FEATURE_TOOLS_LIST
 
 
 @pytest.mark.asyncio
@@ -1275,12 +1275,12 @@ async def test_retryable_client_reorder_instance_config_interfaces_no_replay() -
 
 def test_create_linode_instance_config_interfaces_order_tool_schema() -> None:
     from linodemcp.tools.linode_instances import (
-        create_linode_instance_config_interfaces_order_tool,
+        create_linode_instance_config_interface_reorder_tool,
     )
 
-    tool, capability = create_linode_instance_config_interfaces_order_tool()
+    tool, capability = create_linode_instance_config_interface_reorder_tool()
 
-    assert tool.name == "linode_instance_config_interfaces_order"
+    assert tool.name == "linode_instance_config_interface_reorder"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["linode_id", "config_id", "ids", "confirm"]
     assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
@@ -1296,14 +1296,14 @@ async def test_handle_linode_instance_config_interfaces_order_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     from linodemcp.tools.linode_instances import (
-        handle_linode_instance_config_interfaces_order,
+        handle_linode_instance_config_interface_reorder,
     )
 
     mock_linode_client.reorder_instance_config_interfaces.return_value = {
         "ids": [789, 790]
     }
 
-    result = await handle_linode_instance_config_interfaces_order(
+    result = await handle_linode_instance_config_interface_reorder(
         {"linode_id": 123, "config_id": 456, "ids": [789, 790], "confirm": True},
         sample_config,
     )
@@ -1320,10 +1320,10 @@ async def test_handle_linode_instance_config_interfaces_order_dry_run_skips_clie
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     from linodemcp.tools.linode_instances import (
-        handle_linode_instance_config_interfaces_order,
+        handle_linode_instance_config_interface_reorder,
     )
 
-    result = await handle_linode_instance_config_interfaces_order(
+    result = await handle_linode_instance_config_interface_reorder(
         {
             "linode_id": 123,
             "config_id": 456,
@@ -1335,7 +1335,7 @@ async def test_handle_linode_instance_config_interfaces_order_dry_run_skips_clie
     )
 
     body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_config_interfaces_order"
+    assert body["tool"] == "linode_instance_config_interface_reorder"
     assert body["dry_run"] is True
     assert body["would_execute"]["method"] == "POST"
     assert (
@@ -1352,14 +1352,14 @@ async def test_handle_config_interfaces_order_requires_confirm_true(
     confirm: Any, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     from linodemcp.tools.linode_instances import (
-        handle_linode_instance_config_interfaces_order,
+        handle_linode_instance_config_interface_reorder,
     )
 
     arguments: dict[str, Any] = {"linode_id": 123, "config_id": 456, "ids": [789]}
     if confirm is not None:
         arguments["confirm"] = confirm
 
-    result = await handle_linode_instance_config_interfaces_order(
+    result = await handle_linode_instance_config_interface_reorder(
         arguments, sample_config
     )
 
@@ -1385,10 +1385,10 @@ async def test_handle_config_interfaces_order_rejects_path_params(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     from linodemcp.tools.linode_instances import (
-        handle_linode_instance_config_interfaces_order,
+        handle_linode_instance_config_interface_reorder,
     )
 
-    result = await handle_linode_instance_config_interfaces_order(
+    result = await handle_linode_instance_config_interface_reorder(
         arguments, sample_config
     )
 
@@ -1402,14 +1402,14 @@ async def test_handle_linode_instance_config_interfaces_order_requires_ids(
     ids: Any, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     from linodemcp.tools.linode_instances import (
-        handle_linode_instance_config_interfaces_order,
+        handle_linode_instance_config_interface_reorder,
     )
 
     arguments: dict[str, Any] = {"linode_id": 123, "config_id": 456, "confirm": True}
     if ids is not None:
         arguments["ids"] = ids
 
-    result = await handle_linode_instance_config_interfaces_order(
+    result = await handle_linode_instance_config_interface_reorder(
         arguments, sample_config
     )
 
@@ -1436,16 +1436,16 @@ async def test_client_reorder_instance_config_interfaces_translates_http_errors(
 
 def test_linode_instance_config_interfaces_order_registered_and_exported() -> None:
     from linodemcp.tools.linode_instances import (
-        handle_linode_instance_config_interfaces_order,
+        handle_linode_instance_config_interface_reorder,
     )
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_instance_config_interfaces_order"]
+    entry = entries["linode_instance_config_interface_reorder"]
     assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_instance_config_interfaces_order"
-    assert entry.handle_fn is handle_linode_instance_config_interfaces_order
-    assert "linode_instance_config_interfaces_order" in FEATURE_TOOLS_LIST
+    assert entry.tool.name == "linode_instance_config_interface_reorder"
+    assert entry.handle_fn is handle_linode_instance_config_interface_reorder
+    assert "linode_instance_config_interface_reorder" in FEATURE_TOOLS_LIST
 
 
 @pytest.mark.asyncio

@@ -33,40 +33,40 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Core: always included via Meta/Read.
         ToolDescriptor("hello", Capability.Meta),
         ToolDescriptor("version", Capability.Meta),
-        ToolDescriptor("linode_profile", Capability.Read),
-        ToolDescriptor("linode_profile_security_questions_list", Capability.Read),
-        ToolDescriptor("linode_account", Capability.Read),
-        ToolDescriptor("linode_account_betas_list", Capability.Read),
-        ToolDescriptor("linode_betas_list", Capability.Read),
-        ToolDescriptor("linode_database_instances_list", Capability.Read),
-        ToolDescriptor("linode_account_child_accounts_list", Capability.Read),
+        ToolDescriptor("linode_profile_get", Capability.Read),
+        ToolDescriptor("linode_profile_security_question_list", Capability.Read),
+        ToolDescriptor("linode_account_get", Capability.Read),
+        ToolDescriptor("linode_account_beta_list", Capability.Read),
+        ToolDescriptor("linode_beta_list", Capability.Read),
+        ToolDescriptor("linode_database_instance_list", Capability.Read),
+        ToolDescriptor("linode_account_child_account_list", Capability.Read),
         ToolDescriptor("linode_account_user_create", Capability.Write),
-        ToolDescriptor("linode_account_service_transfers_list", Capability.Read),
+        ToolDescriptor("linode_account_service_transfer_list", Capability.Read),
         ToolDescriptor("linode_account_service_transfer_accept", Capability.Write),
-        ToolDescriptor("linode_account_events_list", Capability.Read),
+        ToolDescriptor("linode_account_event_list", Capability.Read),
         ToolDescriptor("linode_account_event_seen", Capability.Write),
         ToolDescriptor("linode_account_invoice_get", Capability.Read),
-        ToolDescriptor("linode_account_invoice_items_list", Capability.Read),
-        ToolDescriptor("linode_account_invoices_list", Capability.Read),
+        ToolDescriptor("linode_account_invoice_item_list", Capability.Read),
+        ToolDescriptor("linode_account_invoice_list", Capability.Read),
         ToolDescriptor("linode_account_payment_get", Capability.Read),
-        ToolDescriptor("linode_account_payment_methods_list", Capability.Read),
+        ToolDescriptor("linode_account_payment_method_list", Capability.Read),
         ToolDescriptor("linode_account_payment_create", Capability.Write),
         ToolDescriptor("linode_account_payment_method_delete", Capability.Destroy),
-        ToolDescriptor("linode_account_payments_list", Capability.Read),
+        ToolDescriptor("linode_account_payment_list", Capability.Read),
         ToolDescriptor("linode_account_service_transfer_create", Capability.Write),
         ToolDescriptor("linode_account_login_get", Capability.Read),
         ToolDescriptor("linode_account_user_delete", Capability.Destroy),
         ToolDescriptor("linode_account_user_get", Capability.Read),
         ToolDescriptor("linode_account_user_grants_get", Capability.Read),
-        ToolDescriptor("linode_account_logins_list", Capability.Read),
+        ToolDescriptor("linode_account_login_list", Capability.Read),
         ToolDescriptor("linode_account_maintenance_list", Capability.Read),
-        ToolDescriptor("linode_maintenance_policies_list", Capability.Read),
-        ToolDescriptor("linode_account_users_list", Capability.Read),
+        ToolDescriptor("linode_maintenance_policy_list", Capability.Read),
+        ToolDescriptor("linode_account_user_list", Capability.Read),
         ToolDescriptor("linode_account_settings_get", Capability.Read),
         ToolDescriptor("linode_account_settings_managed_enable", Capability.Write),
         ToolDescriptor("linode_managed_contact_create", Capability.Write),
         ToolDescriptor("linode_account_transfer_get", Capability.Read),
-        ToolDescriptor("linode_account_notifications_list", Capability.Read),
+        ToolDescriptor("linode_account_notification_list", Capability.Read),
         ToolDescriptor("linode_account_oauth_client_get", Capability.Read),
         ToolDescriptor("linode_account_payment_method_get", Capability.Read),
         ToolDescriptor("linode_account_payment_method_make_default", Capability.Write),
@@ -75,8 +75,8 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
             "linode_account_oauth_client_thumbnail_update", Capability.Write
         ),
         ToolDescriptor("linode_account_oauth_client_update", Capability.Write),
-        ToolDescriptor("linode_account_oauth_clients_list", Capability.Read),
-        ToolDescriptor("linode_account_oauth_client_reset_secret", Capability.Write),
+        ToolDescriptor("linode_account_oauth_client_list", Capability.Read),
+        ToolDescriptor("linode_account_oauth_client_secret_reset", Capability.Write),
         ToolDescriptor("linode_account_child_account_token_create", Capability.Write),
         ToolDescriptor("linode_account_oauth_client_create", Capability.Write),
         ToolDescriptor("linode_account_oauth_client_delete", Capability.Destroy),
@@ -88,10 +88,12 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Databases.
         ToolDescriptor("linode_database_engine_get", Capability.Read),
         ToolDescriptor("linode_database_type_get", Capability.Read),
-        ToolDescriptor("linode_database_cluster_create", Capability.Write),
-        ToolDescriptor("linode_database_mysql_credentials_reset", Capability.Write),
+        ToolDescriptor("linode_database_mysql_instance_create", Capability.Write),
         ToolDescriptor(
-            "linode_database_postgresql_credentials_reset", Capability.Write
+            "linode_database_mysql_instance_credentials_reset", Capability.Write
+        ),
+        ToolDescriptor(
+            "linode_database_postgresql_instance_credentials_reset", Capability.Write
         ),
         ToolDescriptor(
             "linode_database_mysql_instance_credentials_get", Capability.Write
@@ -101,7 +103,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_mysql_instance_resume", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_suspend", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_update", Capability.Write),
-        ToolDescriptor("linode_database_mysql_instances_list", Capability.Read),
+        ToolDescriptor("linode_database_mysql_instance_list", Capability.Read),
         ToolDescriptor(
             "linode_database_postgresql_instance_delete", Capability.Destroy
         ),
@@ -112,18 +114,18 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ),
         ToolDescriptor("linode_database_postgresql_instance_resume", Capability.Write),
         ToolDescriptor("linode_database_postgresql_instance_suspend", Capability.Write),
-        ToolDescriptor("linode_database_postgresql_instances_list", Capability.Read),
+        ToolDescriptor("linode_database_postgresql_instance_list", Capability.Read),
         # Compute reads + mutations.
-        ToolDescriptor("linode_instances_list", Capability.Read),
+        ToolDescriptor("linode_instance_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),
         ToolDescriptor("linode_instance_create", Capability.Write),
         ToolDescriptor("linode_instance_delete", Capability.Destroy),
         ToolDescriptor("linode_beta_get", Capability.Read),
-        ToolDescriptor("linode_regions_list", Capability.Read),
-        ToolDescriptor("linode_regions_availability_list", Capability.Read),
-        ToolDescriptor("linode_regions_availability_get", Capability.Read),
-        ToolDescriptor("linode_kernels_list", Capability.Read),
-        ToolDescriptor("linode_types_list", Capability.Read),
+        ToolDescriptor("linode_region_list", Capability.Read),
+        ToolDescriptor("linode_region_availability_list", Capability.Read),
+        ToolDescriptor("linode_region_availability_get", Capability.Read),
+        ToolDescriptor("linode_kernel_list", Capability.Read),
+        ToolDescriptor("linode_type_list", Capability.Read),
         ToolDescriptor("linode_type_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_config_get", Capability.Read),
         ToolDescriptor("linode_database_postgresql_config_get", Capability.Read),
@@ -133,97 +135,93 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_mysql_instance_ssl_get", Capability.Read),
         ToolDescriptor("linode_image_delete", Capability.Destroy),
         ToolDescriptor("linode_image_sharegroup_create", Capability.Write),
-        ToolDescriptor("linode_image_sharegroups_by_image_list", Capability.Read),
-        ToolDescriptor("linode_images_list", Capability.Read),
-        ToolDescriptor("linode_images_sharegroup_delete", Capability.Destroy),
-        ToolDescriptor("linode_images_sharegroup_image_delete", Capability.Destroy),
-        ToolDescriptor("linode_images_sharegroup_images_add", Capability.Write),
-        ToolDescriptor("linode_images_sharegroup_images_list", Capability.Read),
-        ToolDescriptor("linode_images_sharegroup_members_add", Capability.Write),
-        ToolDescriptor("linode_images_sharegroup_members_list", Capability.Read),
-        ToolDescriptor("linode_images_sharegroups_list", Capability.Read),
-        ToolDescriptor("linode_images_sharegroup_update", Capability.Write),
-        ToolDescriptor("linode_images_sharegroups_token_create", Capability.Write),
-        ToolDescriptor("linode_images_sharegroups_token_delete", Capability.Destroy),
-        ToolDescriptor("linode_images_sharegroups_token_get", Capability.Read),
-        ToolDescriptor(
-            "linode_images_sharegroups_token_sharegroup_get", Capability.Read
-        ),
-        ToolDescriptor(
-            "linode_images_sharegroups_token_sharegroup_images_list", Capability.Read
-        ),
-        ToolDescriptor("linode_images_sharegroups_token_update", Capability.Write),
-        ToolDescriptor("linode_images_sharegroups_tokens_list", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_by_image_list", Capability.Read),
+        ToolDescriptor("linode_image_list", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_delete", Capability.Destroy),
+        ToolDescriptor("linode_image_sharegroup_image_delete", Capability.Destroy),
+        ToolDescriptor("linode_image_sharegroup_image_add", Capability.Write),
+        ToolDescriptor("linode_image_sharegroup_image_list", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_member_add", Capability.Write),
+        ToolDescriptor("linode_image_sharegroup_member_list", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_list", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_update", Capability.Write),
+        ToolDescriptor("linode_image_sharegroup_token_create", Capability.Write),
+        ToolDescriptor("linode_image_sharegroup_token_delete", Capability.Destroy),
+        ToolDescriptor("linode_image_sharegroup_token_get", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_by_token_get", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_token_image_list", Capability.Read),
+        ToolDescriptor("linode_image_sharegroup_token_update", Capability.Write),
+        ToolDescriptor("linode_image_sharegroup_token_list", Capability.Read),
         ToolDescriptor("linode_stackscript_get", Capability.Read),
-        ToolDescriptor("linode_stackscripts_list", Capability.Read),
+        ToolDescriptor("linode_stackscript_list", Capability.Read),
         # Compute deep (backups, disks, ips).
-        ToolDescriptor("linode_instance_backups_list", Capability.Read),
+        ToolDescriptor("linode_instance_backup_list", Capability.Read),
         ToolDescriptor("linode_instance_backup_create", Capability.Write),
         ToolDescriptor("linode_instance_config_create", Capability.Write),
         ToolDescriptor("linode_instance_disk_create", Capability.Write),
         ToolDescriptor("linode_instance_ip_allocate", Capability.Write),
         # Block storage.
-        ToolDescriptor("linode_volumes_list", Capability.Read),
-        ToolDescriptor("linode_volume_types_list", Capability.Read),
+        ToolDescriptor("linode_volume_list", Capability.Read),
+        ToolDescriptor("linode_volume_type_list", Capability.Read),
         ToolDescriptor("linode_volume_clone", Capability.Write),
         ToolDescriptor("linode_volume_create", Capability.Write),
         ToolDescriptor("linode_volume_delete", Capability.Destroy),
         # Object storage.
-        ToolDescriptor("linode_object_storage_buckets_list", Capability.Read),
+        ToolDescriptor("linode_object_storage_bucket_list", Capability.Read),
         ToolDescriptor("linode_object_storage_bucket_create", Capability.Write),
         # Databases.
-        ToolDescriptor("linode_databases_engines_list", Capability.Read),
-        ToolDescriptor("linode_databases_types_list", Capability.Read),
+        ToolDescriptor("linode_database_engine_list", Capability.Read),
+        ToolDescriptor("linode_database_type_list", Capability.Read),
         # DNS.
-        ToolDescriptor("linode_domains_list", Capability.Read),
+        ToolDescriptor("linode_domain_list", Capability.Read),
         ToolDescriptor("linode_domain_clone", Capability.Write),
         ToolDescriptor("linode_domain_create", Capability.Write),
         ToolDescriptor("linode_domain_zone_file_get", Capability.Read),
         ToolDescriptor("linode_domain_import", Capability.Write),
         ToolDescriptor("linode_domain_record_create", Capability.Write),
         # Networking.
-        ToolDescriptor("linode_firewalls_list", Capability.Read),
+        ToolDescriptor("linode_firewall_list", Capability.Read),
         ToolDescriptor("linode_firewall_create", Capability.Write),
-        ToolDescriptor("linode_instance_firewalls_apply", Capability.Write),
+        ToolDescriptor("linode_instance_firewall_apply", Capability.Write),
         ToolDescriptor("linode_nodebalancer_create", Capability.Write),
         ToolDescriptor("linode_vlan_delete", Capability.Destroy),
         ToolDescriptor("linode_ipv6_range_create", Capability.Write),
         # LKE.
-        ToolDescriptor("linode_lke_clusters_list", Capability.Read),
+        ToolDescriptor("linode_lke_cluster_list", Capability.Read),
         ToolDescriptor("linode_lke_cluster_create", Capability.Write),
         ToolDescriptor("linode_lke_cluster_delete", Capability.Destroy),
         # VPCs.
-        ToolDescriptor("linode_vpcs_list", Capability.Read),
+        ToolDescriptor("linode_vpc_list", Capability.Read),
         ToolDescriptor("linode_vpc_create", Capability.Write),
         ToolDescriptor("linode_vpc_subnet_create", Capability.Write),
         # Security (SSH keys).
-        ToolDescriptor("linode_sshkeys_list", Capability.Read),
+        ToolDescriptor("linode_sshkey_list", Capability.Read),
         ToolDescriptor("linode_sshkey_get", Capability.Read),
         ToolDescriptor("linode_sshkey_create", Capability.Write),
         # Monitor.
         ToolDescriptor("linode_monitor_dashboard_get", Capability.Read),
-        ToolDescriptor("linode_monitor_alert_channels_list", Capability.Read),
-        ToolDescriptor("linode_monitor_alert_definitions_list", Capability.Read),
-        ToolDescriptor("linode_monitor_dashboards_list", Capability.Read),
-        ToolDescriptor("linode_monitor_service_dashboards_list", Capability.Read),
+        ToolDescriptor("linode_monitor_alert_channel_list", Capability.Read),
+        ToolDescriptor("linode_monitor_alert_definition_list", Capability.Read),
+        ToolDescriptor("linode_monitor_dashboard_list", Capability.Read),
+        ToolDescriptor("linode_monitor_service_dashboard_list", Capability.Read),
         ToolDescriptor("linode_monitor_service_get", Capability.Read),
-        ToolDescriptor("linode_monitor_services_list", Capability.Read),
+        ToolDescriptor("linode_monitor_service_list", Capability.Read),
+        ToolDescriptor("linode_monitor_service_alert_definition_list", Capability.Read),
         ToolDescriptor(
-            "linode_monitor_service_alert_definitions_list", Capability.Read
+            "linode_monitor_service_metric_definition_list", Capability.Read
         ),
+        ToolDescriptor("linode_monitor_service_metric_query", Capability.Read),
         ToolDescriptor(
-            "linode_monitor_service_metric_definitions_list", Capability.Read
+            "linode_monitor_service_alert_definition_update", Capability.Write
         ),
-        ToolDescriptor("linode_monitor_service_metrics_read", Capability.Read),
-        ToolDescriptor("linode_monitor_alert_definition_update", Capability.Write),
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
         ToolDescriptor(
             "linode_monitor_service_alert_definition_delete", Capability.Destroy
         ),
         ToolDescriptor("linode_profile_phone_number_delete", Capability.Write),
         ToolDescriptor("linode_profile_phone_number_verify", Capability.Write),
-        ToolDescriptor("linode_profile_security_questions_answer", Capability.Write),
-        ToolDescriptor("linode_profile_app_revoke", Capability.Destroy),
+        ToolDescriptor("linode_profile_security_question_answer", Capability.Write),
+        ToolDescriptor("linode_profile_app_delete", Capability.Destroy),
         ToolDescriptor("linode_profile_tfa_disable", Capability.Write),
         ToolDescriptor("linode_profile_tfa_enable", Capability.Write),
         ToolDescriptor("linode_profile_tfa_enable_confirm", Capability.Write),
@@ -372,10 +370,10 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
 
 def test_linode_kernels_list_requires_linodes_read_scope() -> None:
     """Kernels list requires the Linodes read token scope."""
-    assert required_scopes("linode_kernels_list", Capability.Read) == [
+    assert required_scopes("linode_kernel_list", Capability.Read) == [
         Scope.LinodesReadOnly
     ]
-    assert categories("linode_kernels_list") == ["compute"]
+    assert categories("linode_kernel_list") == ["compute"]
 
 
 def test_longview_tools_map_to_one_longview_category() -> None:
@@ -401,8 +399,8 @@ def test_managed_tools_are_account_scoped() -> None:
     assert required_scopes("linode_managed_credential_revoke", Capability.Destroy) == [
         Scope.AccountReadWrite
     ]
-    assert categories("linode_managed_credentials_list") == ["account"]
-    assert required_scopes("linode_managed_credentials_list", Capability.Read) == [
+    assert categories("linode_managed_credential_list") == ["account"]
+    assert required_scopes("linode_managed_credential_list", Capability.Read) == [
         Scope.AccountReadOnly
     ]
     assert categories("linode_managed_credential_update") == ["account"]
@@ -455,10 +453,10 @@ def test_managed_contact_delete_is_account_scoped() -> None:
 
 def test_database_tools_require_database_read_scope() -> None:
     """Managed Database tools require the database token scope."""
-    assert required_scopes("linode_database_instances_list", Capability.Read) == [
+    assert required_scopes("linode_database_instance_list", Capability.Read) == [
         Scope.DatabasesReadOnly
     ]
-    assert categories("linode_database_instances_list") == ["databases"]
+    assert categories("linode_database_instance_list") == ["databases"]
     assert required_scopes("linode_database_mysql_config_get", Capability.Read) == [
         Scope.DatabasesReadOnly
     ]
@@ -471,23 +469,27 @@ def test_database_tools_require_database_read_scope() -> None:
         "linode_database_postgresql_instance_create", Capability.Write
     ) == [Scope.DatabasesReadWrite]
     assert categories("linode_database_postgresql_instance_create") == ["databases"]
-    assert categories("linode_databases_types_list") == ["databases"]
+    assert categories("linode_database_type_list") == ["databases"]
     assert required_scopes(
         "linode_database_postgresql_instance_ssl_get", Capability.Read
     ) == [Scope.DatabasesReadOnly]
     assert categories("linode_database_postgresql_instance_ssl_get") == ["databases"]
-    assert required_scopes("linode_database_cluster_create", Capability.Write) == [
-        Scope.DatabasesReadWrite
+    assert required_scopes(
+        "linode_database_mysql_instance_create", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
+    assert categories("linode_database_mysql_instance_create") == ["databases"]
+    assert required_scopes(
+        "linode_database_mysql_instance_credentials_reset", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
+    assert categories("linode_database_mysql_instance_credentials_reset") == [
+        "databases"
     ]
-    assert categories("linode_database_cluster_create") == ["databases"]
     assert required_scopes(
-        "linode_database_mysql_credentials_reset", Capability.Write
+        "linode_database_postgresql_instance_credentials_reset", Capability.Write
     ) == [Scope.DatabasesReadWrite]
-    assert categories("linode_database_mysql_credentials_reset") == ["databases"]
-    assert required_scopes(
-        "linode_database_postgresql_credentials_reset", Capability.Write
-    ) == [Scope.DatabasesReadWrite]
-    assert categories("linode_database_postgresql_credentials_reset") == ["databases"]
+    assert categories("linode_database_postgresql_instance_credentials_reset") == [
+        "databases"
+    ]
     assert required_scopes(
         "linode_database_mysql_instance_delete", Capability.Destroy
     ) == [Scope.DatabasesReadWrite]
@@ -509,10 +511,10 @@ def test_database_tools_require_database_read_scope() -> None:
     ) == [Scope.DatabasesReadWrite]
     assert categories("linode_database_mysql_instance_resume") == ["databases"]
     assert categories("linode_database_postgresql_instance_resume") == ["databases"]
-    assert required_scopes("linode_database_mysql_instances_list", Capability.Read) == [
+    assert required_scopes("linode_database_mysql_instance_list", Capability.Read) == [
         Scope.DatabasesReadOnly
     ]
-    assert categories("linode_database_mysql_instances_list") == ["databases"]
+    assert categories("linode_database_mysql_instance_list") == ["databases"]
     assert required_scopes(
         "linode_database_postgresql_instance_patch", Capability.Write
     ) == [Scope.DatabasesReadWrite]
@@ -528,9 +530,9 @@ def test_database_tools_require_database_read_scope() -> None:
         "databases"
     ]
     assert required_scopes(
-        "linode_database_postgresql_instances_list", Capability.Read
+        "linode_database_postgresql_instance_list", Capability.Read
     ) == [Scope.DatabasesReadOnly]
-    assert categories("linode_database_postgresql_instances_list") == ["databases"]
+    assert categories("linode_database_postgresql_instance_list") == ["databases"]
     assert required_scopes(
         "linode_database_mysql_instance_patch", Capability.Write
     ) == [Scope.DatabasesReadWrite]
@@ -567,7 +569,7 @@ def test_account_service_transfer_delete_is_account_category() -> None:
 
 def test_profile_app_revoke_is_account_category() -> None:
     """OAuth app revoke is an account-profile destroy tool."""
-    assert categories("linode_profile_app_revoke") == ["account"]
+    assert categories("linode_profile_app_delete") == ["account"]
 
 
 def test_profile_phone_number_delete_is_account_category() -> None:
@@ -657,7 +659,7 @@ def test_database_tool_category() -> None:
     """Database tools map to the databases profile category."""
     assert categories("linode_database_engine_get") == ["databases"]
     assert categories("linode_database_type_get") == ["databases"]
-    assert categories("linode_database_cluster_create") == ["databases"]
+    assert categories("linode_database_mysql_instance_create") == ["databases"]
     assert categories("linode_database_postgresql_instance_create") == ["databases"]
 
 

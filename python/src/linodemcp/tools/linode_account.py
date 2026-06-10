@@ -237,10 +237,10 @@ _ACCOUNT_OAUTH_CLIENT_ID_PATTERN = re.compile(_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_T
 _USD_AMOUNT_PATTERN = re.compile(r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$")
 
 
-def create_linode_account_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account tool."""
+def create_linode_account_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_get tool."""
     return Tool(
-        name="linode_account",
+        name="linode_account_get",
         description=(
             "Retrieves the authenticated user's Linode account information "
             "including billing details and capabilities"
@@ -252,10 +252,10 @@ def create_linode_account_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account(
+async def handle_linode_account_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account tool request.
+    """Handle linode_account_get tool request.
 
     Args:
         arguments: EnvironmentArgs - environment (optional)
@@ -455,10 +455,10 @@ async def handle_linode_account_user_grants_update(
     )
 
 
-def create_linode_account_agreements_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_agreements_list tool."""
+def create_linode_account_agreement_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_agreement_list tool."""
     return Tool(
-        name="linode_account_agreements_list",
+        name="linode_account_agreement_list",
         description="Lists agreements on the Linode account.",
         inputSchema={
             "type": "object",
@@ -467,10 +467,10 @@ def create_linode_account_agreements_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_agreements_list(
+async def handle_linode_account_agreement_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_agreements_list tool request."""
+    """Handle linode_account_agreement_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_account_agreements()
@@ -478,10 +478,10 @@ async def handle_linode_account_agreements_list(
     return await execute_tool(cfg, arguments, "list Linode account agreements", _call)
 
 
-def create_linode_account_logins_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_logins_list tool."""
+def create_linode_account_login_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_login_list tool."""
     return Tool(
-        name="linode_account_logins_list",
+        name="linode_account_login_list",
         description="Lists user logins on the Linode account.",
         inputSchema={
             "type": "object",
@@ -503,10 +503,10 @@ def create_linode_account_logins_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_logins_list(
+async def handle_linode_account_login_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_logins_list tool request."""
+    """Handle linode_account_login_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -519,10 +519,10 @@ async def handle_linode_account_logins_list(
     return await execute_tool(cfg, arguments, "list Linode account logins", _call)
 
 
-def create_linode_account_users_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_users_list tool."""
+def create_linode_account_user_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_list tool."""
     return Tool(
-        name="linode_account_users_list",
+        name="linode_account_user_list",
         description="Lists users on the Linode account.",
         inputSchema={
             "type": "object",
@@ -544,10 +544,10 @@ def create_linode_account_users_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_users_list(
+async def handle_linode_account_user_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_users_list tool request."""
+    """Handle linode_account_user_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -679,10 +679,10 @@ async def handle_linode_account_maintenance_list(
     return await execute_tool(cfg, arguments, "list Linode account maintenance", _call)
 
 
-def create_linode_maintenance_policies_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_maintenance_policies_list tool."""
+def create_linode_maintenance_policy_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_maintenance_policy_list tool."""
     return Tool(
-        name="linode_maintenance_policies_list",
+        name="linode_maintenance_policy_list",
         description="Lists available maintenance policies.",
         inputSchema={
             "type": "object",
@@ -691,10 +691,10 @@ def create_linode_maintenance_policies_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_maintenance_policies_list(
+async def handle_linode_maintenance_policy_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_maintenance_policies_list tool request."""
+    """Handle linode_maintenance_policy_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.list_maintenance_policies()
@@ -702,10 +702,10 @@ async def handle_linode_maintenance_policies_list(
     return await execute_tool(cfg, arguments, "list Linode maintenance policies", _call)
 
 
-def create_linode_account_oauth_clients_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_oauth_clients_list tool."""
+def create_linode_account_oauth_client_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_list tool."""
     return Tool(
-        name="linode_account_oauth_clients_list",
+        name="linode_account_oauth_client_list",
         description="Lists OAuth clients on the Linode account.",
         inputSchema={
             "type": "object",
@@ -727,10 +727,10 @@ def create_linode_account_oauth_clients_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_oauth_clients_list(
+async def handle_linode_account_oauth_client_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_oauth_clients_list tool request."""
+    """Handle linode_account_oauth_client_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -926,10 +926,10 @@ async def handle_linode_account_oauth_client_thumbnail_update(
     )
 
 
-def create_linode_account_events_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_events_list tool."""
+def create_linode_account_event_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_event_list tool."""
     return Tool(
-        name="linode_account_events_list",
+        name="linode_account_event_list",
         description="Lists events on the Linode account.",
         inputSchema={
             "type": "object",
@@ -951,10 +951,10 @@ def create_linode_account_events_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_events_list(
+async def handle_linode_account_event_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_events_list tool request."""
+    """Handle linode_account_event_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -967,10 +967,10 @@ async def handle_linode_account_events_list(
     return await execute_tool(cfg, arguments, "list Linode account events", _call)
 
 
-def create_linode_account_invoices_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_invoices_list tool."""
+def create_linode_account_invoice_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_invoice_list tool."""
     return Tool(
-        name="linode_account_invoices_list",
+        name="linode_account_invoice_list",
         description="Lists invoices on the Linode account.",
         inputSchema={
             "type": "object",
@@ -992,10 +992,10 @@ def create_linode_account_invoices_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_invoices_list(
+async def handle_linode_account_invoice_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_invoices_list tool request."""
+    """Handle linode_account_invoice_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1008,10 +1008,10 @@ async def handle_linode_account_invoices_list(
     return await execute_tool(cfg, arguments, "list Linode account invoices", _call)
 
 
-def create_linode_account_payments_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_payments_list tool."""
+def create_linode_account_payment_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_list tool."""
     return Tool(
-        name="linode_account_payments_list",
+        name="linode_account_payment_list",
         description="Lists payments on the Linode account.",
         inputSchema={
             "type": "object",
@@ -1033,10 +1033,10 @@ def create_linode_account_payments_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_payments_list(
+async def handle_linode_account_payment_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_payments_list tool request."""
+    """Handle linode_account_payment_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1049,10 +1049,10 @@ async def handle_linode_account_payments_list(
     return await execute_tool(cfg, arguments, "list Linode account payments", _call)
 
 
-def create_linode_account_payment_methods_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_payment_methods_list tool."""
+def create_linode_account_payment_method_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_method_list tool."""
     return Tool(
-        name="linode_account_payment_methods_list",
+        name="linode_account_payment_method_list",
         description="Lists payment methods on the Linode account.",
         inputSchema={
             "type": "object",
@@ -1074,10 +1074,10 @@ def create_linode_account_payment_methods_list_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
-async def handle_linode_account_payment_methods_list(
+async def handle_linode_account_payment_method_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_payment_methods_list tool request."""
+    """Handle linode_account_payment_method_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1348,10 +1348,10 @@ async def handle_linode_account_payment_method_delete(
     )
 
 
-def create_linode_account_notifications_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_notifications_list tool."""
+def create_linode_account_notification_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_notification_list tool."""
     return Tool(
-        name="linode_account_notifications_list",
+        name="linode_account_notification_list",
         description="Lists notifications on the Linode account.",
         inputSchema={
             "type": "object",
@@ -1373,10 +1373,10 @@ def create_linode_account_notifications_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_notifications_list(
+async def handle_linode_account_notification_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_notifications_list tool request."""
+    """Handle linode_account_notification_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1391,10 +1391,10 @@ async def handle_linode_account_notifications_list(
     )
 
 
-def create_linode_account_invoice_items_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_invoice_items_list tool."""
+def create_linode_account_invoice_item_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_invoice_item_list tool."""
     return Tool(
-        name="linode_account_invoice_items_list",
+        name="linode_account_invoice_item_list",
         description="Lists items on a Linode account invoice.",
         inputSchema={
             "type": "object",
@@ -1422,10 +1422,10 @@ def create_linode_account_invoice_items_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_invoice_items_list(
+async def handle_linode_account_invoice_item_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_invoice_items_list tool request."""
+    """Handle linode_account_invoice_item_list tool request."""
     invoice_id = arguments.get("invoice_id")
     if (
         not isinstance(invoice_id, int)
@@ -1564,10 +1564,10 @@ _ACCOUNT_AGREEMENT_FIELDS = (
 )
 
 
-def create_linode_account_agreements_acknowledge_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_agreements_acknowledge tool."""
+def create_linode_account_agreement_acknowledge_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_agreement_acknowledge tool."""
     return Tool(
-        name="linode_account_agreements_acknowledge",
+        name="linode_account_agreement_acknowledge",
         description="Acknowledges agreements on the Linode account.",
         inputSchema={
             "type": "object",
@@ -1603,10 +1603,10 @@ def create_linode_account_agreements_acknowledge_tool() -> tuple[Tool, Capabilit
     ), Capability.Write
 
 
-async def handle_linode_account_agreements_acknowledge(
+async def handle_linode_account_agreement_acknowledge(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_agreements_acknowledge tool request."""
+    """Handle linode_account_agreement_acknowledge tool request."""
     agreements: dict[str, bool] = {}
     for field in _ACCOUNT_AGREEMENT_FIELDS:
         value = arguments.get(field)
@@ -1621,7 +1621,7 @@ async def handle_linode_account_agreements_acknowledge(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_account_agreements_acknowledge",
+            "linode_account_agreement_acknowledge",
             arguments.get("environment", ""),
             "POST",
             "/account/agreements",
@@ -2835,10 +2835,10 @@ async def handle_linode_account_oauth_client_get(
     )
 
 
-def create_linode_account_oauth_client_reset_secret_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_oauth_client_reset_secret tool."""
+def create_linode_account_oauth_client_secret_reset_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_secret_reset tool."""
     return Tool(
-        name="linode_account_oauth_client_reset_secret",
+        name="linode_account_oauth_client_secret_reset",
         description=(
             "Resets an OAuth client secret. The new secret is only shown once "
             "in the response. Pass dry_run=true to preview without resetting."
@@ -2883,17 +2883,17 @@ def _validated_oauth_client_id(
     return client_id, None
 
 
-async def handle_linode_account_oauth_client_reset_secret(
+async def handle_linode_account_oauth_client_secret_reset(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_oauth_client_reset_secret tool request."""
+    """Handle linode_account_oauth_client_secret_reset tool request."""
     client_id, error = _validated_oauth_client_id(arguments)
     if error is not None or client_id is None:
         return error_response(error or "client_id is required")
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_account_oauth_client_reset_secret",
+            "linode_account_oauth_client_secret_reset",
             arguments.get("environment", ""),
             "POST",
             f"/account/oauth-clients/{quote(client_id, safe='')}/reset-secret",
@@ -3466,10 +3466,10 @@ async def handle_linode_account_availability_get(
     )
 
 
-def create_linode_account_betas_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_betas_list tool."""
+def create_linode_account_beta_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_beta_list tool."""
     return Tool(
-        name="linode_account_betas_list",
+        name="linode_account_beta_list",
         description="Lists enrolled Beta programs for the account.",
         inputSchema={
             "type": "object",
@@ -3491,10 +3491,10 @@ def create_linode_account_betas_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_betas_list(
+async def handle_linode_account_beta_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_betas_list tool request."""
+    """Handle linode_account_beta_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -3507,10 +3507,10 @@ async def handle_linode_account_betas_list(
     return await execute_tool(cfg, arguments, "list Linode account betas", _call)
 
 
-def create_linode_betas_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_betas_list tool."""
+def create_linode_beta_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_beta_list tool."""
     return Tool(
-        name="linode_betas_list",
+        name="linode_beta_list",
         description="Lists available Beta programs.",
         inputSchema={
             "type": "object",
@@ -3532,10 +3532,10 @@ def create_linode_betas_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_betas_list(
+async def handle_linode_beta_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_betas_list tool request."""
+    """Handle linode_beta_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -3548,10 +3548,10 @@ async def handle_linode_betas_list(
     return await execute_tool(cfg, arguments, "list Linode beta programs", _call)
 
 
-def create_linode_account_child_accounts_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_child_accounts_list tool."""
+def create_linode_account_child_account_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_child_account_list tool."""
     return Tool(
-        name="linode_account_child_accounts_list",
+        name="linode_account_child_account_list",
         description="Lists child accounts for the Linode account.",
         inputSchema={
             "type": "object",
@@ -3573,10 +3573,10 @@ def create_linode_account_child_accounts_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_child_accounts_list(
+async def handle_linode_account_child_account_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_child_accounts_list tool request."""
+    """Handle linode_account_child_account_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -3591,10 +3591,10 @@ async def handle_linode_account_child_accounts_list(
     )
 
 
-def create_linode_account_service_transfers_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_service_transfers_list tool."""
+def create_linode_account_service_transfer_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_service_transfer_list tool."""
     return Tool(
-        name="linode_account_service_transfers_list",
+        name="linode_account_service_transfer_list",
         description="Lists service transfers for the Linode account.",
         inputSchema={
             "type": "object",
@@ -3616,10 +3616,10 @@ def create_linode_account_service_transfers_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-async def handle_linode_account_service_transfers_list(
+async def handle_linode_account_service_transfer_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_service_transfers_list tool request."""
+    """Handle linode_account_service_transfer_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -3716,10 +3716,10 @@ async def handle_linode_account_child_account_token_create(
     )
 
 
-def create_linode_account_tags_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_tags_list tool."""
+def create_linode_tag_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_tag_list tool."""
     return Tool(
-        name="linode_account_tags_list",
+        name="linode_tag_list",
         description="Lists tags on the Linode account.",
         inputSchema={
             "type": "object",
@@ -3741,10 +3741,10 @@ def create_linode_account_tags_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_tags_list(
+async def handle_linode_tag_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_tags_list tool request."""
+    """Handle linode_tag_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -3757,10 +3757,10 @@ async def handle_linode_account_tags_list(
     return await execute_tool(cfg, arguments, "list Linode account tags", _call)
 
 
-def create_linode_account_tag_objects_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_tag_objects_list tool."""
+def create_linode_tag_object_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_tag_object_list tool."""
     return Tool(
-        name="linode_account_tag_objects_list",
+        name="linode_tag_object_list",
         description="Lists objects assigned to a Linode account tag.",
         inputSchema={
             "type": "object",
@@ -3787,10 +3787,10 @@ def create_linode_account_tag_objects_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_tag_objects_list(
+async def handle_linode_tag_object_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_tag_objects_list tool request."""
+    """Handle linode_tag_object_list tool request."""
     tag_label = arguments.get("tag_label")
     if not isinstance(tag_label, str) or not tag_label.strip():
         return error_response("tag_label is required")
@@ -3809,10 +3809,10 @@ async def handle_linode_account_tag_objects_list(
     return await execute_tool(cfg, arguments, "list tagged objects", _call)
 
 
-def create_linode_account_tag_create_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_tag_create tool."""
+def create_linode_tag_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_tag_create tool."""
     return Tool(
-        name="linode_account_tag_create",
+        name="linode_tag_create",
         description="Creates a Linode account tag and optionally assigns resources.",
         inputSchema={
             "type": "object",
@@ -3870,16 +3870,16 @@ def _optional_int_list_argument(
     return values
 
 
-async def handle_linode_account_tag_create(
+async def handle_linode_tag_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_tag_create tool request."""
+    """Handle linode_tag_create tool request."""
     if is_dry_run(arguments):
         label = arguments.get("label")
         if not isinstance(label, str) or not label.strip():
             return error_response("label is required")
         return build_dry_run_response(
-            "linode_account_tag_create",
+            "linode_tag_create",
             arguments.get("environment", ""),
             "POST",
             "/tags",
@@ -3908,10 +3908,10 @@ async def handle_linode_account_tag_create(
     return await execute_tool(cfg, arguments, "create Linode tag", _call)
 
 
-def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_tag_delete tool."""
+def create_linode_tag_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_tag_delete tool."""
     return Tool(
-        name="linode_account_tag_delete",
+        name="linode_tag_delete",
         description="Deletes a Linode account tag by label." + TWO_STAGE_NOTE,
         inputSchema={
             "type": "object",
@@ -3951,7 +3951,7 @@ async def _account_tag_delete_two_stage(
     return await run_two_stage_destroy(
         cfg,
         arguments,
-        tool_name="linode_account_tag_delete",
+        tool_name="linode_tag_delete",
         method="DELETE",
         path=f"/tags/{tag_label}",
         fetch_state=_ts_fetch,
@@ -3960,10 +3960,10 @@ async def _account_tag_delete_two_stage(
     )
 
 
-async def handle_linode_account_tag_delete(
+async def handle_linode_tag_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_tag_delete tool request."""
+    """Handle linode_tag_delete tool request."""
     # Every branch needs a valid tag_label, so validate it once up front.
     tag_label_raw = arguments.get("tag_label")
     if not isinstance(tag_label_raw, str) or not tag_label_raw.strip():
@@ -3976,7 +3976,7 @@ async def handle_linode_account_tag_delete(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_account_tag_delete",
+            "linode_tag_delete",
             arguments.get("environment", ""),
             "DELETE",
             f"/tags/{tag_label}",
@@ -3993,10 +3993,10 @@ async def handle_linode_account_tag_delete(
     return await execute_tool(cfg, arguments, "delete Linode tag", _call)
 
 
-def create_linode_account_support_ticket_create_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_support_ticket_create tool."""
+def create_linode_support_ticket_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_create tool."""
     return Tool(
-        name="linode_account_support_ticket_create",
+        name="linode_support_ticket_create",
         description="Opens a Linode support ticket.",
         inputSchema={
             "type": "object",
@@ -4091,10 +4091,10 @@ def _attachment_file(arguments: dict[str, Any]) -> str | list[TextContent]:
     return file_path
 
 
-async def handle_linode_account_support_ticket_create(
+async def handle_linode_support_ticket_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_ticket_create tool request."""
+    """Handle linode_support_ticket_create tool request."""
     if is_dry_run(arguments):
         try:
             _required_string_argument(arguments, "summary")
@@ -4108,7 +4108,7 @@ async def handle_linode_account_support_ticket_create(
             else "A new support ticket will be opened."
         )
         return build_dry_run_response(
-            "linode_account_support_ticket_create",
+            "linode_support_ticket_create",
             arguments.get("environment", ""),
             "POST",
             "/support/tickets",
@@ -4193,10 +4193,10 @@ async def handle_linode_managed_credential_get(
     return await execute_tool(cfg, arguments, "get Linode Managed credential", _call)
 
 
-def create_linode_managed_contacts_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_contacts_list tool."""
+def create_linode_managed_contact_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_contact_list tool."""
     return Tool(
-        name="linode_managed_contacts_list",
+        name="linode_managed_contact_list",
         description="Lists Managed contacts on the Linode account.",
         inputSchema={
             "type": "object",
@@ -4218,10 +4218,10 @@ def create_linode_managed_contacts_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_managed_contacts_list(
+async def handle_linode_managed_contact_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_contacts_list tool request."""
+    """Handle linode_managed_contact_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -4234,10 +4234,10 @@ async def handle_linode_managed_contacts_list(
     return await execute_tool(cfg, arguments, "list Linode Managed contacts", _call)
 
 
-def create_linode_managed_issues_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_issues_list tool."""
+def create_linode_managed_issue_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_issue_list tool."""
     return Tool(
-        name="linode_managed_issues_list",
+        name="linode_managed_issue_list",
         description="Lists open Managed issues on the Linode account.",
         inputSchema={
             "type": "object",
@@ -4259,10 +4259,10 @@ def create_linode_managed_issues_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_managed_issues_list(
+async def handle_linode_managed_issue_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_issues_list tool request."""
+    """Handle linode_managed_issue_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -4275,10 +4275,10 @@ async def handle_linode_managed_issues_list(
     return await execute_tool(cfg, arguments, "list Linode Managed issues", _call)
 
 
-def create_linode_managed_credentials_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_credentials_list tool."""
+def create_linode_managed_credential_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_credential_list tool."""
     return Tool(
-        name="linode_managed_credentials_list",
+        name="linode_managed_credential_list",
         description="Lists Managed credentials on the Linode account.",
         inputSchema={
             "type": "object",
@@ -4300,10 +4300,10 @@ def create_linode_managed_credentials_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_managed_credentials_list(
+async def handle_linode_managed_credential_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_credentials_list tool request."""
+    """Handle linode_managed_credential_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -4592,10 +4592,10 @@ def create_linode_managed_linode_settings_update_tool() -> tuple[Tool, Capabilit
     ), Capability.Write
 
 
-def create_linode_managed_ssh_key_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_ssh_key_get tool."""
+def create_linode_managed_sshkey_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_sshkey_get tool."""
     return Tool(
-        name="linode_managed_ssh_key_get",
+        name="linode_managed_sshkey_get",
         description="Gets the Managed SSH public key for the Linode account.",
         inputSchema={
             "type": "object",
@@ -4647,10 +4647,10 @@ async def handle_linode_managed_linode_settings_update(
     )
 
 
-async def handle_linode_managed_ssh_key_get(
+async def handle_linode_managed_sshkey_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_ssh_key_get tool request."""
+    """Handle linode_managed_sshkey_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_managed_ssh_key()
@@ -5341,10 +5341,10 @@ async def handle_linode_managed_contact_delete(
     return await execute_tool(cfg, arguments, "delete Managed contact", _call)
 
 
-def create_linode_managed_contacts_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_contacts_update tool."""
+def create_linode_managed_contact_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_contact_update tool."""
     return Tool(
-        name="linode_managed_contacts_update",
+        name="linode_managed_contact_update",
         description=(
             "Updates a Managed contact. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
@@ -5495,10 +5495,10 @@ def _managed_contact_update_body(
     return body
 
 
-async def handle_linode_managed_contacts_update(
+async def handle_linode_managed_contact_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_contacts_update tool request."""
+    """Handle linode_managed_contact_update tool request."""
     contact_id = _managed_contact_id(arguments)
     if isinstance(contact_id, list):
         return contact_id
@@ -5510,7 +5510,7 @@ async def handle_linode_managed_contacts_update(
     dry_run_path = f"/managed/contacts/{quote(str(contact_id), safe='')}"
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_managed_contacts_update",
+            "linode_managed_contact_update",
             arguments.get("environment", ""),
             "PUT",
             dry_run_path,
@@ -5793,10 +5793,10 @@ async def handle_linode_managed_linode_settings_list(
     )
 
 
-def create_linode_managed_stats_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_stats tool."""
+def create_linode_managed_stats_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_stats_get tool."""
     return Tool(
-        name="linode_managed_stats",
+        name="linode_managed_stats_get",
         description="Lists Managed statistics from the last 24 hours.",
         inputSchema={
             "type": "object",
@@ -5805,10 +5805,10 @@ def create_linode_managed_stats_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_managed_stats(
+async def handle_linode_managed_stats_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_stats tool request."""
+    """Handle linode_managed_stats_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_managed_stats()
@@ -5850,10 +5850,10 @@ async def handle_linode_managed_linode_settings_get(
     return await execute_tool(cfg, arguments, "get Linode Managed settings", _call)
 
 
-def create_linode_managed_services_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_managed_services_list tool."""
+def create_linode_managed_service_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_service_list tool."""
     return Tool(
-        name="linode_managed_services_list",
+        name="linode_managed_service_list",
         description="Lists Managed services on the Linode account.",
         inputSchema={
             "type": "object",
@@ -5862,10 +5862,10 @@ def create_linode_managed_services_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_managed_services_list(
+async def handle_linode_managed_service_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_managed_services_list tool request."""
+    """Handle linode_managed_service_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.list_managed_services()
@@ -5947,10 +5947,10 @@ async def handle_linode_managed_contact_get(
     return await execute_tool(cfg, arguments, "get Linode Managed contact", _call)
 
 
-def create_linode_account_support_tickets_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_support_tickets_list tool."""
+def create_linode_support_ticket_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_list tool."""
     return Tool(
-        name="linode_account_support_tickets_list",
+        name="linode_support_ticket_list",
         description="Lists Linode support tickets.",
         inputSchema={
             "type": "object",
@@ -5972,10 +5972,10 @@ def create_linode_account_support_tickets_list_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
-async def handle_linode_account_support_tickets_list(
+async def handle_linode_support_ticket_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_tickets_list tool request."""
+    """Handle linode_support_ticket_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -5988,10 +5988,10 @@ async def handle_linode_account_support_tickets_list(
     return await execute_tool(cfg, arguments, "list Linode support tickets", _call)
 
 
-def create_linode_account_support_ticket_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_support_ticket_get tool."""
+def create_linode_support_ticket_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_get tool."""
     return Tool(
-        name="linode_account_support_ticket_get",
+        name="linode_support_ticket_get",
         description="Gets a Linode support ticket by ID.",
         inputSchema={
             "type": "object",
@@ -6008,10 +6008,10 @@ def create_linode_account_support_ticket_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_account_support_ticket_get(
+async def handle_linode_support_ticket_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_ticket_get tool request."""
+    """Handle linode_support_ticket_get tool request."""
     ticket_id = arguments.get("ticket_id")
     if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
         return error_response("ticket_id must be a positive integer")
@@ -6022,10 +6022,10 @@ async def handle_linode_account_support_ticket_get(
     return await execute_tool(cfg, arguments, "get Linode support ticket", _call)
 
 
-def create_linode_account_support_ticket_replies_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_support_ticket_replies_list tool."""
+def create_linode_support_ticket_reply_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_reply_list tool."""
     return Tool(
-        name="linode_account_support_ticket_replies_list",
+        name="linode_support_ticket_reply_list",
         description="Lists replies on a Linode support ticket.",
         inputSchema={
             "type": "object",
@@ -6053,10 +6053,10 @@ def create_linode_account_support_ticket_replies_list_tool() -> tuple[Tool, Capa
     ), Capability.Read
 
 
-async def handle_linode_account_support_ticket_replies_list(
+async def handle_linode_support_ticket_reply_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_ticket_replies_list tool request."""
+    """Handle linode_support_ticket_reply_list tool request."""
     ticket_id = arguments.get("ticket_id")
     if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
         return error_response("ticket_id must be a positive integer")
@@ -6077,10 +6077,10 @@ async def handle_linode_account_support_ticket_replies_list(
     )
 
 
-def create_linode_account_support_ticket_close_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_support_ticket_close tool."""
+def create_linode_support_ticket_close_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_close tool."""
     return Tool(
-        name="linode_account_support_ticket_close",
+        name="linode_support_ticket_close",
         description="Closes a Linode support ticket.",
         inputSchema={
             "type": "object",
@@ -6102,10 +6102,10 @@ def create_linode_account_support_ticket_close_tool() -> tuple[Tool, Capability]
     ), Capability.Write
 
 
-async def handle_linode_account_support_ticket_close(
+async def handle_linode_support_ticket_close(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_ticket_close tool request."""
+    """Handle linode_support_ticket_close tool request."""
     if is_dry_run(arguments):
         ticket = _support_ticket_id(arguments)
         if isinstance(ticket, list):
@@ -6121,7 +6121,7 @@ async def handle_linode_account_support_ticket_close(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_account_support_ticket_close",
+            "linode_support_ticket_close",
             "POST",
             f"/support/tickets/{tid}/close",
             _fetch,
@@ -6148,10 +6148,10 @@ async def handle_linode_account_support_ticket_close(
     return await execute_tool(cfg, arguments, "close Linode support ticket", _call)
 
 
-def create_linode_account_support_ticket_reply_create_tool() -> tuple[Tool, Capability]:
-    """Create the linode_account_support_ticket_reply_create tool."""
+def create_linode_support_ticket_reply_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_reply_create tool."""
     return Tool(
-        name="linode_account_support_ticket_reply_create",
+        name="linode_support_ticket_reply_create",
         description="Creates a reply on a Linode support ticket.",
         inputSchema={
             "type": "object",
@@ -6177,10 +6177,10 @@ def create_linode_account_support_ticket_reply_create_tool() -> tuple[Tool, Capa
     ), Capability.Write
 
 
-async def handle_linode_account_support_ticket_reply_create(
+async def handle_linode_support_ticket_reply_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_ticket_reply_create tool request."""
+    """Handle linode_support_ticket_reply_create tool request."""
     if is_dry_run(arguments):
         ticket = _support_ticket_id(arguments)
         if isinstance(ticket, list):
@@ -6198,7 +6198,7 @@ async def handle_linode_account_support_ticket_reply_create(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_account_support_ticket_reply_create",
+            "linode_support_ticket_reply_create",
             "POST",
             f"/support/tickets/{tid}/replies",
             _fetch,
@@ -6228,12 +6228,10 @@ async def handle_linode_account_support_ticket_reply_create(
     )
 
 
-def create_linode_account_support_ticket_attachment_create_tool() -> tuple[
-    Tool, Capability
-]:
-    """Create the linode_account_support_ticket_attachment_create tool."""
+def create_linode_support_ticket_attachment_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_support_ticket_attachment_create tool."""
     return Tool(
-        name="linode_account_support_ticket_attachment_create",
+        name="linode_support_ticket_attachment_create",
         description="Creates an attachment on a Linode support ticket.",
         inputSchema={
             "type": "object",
@@ -6259,10 +6257,10 @@ def create_linode_account_support_ticket_attachment_create_tool() -> tuple[
     ), Capability.Write
 
 
-async def handle_linode_account_support_ticket_attachment_create(
+async def handle_linode_support_ticket_attachment_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account_support_ticket_attachment_create tool request."""
+    """Handle linode_support_ticket_attachment_create tool request."""
     if is_dry_run(arguments):
         ticket = _support_ticket_id(arguments)
         if isinstance(ticket, list):
@@ -6282,7 +6280,7 @@ async def handle_linode_account_support_ticket_attachment_create(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_account_support_ticket_attachment_create",
+            "linode_support_ticket_attachment_create",
             "POST",
             f"/support/tickets/{tid}/attachments",
             _fetch,

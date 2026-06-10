@@ -123,7 +123,7 @@ delete tools are the core of that surface:
 
 A second wave of `CapDestroy` tools is wired the same way:
 
-`linode_database_instance_delete`, `linode_database_postgresql_instance_delete`,
+`linode_database_mysql_instance_delete`, `linode_database_postgresql_instance_delete`,
 `linode_firewall_device_delete`, `linode_image_sharegroup_delete`,
 `linode_image_sharegroup_token_delete`, `linode_instance_backups_cancel`,
 `linode_instance_ip_delete`, `linode_instance_password_reset`,

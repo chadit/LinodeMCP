@@ -471,7 +471,7 @@ func handleLinodeImageShareGroupCreateRequest(ctx context.Context, request *mcp.
 func NewLinodeImageShareGroupImagesAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_image_sharegroup_images_add",
+		"linode_image_sharegroup_image_add",
 		"Adds one or more private images to an image share group.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add images to.")),
@@ -497,7 +497,7 @@ func handleLinodeImageShareGroupImagesAddRequest(ctx context.Context, request *m
 			return mcp.NewToolResultError(imagesMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_images_add", httpMethodPost,
+		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_image_add", httpMethodPost,
 			fmt.Sprintf("/images/sharegroups/%d/images", shareGroupID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetImageShareGroup(ctx, shareGroupID)
@@ -723,7 +723,7 @@ func formatImageShareGroupImageUpdateError(err error) string {
 // NewLinodeImageShareGroupMembersAddTool creates a tool for adding members to an image share group.
 func NewLinodeImageShareGroupMembersAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroup_members_add",
+		"linode_image_sharegroup_member_add",
 		mcp.WithDescription("Adds members to an image share group using a membership token."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add members to.")),
@@ -753,7 +753,7 @@ func handleLinodeImageShareGroupMembersAddRequest(ctx context.Context, request *
 		}
 
 		// Fetch the parent share group, never the membership token material.
-		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_members_add", httpMethodPost,
+		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_member_add", httpMethodPost,
 			fmt.Sprintf("/images/sharegroups/%d/members", shareGroupID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetImageShareGroup(ctx, shareGroupID)
@@ -1058,7 +1058,7 @@ func NewLinodeImageShareGroupTokenUpdateTool(cfg *config.Config) (mcp.Tool, prof
 func NewLinodeImageShareGroupMemberUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_image_sharegroup_member_update",
+		"linode_image_sharegroup_member_token_update",
 		"Updates a member token label for an owned image share group.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric ID of the image share group.")),
@@ -1159,7 +1159,7 @@ func handleLinodeImageShareGroupMemberUpdateRequest(ctx context.Context, request
 		}
 
 		// Fetch the parent share group, never the member token secret.
-		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_member_update", "PUT",
+		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_member_token_update", "PUT",
 			fmt.Sprintf("/images/sharegroups/%d/members/%s", shareGroupID, tokenUUID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetImageShareGroup(ctx, shareGroupID)

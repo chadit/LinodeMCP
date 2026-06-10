@@ -666,10 +666,10 @@ async def handle_linode_firewall_rules_update(
     return await execute_tool(cfg, arguments, "update firewall rules", _call)
 
 
-def create_linode_instance_firewalls_apply_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_firewalls_apply tool."""
+def create_linode_instance_firewall_apply_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_firewall_apply tool."""
     return Tool(
-        name="linode_instance_firewalls_apply",
+        name="linode_instance_firewall_apply",
         description=(
             "Applies the currently assigned Cloud Firewalls to a Linode instance."
         ),
@@ -696,10 +696,10 @@ def create_linode_instance_firewalls_apply_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_instance_firewalls_apply(
+async def handle_linode_instance_firewall_apply(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_firewalls_apply tool request."""
+    """Handle linode_instance_firewall_apply tool request."""
     linode_id, error = _positive_int_argument(arguments, "linode_id")
     if error is not None:
         return error_response(error)
@@ -708,7 +708,7 @@ async def handle_linode_instance_firewalls_apply(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_instance_firewalls_apply",
+            "linode_instance_firewall_apply",
             arguments.get("environment", ""),
             "POST",
             f"/linode/instances/{linode_id_value}/firewalls/apply",

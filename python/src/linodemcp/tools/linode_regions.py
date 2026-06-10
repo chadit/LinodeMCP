@@ -18,10 +18,10 @@ def _is_region_id(value: str) -> bool:
     return bool(value) and all(c.isalnum() or c == "-" for c in value)
 
 
-def create_linode_regions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_regions_list tool."""
+def create_linode_region_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_region_list tool."""
     return Tool(
-        name="linode_regions_list",
+        name="linode_region_list",
         description=(
             "Lists all available Linode regions (datacenters) "
             "with optional filtering by country or capabilities"
@@ -51,10 +51,10 @@ def create_linode_regions_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_regions_list(
+async def handle_linode_region_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_regions_list tool request."""
+    """Handle linode_region_list tool request."""
     country_filter: str = arguments.get("country", "")
     capability_filter: str = arguments.get("capability", "")
 
@@ -104,10 +104,10 @@ async def handle_linode_regions_list(
     return await execute_tool(cfg, arguments, "retrieve Linode regions", _call)
 
 
-def create_linode_regions_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_regions_get tool."""
+def create_linode_region_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_region_get tool."""
     return Tool(
-        name="linode_regions_get",
+        name="linode_region_get",
         description="Gets details for a specific Linode region",
         inputSchema={
             "type": "object",
@@ -128,10 +128,10 @@ def create_linode_regions_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_regions_get(
+async def handle_linode_region_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_regions_get tool request."""
+    """Handle linode_region_get tool request."""
     region_id = str(arguments.get("region_id", "")).strip()
     if not region_id:
         return error_response("region_id is required")
@@ -158,10 +158,10 @@ async def handle_linode_regions_get(
     return await execute_tool(cfg, arguments, f"retrieve region {region_id}", _call)
 
 
-def create_linode_regions_availability_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_regions_availability_list tool."""
+def create_linode_region_availability_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_region_availability_list tool."""
     return Tool(
-        name="linode_regions_availability_list",
+        name="linode_region_availability_list",
         description="Lists compute instance type availability across Linode regions",
         inputSchema={
             "type": "object",
@@ -177,10 +177,10 @@ def create_linode_regions_availability_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_regions_availability_list(
+async def handle_linode_region_availability_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_regions_availability_list tool request."""
+    """Handle linode_region_availability_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         availability = await client.list_regions_availability()
@@ -192,10 +192,10 @@ async def handle_linode_regions_availability_list(
     return await execute_tool(cfg, arguments, "retrieve regions availability", _call)
 
 
-def create_linode_regions_availability_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_regions_availability_get tool."""
+def create_linode_region_availability_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_region_availability_get tool."""
     return Tool(
-        name="linode_regions_availability_get",
+        name="linode_region_availability_get",
         description=(
             "Gets compute instance type availability for a specific Linode region"
         ),
@@ -218,10 +218,10 @@ def create_linode_regions_availability_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_regions_availability_get(
+async def handle_linode_region_availability_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_regions_availability_get tool request."""
+    """Handle linode_region_availability_get tool request."""
     region_id = str(arguments.get("region_id", "")).strip()
     if not region_id:
         return error_response("region_id is required")

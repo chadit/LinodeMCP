@@ -13,11 +13,11 @@ from linodemcp.linode import Client, NetworkError, RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.tools import (
-    create_linode_instance_interfaces_history_list_tool as exported_create_tool,
+    create_linode_instance_interface_history_list_tool as exported_create_tool,
 )
 from linodemcp.tools.linode_instances import (
-    create_linode_instance_interfaces_history_list_tool,
-    handle_linode_instance_interfaces_history_list,
+    create_linode_instance_interface_history_list_tool,
+    handle_linode_instance_interface_history_list,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -138,9 +138,9 @@ async def test_retryable_client_list_instance_interface_history_uses_read_retry(
 
 
 def test_create_linode_instance_interfaces_history_list_tool_schema() -> None:
-    tool, capability = create_linode_instance_interfaces_history_list_tool()
+    tool, capability = create_linode_instance_interface_history_list_tool()
 
-    assert tool.name == "linode_instance_interfaces_history_list"
+    assert tool.name == "linode_instance_interface_history_list"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["linode_id"]
     assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
@@ -157,7 +157,7 @@ async def test_handle_linode_instance_interfaces_history_list_success(
         "results": 1,
     }
 
-    result = await handle_linode_instance_interfaces_history_list(
+    result = await handle_linode_instance_interface_history_list(
         {"linode_id": 123}, sample_config
     )
 
@@ -182,7 +182,7 @@ async def test_handle_linode_instance_interfaces_history_list_success(
 async def test_handle_linode_instance_interfaces_history_list_rejects_invalid_linode_id(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    result = await handle_linode_instance_interfaces_history_list(
+    result = await handle_linode_instance_interface_history_list(
         arguments, sample_config
     )
 
@@ -193,9 +193,9 @@ async def test_handle_linode_instance_interfaces_history_list_rejects_invalid_li
 def test_linode_instance_interfaces_history_list_registered_and_exported() -> None:
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_instance_interfaces_history_list"]
+    entry = entries["linode_instance_interface_history_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_instance_interfaces_history_list"
-    assert entry.handle_fn is handle_linode_instance_interfaces_history_list
-    assert exported_create_tool is create_linode_instance_interfaces_history_list_tool
-    assert "linode_instance_interfaces_history_list" in FEATURE_TOOLS_LIST
+    assert entry.tool.name == "linode_instance_interface_history_list"
+    assert entry.handle_fn is handle_linode_instance_interface_history_list
+    assert exported_create_tool is create_linode_instance_interface_history_list_tool
+    assert "linode_instance_interface_history_list" in FEATURE_TOOLS_LIST

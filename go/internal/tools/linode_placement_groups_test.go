@@ -32,8 +32,8 @@ func TestLinodePlacementGroupListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodePlacementGroupListTool(cfg)
 
-	if tool.Name != "linode_placement_groups_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_groups_list")
+	if tool.Name != "linode_placement_group_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_list")
 	}
 
 	if capability != profiles.CapRead {

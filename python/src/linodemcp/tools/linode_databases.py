@@ -468,10 +468,10 @@ def create_linode_database_type_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_database_cluster_create_tool() -> tuple[Tool, Capability]:
-    """Create the linode_database_cluster_create tool."""
+def create_linode_database_mysql_instance_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instance_create tool."""
     return Tool(
-        name="linode_database_cluster_create",
+        name="linode_database_mysql_instance_create",
         description=(
             "Creates or restores a MySQL Managed Database. WARNING: this can "
             "create a billable resource. Pass dry_run=true to preview without "
@@ -617,10 +617,10 @@ def create_linode_database_mysql_instance_delete_tool() -> tuple[Tool, Capabilit
     ), Capability.Destroy
 
 
-def create_linode_database_mysql_instances_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_database_mysql_instances_list tool."""
+def create_linode_database_mysql_instance_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instance_list tool."""
     return Tool(
-        name="linode_database_mysql_instances_list",
+        name="linode_database_mysql_instance_list",
         description="Lists MySQL Managed Database instances.",
         inputSchema={
             "type": "object",
@@ -642,10 +642,10 @@ def create_linode_database_mysql_instances_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
-def create_linode_database_postgresql_instances_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_database_postgresql_instances_list tool."""
+def create_linode_database_postgresql_instance_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_list tool."""
     return Tool(
-        name="linode_database_postgresql_instances_list",
+        name="linode_database_postgresql_instance_list",
         description="Lists PostgreSQL Managed Database instances.",
         inputSchema={
             "type": "object",
@@ -908,10 +908,10 @@ def create_linode_database_postgresql_instance_update_tool() -> tuple[Tool, Capa
     ), Capability.Write
 
 
-def create_linode_database_instances_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_database_instances_list tool."""
+def create_linode_database_instance_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_instance_list tool."""
     return Tool(
-        name="linode_database_instances_list",
+        name="linode_database_instance_list",
         description="Lists Managed Database instances.",
         inputSchema={
             "type": "object",
@@ -933,10 +933,10 @@ def create_linode_database_instances_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_databases_engines_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_databases_engines_list tool."""
+def create_linode_database_engine_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_engine_list tool."""
     return Tool(
-        name="linode_databases_engines_list",
+        name="linode_database_engine_list",
         description="Lists available Linode Managed Databases engines.",
         inputSchema={
             "type": "object",
@@ -958,10 +958,10 @@ def create_linode_databases_engines_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_databases_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_databases_types_list tool."""
+def create_linode_database_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_type_list tool."""
     return Tool(
-        name="linode_databases_types_list",
+        name="linode_database_type_list",
         description="Lists available Linode Managed Databases types.",
         inputSchema={
             "type": "object",
@@ -1029,10 +1029,12 @@ async def handle_linode_database_type_get(
     )
 
 
-def create_linode_database_mysql_credentials_reset_tool() -> tuple[Tool, Capability]:
-    """Create the linode_database_mysql_credentials_reset tool."""
+def create_linode_database_mysql_instance_credentials_reset_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_database_mysql_instance_credentials_reset tool."""
     return Tool(
-        name="linode_database_mysql_credentials_reset",
+        name="linode_database_mysql_instance_credentials_reset",
         description=(
             "Resets credentials for a MySQL Managed Database. Pass dry_run=true "
             "to preview without resetting credentials."
@@ -1059,12 +1061,12 @@ def create_linode_database_mysql_credentials_reset_tool() -> tuple[Tool, Capabil
     ), Capability.Write
 
 
-def create_linode_database_postgresql_credentials_reset_tool() -> tuple[
+def create_linode_database_postgresql_instance_credentials_reset_tool() -> tuple[
     Tool, Capability
 ]:
-    """Create the linode_database_postgresql_credentials_reset tool."""
+    """Create the linode_database_postgresql_instance_credentials_reset tool."""
     return Tool(
-        name="linode_database_postgresql_credentials_reset",
+        name="linode_database_postgresql_instance_credentials_reset",
         description=(
             "Resets credentials for a PostgreSQL Managed Database. Pass "
             "dry_run=true to preview without resetting credentials."
@@ -1340,17 +1342,17 @@ def create_linode_database_postgresql_config_get_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-async def handle_linode_database_cluster_create(
+async def handle_linode_database_mysql_instance_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_database_cluster_create tool request."""
+    """Handle linode_database_mysql_instance_create tool request."""
     payload, error = _build_mysql_database_payload(arguments)
     if error is not None or payload is None:
         return error_response(error or "invalid database create arguments")
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_database_cluster_create",
+            "linode_database_mysql_instance_create",
             arguments.get("environment", ""),
             "POST",
             "/databases/mysql/instances",
@@ -1471,10 +1473,10 @@ async def handle_linode_database_mysql_instance_delete(
     return await execute_tool(cfg, arguments, "delete MySQL Managed Database", _call)
 
 
-async def handle_linode_database_mysql_instances_list(
+async def handle_linode_database_mysql_instance_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_database_mysql_instances_list tool request."""
+    """Handle linode_database_mysql_instance_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1633,10 +1635,10 @@ async def handle_linode_database_postgresql_instance_update(
     )
 
 
-async def handle_linode_database_postgresql_instances_list(
+async def handle_linode_database_postgresql_instance_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_database_postgresql_instances_list tool request."""
+    """Handle linode_database_postgresql_instance_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1790,10 +1792,10 @@ async def handle_linode_database_postgresql_instance_patch(
     )
 
 
-async def handle_linode_database_instances_list(
+async def handle_linode_database_instance_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_database_instances_list tool request."""
+    """Handle linode_database_instance_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1806,10 +1808,10 @@ async def handle_linode_database_instances_list(
     return await execute_tool(cfg, arguments, "list Linode database instances", _call)
 
 
-async def handle_linode_database_mysql_credentials_reset(
+async def handle_linode_database_mysql_instance_credentials_reset(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_database_mysql_credentials_reset tool request."""
+    """Handle linode_database_mysql_instance_credentials_reset tool request."""
     try:
         instance_id = _required_positive_int_argument(arguments, "instance_id")
     except ValueError as exc:
@@ -1820,7 +1822,7 @@ async def handle_linode_database_mysql_credentials_reset(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_database_mysql_credentials_reset",
+            "linode_database_mysql_instance_credentials_reset",
             arguments.get("environment", ""),
             "POST",
             reset_path,
@@ -1847,10 +1849,10 @@ async def handle_linode_database_mysql_credentials_reset(
     )
 
 
-async def handle_linode_database_postgresql_credentials_reset(
+async def handle_linode_database_postgresql_instance_credentials_reset(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_database_postgresql_credentials_reset tool request."""
+    """Handle linode_database_postgresql_instance_credentials_reset tool request."""
     try:
         instance_id = _required_positive_int_argument(arguments, "instance_id")
     except ValueError as exc:
@@ -1863,7 +1865,7 @@ async def handle_linode_database_postgresql_credentials_reset(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_database_postgresql_credentials_reset",
+            "linode_database_postgresql_instance_credentials_reset",
             arguments.get("environment", ""),
             "POST",
             reset_path,
@@ -2126,10 +2128,10 @@ async def handle_linode_database_postgresql_config_get(
     )
 
 
-async def handle_linode_databases_engines_list(
+async def handle_linode_database_engine_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_databases_engines_list tool request."""
+    """Handle linode_database_engine_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -2151,10 +2153,10 @@ async def handle_linode_databases_engines_list(
     return await execute_tool(cfg, arguments, "list database engines", _call)
 
 
-async def handle_linode_databases_types_list(
+async def handle_linode_database_type_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_databases_types_list tool request."""
+    """Handle linode_database_type_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)

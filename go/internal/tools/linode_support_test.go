@@ -37,8 +37,8 @@ func TestLinodeSupportTicketsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeSupportTicketsTool(cfg)
 
-	if tool.Name != "linode_support_tickets" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_tickets")
+	if tool.Name != "linode_support_ticket_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_ticket_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -165,8 +165,8 @@ func TestLinodeSupportTicketsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_tickets") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_tickets")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -229,8 +229,8 @@ func TestLinodeSupportTicketRepliesToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeSupportTicketRepliesTool(cfg)
 
-	if tool.Name != "linode_support_ticket_replies" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_ticket_replies")
+	if tool.Name != "linode_support_ticket_reply_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_support_ticket_reply_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -365,8 +365,8 @@ func TestLinodeSupportTicketRepliesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_replies") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_replies")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_reply_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_reply_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

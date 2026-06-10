@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	supportTicketCreateToolName = "linode_account_support_ticket_create"
+	supportTicketCreateToolName = "linode_support_ticket_create"
 	supportTicketCreateSummary  = "Need help"
 	supportTicketCreateBody     = "Instance is unreachable"
 	errSummaryRequired          = "summary is required"
@@ -399,8 +399,8 @@ func TestLinodeAccountSupportTicketCreateToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_support_ticket_create") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_support_ticket_create")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_support_ticket_create") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_support_ticket_create")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

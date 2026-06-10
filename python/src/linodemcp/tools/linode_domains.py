@@ -12,10 +12,10 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_domains_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_domains_list tool."""
+def create_linode_domain_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_domain_list tool."""
     return Tool(
-        name="linode_domains_list",
+        name="linode_domain_list",
         description=(
             "Lists all domains managed by your Linode account. "
             "Can filter by domain name or type (master/slave)."
@@ -40,10 +40,10 @@ def create_linode_domains_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_domains_list(
+async def handle_linode_domain_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_domains_list tool request."""
+    """Handle linode_domain_list tool request."""
     domain_contains = arguments.get("domain_contains", "")
     type_filter = arguments.get("type", "")
 

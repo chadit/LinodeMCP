@@ -150,7 +150,15 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
     list per call so the data doesn't sit as module-level mutable.
     """
     return [
-        (("linode_account_", "linode_managed_"), _CAT_ACCOUNT),
+        (
+            (
+                "linode_account_",
+                "linode_managed_",
+                "linode_tag_",
+                "linode_support_ticket_",
+            ),
+            _CAT_ACCOUNT,
+        ),
         (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
         (("linode_lke_",), _CAT_LKE),
@@ -173,9 +181,9 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
                 "linode_instances_",
                 "linode_placement_group_",
                 "linode_placement_groups_",
-                "linode_regions_",
-                "linode_kernels_",
-                "linode_types_",
+                "linode_region_",
+                "linode_kernel_",
+                "linode_type_",
             ),
             _CAT_LINODES,
         ),
@@ -190,8 +198,8 @@ def _scope_category(tool_name: str) -> str | None:
     rather than getting shadowed by a broader rule.
     """
     if tool_name in (
-        "linode_profile",
-        "linode_account",
+        "linode_profile_get",
+        "linode_account_get",
         "linode_firewall_settings_get",
     ):
         return _CAT_ACCOUNT

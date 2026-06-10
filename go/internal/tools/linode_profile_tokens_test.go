@@ -35,8 +35,8 @@ func TestLinodeProfileTokensToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeProfileTokensTool(cfg)
 
-	if tool.Name != "linode_profile_tokens" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_tokens")
+	if tool.Name != "linode_profile_token_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_token_list")
 	}
 
 	if tool.Description == "" {
@@ -211,8 +211,8 @@ func TestLinodeProfileTokensToolUpstreamError(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_tokens") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_tokens")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_token_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_token_list")
 	}
 }
 

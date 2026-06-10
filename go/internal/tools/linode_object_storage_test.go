@@ -150,8 +150,8 @@ func TestLinodeObjectStorageBucketsListByRegionToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_object_storage_bucket_list_by_region" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_list_by_region")
+	if tool.Name != "linode_object_storage_bucket_by_region_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_by_region_list")
 	}
 
 	if tool.Description == "" {
@@ -418,8 +418,8 @@ func TestLinodeObjectStorageBucketContentsToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_object_storage_bucket_contents" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_contents")
+	if tool.Name != "linode_object_storage_bucket_object_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_object_list")
 	}
 
 	if tool.Description == "" {
@@ -927,8 +927,8 @@ func TestLinodeObjectStorageQuotasListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_object_storage_quotas_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_quotas_list")
+	if tool.Name != "linode_object_storage_quota_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_quota_list")
 	}
 
 	if tool.Description == "" {
@@ -1372,8 +1372,8 @@ func TestLinodeObjectStorageQuotaUsageToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_object_storage_quota_usage" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_quota_usage")
+	if tool.Name != "linode_object_storage_quota_usage_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_quota_usage_get")
 	}
 
 	if tool.Description == "" {
@@ -1517,8 +1517,8 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		if tool.Name != "linode_object_storage_transfer" {
-			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_transfer")
+		if tool.Name != "linode_object_storage_transfer_get" {
+			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_transfer_get")
 		}
 
 		if tool.Description == "" {
@@ -3634,8 +3634,8 @@ func TestLinodeObjectStoragePresignedURLToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_object_storage_presigned_url" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_presigned_url")
+	if tool.Name != "linode_object_storage_presigned_url_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_presigned_url_create")
 	}
 
 	if tool.Description == "" {

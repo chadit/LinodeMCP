@@ -13,8 +13,8 @@ from linodemcp.linode import Client, NetworkError, RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_instances import (
-    create_linode_instance_nodebalancers_list_tool,
-    handle_linode_instance_nodebalancers_list,
+    create_linode_instance_nodebalancer_list_tool,
+    handle_linode_instance_nodebalancer_list,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -117,9 +117,9 @@ async def test_retryable_list_instance_nodebalancers_uses_retry() -> None:
 
 
 def test_create_linode_instance_nodebalancers_list_tool_schema() -> None:
-    tool, capability = create_linode_instance_nodebalancers_list_tool()
+    tool, capability = create_linode_instance_nodebalancer_list_tool()
 
-    assert tool.name == "linode_instance_nodebalancers_list"
+    assert tool.name == "linode_instance_nodebalancer_list"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["linode_id"]
     linode_schema = tool.inputSchema["properties"]["linode_id"]
@@ -136,7 +136,7 @@ async def test_handle_linode_instance_nodebalancers_list_success(
         "page": 1,
     }
 
-    result = await handle_linode_instance_nodebalancers_list(
+    result = await handle_linode_instance_nodebalancer_list(
         {"linode_id": 123}, sample_config
     )
 
@@ -152,7 +152,7 @@ async def test_handle_linode_instance_nodebalancers_list_success(
 async def test_handle_linode_instance_nodebalancers_list_rejects_invalid_linode_id(
     linode_id: Any, sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    result = await handle_linode_instance_nodebalancers_list(
+    result = await handle_linode_instance_nodebalancer_list(
         {"linode_id": linode_id}, sample_config
     )
 
@@ -163,10 +163,10 @@ async def test_handle_linode_instance_nodebalancers_list_rejects_invalid_linode_
 def test_linode_instance_nodebalancers_list_registered() -> None:
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    entry = entries["linode_instance_nodebalancers_list"]
+    entry = entries["linode_instance_nodebalancer_list"]
     assert entry.capability is Capability.Read
-    assert entry.handle_fn is handle_linode_instance_nodebalancers_list
+    assert entry.handle_fn is handle_linode_instance_nodebalancer_list
 
 
 def test_linode_instance_nodebalancers_list_in_version_features() -> None:
-    assert "linode_instance_nodebalancers_list" in FEATURE_TOOLS_LIST.split(",")
+    assert "linode_instance_nodebalancer_list" in FEATURE_TOOLS_LIST.split(",")

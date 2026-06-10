@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	supportTicketAttachmentCreateToolName = "linode_account_support_ticket_attachment_create"
+	supportTicketAttachmentCreateToolName = "linode_support_ticket_attachment_create"
 	supportTicketAttachmentTicketID       = "ticket_id"
 	supportTicketAttachmentFileParam      = "file"
 	supportTicketAttachmentFile           = "attachment-content"

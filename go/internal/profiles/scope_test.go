@@ -72,7 +72,7 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 	}{
 		{
 			name:       "tags list",
-			toolName:   "linode_tags",
+			toolName:   "linode_tag_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
@@ -126,13 +126,13 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "longview plan get",
-			toolName:   "linode_longview_plan",
+			toolName:   "linode_longview_plan_get",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeLongviewReadOnly},
 		},
 		{
 			name:       "longview clients list",
-			toolName:   "linode_longview_clients",
+			toolName:   "linode_longview_client_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeLongviewReadOnly},
 		},
@@ -168,7 +168,7 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "nodebalancer node update",
-			toolName:   "linode_nodebalancer_node_update",
+			toolName:   "linode_nodebalancer_config_node_update",
 			capability: profiles.CapWrite,
 			want:       []profiles.Scope{profiles.ScopeNodeBalancersReadWrite},
 		},
@@ -192,13 +192,13 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "profile preferences read",
-			toolName:   "linode_profile_preferences",
+			toolName:   "linode_profile_preferences_get",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
 		{
 			name:       "profile security questions read",
-			toolName:   "linode_profile_security_questions",
+			toolName:   "linode_profile_security_question_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
@@ -210,7 +210,7 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "profile tokens read",
-			toolName:   "linode_profile_tokens",
+			toolName:   "linode_profile_token_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeTokensReadOnly},
 		},
@@ -222,13 +222,13 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "profile devices read",
-			toolName:   "linode_profile_devices",
+			toolName:   "linode_profile_device_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
 		{
 			name:       "profile security questions answer",
-			toolName:   "linode_profile_security_questions_answer",
+			toolName:   "linode_profile_security_question_answer",
 			capability: profiles.CapAdmin,
 			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
@@ -375,15 +375,15 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 		"linode_instance_interface_settings_update",
 		"linode_instance_interface_history_list",
 		toolLinodeInstanceConfigList,
-		"linode_instance_config_interfaces_list",
+		"linode_instance_config_interface_list",
 		"linode_instance_config_interface_get",
 		"linode_instance_config_interface_delete",
 		"linode_instance_config_create",
-		"linode_instance_config_interfaces_reorder",
+		"linode_instance_config_interface_reorder",
 		"linode_instance_config_delete",
 		"linode_instance_disk_create",
 		"linode_instance_ip_allocate",
-		"linode_instance_ip_update_rdns",
+		"linode_instance_ip_update",
 	}
 
 	for _, tool := range cases {

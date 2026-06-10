@@ -25,7 +25,7 @@ const (
 func NewLinodeNetworkingIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_networking_ips_list",
+		"linode_networking_ip_list",
 		"Lists IP addresses on the account. Set skip_ipv6_rdns to true to skip IPv6 reverse DNS lookups.",
 		[]mcp.ToolOption{
 			mcp.WithBoolean(paramSkipIPv6RDNS, mcp.Description("Skip IPv6 reverse DNS lookups (optional).")),
@@ -96,7 +96,7 @@ func handleLinodeNetworkingIPGetRequest(ctx context.Context, request *mcp.CallTo
 func NewLinodeNetworkingIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_networking_ip_update_rdns",
+		"linode_networking_ip_update",
 		"Updates reverse DNS for one account-level IP address.",
 		[]mcp.ToolOption{
 			mcp.WithString(paramAddress, mcp.Required(),
@@ -124,7 +124,7 @@ func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp
 			return mcp.NewToolResultError(rdnsMessage), nil
 		}
 
-		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_networking_ip_update_rdns", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_networking_ip_update", "PUT",
 			"/networking/ips/"+address,
 			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetNetworkingIP(ctx, address) },
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
@@ -240,7 +240,7 @@ func handleLinodeNetworkingIPAllocateRequest(ctx context.Context, request *mcp.C
 func NewLinodeNetworkingIPAssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_networking_ips_assign",
+		"linode_networking_ip_assign",
 		"Assigns IP addresses to Linodes in a region. WARNING: This changes IP ownership assignments.",
 		[]mcp.ToolOption{
 			mcp.WithString("region", mcp.Required(),
@@ -320,7 +320,7 @@ func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.Cal
 	req, validationMessage := networkingIPAssignRequestFromTool(request.GetArguments())
 
 	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
-		ToolName:       "linode_networking_ips_assign",
+		ToolName:       "linode_networking_ip_assign",
 		Path:           "/networking/ips/assign",
 		ConfirmMessage: "This assigns IP addresses to Linodes. Set confirm=true to proceed.",
 		SuccessMessage: "Networking IP assignments updated",
@@ -369,7 +369,7 @@ func handleLinodeNetworkingIPv4AssignRequest(ctx context.Context, request *mcp.C
 func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_networking_ips_share",
+		"linode_networking_ipv4_share",
 		"Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -390,7 +390,7 @@ func handleLinodeNetworkingIPShareRequest(ctx context.Context, request *mcp.Call
 	req, validationMessage := networkingIPShareRequestFromTool(request.GetArguments())
 
 	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
-		ToolName:       "linode_networking_ips_share",
+		ToolName:       "linode_networking_ipv4_share",
 		Path:           "/networking/ipv4/share",
 		ConfirmMessage: "This changes shared IP assignments. Set confirm=true to proceed.",
 		SuccessMessage: "Networking IP sharing updated",

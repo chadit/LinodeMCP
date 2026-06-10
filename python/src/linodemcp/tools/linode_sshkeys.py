@@ -62,10 +62,10 @@ async def handle_linode_sshkey_get(
     return await execute_tool(cfg, arguments, "retrieve SSH key", _call)
 
 
-def create_linode_sshkeys_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_sshkeys_list tool."""
+def create_linode_sshkey_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_sshkey_list tool."""
     return Tool(
-        name="linode_sshkeys_list",
+        name="linode_sshkey_list",
         description=(
             "Lists all SSH keys associated with your Linode profile. "
             "Can filter by label."
@@ -91,10 +91,10 @@ def create_linode_sshkeys_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_sshkeys_list(
+async def handle_linode_sshkey_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_sshkeys_list tool request."""
+    """Handle linode_sshkey_list tool request."""
     label_contains = arguments.get("label_contains", "")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:

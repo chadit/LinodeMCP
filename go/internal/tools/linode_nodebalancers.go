@@ -48,7 +48,7 @@ const (
 func NewLinodeNodeBalancerTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_nodebalancer_types",
+		"linode_nodebalancer_type_list",
 		"Lists available NodeBalancer types.",
 		nil,
 		handleLinodeNodeBalancerTypesRequest,
@@ -65,7 +65,7 @@ func handleLinodeNodeBalancerTypesRequest(ctx context.Context, request *mcp.Call
 
 	types, listFailureMessage := listNodeBalancerTypes(ctx, client)
 	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_nodebalancer_types: " + listFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_nodebalancer_type_list: " + listFailureMessage), nil
 	}
 
 	return MarshalToolResponse(types)
@@ -160,7 +160,7 @@ func NewLinodeNodeBalancerFirewallUpdateTool(cfg *config.Config) (mcp.Tool, prof
 func NewLinodeNodeBalancerVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_nodebalancer_vpc_list",
+		"linode_nodebalancer_vpc_config_list",
 		"Lists VPC configurations for a specific NodeBalancer by its ID.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
@@ -194,7 +194,7 @@ func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles
 func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_nodebalancer_config_nodes_list",
+		"linode_nodebalancer_config_node_list",
 		"Lists backend nodes for a specific NodeBalancer config.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
@@ -290,7 +290,7 @@ func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profil
 func NewLinodeNodeBalancerNodeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_nodebalancer_node_create",
+		"linode_nodebalancer_config_node_create",
 		"Creates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
@@ -317,7 +317,7 @@ func NewLinodeNodeBalancerNodeCreateTool(cfg *config.Config) (mcp.Tool, profiles
 func NewLinodeNodeBalancerNodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_nodebalancer_node_delete",
+		"linode_nodebalancer_config_node_delete",
 		"Deletes a backend node from a specific NodeBalancer config. WARNING: This removes the node from load balancing.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("nodebalancer_id", mcp.Required(),
@@ -340,7 +340,7 @@ func NewLinodeNodeBalancerNodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 func NewLinodeNodeBalancerNodeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_nodebalancer_node_update",
+		"linode_nodebalancer_config_node_update",
 		"Updates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without updating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
@@ -832,7 +832,7 @@ func handleLinodeNodeBalancerNodeUpdateRequest(ctx context.Context, request *mcp
 
 	if IsDryRun(request) {
 		return BuildDryRunResponse(
-			"linode_nodebalancer_node_update",
+			"linode_nodebalancer_config_node_update",
 			request.GetString(paramEnvironment, ""),
 			"PUT",
 			fmt.Sprintf("/nodebalancers/%d/configs/%d/nodes/%d", nodeBalancerID, configID, nodeID),
@@ -1281,7 +1281,7 @@ func handleLinodeNodeBalancerNodeCreateRequest(ctx context.Context, request *mcp
 
 	if IsDryRun(request) {
 		return BuildDryRunResponse(
-			"linode_nodebalancer_node_create",
+			"linode_nodebalancer_config_node_create",
 			request.GetString(paramEnvironment, ""),
 			"POST",
 			fmt.Sprintf("/nodebalancers/%d/configs/%d/nodes", nodeBalancerID, configID),
@@ -1346,7 +1346,7 @@ func handleLinodeNodeBalancerNodeDeleteRequest(ctx context.Context, request *mcp
 		}
 
 		return BuildDryRunResponse(
-			"linode_nodebalancer_node_delete",
+			"linode_nodebalancer_config_node_delete",
 			request.GetString(paramEnvironment, ""),
 			httpMethodDelete,
 			"/nodebalancers/"+strconv.Itoa(nodeBalancerID)+"/configs/"+strconv.Itoa(configID)+"/nodes/"+strconv.Itoa(nodeID),

@@ -17,7 +17,7 @@ import (
 const (
 	monitorAlertDefinitionsToolPath       = "/monitor/alert-definitions"
 	monitorAlertDefinitionsToolQuery      = "page=2&page_size=25"
-	monitorAlertDefinitionsToolName       = "linode_monitor_alert_definitions"
+	monitorAlertDefinitionsToolName       = "linode_monitor_alert_definition_list"
 	monitorAlertDefinitionToolID          = 20000
 	monitorAlertDefinitionToolLabel       = "High CPU Usage"
 	monitorAlertDefinitionToolType        = "alerts-definitions"

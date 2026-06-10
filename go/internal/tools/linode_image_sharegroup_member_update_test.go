@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	imageShareGroupMemberUpdateToolName = "linode_image_sharegroup_member_update"
+	imageShareGroupMemberUpdateToolName = "linode_image_sharegroup_member_token_update"
 	updatedShareGroupMemberLabel        = "Engineering - Backend"
 )
 

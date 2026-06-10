@@ -1071,10 +1071,10 @@ def _validate_expires_in(expires_in: int) -> str | None:
     return None
 
 
-def create_linode_object_storage_presigned_url_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_presigned_url tool."""
+def create_linode_object_storage_presigned_url_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_presigned_url_create tool."""
     return Tool(
-        name="linode_object_storage_presigned_url",
+        name="linode_object_storage_presigned_url_create",
         description=(
             "Generates a presigned URL for accessing an object"
             " in Object Storage. Use method=GET to create a"
@@ -1119,10 +1119,10 @@ def create_linode_object_storage_presigned_url_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
-async def handle_linode_object_storage_presigned_url(
+async def handle_linode_object_storage_presigned_url_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_presigned_url tool request."""
+    """Handle linode_object_storage_presigned_url_create tool request."""
     region = arguments.get("region", "")
     label = arguments.get("label", "")
     name = arguments.get("name", "")

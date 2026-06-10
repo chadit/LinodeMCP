@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def create_linode_monitor_services_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_services_list tool."""
+def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_service_list tool."""
     return Tool(
-        name="linode_monitor_services_list",
+        name="linode_monitor_service_list",
         description="Lists supported Linode Metrics service types.",
         inputSchema={
             "type": "object",
@@ -70,10 +70,10 @@ def create_linode_monitor_service_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_monitor_service_metrics_read_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_service_metrics_read tool."""
+def create_linode_monitor_service_metric_query_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_service_metric_query tool."""
     return Tool(
-        name="linode_monitor_service_metrics_read",
+        name="linode_monitor_service_metric_query",
         description=("Reads metrics for a Linode Metrics service entity type."),
         inputSchema={
             "type": "object",
@@ -97,10 +97,10 @@ def create_linode_monitor_service_metrics_read_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
-def create_linode_monitor_dashboards_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_dashboards_list tool."""
+def create_linode_monitor_dashboard_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_dashboard_list tool."""
     return Tool(
-        name="linode_monitor_dashboards_list",
+        name="linode_monitor_dashboard_list",
         description="Lists Linode Metrics dashboards.",
         inputSchema={
             "type": "object",
@@ -116,10 +116,10 @@ def create_linode_monitor_dashboards_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_monitor_alert_definitions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_alert_definitions_list tool."""
+def create_linode_monitor_alert_definition_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_alert_definition_list tool."""
     return Tool(
-        name="linode_monitor_alert_definitions_list",
+        name="linode_monitor_alert_definition_list",
         description="Lists Linode Metrics alert definitions.",
         inputSchema={
             "type": "object",
@@ -135,10 +135,10 @@ def create_linode_monitor_alert_definitions_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-def create_linode_monitor_alert_channels_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_alert_channels_list tool."""
+def create_linode_monitor_alert_channel_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_alert_channel_list tool."""
     return Tool(
-        name="linode_monitor_alert_channels_list",
+        name="linode_monitor_alert_channel_list",
         description="Lists Linode Metrics alert channels.",
         inputSchema={
             "type": "object",
@@ -154,10 +154,10 @@ def create_linode_monitor_alert_channels_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_monitor_service_dashboards_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_service_dashboards_list tool."""
+def create_linode_monitor_service_dashboard_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_service_dashboard_list tool."""
     return Tool(
-        name="linode_monitor_service_dashboards_list",
+        name="linode_monitor_service_dashboard_list",
         description=("Lists dashboards for a Linode Metrics service type."),
         inputSchema={
             "type": "object",
@@ -206,12 +206,12 @@ def create_linode_monitor_dashboard_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_monitor_service_metric_definitions_list_tool() -> tuple[
+def create_linode_monitor_service_metric_definition_list_tool() -> tuple[
     Tool, Capability
 ]:
-    """Create the linode_monitor_service_metric_definitions_list tool."""
+    """Create the linode_monitor_service_metric_definition_list tool."""
     return Tool(
-        name="linode_monitor_service_metric_definitions_list",
+        name="linode_monitor_service_metric_definition_list",
         description=("Lists metric definitions for a Linode Metrics service type."),
         inputSchema={
             "type": "object",
@@ -235,12 +235,12 @@ def create_linode_monitor_service_metric_definitions_list_tool() -> tuple[
     ), Capability.Read
 
 
-def create_linode_monitor_service_alert_definitions_list_tool() -> tuple[
+def create_linode_monitor_service_alert_definition_list_tool() -> tuple[
     Tool, Capability
 ]:
-    """Create the linode_monitor_service_alert_definitions_list tool."""
+    """Create the linode_monitor_service_alert_definition_list tool."""
     return Tool(
-        name="linode_monitor_service_alert_definitions_list",
+        name="linode_monitor_service_alert_definition_list",
         description=("Lists alert definitions for a Linode Metrics service type."),
         inputSchema={
             "type": "object",
@@ -460,10 +460,10 @@ def _validate_service_type(raw: object) -> str | None:
     return raw
 
 
-async def handle_linode_monitor_services_list(
+async def handle_linode_monitor_service_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_services_list tool request."""
+    """Handle linode_monitor_service_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_services()
@@ -502,10 +502,10 @@ async def handle_linode_monitor_service_get(
     return await execute_tool(cfg, arguments, "get monitor service", _call)
 
 
-async def handle_linode_monitor_service_metrics_read(
+async def handle_linode_monitor_service_metric_query(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_service_metrics_read tool request."""
+    """Handle linode_monitor_service_metric_query tool request."""
     service_type = _validate_service_type(arguments.get("service_type"))
     if service_type is None:
         return error_response(
@@ -524,10 +524,10 @@ async def handle_linode_monitor_service_metrics_read(
     return await execute_tool(cfg, arguments, "read monitor service metrics", _call)
 
 
-async def handle_linode_monitor_dashboards_list(
+async def handle_linode_monitor_dashboard_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_dashboards_list tool request."""
+    """Handle linode_monitor_dashboard_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_dashboards()
@@ -544,10 +544,10 @@ async def handle_linode_monitor_dashboards_list(
     return await execute_tool(cfg, arguments, "list monitor dashboards", _call)
 
 
-async def handle_linode_monitor_alert_definitions_list(
+async def handle_linode_monitor_alert_definition_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_alert_definitions_list tool request."""
+    """Handle linode_monitor_alert_definition_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_alert_definitions()
@@ -564,10 +564,10 @@ async def handle_linode_monitor_alert_definitions_list(
     return await execute_tool(cfg, arguments, "list monitor alert definitions", _call)
 
 
-async def handle_linode_monitor_alert_channels_list(
+async def handle_linode_monitor_alert_channel_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_alert_channels_list tool request."""
+    """Handle linode_monitor_alert_channel_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_alert_channels()
@@ -584,10 +584,10 @@ async def handle_linode_monitor_alert_channels_list(
     return await execute_tool(cfg, arguments, "list monitor alert channels", _call)
 
 
-async def handle_linode_monitor_service_dashboards_list(
+async def handle_linode_monitor_service_dashboard_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_service_dashboards_list tool request."""
+    """Handle linode_monitor_service_dashboard_list tool request."""
     service_type = _validate_service_type(arguments.get("service_type"))
     if service_type is None:
         return error_response(
@@ -628,10 +628,10 @@ async def handle_linode_monitor_dashboard_get(
     return await execute_tool(cfg, arguments, "get monitor dashboard", _call)
 
 
-async def handle_linode_monitor_service_metric_definitions_list(
+async def handle_linode_monitor_service_metric_definition_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_service_metric_definitions_list tool request."""
+    """Handle linode_monitor_service_metric_definition_list tool request."""
     service_type = _validate_service_type(arguments.get("service_type"))
     if service_type is None:
         return error_response(
@@ -654,10 +654,10 @@ async def handle_linode_monitor_service_metric_definitions_list(
     )
 
 
-async def handle_linode_monitor_service_alert_definitions_list(
+async def handle_linode_monitor_service_alert_definition_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_service_alert_definitions_list tool request."""
+    """Handle linode_monitor_service_alert_definition_list tool request."""
     service_type = _validate_service_type(arguments.get("service_type"))
     if service_type is None:
         return error_response(
@@ -944,10 +944,12 @@ async def handle_linode_monitor_service_alert_definition_delete(
     )
 
 
-def create_linode_monitor_alert_definition_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_monitor_alert_definition_update tool."""
+def create_linode_monitor_service_alert_definition_update_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_monitor_service_alert_definition_update tool."""
     return Tool(
-        name="linode_monitor_alert_definition_update",
+        name="linode_monitor_service_alert_definition_update",
         description=(
             "Updates a Linode Metrics alert definition for a service type."
             " Pass dry_run=true to preview without modifying."
@@ -1014,10 +1016,10 @@ def _validate_alert_target(
     return service_type, raw_alert_id, None
 
 
-async def handle_linode_monitor_alert_definition_update(
+async def handle_linode_monitor_service_alert_definition_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_monitor_alert_definition_update tool request."""
+    """Handle linode_monitor_service_alert_definition_update tool request."""
     service_type, alert_id, target_error = _validate_alert_target(arguments)
     if target_error is not None or service_type is None or alert_id is None:
         return error_response(target_error or "invalid alert target")
@@ -1032,7 +1034,7 @@ async def handle_linode_monitor_alert_definition_update(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_monitor_alert_definition_update",
+            "linode_monitor_service_alert_definition_update",
             "PUT",
             f"/monitor/services/{service_type}/alert-definitions/{alert_id}",
             _fetch,

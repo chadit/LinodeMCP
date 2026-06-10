@@ -32,10 +32,10 @@ def _optional_int_argument(
     return value
 
 
-def create_linode_kernels_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_kernels_list tool."""
+def create_linode_kernel_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_kernel_list tool."""
     return Tool(
-        name="linode_kernels_list",
+        name="linode_kernel_list",
         description="Lists available Linode kernels.",
         inputSchema={
             "type": "object",
@@ -57,10 +57,10 @@ def create_linode_kernels_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_kernels_list(
+async def handle_linode_kernel_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_kernels_list tool request."""
+    """Handle linode_kernel_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)

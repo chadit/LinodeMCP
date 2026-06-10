@@ -1257,8 +1257,8 @@ func TestLinodeInstanceConfigInterfacesReorderToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_config_interfaces_reorder" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_config_interfaces_reorder")
+	if tool.Name != "linode_instance_config_interface_reorder" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_config_interface_reorder")
 	}
 
 	if capability != profiles.CapWrite {

@@ -29,10 +29,10 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_domain_records_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_domain_records_list tool."""
+def create_linode_domain_record_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_domain_record_list tool."""
     return Tool(
-        name="linode_domain_records_list",
+        name="linode_domain_record_list",
         description=(
             "Lists all DNS records for a specific domain. "
             "Can filter by record type or name."
@@ -118,10 +118,10 @@ async def handle_linode_domain_record_get(
     return await execute_tool(cfg, arguments, "retrieve domain record", _call)
 
 
-async def handle_linode_domain_records_list(
+async def handle_linode_domain_record_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_domain_records_list tool request."""
+    """Handle linode_domain_record_list tool request."""
     domain_id = arguments.get("domain_id", 0)
     type_filter = arguments.get("type", "")
     name_contains = arguments.get("name_contains", "")

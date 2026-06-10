@@ -245,10 +245,10 @@ PII names deliberately left visible so audit reports stay readable: `email`, `fi
 
 Names dropped from the PII list after source review:
 
-- `country` collides with `linode_regions_list`'s filter input where `country=us` is a non-sensitive selector; the privacy benefit of redacting a region code did not justify losing audit signal on regions calls
+- `country` collides with `linode_region_list`'s filter input where `country=us` is a non-sensitive selector; the privacy benefit of redacting a region code did not justify losing audit signal on regions calls
 - `dob`, `credit_card`, `cvv`, `card_number` are not in any current tool schema; they can be added when payment-method tools land
 
-The bare name `address` is also not redacted: every current tool that uses it (e.g. `linode_instance_ips`, `linode_networking`, `linode_nodebalancers`) means a network or IP address, not a postal address.
+The bare name `address` is also not redacted: every current tool that uses it (the `linode_instance_ip_*`, `linode_networking_*`, and `linode_nodebalancer_*` families) means a network or IP address, not a postal address.
 
 ### Catch-net heuristic
 

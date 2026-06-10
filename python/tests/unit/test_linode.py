@@ -48,24 +48,24 @@ from linodemcp.linode import (
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_longview import handle_linode_longview_client_create
 from linodemcp.tools.linode_monitor_write import (
-    create_linode_monitor_alert_channels_list_tool,
-    create_linode_monitor_alert_definitions_list_tool,
+    create_linode_monitor_alert_channel_list_tool,
+    create_linode_monitor_alert_definition_list_tool,
     create_linode_monitor_dashboard_get_tool,
-    create_linode_monitor_dashboards_list_tool,
+    create_linode_monitor_dashboard_list_tool,
     create_linode_monitor_service_alert_definition_create_tool,
     create_linode_monitor_service_alert_definition_delete_tool,
     create_linode_monitor_service_alert_definition_get_tool,
-    create_linode_monitor_service_alert_definitions_list_tool,
-    create_linode_monitor_service_dashboards_list_tool,
-    handle_linode_monitor_alert_channels_list,
-    handle_linode_monitor_alert_definitions_list,
+    create_linode_monitor_service_alert_definition_list_tool,
+    create_linode_monitor_service_dashboard_list_tool,
+    handle_linode_monitor_alert_channel_list,
+    handle_linode_monitor_alert_definition_list,
     handle_linode_monitor_dashboard_get,
-    handle_linode_monitor_dashboards_list,
+    handle_linode_monitor_dashboard_list,
     handle_linode_monitor_service_alert_definition_create,
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
-    handle_linode_monitor_service_alert_definitions_list,
-    handle_linode_monitor_service_dashboards_list,
+    handle_linode_monitor_service_alert_definition_list,
+    handle_linode_monitor_service_dashboard_list,
 )
 
 
@@ -18925,8 +18925,8 @@ async def test_monitor_alert_definition_delete_rejects_non_positive_alert_id(
 
 async def test_monitor_global_alert_definitions_list_tool_success() -> None:
     """Global monitor alert definitions list is read-only and returns output."""
-    tool, capability = create_linode_monitor_alert_definitions_list_tool()
-    assert tool.name == "linode_monitor_alert_definitions_list"
+    tool, capability = create_linode_monitor_alert_definition_list_tool()
+    assert tool.name == "linode_monitor_alert_definition_list"
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
     assert "required" not in tool.inputSchema
@@ -18956,7 +18956,7 @@ async def test_monitor_global_alert_definitions_list_tool_success() -> None:
     ) as mock_list:
         mock_list.return_value = response_payload
 
-        result = await handle_linode_monitor_alert_definitions_list({}, cfg)
+        result = await handle_linode_monitor_alert_definition_list({}, cfg)
 
     mock_list.assert_awaited_once_with()
     assert "Monitor alert definitions listed" in result[0].text
@@ -18965,8 +18965,8 @@ async def test_monitor_global_alert_definitions_list_tool_success() -> None:
 
 async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> None:
     """Monitor alert channels list tool is read-only and returns handler output."""
-    tool, capability = create_linode_monitor_alert_channels_list_tool()
-    assert tool.name == "linode_monitor_alert_channels_list"
+    tool, capability = create_linode_monitor_alert_channel_list_tool()
+    assert tool.name == "linode_monitor_alert_channel_list"
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
@@ -18995,7 +18995,7 @@ async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> 
     ) as mock_list:
         mock_list.return_value = response_payload
 
-        result = await handle_linode_monitor_alert_channels_list({}, cfg)
+        result = await handle_linode_monitor_alert_channel_list({}, cfg)
 
     mock_list.assert_awaited_once_with()
     assert "Monitor alert channels listed" in result[0].text
@@ -19004,8 +19004,8 @@ async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> 
 
 async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() -> None:
     """Monitor alert definitions list tool is read-only and returns handler output."""
-    tool, capability = create_linode_monitor_service_alert_definitions_list_tool()
-    assert tool.name == "linode_monitor_service_alert_definitions_list"
+    tool, capability = create_linode_monitor_service_alert_definition_list_tool()
+    assert tool.name == "linode_monitor_service_alert_definition_list"
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["service_type"]
@@ -19035,7 +19035,7 @@ async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() 
     ) as mock_list:
         mock_list.return_value = response_payload
 
-        result = await handle_linode_monitor_service_alert_definitions_list(
+        result = await handle_linode_monitor_service_alert_definition_list(
             {"service_type": "dbaas"}, cfg
         )
 
@@ -19056,7 +19056,7 @@ async def test_monitor_alert_definitions_list_handler_rejects_malformed_service_
         "list_monitor_service_alert_definitions",
         new_callable=AsyncMock,
     ) as mock_list:
-        result = await handle_linode_monitor_service_alert_definitions_list(
+        result = await handle_linode_monitor_service_alert_definition_list(
             {"service_type": bad_service_type}, cfg
         )
 
@@ -19149,8 +19149,8 @@ async def test_monitor_dashboard_get_rejects_non_positive_dashboard_id(
 
 async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None:
     """Monitor dashboards list tool is read-only and returns handler output."""
-    tool, capability = create_linode_monitor_dashboards_list_tool()
-    assert tool.name == "linode_monitor_dashboards_list"
+    tool, capability = create_linode_monitor_dashboard_list_tool()
+    assert tool.name == "linode_monitor_dashboard_list"
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
     assert "required" not in tool.inputSchema
@@ -19180,7 +19180,7 @@ async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None
     ) as mock_list:
         mock_list.return_value = response_payload
 
-        result = await handle_linode_monitor_dashboards_list({}, cfg)
+        result = await handle_linode_monitor_dashboard_list({}, cfg)
 
     mock_list.assert_awaited_once_with()
     assert "Monitor dashboards listed" in result[0].text
@@ -19189,8 +19189,8 @@ async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None
 
 async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> None:
     """Monitor service dashboards tool is read-only and returns handler output."""
-    tool, capability = create_linode_monitor_service_dashboards_list_tool()
-    assert tool.name == "linode_monitor_service_dashboards_list"
+    tool, capability = create_linode_monitor_service_dashboard_list_tool()
+    assert tool.name == "linode_monitor_service_dashboard_list"
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["service_type"]
@@ -19220,7 +19220,7 @@ async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> N
     ) as mock_list:
         mock_list.return_value = response_payload
 
-        result = await handle_linode_monitor_service_dashboards_list(
+        result = await handle_linode_monitor_service_dashboard_list(
             {"service_type": "dbaas"}, cfg
         )
 
@@ -19241,7 +19241,7 @@ async def test_monitor_dashboards_handler_rejects_malformed_service_type(
         "list_monitor_service_dashboards",
         new_callable=AsyncMock,
     ) as mock_list:
-        result = await handle_linode_monitor_service_dashboards_list(
+        result = await handle_linode_monitor_service_dashboard_list(
             {"service_type": bad_service_type}, cfg
         )
 

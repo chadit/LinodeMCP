@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	toolProfileSecurityQuestionsAnswer = "linode_profile_security_questions_answer"
+	toolProfileSecurityQuestionsAnswer = "linode_profile_security_question_answer"
 	keySecurityQuestions               = "security_questions"
 	profileSecurityQuestionsPayload    = "answer payload"
 )

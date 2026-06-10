@@ -71,7 +71,7 @@ func handleInstanceFirewallsListRequest(ctx context.Context, request *mcp.CallTo
 func NewLinodeInstanceInterfaceFirewallsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_interface_firewalls_list",
+		"linode_instance_interface_firewall_list",
 		"Lists Cloud Firewalls assigned to a specific Linode interface.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -129,7 +129,7 @@ func formatInstanceInterfaceFirewallsListError(linodeID, interfaceID int, err er
 func NewLinodeInstanceFirewallsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_firewalls_update",
+		"linode_instance_firewall_update",
 		"Replaces the Cloud Firewall assignments for a Linode instance. Pass an empty firewall_ids list to remove all assignments.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -164,7 +164,7 @@ func handleInstanceFirewallsUpdateRequest(ctx context.Context, request *mcp.Call
 			return mcp.NewToolResultError(idsMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_firewalls_update", "PUT",
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_firewall_update", "PUT",
 			fmt.Sprintf("/linode/instances/%d/firewalls", linodeID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.ListInstanceFirewalls(ctx, linodeID, page, pageSize)

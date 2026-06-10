@@ -33,10 +33,10 @@ def _valid_bucket_label(label: str) -> bool:
     )
 
 
-def create_linode_object_storage_buckets_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_buckets_list tool."""
+def create_linode_object_storage_bucket_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_bucket_list tool."""
     return Tool(
-        name="linode_object_storage_buckets_list",
+        name="linode_object_storage_bucket_list",
         description="Lists all Object Storage buckets on your Linode account.",
         inputSchema={
             "type": "object",
@@ -52,10 +52,10 @@ def create_linode_object_storage_buckets_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_object_storage_buckets_list(
+async def handle_linode_object_storage_bucket_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_buckets_list tool request."""
+    """Handle linode_object_storage_bucket_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         buckets = await client.list_object_storage_buckets()
@@ -67,10 +67,12 @@ async def handle_linode_object_storage_buckets_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage buckets", _call)
 
 
-def create_linode_object_storage_buckets_region_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_buckets_region_list tool."""
+def create_linode_object_storage_bucket_by_region_list_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_object_storage_bucket_by_region_list tool."""
     return Tool(
-        name="linode_object_storage_buckets_region_list",
+        name="linode_object_storage_bucket_by_region_list",
         description="Lists Object Storage buckets in a region.",
         inputSchema={
             "type": "object",
@@ -93,10 +95,10 @@ def create_linode_object_storage_buckets_region_list_tool() -> tuple[Tool, Capab
     ), Capability.Read
 
 
-async def handle_linode_object_storage_buckets_region_list(
+async def handle_linode_object_storage_bucket_by_region_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_buckets_region_list tool request."""
+    """Handle linode_object_storage_bucket_by_region_list tool request."""
     region_id = arguments.get("region_id", "")
 
     if not region_id:
@@ -169,10 +171,10 @@ async def handle_linode_object_storage_bucket_get(
     return await execute_tool(cfg, arguments, "retrieve Object Storage bucket", _call)
 
 
-def create_linode_object_storage_bucket_contents_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_bucket_contents tool."""
+def create_linode_object_storage_bucket_object_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_bucket_object_list tool."""
     return Tool(
-        name="linode_object_storage_bucket_contents",
+        name="linode_object_storage_bucket_object_list",
         description=(
             "Lists objects in an Object Storage bucket. "
             "Supports pagination and filtering by prefix/delimiter."
@@ -255,10 +257,10 @@ def _build_bucket_filter_string(
     return ", ".join(filters) if filters else ""
 
 
-async def handle_linode_object_storage_bucket_contents(
+async def handle_linode_object_storage_bucket_object_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_bucket_contents tool request."""
+    """Handle linode_object_storage_bucket_object_list tool request."""
     region = arguments.get("region", "")
     label = arguments.get("label", "")
     prefix = arguments.get("prefix", "")
@@ -306,10 +308,10 @@ async def handle_linode_object_storage_bucket_contents(
 # intentionally not exposed. Use the regions API for supported region metadata.
 
 
-def create_linode_object_storage_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_types_list tool."""
+def create_linode_object_storage_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_type_list tool."""
     return Tool(
-        name="linode_object_storage_types_list",
+        name="linode_object_storage_type_list",
         description=(
             "Lists Object Storage pricing tiers and capabilities. Shows pricing, "
             "storage limits, and transfer allowances."
@@ -328,10 +330,10 @@ def create_linode_object_storage_types_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_object_storage_types_list(
+async def handle_linode_object_storage_type_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_types_list tool request."""
+    """Handle linode_object_storage_type_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         types = await client.list_object_storage_types()
@@ -343,10 +345,10 @@ async def handle_linode_object_storage_types_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage types", _call)
 
 
-def create_linode_object_storage_endpoints_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_endpoints_list tool."""
+def create_linode_object_storage_endpoint_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_endpoint_list tool."""
     return Tool(
-        name="linode_object_storage_endpoints_list",
+        name="linode_object_storage_endpoint_list",
         description="Lists Object Storage endpoints available to your account.",
         inputSchema={
             "type": "object",
@@ -362,10 +364,10 @@ def create_linode_object_storage_endpoints_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
-async def handle_linode_object_storage_endpoints_list(
+async def handle_linode_object_storage_endpoint_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_endpoints_list tool request."""
+    """Handle linode_object_storage_endpoint_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoints = await client.list_object_storage_endpoints()
@@ -382,10 +384,10 @@ async def handle_linode_object_storage_endpoints_list(
 # Phase 2: Read-Only Access Key & Transfer Tools
 
 
-def create_linode_object_storage_keys_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_keys_list tool."""
+def create_linode_object_storage_key_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_key_list tool."""
     return Tool(
-        name="linode_object_storage_keys_list",
+        name="linode_object_storage_key_list",
         description="Lists all Object Storage access keys for the authenticated user.",
         inputSchema={
             "type": "object",
@@ -401,10 +403,10 @@ def create_linode_object_storage_keys_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_object_storage_keys_list(
+async def handle_linode_object_storage_key_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_keys_list tool request."""
+    """Handle linode_object_storage_key_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         keys = await client.list_object_storage_keys()
@@ -455,10 +457,10 @@ async def handle_linode_object_storage_key_get(
     return await execute_tool(cfg, arguments, "retrieve Object Storage key", _call)
 
 
-def create_linode_object_storage_transfer_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_transfer tool."""
+def create_linode_object_storage_transfer_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_transfer_get tool."""
     return Tool(
-        name="linode_object_storage_transfer",
+        name="linode_object_storage_transfer_get",
         description=(
             "Gets Object Storage outbound data transfer usage for the current month."
         ),
@@ -476,10 +478,10 @@ def create_linode_object_storage_transfer_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_object_storage_transfer(
+async def handle_linode_object_storage_transfer_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_transfer tool request."""
+    """Handle linode_object_storage_transfer_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_object_storage_transfer()
@@ -489,10 +491,10 @@ async def handle_linode_object_storage_transfer(
     )
 
 
-def create_linode_object_storage_quotas_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_quotas_list tool."""
+def create_linode_object_storage_quota_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_quota_list tool."""
     return Tool(
-        name="linode_object_storage_quotas_list",
+        name="linode_object_storage_quota_list",
         description="Lists Object Storage quotas on your Linode account.",
         inputSchema={
             "type": "object",
@@ -508,10 +510,10 @@ def create_linode_object_storage_quotas_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_object_storage_quotas_list(
+async def handle_linode_object_storage_quota_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_quotas_list tool request."""
+    """Handle linode_object_storage_quota_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         quotas = await client.list_object_storage_quotas()
@@ -578,10 +580,10 @@ async def handle_linode_object_storage_quota_get(
     return await execute_tool(cfg, arguments, "retrieve Object Storage quota", _call)
 
 
-def create_linode_object_storage_quota_usage_tool() -> tuple[Tool, Capability]:
-    """Create the linode_object_storage_quota_usage tool."""
+def create_linode_object_storage_quota_usage_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_quota_usage_get tool."""
     return Tool(
-        name="linode_object_storage_quota_usage",
+        name="linode_object_storage_quota_usage_get",
         description="Gets Object Storage quota usage data by quota ID.",
         inputSchema={
             "type": "object",
@@ -615,10 +617,10 @@ def _parse_positive_int_argument(value: Any) -> int | None:
     return parsed
 
 
-async def handle_linode_object_storage_quota_usage(
+async def handle_linode_object_storage_quota_usage_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_object_storage_quota_usage tool request."""
+    """Handle linode_object_storage_quota_usage_get tool request."""
     obj_quota_id = _parse_positive_int_argument(arguments.get("obj_quota_id"))
     if obj_quota_id is None:
         return _error_response("obj_quota_id must be a positive integer")

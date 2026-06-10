@@ -27,7 +27,7 @@ const (
 func NewLinodeTagsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_tags",
+		"linode_tag_list",
 		"Lists tags visible to the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -74,7 +74,7 @@ func handleLinodeTagsRequest(ctx context.Context, request *mcp.CallToolRequest, 
 		return MarshalToolResponse(tags)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_tags: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_tag_list: " + listFailure.Error()), nil
 }
 
 func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

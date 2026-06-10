@@ -60,8 +60,8 @@ func TestLinodeAccountPromoCreditToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_account_promo_credit") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_account_promo_credit")
+		if !reflect.DeepEqual(body["tool"], "linode_account_promo_credit_add") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_promo_credit_add")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -113,8 +113,8 @@ func TestLinodeAccountAgreementsAcknowledgeToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_account_agreements_acknowledge") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_account_agreements_acknowledge")
+		if !reflect.DeepEqual(body["tool"], "linode_account_agreement_acknowledge") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_agreement_acknowledge")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -363,8 +363,8 @@ func TestLinodeAccountChildAccountTokenToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_account_child_account_token") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_account_child_account_token")
+		if !reflect.DeepEqual(body["tool"], "linode_account_child_account_token_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_child_account_token_create")
 		}
 
 		state, _ := body["current_state"].(map[string]any)

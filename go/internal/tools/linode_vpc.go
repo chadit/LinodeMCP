@@ -75,7 +75,7 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newListTool(
 		cfg,
-		"linode_vpc_ips_list",
+		"linode_vpc_ip_all_list",
 		"Lists all IP addresses across all VPCs",
 		func(ctx context.Context, client *linode.Client) ([]linode.VPCIP, error) {
 			return client.ListVPCIPs(ctx)

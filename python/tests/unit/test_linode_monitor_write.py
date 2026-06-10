@@ -21,9 +21,9 @@ def _text(result: list[Any]) -> str:
 
 def test_update_alert_definition_tool_schema_requires_confirm() -> None:
     tool, capability = (
-        monitor_write.create_linode_monitor_alert_definition_update_tool()
+        monitor_write.create_linode_monitor_service_alert_definition_update_tool()
     )
-    assert tool.name == "linode_monitor_alert_definition_update"
+    assert tool.name == "linode_monitor_service_alert_definition_update"
     assert capability.name == "Write"
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -41,7 +41,7 @@ async def test_update_alert_definition_requires_explicit_boolean_confirm(
     arguments: dict[str, Any] = {"service_type": "linode", "alert_id": 42}
     if confirm is not None:
         arguments["confirm"] = confirm
-    result = await monitor_write.handle_linode_monitor_alert_definition_update(
+    result = await monitor_write.handle_linode_monitor_service_alert_definition_update(
         arguments, cast("Any", object())
     )
     assert "confirm=true" in _text(result)
@@ -56,7 +56,7 @@ async def test_update_alert_definition_rejects_malformed_service_type(
         raise AssertionError("execute_tool should not be called")
 
     monkeypatch.setattr(monitor_write, "execute_tool", fake_execute_tool)
-    result = await monitor_write.handle_linode_monitor_alert_definition_update(
+    result = await monitor_write.handle_linode_monitor_service_alert_definition_update(
         {"service_type": service_type, "alert_id": 42, "confirm": True},
         cast("Any", object()),
     )
@@ -72,7 +72,7 @@ async def test_update_alert_definition_rejects_invalid_alert_id(
         raise AssertionError("execute_tool should not be called")
 
     monkeypatch.setattr(monitor_write, "execute_tool", fake_execute_tool)
-    result = await monitor_write.handle_linode_monitor_alert_definition_update(
+    result = await monitor_write.handle_linode_monitor_service_alert_definition_update(
         {"service_type": "linode", "alert_id": alert_id, "confirm": True},
         cast("Any", object()),
     )
@@ -100,7 +100,7 @@ async def test_update_alert_definition_rejects_empty_update_payload(
         raise AssertionError("execute_tool should not be called")
 
     monkeypatch.setattr(monitor_write, "execute_tool", fake_execute_tool)
-    result = await monitor_write.handle_linode_monitor_alert_definition_update(
+    result = await monitor_write.handle_linode_monitor_service_alert_definition_update(
         arguments,
         cast("Any", object()),
     )
@@ -121,7 +121,7 @@ async def test_update_alert_definition_calls_client_once_without_retry(
         return [type("Text", (), {"text": str(payload)})()]
 
     monkeypatch.setattr(monitor_write, "execute_tool", fake_execute_tool)
-    result = await monitor_write.handle_linode_monitor_alert_definition_update(
+    result = await monitor_write.handle_linode_monitor_service_alert_definition_update(
         {
             "service_type": "linode",
             "alert_id": 42,

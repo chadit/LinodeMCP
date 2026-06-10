@@ -18,7 +18,7 @@ const (
 	monitorDashboardsToolPath       = "/monitor/dashboards"
 	monitorDashboardToolPath        = "/monitor/dashboards/30000"
 	monitorDashboardsToolQuery      = "page=2&page_size=25"
-	monitorDashboardsToolName       = "linode_monitor_dashboards"
+	monitorDashboardsToolName       = "linode_monitor_dashboard_list"
 	monitorDashboardGetToolName     = "linode_monitor_dashboard_get"
 	monitorDashboardIDParam         = "dashboard_id"
 	monitorDashboardIDPositiveError = "dashboard_id must be a positive integer"

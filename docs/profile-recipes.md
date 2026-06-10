@@ -49,7 +49,6 @@ profiles:
     allowed_tools:
       - "linode_domain_*"
       - "linode_domain_record_*"
-      - "linode_domains_*"
     denied_tools: []
     allowed_environments: ["*"]
     required_token_scopes:
@@ -57,7 +56,7 @@ profiles:
     allow_yolo: false
 ```
 
-This profile leans on the registration filter: the listed wildcards pick up `linode_domain_create`, `linode_domain_update`, `linode_domain_delete`, plus the per-record CRUD. The read tools (`linode_domains_list`, `linode_domain_get`) are also covered. Since the wildcards don't include anything outside the DNS surface, the AI cannot see compute or networking tools at all under this profile.
+This profile leans on the registration filter: the listed wildcards pick up `linode_domain_create`, `linode_domain_update`, `linode_domain_delete`, plus the per-record CRUD. The read tools (`linode_domain_list`, `linode_domain_get`) are also covered. Since the wildcards don't include anything outside the DNS surface, the AI cannot see compute or networking tools at all under this profile.
 
 To add read-everywhere on top, the builder approach (next recipe) is cleaner than maintaining a hand-rolled list.
 
@@ -126,11 +125,9 @@ profiles:
     description: "Compute admin restricted to the dev environment"
     allowed_tools:
       - "linode_instance_*"
-      - "linode_instances_*"
-      - "linode_regions_*"
-      - "linode_types_*"
-      - "linode_images_*"
-      - "linode_stackscripts_*"
+      - "linode_region_*"
+      - "linode_type_*"
+      - "linode_image_*"
       - "linode_stackscript_*"
     denied_tools: []
     allowed_environments: ["dev"]

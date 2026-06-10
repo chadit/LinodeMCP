@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	monitorServicesToolName                     = "linode_monitor_services"
+	monitorServicesToolName                     = "linode_monitor_service_list"
 	monitorServiceGetToolName                   = "linode_monitor_service_get"
-	monitorServiceMetricDefinitionsToolName     = "linode_monitor_service_metric_definitions"
-	monitorServiceAlertDefinitionsToolName      = "linode_monitor_service_alert_definitions"
-	monitorServiceDashboardsToolName            = "linode_monitor_service_dashboards"
-	monitorServiceMetricsToolName               = "linode_monitor_service_metrics"
+	monitorServiceMetricDefinitionsToolName     = "linode_monitor_service_metric_definition_list"
+	monitorServiceAlertDefinitionsToolName      = "linode_monitor_service_alert_definition_list"
+	monitorServiceDashboardsToolName            = "linode_monitor_service_dashboard_list"
+	monitorServiceMetricsToolName               = "linode_monitor_service_metric_query"
 	monitorServiceCreateToolName                = "linode_monitor_service_" + "token_create"
 	monitorServiceAlertDefinitionCreateToolName = "linode_monitor_service_alert_definition_create"
 	monitorServiceAlertDefinitionGetToolName    = "linode_monitor_service_alert_definition_get"
@@ -797,7 +797,7 @@ func createMonitorServiceAlertDefinition(ctx context.Context, client *linode.Cli
 func NewLinodeMonitorDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_monitor_dashboards",
+		"linode_monitor_dashboard_list",
 		"Lists monitoring dashboards available to the user.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -822,7 +822,7 @@ func handleLinodeMonitorDashboardsRequest(ctx context.Context, request *mcp.Call
 
 	dashboards, listFailureMessage := listMonitorDashboards(ctx, client, page, pageSize)
 	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_monitor_dashboards: " + listFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_monitor_dashboard_list: " + listFailureMessage), nil
 	}
 
 	return MarshalToolResponse(dashboards)
@@ -900,7 +900,7 @@ func getMonitorDashboard(ctx context.Context, client *linode.Client, dashboardID
 func NewLinodeMonitorAlertDefinitionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_monitor_alert_definitions",
+		"linode_monitor_alert_definition_list",
 		"Lists monitoring alert definitions available to the user.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -925,7 +925,7 @@ func handleLinodeMonitorAlertDefinitionsRequest(ctx context.Context, request *mc
 
 	definitions, listFailureMessage := listMonitorAlertDefinitions(ctx, client, page, pageSize)
 	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_monitor_alert_definitions: " + listFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_monitor_alert_definition_list: " + listFailureMessage), nil
 	}
 
 	return MarshalToolResponse(definitions)
@@ -960,7 +960,7 @@ func monitorAlertDefinitionsPaginationFromTool(request *mcp.CallToolRequest) (in
 func NewLinodeMonitorAlertChannelsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_monitor_alert_channels",
+		"linode_monitor_alert_channel_list",
 		"Lists monitoring alert channels available to the user.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -985,7 +985,7 @@ func handleLinodeMonitorAlertChannelsRequest(ctx context.Context, request *mcp.C
 
 	channels, listFailureMessage := listMonitorAlertChannels(ctx, client, page, pageSize)
 	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_monitor_alert_channels: " + listFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_monitor_alert_channel_list: " + listFailureMessage), nil
 	}
 
 	return MarshalToolResponse(channels)

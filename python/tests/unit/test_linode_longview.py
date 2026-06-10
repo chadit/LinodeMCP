@@ -198,18 +198,18 @@ def test_longview_plan_get_tool_schema() -> None:
 
 
 def test_longview_types_list_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_types_list_tool()
+    tool, capability = linode_longview.create_linode_longview_type_list_tool()
 
-    assert tool.name == "linode_longview_types_list"
+    assert tool.name == "linode_longview_type_list"
     assert capability is Capability.Read
     assert "environment" in tool.inputSchema["properties"]
     assert "required" not in tool.inputSchema
 
 
 def test_longview_clients_list_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_clients_list_tool()
+    tool, capability = linode_longview.create_linode_longview_client_list_tool()
 
-    assert tool.name == "linode_longview_clients_list"
+    assert tool.name == "linode_longview_client_list"
     assert capability is Capability.Read
     properties = tool.inputSchema["properties"]
     assert properties["page"]["minimum"] == 1
@@ -232,7 +232,7 @@ async def test_longview_clients_list_handler_calls_client_with_pagination(
         return [type("Text", (), {"text": str(payload)})()]
 
     monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_clients_list(
+    result = await linode_longview.handle_linode_longview_client_list(
         {"page": 2, "page_size": 50}, cast("Any", object())
     )
 
@@ -241,9 +241,9 @@ async def test_longview_clients_list_handler_calls_client_with_pagination(
 
 
 def test_longview_subscriptions_list_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_subscriptions_list_tool()
+    tool, capability = linode_longview.create_linode_longview_subscription_list_tool()
 
-    assert tool.name == "linode_longview_subscriptions_list"
+    assert tool.name == "linode_longview_subscription_list"
     assert capability is Capability.Read
     properties = tool.inputSchema["properties"]
     assert properties["page"]["minimum"] == 1
@@ -266,7 +266,7 @@ async def test_longview_subscriptions_list_handler_calls_client_with_pagination(
         return [type("Text", (), {"text": str(payload)})()]
 
     monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_subscriptions_list(
+    result = await linode_longview.handle_linode_longview_subscription_list(
         {"page": 2, "page_size": 50}, cast("Any", object())
     )
 
@@ -292,7 +292,7 @@ async def test_longview_subscriptions_list_handler_rejects_invalid_pagination(
         raise AssertionError("execute_tool should not be called")
 
     monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_subscriptions_list(
+    result = await linode_longview.handle_linode_longview_subscription_list(
         arguments, cast("Any", object())
     )
 
@@ -313,7 +313,7 @@ async def test_longview_types_list_handler_calls_client(
         return [type("Text", (), {"text": str(payload)})()]
 
     monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_types_list(
+    result = await linode_longview.handle_linode_longview_type_list(
         {}, cast("Any", object())
     )
 
@@ -361,7 +361,7 @@ async def test_longview_clients_list_handler_rejects_invalid_pagination(
         raise AssertionError("execute_tool should not be called")
 
     monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_clients_list(
+    result = await linode_longview.handle_linode_longview_client_list(
         arguments, cast("Any", object())
     )
 

@@ -796,7 +796,7 @@ func formatListInstanceInterfaceHistoryError(linodeID int, err error) string {
 func NewLinodeInterfacesUpgradeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_interfaces_upgrade",
+		"linode_instance_interface_upgrade",
 		"Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: Setting dry_run=false irreversibly changes instance network configuration.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -878,7 +878,7 @@ func formatUpgradeLinodeInterfacesError(linodeID int, err error) string {
 func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_interfaces_list",
+		"linode_instance_interface_list",
 		"Lists interfaces assigned to a specific Linode instance.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),

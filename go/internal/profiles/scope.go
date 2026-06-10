@@ -157,9 +157,9 @@ func RequiredScopes(toolName string, capability Capability) []Scope {
 // being shadowed by a more general linode_instance_ rule.
 func scopeCategory(toolName string) string {
 	switch toolName {
-	case "linode_tags", "linode_tag_delete", "linode_profile", "linode_profile_preferences", "linode_profile_preferences_update", "linode_profile_security_questions", "linode_profile_security_questions_answer", "linode_profile_tfa_enable", "linode_profile_tfa_enable_confirm", "linode_profile_phone_number_send", "linode_profile_phone_number_delete", "linode_profile_phone_number_verify", "linode_profile_tfa_disable", "linode_profile_devices", "linode_account":
+	case "linode_tag_list", "linode_tag_delete", "linode_profile_get", "linode_profile_preferences_get", "linode_profile_preferences_update", "linode_profile_security_question_list", "linode_profile_security_question_answer", "linode_profile_tfa_enable", "linode_profile_tfa_enable_confirm", "linode_profile_phone_number_send", "linode_profile_phone_number_delete", "linode_profile_phone_number_verify", "linode_profile_tfa_disable", "linode_profile_device_list", "linode_account_get":
 		return categoryAccount
-	case "linode_profile_tokens", "linode_profile_token_delete", "linode_profile_token_update":
+	case "linode_profile_token_list", "linode_profile_token_delete", "linode_profile_token_update":
 		return categoryTokens
 	}
 

@@ -1071,8 +1071,8 @@ func TestLinodeDatabaseInstanceListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceListTool(cfg)
 
-	if tool.Name != "linode_database_instance_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_list")
+	if tool.Name != "linode_database_mysql_instance_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_list")
 	}
 
 	if tool.Description == "" {
@@ -1511,8 +1511,8 @@ func TestLinodeDatabaseInstanceGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
 
-	if tool.Name != "linode_database_instance_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_get")
+	if tool.Name != "linode_database_mysql_instance_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_get")
 	}
 
 	if tool.Description == "" {
@@ -1911,8 +1911,8 @@ func TestLinodeDatabaseInstanceSSLGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
 
-	if tool.Name != "linode_database_instance_ssl_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_ssl_get")
+	if tool.Name != "linode_database_mysql_instance_ssl_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_ssl_get")
 	}
 
 	if tool.Description == "" {
@@ -2331,8 +2331,8 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
 
-	if tool.Name != "linode_database_instance_credentials_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_credentials_get")
+	if tool.Name != "linode_database_mysql_instance_credentials_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_credentials_get")
 	}
 
 	if tool.Description == "" {
@@ -2542,8 +2542,8 @@ func TestLinodeDatabaseInstanceCredentialsResetToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
 
-	if tool.Name != "linode_database_instance_credentials_reset" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_credentials_reset")
+	if tool.Name != "linode_database_mysql_instance_credentials_reset" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_credentials_reset")
 	}
 
 	if tool.Description == "" {
@@ -3068,8 +3068,8 @@ func TestLinodeDatabaseInstanceCreateToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
 
-	if tool.Name != "linode_database_instance_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_create")
+	if tool.Name != "linode_database_mysql_instance_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_create")
 	}
 
 	if tool.Description == "" {
@@ -3599,8 +3599,8 @@ func TestLinodeDatabaseInstanceUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
 
-	if tool.Name != "linode_database_instance_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_update")
+	if tool.Name != "linode_database_mysql_instance_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_update")
 	}
 
 	if tool.Description == "" {
@@ -4183,8 +4183,8 @@ func TestLinodeDatabaseInstanceDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
 
-	if tool.Name != "linode_database_instance_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_delete")
+	if tool.Name != "linode_database_mysql_instance_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_delete")
 	}
 
 	if tool.Description == "" {
@@ -4412,8 +4412,8 @@ func TestLinodeDatabaseInstanceDeleteToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "linode_database_instance_delete failed") {
-		t.Errorf("textContent.Text does not contain %v", "linode_database_instance_delete failed")
+	if !strings.Contains(textContent.Text, "linode_database_mysql_instance_delete failed") {
+		t.Errorf("textContent.Text does not contain %v", "linode_database_mysql_instance_delete failed")
 	}
 }
 
@@ -4488,8 +4488,8 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunPreviewWithoutMutating(t *testing
 		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
 	}
 
-	if !reflect.DeepEqual(body["tool"], "linode_database_instance_delete") {
-		t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_delete")
+	if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_delete") {
+		t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_delete")
 	}
 
 	would, _ := body["would_execute"].(map[string]any)
@@ -4875,8 +4875,8 @@ func TestLinodeDatabaseInstancePatchToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
 
-	if tool.Name != "linode_database_instance_patch" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_patch")
+	if tool.Name != "linode_database_mysql_instance_patch" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_patch")
 	}
 
 	if tool.Description == "" {
@@ -5115,8 +5115,8 @@ func TestLinodeDatabaseInstanceSuspendToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
 
-	if tool.Name != "linode_database_instance_suspend" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_suspend")
+	if tool.Name != "linode_database_mysql_instance_suspend" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_suspend")
 	}
 
 	if tool.Description == "" {
@@ -5355,8 +5355,8 @@ func TestLinodeDatabaseInstanceResumeToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
 
-	if tool.Name != "linode_database_instance_resume" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_resume")
+	if tool.Name != "linode_database_mysql_instance_resume" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_resume")
 	}
 
 	if tool.Description == "" {

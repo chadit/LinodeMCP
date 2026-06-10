@@ -67,8 +67,9 @@ def redaction_fields_pii() -> list[str]:
     first_name, last_name, company. Contact-specific name/email tool
     args use contact_name/contact_email and are redacted. Names dropped
     after source review because they collide with non-PII tool args: country
-    (linode_regions_list filter), address (network/IP address in
-    linode_instance_ips, linode_networking, linode_nodebalancers).
+    (linode_region_list filter), address (network/IP address in the
+    linode_instance_ip_*, linode_networking_*, and linode_nodebalancer_*
+    families).
 
     Cross-language parity is asserted by the unit test that mirrors
     this list against the Go equivalent at

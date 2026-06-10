@@ -62,10 +62,10 @@ def _parse_instance_id(
         return _error_response("instance_id must be a valid integer")
 
 
-def create_linode_instance_ips_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_ips_list tool."""
+def create_linode_instance_ip_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_ip_list tool."""
     return Tool(
-        name="linode_instance_ips_list",
+        name="linode_instance_ip_list",
         description=("Lists IP addresses for a Linode instance"),
         inputSchema={
             "type": "object",
@@ -78,10 +78,10 @@ def create_linode_instance_ips_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_instance_ips_list(
+async def handle_linode_instance_ip_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_ips_list tool request."""
+    """Handle linode_instance_ip_list tool request."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -431,10 +431,10 @@ async def handle_linode_networking_ip_update(
     return await execute_tool(cfg, arguments, "update networking IP", _call)
 
 
-def create_linode_networking_ips_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_networking_ips_list tool."""
+def create_linode_networking_ip_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_list tool."""
     return Tool(
-        name="linode_networking_ips_list",
+        name="linode_networking_ip_list",
         description="Lists public IP addresses on the account",
         inputSchema={
             "type": "object",
@@ -451,10 +451,10 @@ def create_linode_networking_ips_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_networking_ips_list(
+async def handle_linode_networking_ip_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_networking_ips_list tool request."""
+    """Handle linode_networking_ip_list tool request."""
     skip_ipv6_rdns = arguments.get("skip_ipv6_rdns", False)
     if not isinstance(skip_ipv6_rdns, bool):
         return _error_response("skip_ipv6_rdns must be a boolean")

@@ -186,10 +186,10 @@ def _firewalls_update_fields(
     return firewall_ids, page, page_size
 
 
-def create_linode_nodebalancer_firewalls_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_firewalls_update tool."""
+def create_linode_nodebalancer_firewall_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_firewall_update tool."""
     return Tool(
-        name="linode_nodebalancer_firewalls_update",
+        name="linode_nodebalancer_firewall_update",
         description=(
             "Replaces the firewall assignments for a NodeBalancer. "
             "Pass an empty firewall_ids list to remove all assignments."
@@ -234,10 +234,10 @@ def create_linode_nodebalancer_firewalls_update_tool() -> tuple[Tool, Capability
     ), Capability.Write
 
 
-async def handle_linode_nodebalancer_firewalls_update(
+async def handle_linode_nodebalancer_firewall_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_firewalls_update tool request."""
+    """Handle linode_nodebalancer_firewall_update tool request."""
     if is_dry_run(arguments):
         nb_id = _positive_int_argument(arguments, "nodebalancer_id")
         if nb_id is None:
@@ -250,7 +250,7 @@ async def handle_linode_nodebalancer_firewalls_update(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_nodebalancer_firewalls_update",
+            "linode_nodebalancer_firewall_update",
             "PUT",
             f"/nodebalancers/{nb}/firewalls",
             _fetch,

@@ -27,24 +27,24 @@ def test_meta_returns_empty() -> None:
 @pytest.mark.parametrize(
     ("tool_name", "capability", "expected"),
     [
-        ("linode_instances_list", Capability.Read, [Scope.LinodesReadOnly]),
+        ("linode_instance_list", Capability.Read, [Scope.LinodesReadOnly]),
         ("linode_instance_delete", Capability.Destroy, [Scope.LinodesReadWrite]),
         (
-            "linode_instance_firewalls_update",
+            "linode_instance_firewall_update",
             Capability.Write,
             [Scope.LinodesReadWrite],
         ),
         ("linode_volume_clone", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volume_create", Capability.Write, [Scope.VolumesReadWrite]),
-        ("linode_volumes_list", Capability.Read, [Scope.VolumesReadOnly]),
-        ("linode_volume_types_list", Capability.Read, [Scope.VolumesReadOnly]),
+        ("linode_volume_list", Capability.Read, [Scope.VolumesReadOnly]),
+        ("linode_volume_type_list", Capability.Read, [Scope.VolumesReadOnly]),
         (
-            "linode_databases_engines_list",
+            "linode_database_engine_list",
             Capability.Read,
             [Scope.DatabasesReadOnly],
         ),
         (
-            "linode_databases_types_list",
+            "linode_database_type_list",
             Capability.Read,
             [Scope.DatabasesReadOnly],
         ),
@@ -61,7 +61,7 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.StackScriptsReadWrite],
         ),
-        ("linode_vpcs_list", Capability.Read, [Scope.VPCReadOnly]),
+        ("linode_vpc_list", Capability.Read, [Scope.VPCReadOnly]),
         ("linode_instance_config_get", Capability.Read, [Scope.LinodesReadOnly]),
         (
             "linode_instance_config_interface_get",
@@ -75,17 +75,17 @@ def test_meta_returns_empty() -> None:
         ),
         ("linode_instance_config_delete", Capability.Destroy, [Scope.LinodesReadWrite]),
         (
-            "linode_instance_config_interfaces_list",
+            "linode_instance_config_interface_list",
             Capability.Read,
             [Scope.LinodesReadOnly],
         ),
         (
-            "linode_instance_interfaces_history_list",
+            "linode_instance_interface_history_list",
             Capability.Read,
             [Scope.LinodesReadOnly],
         ),
         (
-            "linode_nodebalancer_vpc_configs_list",
+            "linode_nodebalancer_vpc_config_list",
             Capability.Read,
             [Scope.NodeBalancersReadOnly],
         ),
@@ -95,7 +95,7 @@ def test_meta_returns_empty() -> None:
             [Scope.NodeBalancersReadWrite],
         ),
         (
-            "linode_nodebalancer_firewalls_update",
+            "linode_nodebalancer_firewall_update",
             Capability.Write,
             [Scope.NodeBalancersReadWrite],
         ),
@@ -110,12 +110,12 @@ def test_meta_returns_empty() -> None:
             [Scope.NodeBalancersReadWrite],
         ),
         ("linode_firewall_create", Capability.Write, [Scope.FirewallReadWrite]),
-        ("linode_instance_firewalls_apply", Capability.Write, [Scope.LinodesReadWrite]),
+        ("linode_instance_firewall_apply", Capability.Write, [Scope.LinodesReadWrite]),
         ("linode_firewall_settings_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_firewall_settings_update", Capability.Write, [Scope.AccountReadWrite]),
-        ("linode_account", Capability.Read, [Scope.AccountReadOnly]),
+        ("linode_account_get", Capability.Read, [Scope.AccountReadOnly]),
         (
-            "linode_account_invoice_items_list",
+            "linode_account_invoice_item_list",
             Capability.Read,
             [Scope.AccountReadOnly],
         ),
@@ -130,7 +130,7 @@ def test_meta_returns_empty() -> None:
         ("linode_account_invoice_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_account_payment_get", Capability.Read, [Scope.AccountReadOnly]),
         (
-            "linode_account_agreements_list",
+            "linode_account_agreement_list",
             Capability.Read,
             [Scope.AccountReadOnly],
         ),
@@ -145,7 +145,7 @@ def test_meta_returns_empty() -> None:
             [Scope.AccountReadOnly],
         ),
         (
-            "linode_account_agreements_acknowledge",
+            "linode_account_agreement_acknowledge",
             Capability.Write,
             [Scope.AccountReadWrite],
         ),
@@ -191,7 +191,7 @@ def test_meta_returns_empty() -> None:
         ),
         ("linode_account_cancel", Capability.Destroy, [Scope.AccountReadWrite]),
         ("linode_account_user_update", Capability.Write, [Scope.AccountReadWrite]),
-        ("linode_managed_contacts_update", Capability.Write, [Scope.AccountReadWrite]),
+        ("linode_managed_contact_update", Capability.Write, [Scope.AccountReadWrite]),
         ("linode_managed_service_update", Capability.Write, [Scope.AccountReadWrite]),
         ("linode_managed_service_enable", Capability.Write, [Scope.AccountReadWrite]),
         (
@@ -204,11 +204,11 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.AccountReadWrite],
         ),
-        ("linode_profile", Capability.Read, [Scope.AccountReadOnly]),
+        ("linode_profile_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_database_engine_get", Capability.Read, [Scope.DatabasesReadOnly]),
         ("linode_database_type_get", Capability.Read, [Scope.DatabasesReadOnly]),
         (
-            "linode_database_cluster_create",
+            "linode_database_mysql_instance_create",
             Capability.Write,
             [Scope.DatabasesReadWrite],
         ),
@@ -238,7 +238,7 @@ def test_meta_returns_empty() -> None:
             [Scope.DatabasesReadWrite],
         ),
         (
-            "linode_database_mysql_instances_list",
+            "linode_database_mysql_instance_list",
             Capability.Read,
             [Scope.DatabasesReadOnly],
         ),
@@ -268,7 +268,7 @@ def test_meta_returns_empty() -> None:
             [Scope.DatabasesReadWrite],
         ),
         (
-            "linode_database_postgresql_instances_list",
+            "linode_database_postgresql_instance_list",
             Capability.Read,
             [Scope.DatabasesReadOnly],
         ),
@@ -297,21 +297,21 @@ def test_image_upload_needs_images_write() -> None:
 def test_image_sharegroup_token_create_needs_images_write() -> None:
     """Creating an image share group token needs image write scope."""
     assert required_scopes(
-        "linode_images_sharegroups_token_create", Capability.Write
+        "linode_image_sharegroup_token_create", Capability.Write
     ) == [Scope.ImagesReadWrite]
 
 
 def test_image_sharegroup_token_delete_needs_images_write() -> None:
     """Deleting an image share group token needs image write scope."""
     assert required_scopes(
-        "linode_images_sharegroups_token_delete", Capability.Destroy
+        "linode_image_sharegroup_token_delete", Capability.Destroy
     ) == [Scope.ImagesReadWrite]
 
 
 def test_image_sharegroup_token_update_needs_images_write() -> None:
     """Updating an image share group token needs image write scope."""
     assert required_scopes(
-        "linode_images_sharegroups_token_update", Capability.Write
+        "linode_image_sharegroup_token_update", Capability.Write
     ) == [Scope.ImagesReadWrite]
 
 
@@ -324,14 +324,14 @@ def test_image_delete_needs_images_write() -> None:
 
 def test_image_sharegroup_delete_needs_images_write() -> None:
     """Deleting an image share group needs image write scope."""
-    assert required_scopes("linode_images_sharegroup_delete", Capability.Destroy) == [
+    assert required_scopes("linode_image_sharegroup_delete", Capability.Destroy) == [
         Scope.ImagesReadWrite
     ]
 
 
 def test_image_sharegroup_update_needs_images_write() -> None:
     """Updating an image share group needs image write scope."""
-    assert required_scopes("linode_images_sharegroup_update", Capability.Write) == [
+    assert required_scopes("linode_image_sharegroup_update", Capability.Write) == [
         Scope.ImagesReadWrite
     ]
 
@@ -339,22 +339,22 @@ def test_image_sharegroup_update_needs_images_write() -> None:
 def test_image_sharegroup_image_delete_needs_images_write() -> None:
     """Revoking shared image access needs image write scope."""
     assert required_scopes(
-        "linode_images_sharegroup_image_delete", Capability.Destroy
+        "linode_image_sharegroup_image_delete", Capability.Destroy
     ) == [Scope.ImagesReadWrite]
 
 
 def test_image_sharegroup_images_add_needs_images_write() -> None:
     """Adding images to a share group needs image write scope."""
-    assert required_scopes("linode_images_sharegroup_images_add", Capability.Write) == [
+    assert required_scopes("linode_image_sharegroup_image_add", Capability.Write) == [
         Scope.ImagesReadWrite
     ]
 
 
 def test_image_sharegroup_members_add_needs_images_write() -> None:
     """Adding members to a share group needs image write scope."""
-    assert required_scopes(
-        "linode_images_sharegroup_members_add", Capability.Write
-    ) == [Scope.ImagesReadWrite]
+    assert required_scopes("linode_image_sharegroup_member_add", Capability.Write) == [
+        Scope.ImagesReadWrite
+    ]
 
 
 def test_instance_create_needs_linodes_write_and_images_read() -> None:
@@ -393,7 +393,7 @@ def test_unknown_tool_returns_empty() -> None:
 @pytest.mark.parametrize(
     "tool_name",
     [
-        "linode_instance_backups_list",
+        "linode_instance_backup_list",
         "linode_instance_config_create",
         "linode_instance_disk_create",
         "linode_instance_ip_allocate",
@@ -412,16 +412,16 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
 @pytest.mark.parametrize(
     ("tool_name", "capability", "expected"),
     [
-        ("linode_sshkeys_list", Capability.Read, Scope.AccountReadOnly),
+        ("linode_sshkey_list", Capability.Read, Scope.AccountReadOnly),
         ("linode_sshkey_get", Capability.Read, Scope.AccountReadOnly),
         ("linode_sshkey_create", Capability.Write, Scope.AccountReadWrite),
         (
-            "linode_monitor_dashboards_list",
+            "linode_monitor_dashboard_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_service_dashboards_list",
+            "linode_monitor_service_dashboard_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
@@ -431,37 +431,37 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_services_list",
+            "linode_monitor_service_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_alert_channels_list",
+            "linode_monitor_alert_channel_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_alert_definitions_list",
+            "linode_monitor_alert_definition_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_service_alert_definitions_list",
+            "linode_monitor_service_alert_definition_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_service_metric_definitions_list",
+            "linode_monitor_service_metric_definition_list",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_service_metrics_read",
+            "linode_monitor_service_metric_query",
             Capability.Read,
             Scope.AccountReadOnly,
         ),
         (
-            "linode_monitor_alert_definition_update",
+            "linode_monitor_service_alert_definition_update",
             Capability.Write,
             Scope.AccountReadWrite,
         ),

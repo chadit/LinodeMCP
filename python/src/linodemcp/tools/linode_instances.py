@@ -330,10 +330,10 @@ def create_linode_instance_interface_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
-def create_linode_instance_interfaces_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_interfaces_list tool."""
+def create_linode_instance_interface_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_list tool."""
     return Tool(
-        name="linode_instance_interfaces_list",
+        name="linode_instance_interface_list",
         description="Lists interfaces for a Linode instance.",
         inputSchema={
             "type": "object",
@@ -431,10 +431,10 @@ def create_linode_instance_interface_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_instance_interface_firewalls_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_interface_firewalls_list tool."""
+def create_linode_instance_interface_firewall_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_firewall_list tool."""
     return Tool(
-        name="linode_instance_interface_firewalls_list",
+        name="linode_instance_interface_firewall_list",
         description="Lists firewalls assigned to a Linode instance interface.",
         inputSchema={
             "type": "object",
@@ -456,10 +456,10 @@ def create_linode_instance_interface_firewalls_list_tool() -> tuple[Tool, Capabi
     ), Capability.Read
 
 
-async def handle_linode_instance_interface_firewalls_list(
+async def handle_linode_instance_interface_firewall_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_interface_firewalls_list tool request."""
+    """Handle linode_instance_interface_firewall_list tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -475,10 +475,10 @@ async def handle_linode_instance_interface_firewalls_list(
     )
 
 
-def create_linode_instance_config_interfaces_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_config_interfaces_list tool."""
+def create_linode_instance_config_interface_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_interface_list tool."""
     return Tool(
-        name="linode_instance_config_interfaces_list",
+        name="linode_instance_config_interface_list",
         description="Lists interfaces for a Linode instance configuration profile.",
         inputSchema={
             "type": "object",
@@ -500,10 +500,10 @@ def create_linode_instance_config_interfaces_list_tool() -> tuple[Tool, Capabili
     ), Capability.Read
 
 
-def create_linode_instance_interfaces_history_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_interfaces_history_list tool."""
+def create_linode_instance_interface_history_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_history_list tool."""
     return Tool(
-        name="linode_instance_interfaces_history_list",
+        name="linode_instance_interface_history_list",
         description="Lists network interface history for a Linode instance.",
         inputSchema={
             "type": "object",
@@ -578,10 +578,10 @@ def create_linode_instance_config_interface_update_tool() -> tuple[Tool, Capabil
     ), Capability.Write
 
 
-def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instances_list tool."""
+def create_linode_instance_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_list tool."""
     return Tool(
-        name="linode_instances_list",
+        name="linode_instance_list",
         description="Lists Linode instances with optional filtering by status",
         inputSchema={
             "type": "object",
@@ -603,10 +603,10 @@ def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_instance_stats_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_stats tool."""
+def create_linode_instance_stats_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_stats_get tool."""
     return Tool(
-        name="linode_instance_stats",
+        name="linode_instance_stats_get",
         description="Gets daily statistics for a Linode instance.",
         inputSchema={
             "type": "object",
@@ -623,10 +623,10 @@ def create_linode_instance_stats_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_instance_nodebalancers_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_nodebalancers_list tool."""
+def create_linode_instance_nodebalancer_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_nodebalancer_list tool."""
     return Tool(
-        name="linode_instance_nodebalancers_list",
+        name="linode_instance_nodebalancer_list",
         description="Lists NodeBalancers assigned to a Linode instance.",
         inputSchema={
             "type": "object",
@@ -697,10 +697,10 @@ def create_linode_instance_transfer_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_configs_list tool."""
+def create_linode_instance_config_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_list tool."""
     return Tool(
-        name="linode_instance_configs_list",
+        name="linode_instance_config_list",
         description="Lists configuration profiles for a Linode instance.",
         inputSchema={
             "type": "object",
@@ -728,10 +728,10 @@ def create_linode_instance_configs_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_instance_config_interfaces_order_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_config_interfaces_order tool."""
+def create_linode_instance_config_interface_reorder_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_config_interface_reorder tool."""
     return Tool(
-        name="linode_instance_config_interfaces_order",
+        name="linode_instance_config_interface_reorder",
         description=(
             "Reorders interfaces on a Linode instance configuration profile. "
             "Requires confirm because the active interface order can change."
@@ -1265,10 +1265,10 @@ async def handle_linode_instance_interface_delete(
     return await execute_tool(cfg, arguments, "delete Linode instance interface", _call)
 
 
-async def handle_linode_instance_interfaces_list(
+async def handle_linode_instance_interface_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_interfaces_list tool request."""
+    """Handle linode_instance_interface_list tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1343,10 +1343,10 @@ async def handle_linode_instance_interface_get(
     )
 
 
-async def handle_linode_instance_config_interfaces_list(
+async def handle_linode_instance_config_interface_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_config_interfaces_list tool request."""
+    """Handle linode_instance_config_interface_list tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1365,10 +1365,10 @@ async def handle_linode_instance_config_interfaces_list(
     )
 
 
-async def handle_linode_instance_interfaces_history_list(
+async def handle_linode_instance_interface_history_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_interfaces_history_list tool request."""
+    """Handle linode_instance_interface_history_list tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1470,10 +1470,10 @@ async def handle_linode_instance_config_interface_update(
     )
 
 
-async def handle_linode_instances_list(
+async def handle_linode_instance_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instances_list tool request.
+    """Handle linode_instance_list tool request.
 
     Args:
         arguments: InstanceFilterArgs - environment, status (optional)
@@ -1521,10 +1521,10 @@ async def handle_linode_instances_list(
     return await execute_tool(cfg, arguments, "retrieve Linode instances", _call)
 
 
-async def handle_linode_instance_stats(
+async def handle_linode_instance_stats_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_stats tool request."""
+    """Handle linode_instance_stats_get tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1537,10 +1537,10 @@ async def handle_linode_instance_stats(
     )
 
 
-async def handle_linode_instance_nodebalancers_list(
+async def handle_linode_instance_nodebalancer_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_nodebalancers_list tool request."""
+    """Handle linode_instance_nodebalancer_list tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1596,10 +1596,10 @@ async def handle_linode_instance_transfer_get(
     )
 
 
-async def handle_linode_instance_configs_list(
+async def handle_linode_instance_config_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_configs_list tool request."""
+    """Handle linode_instance_config_list tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1620,10 +1620,10 @@ async def handle_linode_instance_configs_list(
     )
 
 
-async def handle_linode_instance_config_interfaces_order(
+async def handle_linode_instance_config_interface_reorder(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_instance_config_interfaces_order tool request."""
+    """Handle linode_instance_config_interface_reorder tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
@@ -1638,7 +1638,7 @@ async def handle_linode_instance_config_interfaces_order(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_instance_config_interfaces_order",
+            "linode_instance_config_interface_reorder",
             arguments.get("environment", ""),
             "POST",
             f"/linode/instances/{linode_id}/configs/{config_id}/interfaces/order",

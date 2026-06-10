@@ -26,8 +26,8 @@ func TestLinodeInterfacesUpgradeToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_interfaces_upgrade" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_interfaces_upgrade")
+	if tool.Name != "linode_instance_interface_upgrade" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interface_upgrade")
 	}
 
 	if tool.Description == "" {

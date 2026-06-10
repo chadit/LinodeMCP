@@ -21,8 +21,8 @@ func TestLinodeIPv6RangesListToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeIPv6RangesListTool(&config.Config{})
 
-	if tool.Name != "linode_ipv6_ranges_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_ipv6_ranges_list")
+	if tool.Name != "linode_ipv6_range_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_ipv6_range_list")
 	}
 
 	if tool.Description == "" {
@@ -150,8 +150,8 @@ func TestLinodeIPv6RangesListToolApiErrorReturnsToolError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_ipv6_ranges_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_ipv6_ranges_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_ipv6_range_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_ipv6_range_list")
 	}
 }
 

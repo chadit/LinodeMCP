@@ -239,8 +239,8 @@ func TestLinodeInstanceInterfaceFirewallsListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_interface_firewalls_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interface_firewalls_list")
+	if tool.Name != "linode_instance_interface_firewall_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interface_firewall_list")
 	}
 
 	if tool.Description == "" {
@@ -432,8 +432,8 @@ func TestLinodeInstanceFirewallsUpdateToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_firewalls_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_firewalls_update")
+	if tool.Name != "linode_instance_firewall_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_firewall_update")
 	}
 
 	if capability != profiles.CapWrite {

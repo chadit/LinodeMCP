@@ -123,7 +123,7 @@ func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 // NewLinodeImageShareGroupsListTool creates a tool for listing image share groups.
 func NewLinodeImageShareGroupsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroups_list",
+		"linode_image_sharegroup_list",
 		mcp.WithDescription("Lists owned image share groups with optional pagination."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -156,7 +156,7 @@ func NewLinodeImageShareGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 // NewLinodeImageShareGroupsByImageListTool creates a tool for listing share groups that contain an image.
 func NewLinodeImageShareGroupsByImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroups_by_image_list",
+		"linode_image_sharegroup_by_image_list",
 		mcp.WithDescription("Lists owned image share groups that currently include a private image."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("image_id", mcp.Required(), mcp.Description("Private image ID, for example private/12345.")),
@@ -174,7 +174,7 @@ func NewLinodeImageShareGroupsByImageListTool(cfg *config.Config) (mcp.Tool, pro
 // NewLinodeImageShareGroupImagesListTool creates a tool for listing images shared in an owned image share group.
 func NewLinodeImageShareGroupImagesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroup_images_list",
+		"linode_image_sharegroup_image_list",
 		mcp.WithDescription("Lists images shared in an owned image share group."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
@@ -192,7 +192,7 @@ func NewLinodeImageShareGroupImagesListTool(cfg *config.Config) (mcp.Tool, profi
 // NewLinodeImageShareGroupMembersListTool creates a tool for listing members linked to an owned image share group.
 func NewLinodeImageShareGroupMembersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroup_members_list",
+		"linode_image_sharegroup_member_list",
 		mcp.WithDescription("Lists members linked to an owned image share group."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
@@ -227,7 +227,7 @@ func NewLinodeImageShareGroupMemberTokenGetTool(cfg *config.Config) (mcp.Tool, p
 // NewLinodeImageShareGroupTokensListTool creates a tool for listing image share group tokens.
 func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroup_tokens_list",
+		"linode_image_sharegroup_token_list",
 		mcp.WithDescription("Lists image share group tokens for the authenticated user with optional pagination."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -320,7 +320,7 @@ func NewLinodeImageShareGroupMemberTokenDeleteTool(cfg *config.Config) (mcp.Tool
 // NewLinodeImageShareGroupTokenImagesListTool creates a tool for listing images available through an image share group token.
 func NewLinodeImageShareGroupTokenImagesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_image_sharegroup_token_images_list",
+		"linode_image_sharegroup_token_image_list",
 		mcp.WithDescription("Lists images available through an image share group token."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),

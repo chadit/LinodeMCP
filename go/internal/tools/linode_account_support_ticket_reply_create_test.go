@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	supportTicketReplyCreateToolName = "linode_account_support_ticket_reply_create"
+	supportTicketReplyCreateToolName = "linode_support_ticket_reply_create"
 	supportTicketReplyDescription    = "Thanks, here is more detail."
 	supportTicketReplyCreatedBy      = "adevi"
 )

@@ -14,10 +14,10 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_network_transfer_prices_tool() -> tuple[Tool, Capability]:
-    """Create the linode_network_transfer_prices tool."""
+def create_linode_network_transfer_price_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_network_transfer_price_list tool."""
     return Tool(
-        name="linode_network_transfer_prices",
+        name="linode_network_transfer_price_list",
         description="Gets network transfer prices.",
         inputSchema={
             "type": "object",
@@ -33,10 +33,10 @@ def create_linode_network_transfer_prices_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_network_transfer_prices(
+async def handle_linode_network_transfer_price_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_network_transfer_prices tool request."""
+    """Handle linode_network_transfer_price_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_network_transfer_prices()

@@ -48,10 +48,10 @@ def _validate_lke_tier(value: object) -> str | None:
     return value
 
 
-def create_linode_lke_clusters_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_lke_clusters_list tool."""
+def create_linode_lke_cluster_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_cluster_list tool."""
     return Tool(
-        name="linode_lke_clusters_list",
+        name="linode_lke_cluster_list",
         description="Lists all LKE (Kubernetes) clusters on the account",
         inputSchema={
             "type": "object",
@@ -62,10 +62,10 @@ def create_linode_lke_clusters_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_lke_clusters_list(
+async def handle_linode_lke_cluster_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_lke_clusters_list tool request."""
+    """Handle linode_lke_cluster_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         clusters = await client.list_lke_clusters()
@@ -108,10 +108,10 @@ async def handle_linode_lke_cluster_get(
     return await execute_tool(cfg, arguments, "get LKE cluster", _call)
 
 
-def create_linode_lke_pools_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_lke_pools_list tool."""
+def create_linode_lke_pool_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_pool_list tool."""
     return Tool(
-        name="linode_lke_pools_list",
+        name="linode_lke_pool_list",
         description="Lists node pools for an LKE cluster",
         inputSchema={
             "type": "object",
@@ -124,10 +124,10 @@ def create_linode_lke_pools_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_lke_pools_list(
+async def handle_linode_lke_pool_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_lke_pools_list tool request."""
+    """Handle linode_lke_pool_list tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -297,10 +297,10 @@ async def handle_linode_lke_dashboard_get(
     return await execute_tool(cfg, arguments, "get LKE dashboard", _call)
 
 
-def create_linode_lke_api_endpoints_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_lke_api_endpoints_list tool."""
+def create_linode_lke_api_endpoint_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_api_endpoint_list tool."""
     return Tool(
-        name="linode_lke_api_endpoints_list",
+        name="linode_lke_api_endpoint_list",
         description="Lists API endpoints for an LKE cluster",
         inputSchema={
             "type": "object",
@@ -313,10 +313,10 @@ def create_linode_lke_api_endpoints_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_lke_api_endpoints_list(
+async def handle_linode_lke_api_endpoint_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_lke_api_endpoints_list tool request."""
+    """Handle linode_lke_api_endpoint_list tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -366,10 +366,10 @@ async def handle_linode_lke_acl_get(
     return await execute_tool(cfg, arguments, "get LKE control plane ACL", _call)
 
 
-def create_linode_lke_versions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_lke_versions_list tool."""
+def create_linode_lke_version_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_version_list tool."""
     return Tool(
-        name="linode_lke_versions_list",
+        name="linode_lke_version_list",
         description="Lists available Kubernetes versions for LKE",
         inputSchema={
             "type": "object",
@@ -380,10 +380,10 @@ def create_linode_lke_versions_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_lke_versions_list(
+async def handle_linode_lke_version_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_lke_versions_list tool request."""
+    """Handle linode_lke_version_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         versions = await client.list_lke_versions()
@@ -425,10 +425,10 @@ async def handle_linode_lke_version_get(
     return await execute_tool(cfg, arguments, "get LKE version", _call)
 
 
-def create_linode_lke_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_lke_types_list tool."""
+def create_linode_lke_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_type_list tool."""
     return Tool(
-        name="linode_lke_types_list",
+        name="linode_lke_type_list",
         description="Lists available node types for LKE clusters",
         inputSchema={
             "type": "object",
@@ -439,10 +439,10 @@ def create_linode_lke_types_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_lke_types_list(
+async def handle_linode_lke_type_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_lke_types_list tool request."""
+    """Handle linode_lke_type_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         types = await client.list_lke_types()
@@ -451,10 +451,10 @@ async def handle_linode_lke_types_list(
     return await execute_tool(cfg, arguments, "list LKE types", _call)
 
 
-def create_linode_lke_tier_versions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_lke_tier_versions_list tool."""
+def create_linode_lke_tier_version_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_lke_tier_version_list tool."""
     return Tool(
-        name="linode_lke_tier_versions_list",
+        name="linode_lke_tier_version_list",
         description="Lists LKE Kubernetes versions for a tier",
         inputSchema={
             "type": "object",
@@ -467,10 +467,10 @@ def create_linode_lke_tier_versions_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_lke_tier_versions_list(
+async def handle_linode_lke_tier_version_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_lke_tier_versions_list tool request."""
+    """Handle linode_lke_tier_version_list tool request."""
     tier = _validate_lke_tier(arguments.get("tier"))
     if tier is None:
         return error_response("tier must be a non-empty path segment")

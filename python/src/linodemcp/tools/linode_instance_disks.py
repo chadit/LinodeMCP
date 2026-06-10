@@ -118,10 +118,10 @@ def _is_non_empty_dict(value: Any) -> TypeGuard[dict[str, Any]]:
     return len(candidate) > 0
 
 
-def create_linode_instance_disks_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_disks_list tool."""
+def create_linode_instance_disk_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_disk_list tool."""
     return Tool(
-        name="linode_instance_disks_list",
+        name="linode_instance_disk_list",
         description="Lists disks for a Linode instance",
         inputSchema={
             "type": "object",
@@ -134,10 +134,10 @@ def create_linode_instance_disks_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_instance_disks_list(
+async def handle_linode_instance_disk_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_disks_list tool request."""
+    """Handle linode_instance_disk_list tool request."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -151,10 +151,10 @@ async def handle_linode_instance_disks_list(
     return await execute_tool(cfg, arguments, "list instance disks", _call)
 
 
-def create_linode_instance_volumes_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_volumes_list tool."""
+def create_linode_instance_volume_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_volume_list tool."""
     return Tool(
-        name="linode_instance_volumes_list",
+        name="linode_instance_volume_list",
         description="Lists volumes attached to a Linode instance",
         inputSchema={
             "type": "object",
@@ -178,10 +178,10 @@ def create_linode_instance_volumes_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_instance_volumes_list(
+async def handle_linode_instance_volume_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_volumes_list tool request."""
+    """Handle linode_instance_volume_list tool request."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -198,10 +198,10 @@ async def handle_linode_instance_volumes_list(
     return await execute_tool(cfg, arguments, "list instance volumes", _call)
 
 
-def create_linode_instance_firewalls_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_firewalls_list tool."""
+def create_linode_instance_firewall_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_firewall_list tool."""
     return Tool(
-        name="linode_instance_firewalls_list",
+        name="linode_instance_firewall_list",
         description="Lists firewalls assigned to a Linode instance",
         inputSchema={
             "type": "object",
@@ -225,10 +225,10 @@ def create_linode_instance_firewalls_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_instance_firewalls_list(
+async def handle_linode_instance_firewall_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_firewalls_list tool request."""
+    """Handle linode_instance_firewall_list tool request."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid

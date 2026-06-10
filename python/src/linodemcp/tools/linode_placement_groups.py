@@ -60,10 +60,10 @@ def _parse_optional_int(
     return value
 
 
-def create_linode_placement_groups_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_placement_groups_list tool."""
+def create_linode_placement_group_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_placement_group_list tool."""
     return Tool(
-        name="linode_placement_groups_list",
+        name="linode_placement_group_list",
         description="Lists placement groups",
         inputSchema={
             "type": "object",
@@ -76,10 +76,10 @@ def create_linode_placement_groups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_placement_groups_list(
+async def handle_linode_placement_group_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_placement_groups_list tool request."""
+    """Handle linode_placement_group_list tool request."""
     try:
         page = _parse_optional_int(arguments, "page", 1)
         page_size = _parse_optional_int(arguments, "page_size", 25, 500)

@@ -822,7 +822,7 @@ func lkeACLUpdateSideEffects(ctx context.Context, enabled bool) (DryRunDetails, 
 }
 
 // networkingIPUpdateRDNSSideEffects is the Tier B walk for
-// linode_networking_ip_update_rdns. It reports the reverse-DNS change or its
+// linode_networking_ip_update. It reports the reverse-DNS change or its
 // removal.
 func networkingIPUpdateRDNSSideEffects(ctx context.Context, rdns string) (DryRunDetails, error) {
 	var details DryRunDetails
@@ -1422,7 +1422,7 @@ func tagCreateSideEffects(ctx context.Context, label string) (DryRunDetails, err
 }
 
 // supportTicketCreateSideEffects is the Tier B preview for
-// linode_account_support_ticket_create (arg-only).
+// linode_support_ticket_create (arg-only).
 func supportTicketCreateSideEffects(ctx context.Context, summary string) (DryRunDetails, error) {
 	var details DryRunDetails
 
@@ -1441,7 +1441,7 @@ func supportTicketCreateSideEffects(ctx context.Context, summary string) (DryRun
 }
 
 // supportTicketReplyCreateSideEffects is the Tier B preview for
-// linode_account_support_ticket_reply_create (arg-only).
+// linode_support_ticket_reply_create (arg-only).
 func supportTicketReplyCreateSideEffects(ctx context.Context, ticketID int) (DryRunDetails, error) {
 	var details DryRunDetails
 
@@ -1456,7 +1456,7 @@ func supportTicketReplyCreateSideEffects(ctx context.Context, ticketID int) (Dry
 }
 
 // supportTicketAttachmentCreateSideEffects is the Tier B preview for
-// linode_account_support_ticket_attachment_create (arg-only).
+// linode_support_ticket_attachment_create (arg-only).
 func supportTicketAttachmentCreateSideEffects(ctx context.Context, ticketID int) (DryRunDetails, error) {
 	var details DryRunDetails
 
@@ -1501,7 +1501,7 @@ func profilePreferencesUpdateSideEffects(ctx context.Context) (DryRunDetails, er
 }
 
 // profileSecurityQuestionsAnswerSideEffects is the Tier B preview for
-// linode_profile_security_questions_answer. The answers are security material,
+// linode_profile_security_question_answer. The answers are security material,
 // so the side effect describes the action without echoing them (arg-only).
 func profileSecurityQuestionsAnswerSideEffects(ctx context.Context) (DryRunDetails, error) {
 	var details DryRunDetails
@@ -1517,7 +1517,7 @@ func profileSecurityQuestionsAnswerSideEffects(ctx context.Context) (DryRunDetai
 }
 
 // accountAgreementsAcknowledgeSideEffects is the Tier B preview for
-// linode_account_agreements_acknowledge (arg-only).
+// linode_account_agreement_acknowledge (arg-only).
 func accountAgreementsAcknowledgeSideEffects(ctx context.Context) (DryRunDetails, error) {
 	var details DryRunDetails
 
@@ -1569,7 +1569,7 @@ func accountCancelSideEffects(ctx context.Context) (DryRunDetails, error) {
 }
 
 // accountChildAccountTokenCreateSideEffects is the Tier B preview for
-// linode_account_child_account_token. The proxy token itself is never
+// linode_account_child_account_token_create. The proxy token itself is never
 // surfaced; the side effect only states that a token is minted (arg-only).
 func accountChildAccountTokenCreateSideEffects(ctx context.Context) (DryRunDetails, error) {
 	var details DryRunDetails

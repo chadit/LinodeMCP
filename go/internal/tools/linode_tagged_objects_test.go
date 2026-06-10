@@ -28,8 +28,8 @@ func TestLinodeTaggedObjectsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeTaggedObjectsTool(cfg)
 
-	if tool.Name != "linode_tagged_objects" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_tagged_objects")
+	if tool.Name != "linode_tag_object_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_tag_object_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -173,8 +173,8 @@ func TestLinodeTaggedObjectsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_tagged_objects") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_tagged_objects")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_tag_object_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_tag_object_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

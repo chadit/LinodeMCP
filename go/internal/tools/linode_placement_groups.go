@@ -36,7 +36,7 @@ const (
 // NewLinodePlacementGroupListTool creates a tool for listing placement groups.
 func NewLinodePlacementGroupListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_placement_groups_list",
+		"linode_placement_group_list",
 		mcp.WithDescription("Lists placement groups for the authenticated account with optional pagination."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),

@@ -275,8 +275,8 @@ func TestLinodeManagedContactsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeManagedContactsTool(cfg)
 
-	if tool.Name != "linode_managed_contacts" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_contacts")
+	if tool.Name != "linode_managed_contact_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_contact_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -454,8 +454,8 @@ func TestLinodeManagedContactsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_contacts") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_contacts")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_contact_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_contact_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

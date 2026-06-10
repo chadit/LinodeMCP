@@ -323,7 +323,7 @@ func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallTo
 func NewLinodeInstanceFirewallsApplyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_firewalls_apply",
+		"linode_instance_firewall_apply",
 		"Reapplies assigned firewalls to a Linode instance. Use this if firewall assignment was not applied successfully.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -356,7 +356,7 @@ func handleInstanceFirewallsApplyRequest(ctx context.Context, request *mcp.CallT
 			return mcp.NewToolResultError(validationMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_firewalls_apply", httpMethodPost,
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_firewall_apply", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/firewalls/apply", linodeID),
 			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
 	}

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 _TEST_PROFILE_COMPUTE_ADMIN = "compute-admin"
 _TEST_USER_PROFILE = "my-custom"
-_TEST_VOLUMES_LIST_TOOL = "linode_volumes_list"
+_TEST_VOLUMES_LIST_TOOL = "linode_volume_list"
 
 
 def test_all_profiles_contains_builtins(sample_config: Config) -> None:
@@ -179,7 +179,7 @@ def test_print_profile_detail_lists_allowed_tools() -> None:
     prof = Profile(
         name=_TEST_PROFILE_COMPUTE_ADMIN,
         description="",
-        allowed_tools=("linode_instances_list", "linode_instance_create"),
+        allowed_tools=("linode_instance_list", "linode_instance_create"),
         allowed_environments=(),
         required_token_scopes=(),
         allow_yolo=False,
@@ -191,7 +191,7 @@ def test_print_profile_detail_lists_allowed_tools() -> None:
 
     out = buf.getvalue()
     assert "Allowed tools (2):" in out
-    assert "linode_instances_list" in out
+    assert "linode_instance_list" in out
     assert "linode_instance_create" in out
 
 

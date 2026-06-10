@@ -58,7 +58,7 @@ func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.Cal
 // NewLinodeObjectStorageBucketListByRegionTool creates a tool for listing buckets in a region.
 func NewLinodeObjectStorageBucketListByRegionTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_bucket_list_by_region",
+		"linode_object_storage_bucket_by_region_list",
 		mcp.WithDescription("Lists Object Storage buckets in a specific region for the authenticated user"),
 		mcp.WithString(
 			paramEnvironment,
@@ -200,7 +200,7 @@ func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallT
 // NewLinodeObjectStorageBucketContentsTool creates a tool for listing objects in a bucket.
 func NewLinodeObjectStorageBucketContentsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_bucket_contents",
+		"linode_object_storage_bucket_object_list",
 		mcp.WithDescription("Lists objects in an Object Storage bucket with optional prefix/delimiter filtering and pagination"),
 		mcp.WithString(
 			paramEnvironment,
@@ -400,7 +400,7 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallTo
 // NewLinodeObjectStorageQuotasListTool creates a tool for listing Object Storage quotas.
 func NewLinodeObjectStorageQuotasListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_quotas_list",
+		"linode_object_storage_quota_list",
 		mcp.WithDescription("Lists Object Storage quotas on the account"),
 		mcp.WithString(
 			paramEnvironment,
@@ -528,7 +528,7 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallTool
 // NewLinodeObjectStorageQuotaUsageTool creates a tool for getting Object Storage quota usage.
 func NewLinodeObjectStorageQuotaUsageTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_quota_usage",
+		"linode_object_storage_quota_usage_get",
 		mcp.WithDescription("Gets usage data for a specific Object Storage quota"),
 		mcp.WithString(
 			paramEnvironment,
@@ -575,7 +575,7 @@ func handleObjectStorageQuotaUsageRequest(ctx context.Context, request *mcp.Call
 // NewLinodeObjectStorageTransferTool creates a tool for getting Object Storage transfer usage.
 func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_transfer",
+		"linode_object_storage_transfer_get",
 		mcp.WithDescription("Gets Object Storage outbound data transfer usage for the current month"),
 		mcp.WithString(
 			paramEnvironment,
@@ -706,7 +706,7 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp
 // NewLinodeObjectStoragePresignedURLTool creates a tool for generating presigned URLs for objects.
 func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_presigned_url",
+		"linode_object_storage_presigned_url_create",
 		mcp.WithDescription("Generates a presigned URL for accessing an object in Object Storage. "+
 			"Use method=GET to create a download URL, method=PUT to create an upload URL."),
 		mcp.WithString(

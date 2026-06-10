@@ -137,7 +137,7 @@ func NewLinodeDatabasePostgreSQLConfigGetTool(cfg *config.Config) (mcp.Tool, pro
 // NewLinodeDatabaseInstanceListTool creates a tool for listing Managed Database instances.
 func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_list",
+		"linode_database_mysql_instance_list",
 		mcp.WithDescription("Lists Managed Database instances with optional pagination."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -171,7 +171,7 @@ func NewLinodeDatabasePostgreSQLInstanceListTool(cfg *config.Config) (mcp.Tool, 
 // NewLinodeDatabaseInstanceGetTool creates a tool for getting one MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_get",
+		"linode_database_mysql_instance_get",
 		mcp.WithDescription("Retrieves a single MySQL Managed Database instance by ID."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to retrieve.")),
@@ -203,7 +203,7 @@ func NewLinodeDatabasePostgreSQLInstanceGetTool(cfg *config.Config) (mcp.Tool, p
 // NewLinodeDatabaseInstanceSSLGetTool creates a tool for getting a MySQL Managed Database SSL CA certificate.
 func NewLinodeDatabaseInstanceSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_ssl_get",
+		"linode_database_mysql_instance_ssl_get",
 		mcp.WithDescription("Retrieves the SSL CA certificate for a MySQL Managed Database instance by ID."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID whose SSL CA certificate to retrieve.")),
@@ -235,7 +235,7 @@ func NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg *config.Config) (mcp.Tool
 // NewLinodeDatabaseInstanceCredentialsGetTool creates a tool for getting MySQL Managed Database credentials.
 func NewLinodeDatabaseInstanceCredentialsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_credentials_get",
+		"linode_database_mysql_instance_credentials_get",
 		mcp.WithDescription("Retrieves credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID whose credentials to retrieve.")),
@@ -269,7 +269,7 @@ func NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool(cfg *config.Config) (
 // NewLinodeDatabaseInstanceCredentialsResetTool creates a tool for resetting MySQL Managed Database credentials.
 func NewLinodeDatabaseInstanceCredentialsResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_credentials_reset",
+		"linode_database_mysql_instance_credentials_reset",
 		mcp.WithDescription("Resets credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview without resetting."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID whose credentials to reset.")),
@@ -306,7 +306,7 @@ func NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg *config.Config)
 func NewLinodeDatabaseInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newDatabaseInstanceCreateTool(
 		cfg,
-		"linode_database_instance_create",
+		"linode_database_mysql_instance_create",
 		"Creates or restores a MySQL Managed Database instance. This creates a billable resource.",
 		"Database engine ID, for example mysql/8.0.26.",
 		"JSON object of MySQL engine configuration values (optional).",
@@ -363,7 +363,7 @@ func newDatabaseInstanceCreateTool(
 func NewLinodeDatabaseInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newDatabaseInstanceUpdateTool(
 		cfg,
-		"linode_database_instance_update",
+		"linode_database_mysql_instance_update",
 		"Updates a MySQL Managed Database instance.",
 		"The MySQL Managed Database instance ID to update.",
 		"JSON object of MySQL engine configuration values (optional).",
@@ -424,7 +424,7 @@ func newDatabaseInstanceUpdateTool(
 func NewLinodeDatabaseInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newDatabaseInstanceDeleteTool(
 		cfg,
-		"linode_database_instance_delete",
+		"linode_database_mysql_instance_delete",
 		"Deletes a MySQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting.",
 		"The MySQL Managed Database instance ID to delete.",
 		"Must be true to confirm database deletion. This action is irreversible. Ignored when dry_run=true.",
@@ -476,7 +476,7 @@ func newDatabaseInstanceDeleteTool(
 // NewLinodeDatabaseInstancePatchTool creates a tool for patching one MySQL Managed Database instance.
 func NewLinodeDatabaseInstancePatchTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_patch",
+		"linode_database_mysql_instance_patch",
 		mcp.WithDescription("Applies security patches and updates to a MySQL Managed Database instance. Pass dry_run=true to preview without patching."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to patch.")),
@@ -512,7 +512,7 @@ func NewLinodeDatabasePostgreSQLInstancePatchTool(cfg *config.Config) (mcp.Tool,
 // NewLinodeDatabaseInstanceSuspendTool creates a tool for suspending one active MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceSuspendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_suspend",
+		"linode_database_mysql_instance_suspend",
 		mcp.WithDescription("Suspends an active MySQL Managed Database instance. Pass dry_run=true to preview without suspending."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to suspend.")),
@@ -548,7 +548,7 @@ func NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg *config.Config) (mcp.Too
 // NewLinodeDatabaseInstanceResumeTool creates a tool for resuming one suspended MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceResumeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_database_instance_resume",
+		"linode_database_mysql_instance_resume",
 		mcp.WithDescription("Resumes a suspended MySQL Managed Database instance. Pass dry_run=true to preview without resuming."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to resume.")),
@@ -726,7 +726,7 @@ func handleDatabasePostgreSQLInstanceSSLGetRequest(ctx context.Context, request 
 
 func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return runDatabaseInstanceActionDryRun(ctx, request, cfg, "linode_database_instance_credentials_get", "GET", dbMySQLInstancesPath, "credentials",
+		return runDatabaseInstanceActionDryRun(ctx, request, cfg, "linode_database_mysql_instance_credentials_get", "GET", dbMySQLInstancesPath, "credentials",
 			func(ctx context.Context, c *linode.Client, id int) (any, error) {
 				return c.GetDatabaseInstance(ctx, id)
 			})
@@ -778,7 +778,7 @@ func handleDatabasePostgreSQLInstanceCredentialsGetRequest(ctx context.Context, 
 
 func handleDatabaseInstanceCredentialsResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return runDatabaseInstanceActionDryRun(ctx, request, cfg, "linode_database_instance_credentials_reset", httpMethodPost, dbMySQLInstancesPath, "credentials/reset",
+		return runDatabaseInstanceActionDryRun(ctx, request, cfg, "linode_database_mysql_instance_credentials_reset", httpMethodPost, dbMySQLInstancesPath, "credentials/reset",
 			func(ctx context.Context, c *linode.Client, id int) (any, error) {
 				return c.GetDatabaseInstance(ctx, id)
 			})
@@ -1000,7 +1000,7 @@ func runDatabaseInstanceCreate(
 
 func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return runDatabaseInstanceCreate(ctx, request, cfg,
-		"linode_database_instance_create", dbMySQLInstancesPath,
+		"linode_database_mysql_instance_create", dbMySQLInstancesPath,
 		"This creates a billable Managed Database instance. Set confirm=true to proceed.",
 		dbMessagePrefixMySQL,
 		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
@@ -1023,7 +1023,7 @@ func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallT
 		ctx,
 		request,
 		cfg,
-		"linode_database_instance_update",
+		"linode_database_mysql_instance_update",
 		dbMySQLInstancesPath,
 		"This updates a Managed Database instance. Set confirm=true to proceed.",
 		func(ctx context.Context, client *linode.Client, instanceID int) (any, error) {
@@ -1123,7 +1123,7 @@ func handleDatabaseInstanceDeleteRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
-		ToolName:       "linode_database_instance_delete",
+		ToolName:       "linode_database_mysql_instance_delete",
 		IDParam:        paramDatabaseInstanceID,
 		Method:         httpMethodDelete,
 		PathPattern:    dbMySQLInstancesPath + "/%d",
@@ -1232,7 +1232,7 @@ func runDatabaseInstanceAction(ctx context.Context, request *mcp.CallToolRequest
 
 func handleDatabaseInstancePatchRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return runDatabaseInstanceAction(ctx, request, cfg, &databaseInstanceActionSpec{
-		ToolName:       "linode_database_instance_patch",
+		ToolName:       "linode_database_mysql_instance_patch",
 		InstancesPath:  dbMySQLInstancesPath,
 		Verb:           "patch",
 		ConfirmMessage: "This patches a Managed Database instance. Set confirm=true to proceed.",
@@ -1266,7 +1266,7 @@ func handleDatabasePostgreSQLInstancePatchRequest(ctx context.Context, request *
 
 func handleDatabaseInstanceSuspendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return runDatabaseInstanceAction(ctx, request, cfg, &databaseInstanceActionSpec{
-		ToolName:       "linode_database_instance_suspend",
+		ToolName:       "linode_database_mysql_instance_suspend",
 		InstancesPath:  dbMySQLInstancesPath,
 		Verb:           "suspend",
 		ConfirmMessage: "This suspends a Managed Database instance. Set confirm=true to proceed.",
@@ -1300,7 +1300,7 @@ func handleDatabasePostgreSQLInstanceSuspendRequest(ctx context.Context, request
 
 func handleDatabaseInstanceResumeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return runDatabaseInstanceAction(ctx, request, cfg, &databaseInstanceActionSpec{
-		ToolName:       "linode_database_instance_resume",
+		ToolName:       "linode_database_mysql_instance_resume",
 		InstancesPath:  dbMySQLInstancesPath,
 		Verb:           "resume",
 		ConfirmMessage: "This resumes a Managed Database instance. Set confirm=true to proceed.",

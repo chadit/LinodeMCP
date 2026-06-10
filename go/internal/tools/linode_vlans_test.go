@@ -25,8 +25,8 @@ func TestLinodeVLANsListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_vlans_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_vlans_list")
+	if tool.Name != "linode_vlan_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_vlan_list")
 	}
 
 	if tool.Description == "" {
@@ -147,8 +147,8 @@ func TestLinodeVLANsListToolApiErrorReturnsToolError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_vlans_list") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_vlans_list")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_vlan_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_vlan_list")
 	}
 }
 

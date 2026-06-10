@@ -18,10 +18,10 @@ def _is_type_id(value: str) -> bool:
     return bool(value) and all(c.isalnum() or c == "-" for c in value)
 
 
-def create_linode_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_types_list tool."""
+def create_linode_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_type_list tool."""
     return Tool(
-        name="linode_types_list",
+        name="linode_type_list",
         description=(
             "Lists all available Linode instance types (plans) with pricing. "
             "Can filter by class (standard, dedicated, gpu, highmem, premium)."
@@ -46,10 +46,10 @@ def create_linode_types_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_types_list(
+async def handle_linode_type_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_types_list tool request."""
+    """Handle linode_type_list tool request."""
     class_filter: str = arguments.get("class", "")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:

@@ -68,8 +68,9 @@ func RedactionFieldSet() map[string]struct{} {
 // audit reports: email, first_name, last_name, company. Contact-specific
 // name/email tool args use contact_name/contact_email and are redacted. Names dropped
 // after source review because they collide with non-PII tool args:
-// country (linode_regions_list filter), address (network/IP address
-// in linode_instance_ips, linode_networking, linode_nodebalancers).
+// country (linode_region_list filter), address (network/IP address
+// in the linode_instance_ip_*, linode_networking_*, and
+// linode_nodebalancer_* families).
 func RedactionFieldsPII() []string {
 	return []string{
 		"address_1",

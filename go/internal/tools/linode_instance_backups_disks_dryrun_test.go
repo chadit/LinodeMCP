@@ -254,8 +254,8 @@ func TestLinodeInstanceFirewallsApplyToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_instance_firewalls_apply") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_instance_firewalls_apply")
+		if !reflect.DeepEqual(body["tool"], "linode_instance_firewall_apply") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_instance_firewall_apply")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)

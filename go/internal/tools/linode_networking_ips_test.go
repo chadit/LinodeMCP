@@ -32,8 +32,8 @@ func TestLinodeNetworkingIPsListToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeNetworkingIPListTool(&config.Config{})
 
-	if tool.Name != "linode_networking_ips_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ips_list")
+	if tool.Name != "linode_networking_ip_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_list")
 	}
 
 	if tool.Description == "" {
@@ -369,8 +369,8 @@ func TestLinodeNetworkingIPUpdateRDNSToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(&config.Config{})
 
-	if tool.Name != "linode_networking_ip_update_rdns" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_update_rdns")
+	if tool.Name != "linode_networking_ip_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_update")
 	}
 
 	if tool.Description == "" {
@@ -829,8 +829,8 @@ func TestLinodeNetworkingIPAssignToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
 
-	if tool.Name != "linode_networking_ips_assign" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ips_assign")
+	if tool.Name != "linode_networking_ip_assign" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_assign")
 	}
 
 	if tool.Description == "" {
@@ -1357,8 +1357,8 @@ func TestLinodeNetworkingIPShareToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
 
-	if tool.Name != "linode_networking_ips_share" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ips_share")
+	if tool.Name != "linode_networking_ipv4_share" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ipv4_share")
 	}
 
 	if tool.Description == "" {

@@ -17,7 +17,7 @@ import (
 
 const (
 	monitorServiceDashboardsToolPath = "/monitor/services/dbaas/dashboards"
-	monitorServiceDashboardsToolName = "linode_monitor_service_dashboards"
+	monitorServiceDashboardsToolName = "linode_monitor_service_dashboard_list"
 )
 
 func TestLinodeMonitorServiceDashboardsToolDefinition(t *testing.T) {

@@ -272,8 +272,8 @@ func TestLinodeAccountOAuthClientResetSecretToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_account_oauth_client_reset_secret") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_account_oauth_client_reset_secret")
+		if !reflect.DeepEqual(body["tool"], "linode_account_oauth_client_secret_reset") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_account_oauth_client_secret_reset")
 		}
 
 		state, _ := body["current_state"].(map[string]any)

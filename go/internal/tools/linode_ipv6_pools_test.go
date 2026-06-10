@@ -20,8 +20,8 @@ func TestLinodeIPv6PoolsListToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeIPv6PoolsListTool(&config.Config{})
 
-	if tool.Name != "linode_ipv6_pools_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_ipv6_pools_list")
+	if tool.Name != "linode_ipv6_pool_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_ipv6_pool_list")
 	}
 
 	if tool.Description == "" {

@@ -426,8 +426,8 @@ func TestLinodeNodeBalancerConfigNodesListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_nodebalancer_config_nodes_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_nodes_list")
+	if tool.Name != "linode_nodebalancer_config_node_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_node_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -1300,8 +1300,8 @@ func TestLinodeNodeBalancerNodeCreateToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_nodebalancer_node_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_node_create")
+	if tool.Name != "linode_nodebalancer_config_node_create" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_node_create")
 	}
 
 	if capability != profiles.CapWrite {
@@ -1540,8 +1540,8 @@ func TestLinodeNodeBalancerNodeCreateToolDryRunPreviewDoesNotCallClient(t *testi
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "linode_nodebalancer_node_create") {
-		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_node_create")
+	if !strings.Contains(textContent.Text, "linode_nodebalancer_config_node_create") {
+		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_config_node_create")
 	}
 
 	if !strings.Contains(textContent.Text, "POST") {
@@ -1605,8 +1605,8 @@ func TestLinodeNodeBalancerNodeDeleteToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_nodebalancer_node_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_node_delete")
+	if tool.Name != "linode_nodebalancer_config_node_delete" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_node_delete")
 	}
 
 	if capability != profiles.CapDestroy {
@@ -1930,8 +1930,8 @@ func TestLinodeNodeBalancerNodeUpdateToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_nodebalancer_node_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_node_update")
+	if tool.Name != "linode_nodebalancer_config_node_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_config_node_update")
 	}
 
 	if capability != profiles.CapWrite {
@@ -2171,8 +2171,8 @@ func TestLinodeNodeBalancerNodeUpdateToolDryRunPreviewDoesNotCallClient(t *testi
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "linode_nodebalancer_node_update") {
-		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_node_update")
+	if !strings.Contains(textContent.Text, "linode_nodebalancer_config_node_update") {
+		t.Errorf("textContent.Text does not contain %v", "linode_nodebalancer_config_node_update")
 	}
 
 	if !strings.Contains(textContent.Text, "PUT") {

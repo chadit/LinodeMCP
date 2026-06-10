@@ -279,10 +279,10 @@ async def handle_linode_instance_shutdown(
     return await execute_tool(cfg, arguments, "shutdown instance", _call)
 
 
-def create_linode_instance_firewalls_update_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_firewalls_update tool."""
+def create_linode_instance_firewall_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_firewall_update tool."""
     return Tool(
-        name="linode_instance_firewalls_update",
+        name="linode_instance_firewall_update",
         description=(
             "Replaces the firewall assignments for a Linode instance. "
             "Pass an empty firewall_ids list to remove all assignments."
@@ -333,10 +333,10 @@ def create_linode_instance_firewalls_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_instance_firewalls_update(
+async def handle_linode_instance_firewall_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_firewalls_update tool request."""
+    """Handle linode_instance_firewall_update tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return _error_response("linode_id must be a positive integer")
@@ -365,7 +365,7 @@ async def handle_linode_instance_firewalls_update(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_instance_firewalls_update",
+            "linode_instance_firewall_update",
             arguments.get("environment", ""),
             "PUT",
             dry_run_path,
@@ -556,7 +556,7 @@ def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
         description=(
             "Creates a new Linode instance under the current Linode Interfaces "
             "generation. WARNING: Billing starts immediately. Requires "
-            "firewall_id (get one from linode_firewalls_list or create with "
+            "firewall_id (get one from linode_firewall_list or create with "
             "linode_firewall_create). Note: VPC attachment via the current "
             "interface model is not yet supported by this tool; use "
             "linode_vpc_* tools after create."
@@ -651,7 +651,7 @@ def _instance_create_error(
     if not firewall_id or firewall_id <= 0:
         return (
             "firewall_id is required for instance creation. Get a firewall ID "
-            "from linode_firewalls_list, or create one with linode_firewall_create."
+            "from linode_firewall_list, or create one with linode_firewall_create."
         )
     return None
 
@@ -1149,10 +1149,10 @@ async def handle_linode_instance_mutate(
     return await execute_tool(cfg, arguments, "mutate Linode instance", _call)
 
 
-def create_linode_instance_upgrade_interfaces_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_upgrade_interfaces tool."""
+def create_linode_instance_interface_upgrade_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_interface_upgrade tool."""
     return Tool(
-        name="linode_instance_upgrade_interfaces",
+        name="linode_instance_interface_upgrade",
         description="Upgrades a Linode to Linode Interfaces.",
         inputSchema={
             "type": "object",
@@ -1194,10 +1194,10 @@ def create_linode_instance_upgrade_interfaces_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_instance_upgrade_interfaces(
+async def handle_linode_instance_interface_upgrade(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_upgrade_interfaces tool request."""
+    """Handle linode_instance_interface_upgrade tool request."""
     linode_id = _positive_int_argument(arguments, "linode_id")
     if linode_id is None:
         return _error_response("linode_id must be a positive integer")
@@ -1219,7 +1219,7 @@ async def handle_linode_instance_upgrade_interfaces(
 
     if is_dry_run(arguments):
         return build_dry_run_response(
-            "linode_instance_upgrade_interfaces",
+            "linode_instance_interface_upgrade",
             arguments.get("environment", ""),
             "POST",
             f"/linode/instances/{linode_id}/upgrade-interfaces",

@@ -94,10 +94,10 @@ def create_linode_longview_plan_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_longview_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_longview_types_list tool."""
+def create_linode_longview_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_type_list tool."""
     return Tool(
-        name="linode_longview_types_list",
+        name="linode_longview_type_list",
         description="Lists Longview types.",
         inputSchema={
             "type": "object",
@@ -108,10 +108,10 @@ def create_linode_longview_types_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_longview_clients_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_longview_clients_list tool."""
+def create_linode_longview_client_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_client_list tool."""
     return Tool(
-        name="linode_longview_clients_list",
+        name="linode_longview_client_list",
         description="Lists Longview clients on the account.",
         inputSchema={
             "type": "object",
@@ -181,10 +181,10 @@ def create_linode_longview_plan_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def create_linode_longview_subscriptions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_longview_subscriptions_list tool."""
+def create_linode_longview_subscription_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_longview_subscription_list tool."""
     return Tool(
-        name="linode_longview_subscriptions_list",
+        name="linode_longview_subscription_list",
         description="Lists Longview subscriptions on the account.",
         inputSchema={
             "type": "object",
@@ -334,10 +334,10 @@ async def handle_linode_longview_client_update(
     return await execute_tool(cfg, arguments, "update Longview client", _call)
 
 
-async def handle_linode_longview_types_list(
+async def handle_linode_longview_type_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_longview_types_list tool request."""
+    """Handle linode_longview_type_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.list_longview_types()
@@ -345,10 +345,10 @@ async def handle_linode_longview_types_list(
     return await execute_tool(cfg, arguments, "list Longview types", _call)
 
 
-async def handle_linode_longview_clients_list(
+async def handle_linode_longview_client_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_longview_clients_list tool request."""
+    """Handle linode_longview_client_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -507,10 +507,10 @@ async def handle_linode_longview_plan_update(
     return await execute_tool(cfg, arguments, "update Longview plan", _call)
 
 
-async def handle_linode_longview_subscriptions_list(
+async def handle_linode_longview_subscription_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_longview_subscriptions_list tool request."""
+    """Handle linode_longview_subscription_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)

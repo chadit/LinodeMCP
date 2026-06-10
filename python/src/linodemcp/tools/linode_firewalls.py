@@ -12,10 +12,10 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_firewalls_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_firewalls_list tool."""
+def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_list tool."""
     return Tool(
-        name="linode_firewalls_list",
+        name="linode_firewall_list",
         description=(
             "Lists all Cloud Firewalls on your account. Can filter by status or label."
         ),
@@ -153,10 +153,10 @@ async def handle_linode_firewall_rules_get(
     return await execute_tool(cfg, arguments, "retrieve firewall rules", _call)
 
 
-async def handle_linode_firewalls_list(
+async def handle_linode_firewall_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_firewalls_list tool request."""
+    """Handle linode_firewall_list tool request."""
     status_filter = arguments.get("status", "")
     label_contains = arguments.get("label_contains", "")
 
@@ -204,10 +204,10 @@ async def handle_linode_firewalls_list(
     return await execute_tool(cfg, arguments, "retrieve firewalls", _call)
 
 
-def create_linode_firewall_rule_versions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_firewall_rule_versions_list tool."""
+def create_linode_firewall_rule_version_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_rule_version_list tool."""
     return Tool(
-        name="linode_firewall_rule_versions_list",
+        name="linode_firewall_rule_version_list",
         description=("Lists all rule versions (history) for a Cloud Firewall by ID."),
         inputSchema={
             "type": "object",
@@ -223,10 +223,10 @@ def create_linode_firewall_rule_versions_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_firewall_rule_versions_list(
+async def handle_linode_firewall_rule_version_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_firewall_rule_versions_list tool request."""
+    """Handle linode_firewall_rule_version_list tool request."""
     firewall_id = arguments.get("firewall_id")
     if not firewall_id:
         return error_response("firewall_id is required")
@@ -309,10 +309,10 @@ def create_linode_firewall_device_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_firewall_devices_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_firewall_devices_list tool."""
+def create_linode_firewall_device_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_device_list tool."""
     return Tool(
-        name="linode_firewall_devices_list",
+        name="linode_firewall_device_list",
         description="Lists devices attached to a Cloud Firewall by ID.",
         inputSchema={
             "type": "object",
@@ -389,10 +389,10 @@ def _parse_positive_integer_arg(
     return parsed, None
 
 
-async def handle_linode_firewall_devices_list(
+async def handle_linode_firewall_device_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_firewall_devices_list tool request."""
+    """Handle linode_firewall_device_list tool request."""
     fw_id, error = _parse_positive_integer_arg(arguments, "firewall_id", required=True)
     if error is not None:
         return error
@@ -490,10 +490,10 @@ async def handle_linode_firewall_settings_get(
     return await execute_tool(cfg, arguments, "list default firewall settings", _call)
 
 
-def create_linode_firewall_templates_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_firewall_templates_list tool."""
+def create_linode_firewall_template_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_template_list tool."""
     return Tool(
-        name="linode_firewall_templates_list",
+        name="linode_firewall_template_list",
         description="Lists Cloud Firewall Templates.",
         inputSchema={
             "type": "object",
@@ -512,10 +512,10 @@ def create_linode_firewall_templates_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_firewall_templates_list(
+async def handle_linode_firewall_template_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_firewall_templates_list tool request."""
+    """Handle linode_firewall_template_list tool request."""
     page, error = _parse_positive_integer_arg(arguments, "page", required=False)
     if error is not None:
         return error

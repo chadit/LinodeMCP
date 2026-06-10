@@ -438,8 +438,8 @@ func TestLinodeImageShareGroupImagesAddToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_image_sharegroup_images_add") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_image_sharegroup_images_add")
+		if !reflect.DeepEqual(body["tool"], "linode_image_sharegroup_image_add") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_image_sharegroup_image_add")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -594,8 +594,8 @@ func TestLinodeImageShareGroupMembersAddToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_image_sharegroup_members_add") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_image_sharegroup_members_add")
+		if !reflect.DeepEqual(body["tool"], "linode_image_sharegroup_member_add") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_image_sharegroup_member_add")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -754,8 +754,8 @@ func TestLinodeImageShareGroupMemberUpdateToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_image_sharegroup_member_update") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_image_sharegroup_member_update")
+		if !reflect.DeepEqual(body["tool"], "linode_image_sharegroup_member_token_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_image_sharegroup_member_token_update")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)

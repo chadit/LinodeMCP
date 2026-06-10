@@ -22,8 +22,8 @@ func TestLinodeFirewallTemplatesListToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeFirewallTemplatesListTool(&config.Config{})
 
-	if tool.Name != "linode_firewall_templates_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_templates_list")
+	if tool.Name != "linode_firewall_template_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_template_list")
 	}
 
 	if tool.Description == "" {
@@ -160,8 +160,8 @@ func TestLinodeFirewallTemplatesListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_templates_list") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_templates_list")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_template_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_template_list")
 	}
 }
 

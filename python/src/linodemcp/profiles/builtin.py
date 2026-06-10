@@ -82,9 +82,9 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "linode_instances_",
             "linode_placement_group_",
             "linode_placement_groups_",
-            "linode_regions_",
-            "linode_kernels_",
-            "linode_types_",
+            "linode_region_",
+            "linode_kernel_",
+            "linode_type_",
             "linode_image_",
             "linode_images_",
             "linode_stackscripts_",
@@ -96,6 +96,8 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "linode_account_",
             "linode_managed_",
+            "linode_tag_",
+            "linode_support_ticket_",
             "linode_profile_app_",
             "linode_profile_preferences_",
             "linode_profile_phone_number_",
@@ -143,7 +145,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
 # the category is informational rather than load-bearing. Listed for
 # completeness and to keep the categorizer total over the tool surface.
 _CORE_TOOL_NAMES: frozenset[str] = frozenset(
-    {"hello", "version", "linode_profile", "linode_account"}
+    {"hello", "version", "linode_profile_get", "linode_account_get"}
 )
 
 
@@ -159,7 +161,7 @@ def categories(tool_name: str) -> list[str]:
     intentionally). An empty list signals "no known category"; the
     caller decides how to render that.
 
-    Core tools (hello, version, linode_profile, linode_account) live
+    Core tools (hello, version, linode_profile_get, linode_account_get) live
     in their own bucket and bypass the prefix walk.
     """
     if tool_name in _CORE_TOOL_NAMES:

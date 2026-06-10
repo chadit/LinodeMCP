@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	managedLinodeSettingsToolName = "linode_managed_linode_settings"
+	managedLinodeSettingsToolName = "linode_managed_linode_settings_list"
 	managedLinodeSettingsPath     = "/managed/linode-settings"
 	managedLinodeSettingsLabel    = "linode123"
 )
@@ -222,8 +222,8 @@ func TestLinodeManagedLinodeSettingsToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_linode_settings") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_linode_settings")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_linode_settings_list") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_linode_settings_list")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

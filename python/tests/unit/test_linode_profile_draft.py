@@ -51,7 +51,7 @@ def fixture_source_profile() -> Profile:
     return Profile(
         name=_CLONE_SOURCE_NAME,
         description="Compute admin clone source",
-        allowed_tools=("linode_instance_boot", "linode_instances_list"),
+        allowed_tools=("linode_instance_boot", "linode_instance_list"),
         allowed_environments=("prod",),
         required_token_scopes=("linodes:read_write",),
         allow_yolo=False,
@@ -260,3 +260,32 @@ async def test_draft_discard_refuses_missing_name() -> None:
     """Empty name raises DraftNameMissingError (mirrors _new and _show)."""
     with pytest.raises(DraftNameMissingError):
         await handle_linode_profile_draft_discard({})
+
+
+def test_profile_builder_tools_registered_with_server() -> None:
+    """Every profile-builder meta tool must be exported and server-registered.
+
+    These create/handle pairs existed in the tools package but were missing
+    from ``tools.__all__``, so the registry scan never picked them up and the
+    server silently shipped without them. This pins the full set.
+    """
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    builder_tools = [
+        "linode_profile_draft_add_tools",
+        "linode_profile_draft_discard",
+        "linode_profile_draft_new",
+        "linode_profile_draft_remove_tools",
+        "linode_profile_draft_save",
+        "linode_profile_draft_set",
+        "linode_profile_draft_show",
+        "linode_profile_list_categories",
+        "linode_profile_list_tools",
+    ]
+
+    registered = {entry.name for entry in get_tool_registry()}
+    for name in builder_tools:
+        assert f"create_{name}_tool" in tools_mod.__all__, name
+        assert f"handle_{name}" in tools_mod.__all__, name
+        assert name in registered, f"{name} is not registered with the server"

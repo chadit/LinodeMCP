@@ -34,23 +34,23 @@ def _synthetic_registry() -> list[ToolDescriptor]:
         # Core and read tools (always included in every built-in).
         ToolDescriptor("hello", Capability.Meta),
         ToolDescriptor("version", Capability.Meta),
-        ToolDescriptor("linode_profile", Capability.Read),
-        ToolDescriptor("linode_account", Capability.Read),
+        ToolDescriptor("linode_profile_get", Capability.Read),
+        ToolDescriptor("linode_account_get", Capability.Read),
         # Compute.
-        ToolDescriptor("linode_instances_list", Capability.Read),
+        ToolDescriptor("linode_instance_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),
         ToolDescriptor("linode_instance_create", Capability.Write),
         ToolDescriptor("linode_instance_delete", Capability.Destroy),
         # Block storage. Mix of read and mutate so wildcards have real tools
         # to match against.
-        ToolDescriptor("linode_volumes_list", Capability.Read),
+        ToolDescriptor("linode_volume_list", Capability.Read),
         ToolDescriptor("linode_volume_get", Capability.Read),
         ToolDescriptor("linode_volume_clone", Capability.Write),
         ToolDescriptor("linode_volume_create", Capability.Write),
         ToolDescriptor("linode_volume_update", Capability.Write),
         ToolDescriptor("linode_volume_delete", Capability.Destroy),
         # Networking. Used by the "non-builtin override is ignored" test.
-        ToolDescriptor("linode_firewalls_list", Capability.Read),
+        ToolDescriptor("linode_firewall_list", Capability.Read),
         ToolDescriptor("linode_firewall_create", Capability.Write),
     ]
 
@@ -124,7 +124,7 @@ def test_user_defined_profile_with_literal_tool() -> None:
         profiles={
             "my-prof": UserProfileConfig(
                 description="just volumes list",
-                allowed_tools=("linode_volumes_list",),
+                allowed_tools=("linode_volume_list",),
             ),
         },
     )
@@ -132,7 +132,7 @@ def test_user_defined_profile_with_literal_tool() -> None:
     profile = resolve_active_profile(cfg, registry)
 
     assert profile.name == "my-prof"
-    assert profile.allowed_tools == ("linode_volumes_list",)
+    assert profile.allowed_tools == ("linode_volume_list",)
 
 
 def test_wildcard_expansion_resolves_every_matching_tool() -> None:
@@ -151,6 +151,7 @@ def test_wildcard_expansion_resolves_every_matching_tool() -> None:
     profile = resolve_active_profile(cfg, registry)
 
     assert set(profile.allowed_tools) == {
+        "linode_volume_list",
         "linode_volume_get",
         "linode_volume_clone",
         "linode_volume_create",
@@ -244,7 +245,7 @@ def test_override_naming_non_builtin_is_ignored_with_warning(
         profiles={
             "my-custom": UserProfileConfig(
                 description="user profile sharing a name with an override",
-                allowed_tools=("linode_volumes_list",),
+                allowed_tools=("linode_volume_list",),
             ),
         },
         overrides={"my-custom": BuiltinOverride(disabled=True)},
@@ -255,7 +256,7 @@ def test_override_naming_non_builtin_is_ignored_with_warning(
 
     # The user-defined profile loads normally despite the bogus override.
     assert profile.name == "my-custom"
-    assert profile.allowed_tools == ("linode_volumes_list",)
+    assert profile.allowed_tools == ("linode_volume_list",)
     ignored_warnings = [
         record
         for record in caplog.records

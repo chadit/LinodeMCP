@@ -150,8 +150,8 @@ async def test_version_handler_returns_version_info() -> None:
 async def test_config_handler_profile_dispatch(
     sample_config: Config, sample_profile_data: dict[str, Any]
 ) -> None:
-    """Config-based handler for linode_profile calls the client and returns data."""
-    from linodemcp.tools import handle_linode_profile
+    """Config-based handler for linode_profile_get calls the client and returns data."""
+    from linodemcp.tools import handle_linode_profile_get
 
     mock_profile = Profile(
         username=sample_profile_data["username"],
@@ -170,7 +170,7 @@ async def test_config_handler_profile_dispatch(
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_profile({}, sample_config)
+        result = await handle_linode_profile_get({}, sample_config)
 
         assert len(result) == 1
         assert "testuser" in result[0].text
@@ -259,14 +259,14 @@ async def test_longview_subscriptions_list_tool_is_exported_and_registered(
     """Longview subscriptions list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_longview_subscriptions_list_tool" in tools_mod.__all__
-    assert "handle_linode_longview_subscriptions_list" in tools_mod.__all__
+    assert "create_linode_longview_subscription_list_tool" in tools_mod.__all__
+    assert "handle_linode_longview_subscription_list" in tools_mod.__all__
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_longview_subscriptions_list"].capability is not None
+    assert registry["linode_longview_subscription_list"].capability is not None
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_longview_subscriptions_list" in srv.registered_tool_names
+    assert "linode_longview_subscription_list" in srv.registered_tool_names
 
 
 async def test_longview_subscriptions_list_dispatches_from_registry(
@@ -289,7 +289,7 @@ async def test_longview_subscriptions_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_longview_subscriptions_list", {"page": 2, "page_size": 25}
+            "linode_longview_subscription_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -305,7 +305,7 @@ async def test_longview_subscriptions_list_rejects_bad_pagination(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_longview_subscriptions_list", {"page": "bad"}
+            "linode_longview_subscription_list", {"page": "bad"}
         )
 
     assert "page must be an integer" in result[0].text
@@ -318,14 +318,14 @@ async def test_linode_kernels_list_tool_is_exported_and_registered(
     """Kernels list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_kernels_list_tool" in tools_mod.__all__
-    assert "handle_linode_kernels_list" in tools_mod.__all__
+    assert "create_linode_kernel_list_tool" in tools_mod.__all__
+    assert "handle_linode_kernel_list" in tools_mod.__all__
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_kernels_list"].capability is not None
+    assert registry["linode_kernel_list"].capability is not None
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_kernels_list" in srv.registered_tool_names
+    assert "linode_kernel_list" in srv.registered_tool_names
 
 
 async def test_placement_group_create_tool_is_exported_and_registered(
@@ -475,11 +475,11 @@ async def test_object_storage_quotas_list_tool_is_exported_and_registered(
     """Object Storage quotas list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_object_storage_quotas_list_tool" in tools_mod.__all__
-    assert "handle_linode_object_storage_quotas_list" in tools_mod.__all__
+    assert "create_linode_object_storage_quota_list_tool" in tools_mod.__all__
+    assert "handle_linode_object_storage_quota_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_object_storage_quotas_list" in srv.registered_tool_names
+    assert "linode_object_storage_quota_list" in srv.registered_tool_names
 
 
 async def test_deprecated_object_storage_clusters_list_tool_absent(
@@ -504,8 +504,8 @@ async def test_deprecated_object_storage_clusters_list_tool_absent(
     assert "linode_object_storage_clusters_list" not in FEATURE_TOOLS_LIST.split(",")
     assert "linode_object_storage_cluster_get" not in FEATURE_TOOLS_LIST.split(",")
     assert "linode_object_storage_cluster_get" in REMOVED_FEATURE_TOOLS_LIST.split(",")
-    assert "linode_regions_get" in registry
-    assert "linode_regions_get" in srv.registered_tool_names
+    assert "linode_region_get" in registry
+    assert "linode_region_get" in srv.registered_tool_names
 
 
 async def test_object_storage_endpoints_list_tool_is_exported_and_registered(
@@ -514,11 +514,11 @@ async def test_object_storage_endpoints_list_tool_is_exported_and_registered(
     """Object Storage endpoints list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_object_storage_endpoints_list_tool" in tools_mod.__all__
-    assert "handle_linode_object_storage_endpoints_list" in tools_mod.__all__
+    assert "create_linode_object_storage_endpoint_list_tool" in tools_mod.__all__
+    assert "handle_linode_object_storage_endpoint_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_object_storage_endpoints_list" in srv.registered_tool_names
+    assert "linode_object_storage_endpoint_list" in srv.registered_tool_names
 
 
 async def test_deprecated_object_storage_cluster_get_tool_is_not_dispatchable(
@@ -547,11 +547,11 @@ async def test_network_transfer_prices_tool_is_exported_and_registered(
     """Network transfer prices tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_network_transfer_prices_tool" in tools_mod.__all__
-    assert "handle_linode_network_transfer_prices" in tools_mod.__all__
+    assert "create_linode_network_transfer_price_list_tool" in tools_mod.__all__
+    assert "handle_linode_network_transfer_price_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_network_transfer_prices" in srv.registered_tool_names
+    assert "linode_network_transfer_price_list" in srv.registered_tool_names
 
 
 async def test_network_transfer_prices_handler_returns_client_response(
@@ -568,7 +568,7 @@ async def test_network_transfer_prices_handler_returns_client_response(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_network_transfer_prices", {})
+        result = await srv.dispatch("linode_network_transfer_price_list", {})
 
     mock_client.get_network_transfer_prices.assert_awaited_once_with()
     assert json.loads(result[0].text) == {"data": [{"id": "transfer"}]}
@@ -588,7 +588,7 @@ async def test_network_transfer_prices_handler_returns_error_response_on_client_
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_network_transfer_prices", {})
+        result = await srv.dispatch("linode_network_transfer_price_list", {})
 
     assert "failed to retrieve network transfer prices" in result[0].text.lower()
     assert "GetNetworkTransferPrices" in result[0].text
@@ -600,11 +600,13 @@ async def test_object_storage_buckets_region_list_tool_is_exported_and_registere
     """Object Storage region bucket list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_object_storage_buckets_region_list_tool" in tools_mod.__all__
-    assert "handle_linode_object_storage_buckets_region_list" in tools_mod.__all__
+    assert (
+        "create_linode_object_storage_bucket_by_region_list_tool" in tools_mod.__all__
+    )
+    assert "handle_linode_object_storage_bucket_by_region_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_object_storage_buckets_region_list" in srv.registered_tool_names
+    assert "linode_object_storage_bucket_by_region_list" in srv.registered_tool_names
 
 
 async def test_object_storage_quota_get_tool_is_exported_and_registered(
@@ -626,11 +628,11 @@ async def test_object_storage_quota_usage_tool_is_exported_and_registered(
     """Object Storage quota usage tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_object_storage_quota_usage_tool" in tools_mod.__all__
-    assert "handle_linode_object_storage_quota_usage" in tools_mod.__all__
+    assert "create_linode_object_storage_quota_usage_get_tool" in tools_mod.__all__
+    assert "handle_linode_object_storage_quota_usage_get" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_object_storage_quota_usage" in srv.registered_tool_names
+    assert "linode_object_storage_quota_usage_get" in srv.registered_tool_names
 
 
 async def test_domain_clone_tool_is_exported_and_registered(
@@ -734,11 +736,11 @@ async def test_regions_get_tool_is_exported_and_registered(
     """Region get tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_regions_get_tool" in tools_mod.__all__
-    assert "handle_linode_regions_get" in tools_mod.__all__
+    assert "create_linode_region_get_tool" in tools_mod.__all__
+    assert "handle_linode_region_get" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_regions_get" in srv.registered_tool_names
+    assert "linode_region_get" in srv.registered_tool_names
 
 
 async def test_firewall_get_tool_is_exported_and_registered(
@@ -825,11 +827,11 @@ async def test_firewall_rule_versions_list_tool_is_exported_and_registered(
     """Firewall rule versions list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_firewall_rule_versions_list_tool" in tools_mod.__all__
-    assert "handle_linode_firewall_rule_versions_list" in tools_mod.__all__
+    assert "create_linode_firewall_rule_version_list_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_rule_version_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_firewall_rule_versions_list" in srv.registered_tool_names
+    assert "linode_firewall_rule_version_list" in srv.registered_tool_names
 
 
 async def test_firewall_devices_list_tool_is_exported_and_registered(
@@ -838,11 +840,11 @@ async def test_firewall_devices_list_tool_is_exported_and_registered(
     """Verify the firewall devices list tool is exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_firewall_devices_list_tool" in tools_mod.__all__
-    assert "handle_linode_firewall_devices_list" in tools_mod.__all__
+    assert "create_linode_firewall_device_list_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_device_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_firewall_devices_list" in srv.registered_tool_names
+    assert "linode_firewall_device_list" in srv.registered_tool_names
 
 
 async def test_firewall_rules_update_tool_is_exported_and_registered(
@@ -1021,17 +1023,17 @@ async def test_linode_instance_firewalls_apply_tool_is_exported_and_registered(
     """Linode firewall apply tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_instance_firewalls_apply_tool" in tools_mod.__all__
-    assert "handle_linode_instance_firewalls_apply" in tools_mod.__all__
+    assert "create_linode_instance_firewall_apply_tool" in tools_mod.__all__
+    assert "handle_linode_instance_firewall_apply" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_instance_firewalls_apply_tool()
-    assert tool.name == "linode_instance_firewalls_apply"
+    tool, capability = tools_mod.create_linode_instance_firewall_apply_tool()
+    assert tool.name == "linode_instance_firewall_apply"
     assert capability is Capability.Write
     assert "confirm" in tool.inputSchema["required"]
     assert "dry_run" in tool.inputSchema["properties"]
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_firewalls_apply" in srv.registered_tool_names
+    assert "linode_instance_firewall_apply" in srv.registered_tool_names
 
 
 async def test_firewall_settings_update_tool_is_exported_and_registered(
@@ -1128,23 +1130,23 @@ async def test_firewall_templates_list_tool_is_exported_and_registered(
     """Firewall templates list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_firewall_templates_list_tool" in tools_mod.__all__
-    assert "handle_linode_firewall_templates_list" in tools_mod.__all__
+    assert "create_linode_firewall_template_list_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_template_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_firewall_templates_list_tool()
-    assert tool.name == "linode_firewall_templates_list"
+    tool, capability = tools_mod.create_linode_firewall_template_list_tool()
+    assert tool.name == "linode_firewall_template_list"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     srv = Server(sample_config)
-    assert "linode_firewall_templates_list" in srv.registered_tool_names
+    assert "linode_firewall_template_list" in srv.registered_tool_names
 
 
 async def test_firewall_templates_list_handler_returns_templates(
     sample_config: Config,
 ) -> None:
     """Firewall templates list handler returns client results."""
-    from linodemcp.tools import handle_linode_firewall_templates_list
+    from linodemcp.tools import handle_linode_firewall_template_list
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -1158,7 +1160,7 @@ async def test_firewall_templates_list_handler_returns_templates(
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_firewall_templates_list(
+        result = await handle_linode_firewall_template_list(
             {"page": 2, "page_size": 25}, sample_config
         )
 
@@ -1187,10 +1189,10 @@ async def test_firewall_templates_list_rejects_invalid_pagination(
     sample_config: Config,
 ) -> None:
     """Firewall templates list handler validates pagination before client calls."""
-    from linodemcp.tools import handle_linode_firewall_templates_list
+    from linodemcp.tools import handle_linode_firewall_template_list
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_templates_list(arguments, sample_config)
+        result = await handle_linode_firewall_template_list(arguments, sample_config)
 
     assert len(result) == 1
     assert message in result[0].text
@@ -1273,11 +1275,11 @@ async def test_ipv6_ranges_list_tool_is_exported_and_registered(
     """IPv6 ranges list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_ipv6_ranges_list_tool" in tools_mod.__all__
-    assert "handle_linode_ipv6_ranges_list" in tools_mod.__all__
+    assert "create_linode_ipv6_range_list_tool" in tools_mod.__all__
+    assert "handle_linode_ipv6_range_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_ipv6_ranges_list" in srv.registered_tool_names
+    assert "linode_ipv6_range_list" in srv.registered_tool_names
 
 
 async def test_ipv6_pools_list_tool_is_exported_and_registered(
@@ -1286,11 +1288,11 @@ async def test_ipv6_pools_list_tool_is_exported_and_registered(
     """IPv6 pools list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_ipv6_pools_list_tool" in tools_mod.__all__
-    assert "handle_linode_ipv6_pools_list" in tools_mod.__all__
+    assert "create_linode_ipv6_pool_list_tool" in tools_mod.__all__
+    assert "handle_linode_ipv6_pool_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_ipv6_pools_list" in srv.registered_tool_names
+    assert "linode_ipv6_pool_list" in srv.registered_tool_names
 
 
 async def test_ipv6_pools_list_dispatches_from_registry(
@@ -1312,7 +1314,7 @@ async def test_ipv6_pools_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_ipv6_pools_list", {})
+        result = await srv.dispatch("linode_ipv6_pool_list", {})
 
     assert json.loads(result[0].text) == {
         "count": 1,
@@ -1365,9 +1367,9 @@ async def test_account_agreements_acknowledge_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
 
-    assert "create_linode_account_agreements_acknowledge_tool" in tools_mod.__all__
-    assert "handle_linode_account_agreements_acknowledge" in tools_mod.__all__
-    assert "linode_account_agreements_acknowledge" in srv.registered_tool_names
+    assert "create_linode_account_agreement_acknowledge_tool" in tools_mod.__all__
+    assert "handle_linode_account_agreement_acknowledge" in tools_mod.__all__
+    assert "linode_account_agreement_acknowledge" in srv.registered_tool_names
 
 
 async def test_account_agreements_acknowledge_dispatches_from_registry(
@@ -1385,7 +1387,7 @@ async def test_account_agreements_acknowledge_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_agreements_acknowledge",
+            "linode_account_agreement_acknowledge",
             {"eu_model": True, "confirm": True},
         )
 
@@ -1436,11 +1438,11 @@ async def test_account_agreements_list_tool_is_exported_and_registered(
     """Account agreements list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_agreements_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_agreements_list" in tools_mod.__all__
+    assert "create_linode_account_agreement_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_agreement_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_agreements_list" in srv.registered_tool_names
+    assert "linode_account_agreement_list" in srv.registered_tool_names
 
 
 async def test_account_agreements_list_dispatches_from_registry(
@@ -1459,7 +1461,7 @@ async def test_account_agreements_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_agreements_list", {})
+        result = await srv.dispatch("linode_account_agreement_list", {})
 
     assert json.loads(result[0].text) == response_data
     mock_client.get_account_agreements.assert_awaited_once_with()
@@ -1471,11 +1473,11 @@ async def test_account_logins_list_tool_is_exported_and_registered(
     """Account logins list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_logins_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_logins_list" in tools_mod.__all__
+    assert "create_linode_account_login_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_login_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_logins_list" in srv.registered_tool_names
+    assert "linode_account_login_list" in srv.registered_tool_names
 
 
 async def test_account_logins_list_dispatches_from_registry(
@@ -1498,7 +1500,7 @@ async def test_account_logins_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_logins_list", {"page": 2, "page_size": 25}
+            "linode_account_login_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -1511,7 +1513,7 @@ async def test_account_logins_list_rejects_invalid_page(
     """Account logins list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_logins_list", {"page": 0})
+        result = await srv.dispatch("linode_account_login_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -1523,7 +1525,7 @@ async def test_account_logins_list_rejects_invalid_page_size(
     """Account logins list validates page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_logins_list", {"page_size": 10})
+        result = await srv.dispatch("linode_account_login_list", {"page_size": 10})
 
     assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
@@ -1535,7 +1537,7 @@ async def test_account_logins_list_rejects_non_integer_pagination(
     """Account logins list rejects non-integer pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_logins_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_login_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -1547,26 +1549,26 @@ async def test_databases_engines_list_tool_is_exported_and_registered(
     """Database engines list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_databases_engines_list_tool" in tools_mod.__all__
-    assert "handle_linode_databases_engines_list" in tools_mod.__all__
+    assert "create_linode_database_engine_list_tool" in tools_mod.__all__
+    assert "handle_linode_database_engine_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_databases_engines_list_tool()
-    assert tool.name == "linode_databases_engines_list"
+    tool, capability = tools_mod.create_linode_database_engine_list_tool()
+    assert tool.name == "linode_database_engine_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_databases_engines_list"].capability is Capability.Read
+    assert registry["linode_database_engine_list"].capability is Capability.Read
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_databases_engines_list" in srv.registered_tool_names
+    assert "linode_database_engine_list" in srv.registered_tool_names
 
     list_tools = srv.mcp.request_handlers[ListToolsRequest]
     result = await list_tools(ListToolsRequest(method="tools/list"))
     list_result = cast("ListToolsResult", result.root)
-    assert "linode_databases_engines_list" in {tool.name for tool in list_result.tools}
+    assert "linode_database_engine_list" in {tool.name for tool in list_result.tools}
 
 
 async def test_databases_engines_list_dispatches_from_registry(
@@ -1589,7 +1591,7 @@ async def test_databases_engines_list_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_databases_engines_list", {"page": 2, "page_size": 25}
+            "linode_database_engine_list", {"page": 2, "page_size": 25}
         )
 
     payload = json.loads(result[0].text)
@@ -1615,7 +1617,7 @@ async def test_databases_engines_list_rejects_invalid_pagination(
     """Database engines list validates pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_databases_engines_list", arguments)
+        result = await srv.dispatch("linode_database_engine_list", arguments)
 
     assert message in result[0].text
     mock_client_class.assert_not_called()
@@ -1627,7 +1629,7 @@ async def test_account_logins_list_rejects_oversized_page_size(
     """Account logins list enforces page_size upper bound before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_logins_list", {"page_size": 501})
+        result = await srv.dispatch("linode_account_login_list", {"page_size": 501})
 
     assert "page_size must be at most 500" in result[0].text
     mock_client_class.assert_not_called()
@@ -1639,7 +1641,7 @@ async def test_account_logins_list_rejects_boolean_pagination(
     """Account logins list rejects bool pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_logins_list", {"page": True})
+        result = await srv.dispatch("linode_account_login_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -1651,11 +1653,11 @@ async def test_account_users_list_tool_is_exported_and_registered(
     """Account users list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_users_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_users_list" in tools_mod.__all__
+    assert "create_linode_account_user_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_user_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_users_list" in srv.registered_tool_names
+    assert "linode_account_user_list" in srv.registered_tool_names
 
 
 async def test_account_users_list_dispatches_from_registry(
@@ -1678,7 +1680,7 @@ async def test_account_users_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_users_list", {"page": 2, "page_size": 25}
+            "linode_account_user_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -1691,7 +1693,7 @@ async def test_account_users_list_rejects_invalid_page(
     """Account users list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_users_list", {"page": 0})
+        result = await srv.dispatch("linode_account_user_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -1703,7 +1705,7 @@ async def test_account_users_list_rejects_invalid_page_size(
     """Account users list validates page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_users_list", {"page_size": 10})
+        result = await srv.dispatch("linode_account_user_list", {"page_size": 10})
 
     assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
@@ -1715,7 +1717,7 @@ async def test_account_users_list_rejects_non_integer_pagination(
     """Account users list rejects non-integer pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_users_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_user_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -1727,7 +1729,7 @@ async def test_account_users_list_rejects_oversized_page_size(
     """Account users list enforces page_size upper bound before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_users_list", {"page_size": 501})
+        result = await srv.dispatch("linode_account_user_list", {"page_size": 501})
 
     assert "page_size must be at most 500" in result[0].text
     mock_client_class.assert_not_called()
@@ -1739,7 +1741,7 @@ async def test_account_users_list_rejects_boolean_pagination(
     """Account users list rejects bool pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_users_list", {"page": True})
+        result = await srv.dispatch("linode_account_user_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2074,11 +2076,11 @@ async def test_linode_instance_upgrade_interfaces_tool_is_exported_and_registere
     """Linode instance upgrade interfaces tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_instance_upgrade_interfaces_tool" in tools_mod.__all__
-    assert "handle_linode_instance_upgrade_interfaces" in tools_mod.__all__
+    assert "create_linode_instance_interface_upgrade_tool" in tools_mod.__all__
+    assert "handle_linode_instance_interface_upgrade" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_upgrade_interfaces" in srv.registered_tool_names
+    assert "linode_instance_interface_upgrade" in srv.registered_tool_names
 
 
 async def test_linode_instance_firewalls_update_tool_is_exported_and_registered(
@@ -2087,11 +2089,11 @@ async def test_linode_instance_firewalls_update_tool_is_exported_and_registered(
     """Linode instance firewalls update tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_instance_firewalls_update_tool" in tools_mod.__all__
-    assert "handle_linode_instance_firewalls_update" in tools_mod.__all__
+    assert "create_linode_instance_firewall_update_tool" in tools_mod.__all__
+    assert "handle_linode_instance_firewall_update" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_firewalls_update" in srv.registered_tool_names
+    assert "linode_instance_firewall_update" in srv.registered_tool_names
 
 
 async def test_account_maintenance_list_dispatches_from_registry(
@@ -2122,11 +2124,11 @@ async def test_maintenance_policies_list_tool_is_exported_and_registered(
     """Maintenance policies list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_maintenance_policies_list_tool" in tools_mod.__all__
-    assert "handle_linode_maintenance_policies_list" in tools_mod.__all__
+    assert "create_linode_maintenance_policy_list_tool" in tools_mod.__all__
+    assert "handle_linode_maintenance_policy_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_maintenance_policies_list" in srv.registered_tool_names
+    assert "linode_maintenance_policy_list" in srv.registered_tool_names
 
 
 async def test_maintenance_policies_list_dispatches_from_registry(
@@ -2145,7 +2147,7 @@ async def test_maintenance_policies_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_maintenance_policies_list", {})
+        result = await srv.dispatch("linode_maintenance_policy_list", {})
 
     assert json.loads(result[0].text) == response_data
     mock_client.list_maintenance_policies.assert_awaited_once_with()
@@ -2157,11 +2159,11 @@ async def test_account_oauth_clients_list_tool_is_exported_and_registered(
     """Account OAuth clients list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_oauth_clients_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_oauth_clients_list" in tools_mod.__all__
+    assert "create_linode_account_oauth_client_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_oauth_clients_list" in srv.registered_tool_names
+    assert "linode_account_oauth_client_list" in srv.registered_tool_names
 
 
 async def test_account_oauth_clients_list_dispatches_from_registry(
@@ -2184,7 +2186,7 @@ async def test_account_oauth_clients_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_oauth_clients_list", {"page": 2, "page_size": 25}
+            "linode_account_oauth_client_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -2199,7 +2201,7 @@ async def test_account_oauth_clients_list_rejects_invalid_page(
     """Account OAuth clients list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_oauth_clients_list", {"page": 0})
+        result = await srv.dispatch("linode_account_oauth_client_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -2212,7 +2214,7 @@ async def test_account_oauth_clients_list_rejects_invalid_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_oauth_clients_list", {"page_size": 10}
+            "linode_account_oauth_client_list", {"page_size": 10}
         )
 
     assert "page_size must be at least 25" in result[0].text
@@ -2225,7 +2227,7 @@ async def test_account_oauth_clients_list_rejects_non_integer_pagination(
     """Account OAuth clients list rejects non-integer pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_oauth_clients_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_oauth_client_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2238,7 +2240,7 @@ async def test_account_oauth_clients_list_rejects_oversized_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_oauth_clients_list", {"page_size": 501}
+            "linode_account_oauth_client_list", {"page_size": 501}
         )
 
     assert "page_size must be at most 500" in result[0].text
@@ -2251,7 +2253,7 @@ async def test_account_oauth_clients_list_rejects_boolean_pagination(
     """Account OAuth clients list rejects bool pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_oauth_clients_list", {"page": True})
+        result = await srv.dispatch("linode_account_oauth_client_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2510,11 +2512,11 @@ async def test_account_events_list_tool_is_exported_and_registered(
     """Account events list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_events_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_events_list" in tools_mod.__all__
+    assert "create_linode_account_event_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_event_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_events_list" in srv.registered_tool_names
+    assert "linode_account_event_list" in srv.registered_tool_names
 
 
 async def test_account_events_list_dispatches_from_registry(
@@ -2537,7 +2539,7 @@ async def test_account_events_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_events_list", {"page": 2, "page_size": 25}
+            "linode_account_event_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -2550,11 +2552,11 @@ async def test_account_invoices_list_tool_is_exported_and_registered(
     """Account invoices list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_invoices_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_invoices_list" in tools_mod.__all__
+    assert "create_linode_account_invoice_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_invoice_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_invoices_list" in srv.registered_tool_names
+    assert "linode_account_invoice_list" in srv.registered_tool_names
 
 
 async def test_account_invoices_list_dispatches_from_registry(
@@ -2577,7 +2579,7 @@ async def test_account_invoices_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_invoices_list", {"page": 2, "page_size": 25}
+            "linode_account_invoice_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -2590,11 +2592,11 @@ async def test_account_payments_list_tool_is_exported_and_registered(
     """Account payments list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_payments_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_payments_list" in tools_mod.__all__
+    assert "create_linode_account_payment_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_payment_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_account_payments_list_tool()
-    assert tool.name == "linode_account_payments_list"
+    tool, capability = tools_mod.create_linode_account_payment_list_tool()
+    assert tool.name == "linode_account_payment_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "page", "page_size"}
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
@@ -2603,7 +2605,7 @@ async def test_account_payments_list_tool_is_exported_and_registered(
     assert "required" not in tool.inputSchema
 
     srv = Server(sample_config)
-    assert "linode_account_payments_list" in srv.registered_tool_names
+    assert "linode_account_payment_list" in srv.registered_tool_names
 
 
 async def test_account_payments_list_dispatches_from_registry(
@@ -2626,7 +2628,7 @@ async def test_account_payments_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_payments_list", {"page": 2, "page_size": 25}
+            "linode_account_payment_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -2639,7 +2641,7 @@ async def test_account_payments_list_rejects_invalid_page(
     """Account payments list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_payments_list", {"page": 0})
+        result = await srv.dispatch("linode_account_payment_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -2651,7 +2653,7 @@ async def test_account_payments_list_rejects_invalid_page_size(
     """Account payments list validates page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_payments_list", {"page_size": 10})
+        result = await srv.dispatch("linode_account_payment_list", {"page_size": 10})
 
     assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
@@ -2663,7 +2665,7 @@ async def test_account_payments_list_rejects_non_integer_pagination(
     """Account payments list rejects non-integer pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_payments_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_payment_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2675,7 +2677,7 @@ async def test_account_payments_list_rejects_oversized_page_size(
     """Account payments list enforces page_size upper bound."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_payments_list", {"page_size": 501})
+        result = await srv.dispatch("linode_account_payment_list", {"page_size": 501})
 
     assert "page_size must be at most 500" in result[0].text
     mock_client_class.assert_not_called()
@@ -2687,7 +2689,7 @@ async def test_account_payments_list_rejects_boolean_pagination(
     """Account payments list rejects bool pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_payments_list", {"page": True})
+        result = await srv.dispatch("linode_account_payment_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2699,11 +2701,11 @@ async def test_account_payment_methods_list_tool_is_exported_and_registered(
     """Account payment methods list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_payment_methods_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_payment_methods_list" in tools_mod.__all__
+    assert "create_linode_account_payment_method_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_payment_method_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_account_payment_methods_list_tool()
-    assert tool.name == "linode_account_payment_methods_list"
+    tool, capability = tools_mod.create_linode_account_payment_method_list_tool()
+    assert tool.name == "linode_account_payment_method_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "page", "page_size"}
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
@@ -2712,7 +2714,7 @@ async def test_account_payment_methods_list_tool_is_exported_and_registered(
     assert "required" not in tool.inputSchema
 
     srv = Server(sample_config)
-    assert "linode_account_payment_methods_list" in srv.registered_tool_names
+    assert "linode_account_payment_method_list" in srv.registered_tool_names
 
 
 async def test_account_payment_methods_list_dispatches_from_registry(
@@ -2735,7 +2737,7 @@ async def test_account_payment_methods_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_payment_methods_list", {"page": 2, "page_size": 25}
+            "linode_account_payment_method_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -2750,7 +2752,7 @@ async def test_account_payment_methods_list_rejects_invalid_page(
     """Account payment methods list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_payment_methods_list", {"page": 0})
+        result = await srv.dispatch("linode_account_payment_method_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -2763,7 +2765,7 @@ async def test_account_payment_methods_list_rejects_invalid_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_payment_methods_list", {"page_size": 10}
+            "linode_account_payment_method_list", {"page_size": 10}
         )
 
     assert "page_size must be at least 25" in result[0].text
@@ -2776,9 +2778,7 @@ async def test_account_payment_methods_list_rejects_non_integer_pagination(
     """Account payment methods list rejects non-integer pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch(
-            "linode_account_payment_methods_list", {"page": "2"}
-        )
+        result = await srv.dispatch("linode_account_payment_method_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2791,7 +2791,7 @@ async def test_account_payment_methods_list_rejects_oversized_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_payment_methods_list", {"page_size": 501}
+            "linode_account_payment_method_list", {"page_size": 501}
         )
 
     assert "page_size must be at most 500" in result[0].text
@@ -2805,7 +2805,7 @@ async def test_account_payment_methods_list_rejects_boolean_pagination(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_payment_methods_list", {"page": True}
+            "linode_account_payment_method_list", {"page": True}
         )
 
     assert "page must be an integer" in result[0].text
@@ -2818,11 +2818,11 @@ async def test_account_notifications_list_tool_is_exported_and_registered(
     """Account notifications list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_notifications_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_notifications_list" in tools_mod.__all__
+    assert "create_linode_account_notification_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_notification_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_notifications_list" in srv.registered_tool_names
+    assert "linode_account_notification_list" in srv.registered_tool_names
 
 
 async def test_account_notifications_list_schema_has_no_route_inputs(
@@ -2831,9 +2831,9 @@ async def test_account_notifications_list_schema_has_no_route_inputs(
     """Account notifications list schema exposes no route-specific inputs."""
     from linodemcp import tools as tools_mod
 
-    tool, capability = tools_mod.create_linode_account_notifications_list_tool()
+    tool, capability = tools_mod.create_linode_account_notification_list_tool()
 
-    assert tool.name == "linode_account_notifications_list"
+    assert tool.name == "linode_account_notification_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "page", "page_size"}
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
@@ -2842,7 +2842,7 @@ async def test_account_notifications_list_schema_has_no_route_inputs(
     assert "required" not in tool.inputSchema
 
     srv = Server(sample_config)
-    assert "linode_account_notifications_list" in srv.registered_tool_names
+    assert "linode_account_notification_list" in srv.registered_tool_names
 
 
 async def test_account_notifications_list_dispatches_from_registry(
@@ -2865,7 +2865,7 @@ async def test_account_notifications_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_notifications_list", {"page": 2, "page_size": 25}
+            "linode_account_notification_list", {"page": 2, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -2880,7 +2880,7 @@ async def test_account_notifications_list_rejects_invalid_page(
     """Account notifications list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_notifications_list", {"page": 0})
+        result = await srv.dispatch("linode_account_notification_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -2893,7 +2893,7 @@ async def test_account_notifications_list_rejects_invalid_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_notifications_list", {"page_size": 10}
+            "linode_account_notification_list", {"page_size": 10}
         )
 
     assert "page_size must be at least 25" in result[0].text
@@ -2906,7 +2906,7 @@ async def test_account_notifications_list_rejects_non_integer_pagination(
     """Account notifications list rejects non-integer pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_notifications_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_notification_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2919,7 +2919,7 @@ async def test_account_notifications_list_rejects_oversized_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_notifications_list", {"page_size": 501}
+            "linode_account_notification_list", {"page_size": 501}
         )
 
     assert "page_size must be at most 500" in result[0].text
@@ -2932,7 +2932,7 @@ async def test_account_notifications_list_rejects_boolean_pagination(
     """Account notifications list rejects bool pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_notifications_list", {"page": True})
+        result = await srv.dispatch("linode_account_notification_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2944,7 +2944,7 @@ async def test_account_invoices_list_rejects_invalid_page(
     """Account invoices list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_invoices_list", {"page": 0})
+        result = await srv.dispatch("linode_account_invoice_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -2956,7 +2956,7 @@ async def test_account_invoices_list_rejects_invalid_page_size(
     """Account invoices list validates page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_invoices_list", {"page_size": 10})
+        result = await srv.dispatch("linode_account_invoice_list", {"page_size": 10})
 
     assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
@@ -2968,7 +2968,7 @@ async def test_account_invoices_list_rejects_non_integer_pagination(
     """Account invoices list rejects non-integer pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_invoices_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_invoice_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -2980,7 +2980,7 @@ async def test_account_invoices_list_rejects_oversized_page_size(
     """Account invoices list enforces page_size upper bound before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_invoices_list", {"page_size": 501})
+        result = await srv.dispatch("linode_account_invoice_list", {"page_size": 501})
 
     assert "page_size must be at most 500" in result[0].text
     mock_client_class.assert_not_called()
@@ -2992,7 +2992,7 @@ async def test_account_invoices_list_rejects_boolean_pagination(
     """Account invoices list rejects bool pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_invoices_list", {"page": True})
+        result = await srv.dispatch("linode_account_invoice_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -3004,11 +3004,11 @@ async def test_account_invoice_items_list_tool_is_exported_and_registered(
     """Account invoice items list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_invoice_items_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_invoice_items_list" in tools_mod.__all__
+    assert "create_linode_account_invoice_item_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_invoice_item_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_invoice_items_list" in srv.registered_tool_names
+    assert "linode_account_invoice_item_list" in srv.registered_tool_names
 
 
 async def test_account_invoice_items_list_dispatches_from_registry(
@@ -3031,7 +3031,7 @@ async def test_account_invoice_items_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_invoice_items_list",
+            "linode_account_invoice_item_list",
             {"invoice_id": 123, "page": 2, "page_size": 25},
         )
 
@@ -3061,7 +3061,7 @@ async def test_account_invoice_items_list_rejects_invalid_arguments(
     """Account invoice items list validates route inputs before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_invoice_items_list", arguments)
+        result = await srv.dispatch("linode_account_invoice_item_list", arguments)
 
     assert expected_error in result[0].text
     mock_client_class.assert_not_called()
@@ -3134,7 +3134,7 @@ async def test_account_event_seen_tool_is_exported_registered_and_profiled(
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert set(tool.inputSchema["required"]) == {"event_id", "confirm"}
     assert "account" in categories("linode_account_event_seen")
-    assert "account" in categories("linode_managed_contacts_update")
+    assert "account" in categories("linode_managed_contact_update")
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_account_event_seen" in srv.registered_tool_names
@@ -3261,7 +3261,7 @@ async def test_account_events_list_rejects_invalid_page(
     """Account events list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_events_list", {"page": 0})
+        result = await srv.dispatch("linode_account_event_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -3273,7 +3273,7 @@ async def test_account_events_list_rejects_invalid_page_size(
     """Account events list validates page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_events_list", {"page_size": 10})
+        result = await srv.dispatch("linode_account_event_list", {"page_size": 10})
 
     assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
@@ -3285,7 +3285,7 @@ async def test_account_events_list_rejects_non_integer_pagination(
     """Account events list rejects non-integer pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_events_list", {"page": "2"})
+        result = await srv.dispatch("linode_account_event_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -3297,7 +3297,7 @@ async def test_account_events_list_rejects_oversized_page_size(
     """Account events list enforces page_size upper bound before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_events_list", {"page_size": 501})
+        result = await srv.dispatch("linode_account_event_list", {"page_size": 501})
 
     assert "page_size must be at most 500" in result[0].text
     mock_client_class.assert_not_called()
@@ -3309,7 +3309,7 @@ async def test_account_events_list_rejects_boolean_pagination(
     """Account events list rejects bool pagination before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_events_list", {"page": True})
+        result = await srv.dispatch("linode_account_event_list", {"page": True})
 
     assert "page must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -6512,15 +6512,15 @@ async def test_account_betas_list_tool_remains_exported_and_registered(
     """Account beta enrollment list tool remains exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_betas_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_betas_list" in tools_mod.__all__
+    assert "create_linode_account_beta_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_beta_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_account_betas_list_tool()
-    assert tool.name == "linode_account_betas_list"
+    tool, capability = tools_mod.create_linode_account_beta_list_tool()
+    assert tool.name == "linode_account_beta_list"
     assert capability is Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_account_betas_list" in srv.registered_tool_names
+    assert "linode_account_beta_list" in srv.registered_tool_names
 
 
 async def test_account_betas_list_dispatches_from_registry(
@@ -6538,7 +6538,7 @@ async def test_account_betas_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_betas_list", {"page": 1, "page_size": 25}
+            "linode_account_beta_list", {"page": 1, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -6551,11 +6551,11 @@ async def test_database_cluster_create_tool_is_exported_and_registered(
     """MySQL database create tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_database_cluster_create_tool" in tools_mod.__all__
-    assert "handle_linode_database_cluster_create" in tools_mod.__all__
+    assert "create_linode_database_mysql_instance_create_tool" in tools_mod.__all__
+    assert "handle_linode_database_mysql_instance_create" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_database_cluster_create_tool()
-    assert tool.name == "linode_database_cluster_create"
+    tool, capability = tools_mod.create_linode_database_mysql_instance_create_tool()
+    assert tool.name == "linode_database_mysql_instance_create"
     assert capability is Capability.Write
     assert set(tool.inputSchema["required"]) == {
         "label",
@@ -6568,7 +6568,7 @@ async def test_database_cluster_create_tool_is_exported_and_registered(
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_database_cluster_create" in srv.registered_tool_names
+    assert "linode_database_mysql_instance_create" in srv.registered_tool_names
 
 
 async def test_database_cluster_create_dispatches_from_registry(
@@ -6601,7 +6601,7 @@ async def test_database_cluster_create_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_database_cluster_create", arguments)
+        result = await srv.dispatch("linode_database_mysql_instance_create", arguments)
 
     assert json.loads(result[0].text) == response_data
     mock_client.create_mysql_database_instance.assert_awaited_once_with(
@@ -6630,7 +6630,7 @@ async def test_database_cluster_create_rejects_non_true_confirm(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_database_cluster_create", arguments)
+        result = await srv.dispatch("linode_database_mysql_instance_create", arguments)
 
     assert "Set confirm=true to proceed" in result[0].text
     mock_client.create_mysql_database_instance.assert_not_called()
@@ -6786,7 +6786,7 @@ async def test_database_cluster_create_rejects_invalid_arguments(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_database_cluster_create", arguments)
+        result = await srv.dispatch("linode_database_mysql_instance_create", arguments)
 
     assert expected_error in result[0].text
     mock_client.create_mysql_database_instance.assert_not_called()
@@ -6812,7 +6812,7 @@ async def test_database_cluster_create_dry_run_previews_without_client_call(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_database_cluster_create", arguments)
+        result = await srv.dispatch("linode_database_mysql_instance_create", arguments)
 
     payload = json.loads(result[0].text)
     assert payload["dry_run"] is True
@@ -7179,14 +7179,18 @@ async def test_database_postgresql_credentials_reset_tool_is_exported_and_regist
     from linodemcp import tools as tools_mod
 
     assert (
-        "create_linode_database_postgresql_credentials_reset_tool" in tools_mod.__all__
+        "create_linode_database_postgresql_instance_credentials_reset_tool"
+        in tools_mod.__all__
     )
-    assert "handle_linode_database_postgresql_credentials_reset" in tools_mod.__all__
+    assert (
+        "handle_linode_database_postgresql_instance_credentials_reset"
+        in tools_mod.__all__
+    )
 
     tool, capability = (
-        tools_mod.create_linode_database_postgresql_credentials_reset_tool()
+        tools_mod.create_linode_database_postgresql_instance_credentials_reset_tool()
     )
-    assert tool.name == "linode_database_postgresql_credentials_reset"
+    assert tool.name == "linode_database_postgresql_instance_credentials_reset"
     assert capability is Capability.Write
     assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -7194,7 +7198,10 @@ async def test_database_postgresql_credentials_reset_tool_is_exported_and_regist
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_database_postgresql_credentials_reset" in srv.registered_tool_names
+    assert (
+        "linode_database_postgresql_instance_credentials_reset"
+        in srv.registered_tool_names
+    )
 
 
 async def test_database_postgresql_credentials_reset_dispatches_from_registry(
@@ -7212,7 +7219,7 @@ async def test_database_postgresql_credentials_reset_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_postgresql_credentials_reset",
+            "linode_database_postgresql_instance_credentials_reset",
             {"instance_id": 123, "confirm": True},
         )
 
@@ -7232,7 +7239,7 @@ async def test_database_postgresql_credentials_reset_requires_boolean_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_postgresql_credentials_reset", arguments
+            "linode_database_postgresql_instance_credentials_reset", arguments
         )
 
     assert "confirm" in result[0].text
@@ -7257,7 +7264,7 @@ async def test_database_postgresql_credentials_reset_rejects_invalid_instance_id
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_postgresql_credentials_reset", arguments
+            "linode_database_postgresql_instance_credentials_reset", arguments
         )
 
     assert "instance_id must be a positive integer" in result[0].text
@@ -7271,7 +7278,7 @@ async def test_database_postgresql_credentials_reset_dry_run_encodes_path(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_postgresql_credentials_reset",
+            "linode_database_postgresql_instance_credentials_reset",
             {"instance_id": 123, "confirm": True, "dry_run": True},
         )
 
@@ -7290,11 +7297,18 @@ async def test_database_mysql_credentials_reset_tool_is_exported_and_registered(
     """MySQL credential reset tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_database_mysql_credentials_reset_tool" in tools_mod.__all__
-    assert "handle_linode_database_mysql_credentials_reset" in tools_mod.__all__
+    assert (
+        "create_linode_database_mysql_instance_credentials_reset_tool"
+        in tools_mod.__all__
+    )
+    assert (
+        "handle_linode_database_mysql_instance_credentials_reset" in tools_mod.__all__
+    )
 
-    tool, capability = tools_mod.create_linode_database_mysql_credentials_reset_tool()
-    assert tool.name == "linode_database_mysql_credentials_reset"
+    tool, capability = (
+        tools_mod.create_linode_database_mysql_instance_credentials_reset_tool()
+    )
+    assert tool.name == "linode_database_mysql_instance_credentials_reset"
     assert capability is Capability.Write
     assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -7302,7 +7316,9 @@ async def test_database_mysql_credentials_reset_tool_is_exported_and_registered(
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_database_mysql_credentials_reset" in srv.registered_tool_names
+    assert (
+        "linode_database_mysql_instance_credentials_reset" in srv.registered_tool_names
+    )
 
 
 async def test_database_mysql_credentials_reset_dispatches_from_registry(
@@ -7320,7 +7336,7 @@ async def test_database_mysql_credentials_reset_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_mysql_credentials_reset",
+            "linode_database_mysql_instance_credentials_reset",
             {"instance_id": 123, "confirm": True},
         )
 
@@ -7340,7 +7356,7 @@ async def test_database_mysql_credentials_reset_requires_boolean_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_mysql_credentials_reset", arguments
+            "linode_database_mysql_instance_credentials_reset", arguments
         )
 
     assert "confirm" in result[0].text
@@ -7365,7 +7381,7 @@ async def test_database_mysql_credentials_reset_rejects_invalid_instance_id(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_mysql_credentials_reset", arguments
+            "linode_database_mysql_instance_credentials_reset", arguments
         )
 
     assert "instance_id must be a positive integer" in result[0].text
@@ -7379,7 +7395,7 @@ async def test_database_mysql_credentials_reset_dry_run_encodes_path(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_database_mysql_credentials_reset",
+            "linode_database_mysql_instance_credentials_reset",
             {"instance_id": 123, "confirm": True, "dry_run": True},
         )
 
@@ -8797,18 +8813,18 @@ async def test_database_mysql_instances_list_tool_is_exported_and_registered(
     """MySQL Managed Database list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_database_mysql_instances_list_tool" in tools_mod.__all__
-    assert "handle_linode_database_mysql_instances_list" in tools_mod.__all__
+    assert "create_linode_database_mysql_instance_list_tool" in tools_mod.__all__
+    assert "handle_linode_database_mysql_instance_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_database_mysql_instances_list_tool()
-    assert tool.name == "linode_database_mysql_instances_list"
+    tool, capability = tools_mod.create_linode_database_mysql_instance_list_tool()
+    assert tool.name == "linode_database_mysql_instance_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
-    assert "linode_database_mysql_instances_list" in srv.registered_tool_names
+    assert "linode_database_mysql_instance_list" in srv.registered_tool_names
 
 
 async def test_database_mysql_instances_list_dispatches_from_registry(
@@ -8831,7 +8847,7 @@ async def test_database_mysql_instances_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_database_mysql_instances_list", {"page": 1, "page_size": 25}
+            "linode_database_mysql_instance_list", {"page": 1, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -8854,7 +8870,7 @@ async def test_database_mysql_instances_list_rejects_invalid_page(
     """MySQL Managed Database list rejects invalid page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_database_mysql_instances_list", arguments)
+        result = await srv.dispatch("linode_database_mysql_instance_list", arguments)
 
     assert expected_error in result[0].text
     mock_client_class.assert_not_called()
@@ -8875,7 +8891,7 @@ async def test_database_mysql_instances_list_rejects_invalid_page_size(
     """MySQL Managed Database list rejects invalid page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_database_mysql_instances_list", arguments)
+        result = await srv.dispatch("linode_database_mysql_instance_list", arguments)
 
     assert expected_error in result[0].text
     mock_client_class.assert_not_called()
@@ -8943,19 +8959,19 @@ async def test_database_postgresql_instances_list_tool_is_exported_and_registere
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_database_postgresql_instances_list_tool" in tools_mod.__all__
-    assert "handle_linode_database_postgresql_instances_list" in tools_mod.__all__
+    assert "create_linode_database_postgresql_instance_list_tool" in tools_mod.__all__
+    assert "handle_linode_database_postgresql_instance_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_database_postgresql_instances_list_tool()
-    assert tool.name == "linode_database_postgresql_instances_list"
+    tool, capability = tools_mod.create_linode_database_postgresql_instance_list_tool()
+    assert tool.name == "linode_database_postgresql_instance_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
-    assert "linode_database_postgresql_instances_list" in srv.registered_tool_names
-    assert "linode_database_postgresql_instances_list" in get_version_info().features[
+    assert "linode_database_postgresql_instance_list" in srv.registered_tool_names
+    assert "linode_database_postgresql_instance_list" in get_version_info().features[
         "tools"
     ].split(",")
 
@@ -8980,7 +8996,7 @@ async def test_database_postgresql_instances_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_database_postgresql_instances_list",
+            "linode_database_postgresql_instance_list",
             {"page": 1, "page_size": 25},
         )
 
@@ -9005,7 +9021,7 @@ async def test_database_postgresql_instances_list_rejects_invalid_page(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_database_postgresql_instances_list", arguments
+            "linode_database_postgresql_instance_list", arguments
         )
 
     assert expected_error in result[0].text
@@ -9028,7 +9044,7 @@ async def test_database_postgresql_instances_list_rejects_invalid_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_database_postgresql_instances_list", arguments
+            "linode_database_postgresql_instance_list", arguments
         )
 
     assert expected_error in result[0].text
@@ -9041,18 +9057,18 @@ async def test_database_instances_list_tool_is_exported_and_registered(
     """Managed Database list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_database_instances_list_tool" in tools_mod.__all__
-    assert "handle_linode_database_instances_list" in tools_mod.__all__
+    assert "create_linode_database_instance_list_tool" in tools_mod.__all__
+    assert "handle_linode_database_instance_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_database_instances_list_tool()
-    assert tool.name == "linode_database_instances_list"
+    tool, capability = tools_mod.create_linode_database_instance_list_tool()
+    assert tool.name == "linode_database_instance_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
-    assert "linode_database_instances_list" in srv.registered_tool_names
+    assert "linode_database_instance_list" in srv.registered_tool_names
 
 
 async def test_database_instances_list_dispatches_from_registry(
@@ -9075,7 +9091,7 @@ async def test_database_instances_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_database_instances_list", {"page": 1, "page_size": 25}
+            "linode_database_instance_list", {"page": 1, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -9101,7 +9117,7 @@ async def test_database_instances_list_rejects_invalid_page(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_database_instances_list", arguments)
+        result = await srv.dispatch("linode_database_instance_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_database_instances.assert_not_called()
@@ -9127,7 +9143,7 @@ async def test_database_instances_list_rejects_invalid_page_size(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_database_instances_list", arguments)
+        result = await srv.dispatch("linode_database_instance_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_database_instances.assert_not_called()
@@ -9139,18 +9155,18 @@ async def test_betas_list_tool_is_exported_and_registered(
     """Global betas list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_betas_list_tool" in tools_mod.__all__
-    assert "handle_linode_betas_list" in tools_mod.__all__
+    assert "create_linode_beta_list_tool" in tools_mod.__all__
+    assert "handle_linode_beta_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_betas_list_tool()
-    assert tool.name == "linode_betas_list"
+    tool, capability = tools_mod.create_linode_beta_list_tool()
+    assert tool.name == "linode_beta_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
-    assert "linode_betas_list" in srv.registered_tool_names
+    assert "linode_beta_list" in srv.registered_tool_names
 
 
 async def test_betas_list_dispatches_from_registry(
@@ -9172,7 +9188,7 @@ async def test_betas_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_betas_list", {"page": 1, "page_size": 25})
+        result = await srv.dispatch("linode_beta_list", {"page": 1, "page_size": 25})
 
     assert json.loads(result[0].text) == response_data
     mock_client.list_betas.assert_awaited_once_with(page=1, page_size=25)
@@ -9197,7 +9213,7 @@ async def test_betas_list_rejects_invalid_page(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_betas_list", arguments)
+        result = await srv.dispatch("linode_beta_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_betas.assert_not_called()
@@ -9223,7 +9239,7 @@ async def test_betas_list_rejects_invalid_page_size(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_betas_list", arguments)
+        result = await srv.dispatch("linode_beta_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_betas.assert_not_called()
@@ -9235,18 +9251,18 @@ async def test_account_child_accounts_list_tool_is_exported_and_registered(
     """Account child accounts list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_child_accounts_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_child_accounts_list" in tools_mod.__all__
+    assert "create_linode_account_child_account_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_child_account_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_account_child_accounts_list_tool()
-    assert tool.name == "linode_account_child_accounts_list"
+    tool, capability = tools_mod.create_linode_account_child_account_list_tool()
+    assert tool.name == "linode_account_child_account_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
-    assert "linode_account_child_accounts_list" in srv.registered_tool_names
+    assert "linode_account_child_account_list" in srv.registered_tool_names
 
 
 async def test_account_child_accounts_list_dispatches_from_registry(
@@ -9274,7 +9290,7 @@ async def test_account_child_accounts_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_child_accounts_list", {"page": 1, "page_size": 25}
+            "linode_account_child_account_list", {"page": 1, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -9302,7 +9318,7 @@ async def test_account_child_accounts_list_rejects_invalid_page(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_child_accounts_list", arguments)
+        result = await srv.dispatch("linode_account_child_account_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_account_child_accounts.assert_not_called()
@@ -9328,7 +9344,7 @@ async def test_account_child_accounts_list_rejects_invalid_page_size(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_child_accounts_list", arguments)
+        result = await srv.dispatch("linode_account_child_account_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_account_child_accounts.assert_not_called()
@@ -9340,18 +9356,18 @@ async def test_account_service_transfers_list_tool_is_exported_and_registered(
     """Account service transfers list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_service_transfers_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_service_transfers_list" in tools_mod.__all__
+    assert "create_linode_account_service_transfer_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_service_transfer_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_account_service_transfers_list_tool()
-    assert tool.name == "linode_account_service_transfers_list"
+    tool, capability = tools_mod.create_linode_account_service_transfer_list_tool()
+    assert tool.name == "linode_account_service_transfer_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
     assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
-    assert "linode_account_service_transfers_list" in srv.registered_tool_names
+    assert "linode_account_service_transfer_list" in srv.registered_tool_names
 
 
 async def test_account_service_transfers_list_dispatches_from_registry(
@@ -9374,7 +9390,7 @@ async def test_account_service_transfers_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_service_transfers_list", {"page": 1, "page_size": 25}
+            "linode_account_service_transfer_list", {"page": 1, "page_size": 25}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -9402,7 +9418,7 @@ async def test_account_service_transfers_list_rejects_invalid_page(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_service_transfers_list", arguments)
+        result = await srv.dispatch("linode_account_service_transfer_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_account_service_transfers.assert_not_called()
@@ -9428,7 +9444,7 @@ async def test_account_service_transfers_list_rejects_invalid_page_size(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_service_transfers_list", arguments)
+        result = await srv.dispatch("linode_account_service_transfer_list", arguments)
 
     assert expected_error in result[0].text
     mock_client.list_account_service_transfers.assert_not_called()
@@ -9579,11 +9595,11 @@ async def test_account_tags_list_tool_is_exported_and_registered(
     """Account tags list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_tags_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_tags_list" in tools_mod.__all__
+    assert "create_linode_tag_list_tool" in tools_mod.__all__
+    assert "handle_linode_tag_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_tags_list" in srv.registered_tool_names
+    assert "linode_tag_list" in srv.registered_tool_names
 
 
 async def test_account_tag_objects_list_tool_is_exported_and_registered(
@@ -9592,11 +9608,11 @@ async def test_account_tag_objects_list_tool_is_exported_and_registered(
     """Account tag objects list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_tag_objects_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_tag_objects_list" in tools_mod.__all__
+    assert "create_linode_tag_object_list_tool" in tools_mod.__all__
+    assert "handle_linode_tag_object_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_tag_objects_list" in srv.registered_tool_names
+    assert "linode_tag_object_list" in srv.registered_tool_names
 
 
 async def test_account_tag_delete_tool_is_exported_and_registered(
@@ -9605,11 +9621,11 @@ async def test_account_tag_delete_tool_is_exported_and_registered(
     """Account tag delete tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_tag_delete_tool" in tools_mod.__all__
-    assert "handle_linode_account_tag_delete" in tools_mod.__all__
+    assert "create_linode_tag_delete_tool" in tools_mod.__all__
+    assert "handle_linode_tag_delete" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_account_tag_delete" in srv.registered_tool_names
+    assert "linode_tag_delete" in srv.registered_tool_names
 
 
 async def test_account_support_ticket_create_tool_is_exported_and_registered(
@@ -9618,11 +9634,11 @@ async def test_account_support_ticket_create_tool_is_exported_and_registered(
     """Support ticket create tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_support_ticket_create_tool" in tools_mod.__all__
-    assert "handle_linode_account_support_ticket_create" in tools_mod.__all__
+    assert "create_linode_support_ticket_create_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_create" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_account_support_ticket_create" in srv.registered_tool_names
+    assert "linode_support_ticket_create" in srv.registered_tool_names
 
 
 async def test_account_support_ticket_create_dispatches_from_registry(
@@ -9640,7 +9656,7 @@ async def test_account_support_ticket_create_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_support_ticket_create",
+            "linode_support_ticket_create",
             {
                 "confirm": True,
                 "summary": "Need help",
@@ -9661,11 +9677,11 @@ async def test_account_support_ticket_get_tool_is_exported_and_registered(
     """Support ticket get tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_support_ticket_get_tool" in tools_mod.__all__
-    assert "handle_linode_account_support_ticket_get" in tools_mod.__all__
+    assert "create_linode_support_ticket_get_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_get" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_support_ticket_get" in srv.registered_tool_names
+    assert "linode_support_ticket_get" in srv.registered_tool_names
 
 
 async def test_managed_contacts_list_tool_is_exported_and_registered(
@@ -9674,15 +9690,15 @@ async def test_managed_contacts_list_tool_is_exported_and_registered(
     """Managed contacts list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_managed_contacts_list_tool" in tools_mod.__all__
-    assert "handle_linode_managed_contacts_list" in tools_mod.__all__
+    assert "create_linode_managed_contact_list_tool" in tools_mod.__all__
+    assert "handle_linode_managed_contact_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_managed_contacts_list_tool()
-    assert tool.name == "linode_managed_contacts_list"
+    tool, capability = tools_mod.create_linode_managed_contact_list_tool()
+    assert tool.name == "linode_managed_contact_list"
     assert capability is Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_managed_contacts_list" in srv.registered_tool_names
+    assert "linode_managed_contact_list" in srv.registered_tool_names
 
 
 async def test_managed_contacts_list_dispatches_from_registry(
@@ -9705,7 +9721,7 @@ async def test_managed_contacts_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_managed_contacts_list", {"page": 2, "page_size": 25}
+            "linode_managed_contact_list", {"page": 2, "page_size": 25}
         )
 
     assert len(result) == 1
@@ -9719,7 +9735,7 @@ async def test_managed_contacts_list_rejects_invalid_page(
     """Managed contacts list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_contacts_list", {"page": 0})
+        result = await srv.dispatch("linode_managed_contact_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -9731,7 +9747,7 @@ async def test_managed_contacts_list_rejects_non_integer_page_size(
     """Managed contacts list rejects non-integer pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_contacts_list", {"page_size": "25"})
+        result = await srv.dispatch("linode_managed_contact_list", {"page_size": "25"})
 
     assert "page_size must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -9751,7 +9767,7 @@ async def test_managed_contacts_list_rejects_out_of_range_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_managed_contacts_list", {"page_size": page_size}
+            "linode_managed_contact_list", {"page_size": page_size}
         )
 
     assert expected in result[0].text
@@ -10007,15 +10023,15 @@ async def test_managed_issues_list_tool_is_exported_and_registered(
     """Managed issues list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_managed_issues_list_tool" in tools_mod.__all__
-    assert "handle_linode_managed_issues_list" in tools_mod.__all__
+    assert "create_linode_managed_issue_list_tool" in tools_mod.__all__
+    assert "handle_linode_managed_issue_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_managed_issues_list_tool()
-    assert tool.name == "linode_managed_issues_list"
+    tool, capability = tools_mod.create_linode_managed_issue_list_tool()
+    assert tool.name == "linode_managed_issue_list"
     assert capability is Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_managed_issues_list" in srv.registered_tool_names
+    assert "linode_managed_issue_list" in srv.registered_tool_names
 
 
 async def test_managed_issues_list_dispatches_from_registry(
@@ -10038,7 +10054,7 @@ async def test_managed_issues_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_managed_issues_list", {"page": 2, "page_size": 25}
+            "linode_managed_issue_list", {"page": 2, "page_size": 25}
         )
 
     assert len(result) == 1
@@ -10052,7 +10068,7 @@ async def test_managed_issues_list_rejects_invalid_page(
     """Managed issues list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_issues_list", {"page": 0})
+        result = await srv.dispatch("linode_managed_issue_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -10064,7 +10080,7 @@ async def test_managed_issues_list_rejects_non_integer_page_size(
     """Managed issues list rejects non-integer pagination."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_issues_list", {"page_size": "25"})
+        result = await srv.dispatch("linode_managed_issue_list", {"page_size": "25"})
 
     assert "page_size must be an integer" in result[0].text
     mock_client_class.assert_not_called()
@@ -10084,7 +10100,7 @@ async def test_managed_issues_list_rejects_out_of_range_page_size(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_managed_issues_list", {"page_size": page_size}
+            "linode_managed_issue_list", {"page_size": page_size}
         )
 
     assert expected in result[0].text
@@ -11402,15 +11418,15 @@ async def test_managed_contacts_update_tool_is_exported_and_registered(
     """Managed contact update tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_managed_contacts_update_tool" in tools_mod.__all__
-    assert "handle_linode_managed_contacts_update" in tools_mod.__all__
+    assert "create_linode_managed_contact_update_tool" in tools_mod.__all__
+    assert "handle_linode_managed_contact_update" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_managed_contacts_update_tool()
-    assert tool.name == "linode_managed_contacts_update"
+    tool, capability = tools_mod.create_linode_managed_contact_update_tool()
+    assert tool.name == "linode_managed_contact_update"
     assert capability is Capability.Write
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_managed_contacts_update" in srv.registered_tool_names
+    assert "linode_managed_contact_update" in srv.registered_tool_names
 
 
 async def test_managed_contacts_update_dispatches_from_registry(
@@ -11432,7 +11448,7 @@ async def test_managed_contacts_update_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_managed_contacts_update",
+            "linode_managed_contact_update",
             {"contact_id": 174, "email": "ops@example.com", "confirm": True},
         )
 
@@ -11502,15 +11518,15 @@ async def test_managed_credentials_list_tool_is_exported_and_registered(
     """Managed credentials list tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_managed_credentials_list_tool" in tools_mod.__all__
-    assert "handle_linode_managed_credentials_list" in tools_mod.__all__
+    assert "create_linode_managed_credential_list_tool" in tools_mod.__all__
+    assert "handle_linode_managed_credential_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_managed_credentials_list_tool()
-    assert tool.name == "linode_managed_credentials_list"
+    tool, capability = tools_mod.create_linode_managed_credential_list_tool()
+    assert tool.name == "linode_managed_credential_list"
     assert capability == Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_managed_credentials_list" in srv.registered_tool_names
+    assert "linode_managed_credential_list" in srv.registered_tool_names
 
 
 async def test_managed_credentials_list_dispatches_from_registry(
@@ -11533,7 +11549,7 @@ async def test_managed_credentials_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_managed_credentials_list", {"page": 2, "page_size": 25}
+            "linode_managed_credential_list", {"page": 2, "page_size": 25}
         )
 
     assert len(result) == 1
@@ -11547,7 +11563,7 @@ async def test_managed_credentials_list_rejects_invalid_page(
     """Managed credentials list validates page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_credentials_list", {"page": 0})
+        result = await srv.dispatch("linode_managed_credential_list", {"page": 0})
 
     assert "page must be at least 1" in result[0].text
     mock_client_class.assert_not_called()
@@ -11559,9 +11575,7 @@ async def test_managed_credentials_list_rejects_out_of_range_page_size(
     """Managed credentials list validates page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch(
-            "linode_managed_credentials_list", {"page_size": 24}
-        )
+        result = await srv.dispatch("linode_managed_credential_list", {"page_size": 24})
 
     assert "page_size must be at least 25" in result[0].text
     mock_client_class.assert_not_called()
@@ -11573,15 +11587,15 @@ async def test_managed_ssh_key_get_tool_is_exported_and_registered(
     """Managed SSH key get tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_managed_ssh_key_get_tool" in tools_mod.__all__
-    assert "handle_linode_managed_ssh_key_get" in tools_mod.__all__
+    assert "create_linode_managed_sshkey_get_tool" in tools_mod.__all__
+    assert "handle_linode_managed_sshkey_get" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_managed_ssh_key_get_tool()
-    assert tool.name == "linode_managed_ssh_key_get"
+    tool, capability = tools_mod.create_linode_managed_sshkey_get_tool()
+    assert tool.name == "linode_managed_sshkey_get"
     assert capability == Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_managed_ssh_key_get" in srv.registered_tool_names
+    assert "linode_managed_sshkey_get" in srv.registered_tool_names
 
 
 async def test_managed_ssh_key_get_dispatches_from_registry(
@@ -11600,7 +11614,7 @@ async def test_managed_ssh_key_get_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_ssh_key_get", {})
+        result = await srv.dispatch("linode_managed_sshkey_get", {})
 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
@@ -11613,11 +11627,11 @@ async def test_managed_stats_tool_is_exported_and_registered(
     """Managed stats tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_managed_stats_tool" in tools_mod.__all__
-    assert "handle_linode_managed_stats" in tools_mod.__all__
+    assert "create_linode_managed_stats_get_tool" in tools_mod.__all__
+    assert "handle_linode_managed_stats_get" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_managed_stats" in srv.registered_tool_names
+    assert "linode_managed_stats_get" in srv.registered_tool_names
 
 
 async def test_managed_stats_dispatches_from_registry(
@@ -11634,7 +11648,7 @@ async def test_managed_stats_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_stats", {})
+        result = await srv.dispatch("linode_managed_stats_get", {})
 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
@@ -11714,11 +11728,11 @@ async def test_managed_services_list_tool_is_exported_and_registered(
     """Managed services list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_managed_services_list_tool" in tools_mod.__all__
-    assert "handle_linode_managed_services_list" in tools_mod.__all__
+    assert "create_linode_managed_service_list_tool" in tools_mod.__all__
+    assert "handle_linode_managed_service_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_managed_services_list" in srv.registered_tool_names
+    assert "linode_managed_service_list" in srv.registered_tool_names
 
 
 async def test_managed_services_list_dispatches_from_registry(
@@ -11740,7 +11754,7 @@ async def test_managed_services_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_managed_services_list", {})
+        result = await srv.dispatch("linode_managed_service_list", {})
 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
@@ -11821,11 +11835,11 @@ async def test_account_support_tickets_list_tool_is_exported_and_registered(
     """Support tickets list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_support_tickets_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_support_tickets_list" in tools_mod.__all__
+    assert "create_linode_support_ticket_list_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_support_tickets_list" in srv.registered_tool_names
+    assert "linode_support_ticket_list" in srv.registered_tool_names
 
 
 async def test_account_support_tickets_list_dispatches_from_registry(
@@ -11842,7 +11856,7 @@ async def test_account_support_tickets_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_support_tickets_list", {})
+        result = await srv.dispatch("linode_support_ticket_list", {})
 
     assert json.loads(result[0].text) == response_data
     mock_client.list_support_tickets.assert_awaited_once_with(page=None, page_size=None)
@@ -11862,9 +11876,7 @@ async def test_account_support_ticket_get_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch(
-            "linode_account_support_ticket_get", {"ticket_id": 123}
-        )
+        result = await srv.dispatch("linode_support_ticket_get", {"ticket_id": 123})
 
     assert json.loads(result[0].text) == response_data
     mock_client.get_support_ticket.assert_awaited_once_with(123)
@@ -11876,11 +11888,11 @@ async def test_account_support_ticket_replies_list_tool_is_exported_and_register
     """Support ticket replies list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_support_ticket_replies_list_tool" in tools_mod.__all__
-    assert "handle_linode_account_support_ticket_replies_list" in tools_mod.__all__
+    assert "create_linode_support_ticket_reply_list_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_reply_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_account_support_ticket_replies_list" in srv.registered_tool_names
+    assert "linode_support_ticket_reply_list" in srv.registered_tool_names
 
 
 async def test_account_support_ticket_replies_list_dispatches_from_registry(
@@ -11898,7 +11910,7 @@ async def test_account_support_ticket_replies_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_account_support_ticket_replies_list", {"ticket_id": 123}
+            "linode_support_ticket_reply_list", {"ticket_id": 123}
         )
 
     assert json.loads(result[0].text) == response_data
@@ -13359,11 +13371,11 @@ async def test_account_oauth_client_reset_secret_tool_is_exported_and_registered
     """OAuth client secret reset tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_oauth_client_reset_secret_tool" in tools_mod.__all__
-    assert "handle_linode_account_oauth_client_reset_secret" in tools_mod.__all__
+    assert "create_linode_account_oauth_client_secret_reset_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_secret_reset" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_account_oauth_client_reset_secret_tool()
-    assert tool.name == "linode_account_oauth_client_reset_secret"
+    tool, capability = tools_mod.create_linode_account_oauth_client_secret_reset_tool()
+    assert tool.name == "linode_account_oauth_client_secret_reset"
     assert capability is Capability.Write
     assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -13372,7 +13384,7 @@ async def test_account_oauth_client_reset_secret_tool_is_exported_and_registered
     assert "confirm" in tool.inputSchema["required"]
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_account_oauth_client_reset_secret" in srv.registered_tool_names
+    assert "linode_account_oauth_client_secret_reset" in srv.registered_tool_names
 
 
 async def test_account_oauth_client_reset_secret_dispatches_from_registry(
@@ -13391,7 +13403,7 @@ async def test_account_oauth_client_reset_secret_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_oauth_client_reset_secret",
+            "linode_account_oauth_client_secret_reset",
             {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
@@ -13416,7 +13428,7 @@ async def test_account_oauth_client_reset_secret_requires_boolean_confirm(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_oauth_client_reset_secret", arguments
+            "linode_account_oauth_client_secret_reset", arguments
         )
 
     assert "confirm" in result[0].text
@@ -13449,7 +13461,7 @@ async def test_account_oauth_client_reset_secret_validates_client_id(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_oauth_client_reset_secret", arguments
+            "linode_account_oauth_client_secret_reset", arguments
         )
 
     assert message in result[0].text
@@ -13468,12 +13480,12 @@ async def test_account_oauth_client_reset_secret_dry_run_skips_client_call(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_oauth_client_reset_secret",
+            "linode_account_oauth_client_secret_reset",
             {"client_id": "client#123", "confirm": False, "dry_run": True},
         )
 
     payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_account_oauth_client_reset_secret"
+    assert payload["tool"] == "linode_account_oauth_client_secret_reset"
     assert payload["would_execute"] == {
         "method": "POST",
         "path": "/account/oauth-clients/client%23123/reset-secret",
@@ -13497,7 +13509,7 @@ async def test_account_oauth_client_reset_secret_tool_propagates_client_error(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_oauth_client_reset_secret",
+            "linode_account_oauth_client_secret_reset",
             {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
@@ -13632,11 +13644,11 @@ async def test_account_support_ticket_close_tool_is_exported_and_registered(
     """Support ticket close tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_support_ticket_close_tool" in tools_mod.__all__
-    assert "handle_linode_account_support_ticket_close" in tools_mod.__all__
+    assert "create_linode_support_ticket_close_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_close" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_account_support_ticket_close" in srv.registered_tool_names
+    assert "linode_support_ticket_close" in srv.registered_tool_names
 
 
 async def test_account_support_ticket_close_dispatches_from_registry(
@@ -13654,7 +13666,7 @@ async def test_account_support_ticket_close_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_account_support_ticket_close",
+            "linode_support_ticket_close",
             {"ticket_id": 123, "confirm": True},
         )
 
@@ -13671,11 +13683,11 @@ async def test_account_support_ticket_reply_create_tool_is_exported_and_register
     """Support ticket reply create tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_account_support_ticket_reply_create_tool" in tools_mod.__all__
-    assert "handle_linode_account_support_ticket_reply_create" in tools_mod.__all__
+    assert "create_linode_support_ticket_reply_create_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_reply_create" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_account_support_ticket_reply_create" in srv.registered_tool_names
+    assert "linode_support_ticket_reply_create" in srv.registered_tool_names
 
 
 async def test_account_support_ticket_attachment_create_tool_is_exported_and_registered(
@@ -13684,16 +13696,11 @@ async def test_account_support_ticket_attachment_create_tool_is_exported_and_reg
     """Support ticket attachment create tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert (
-        "create_linode_account_support_ticket_attachment_create_tool"
-        in tools_mod.__all__
-    )
-    assert "handle_linode_account_support_ticket_attachment_create" in tools_mod.__all__
+    assert "create_linode_support_ticket_attachment_create_tool" in tools_mod.__all__
+    assert "handle_linode_support_ticket_attachment_create" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert (
-        "linode_account_support_ticket_attachment_create" in srv.registered_tool_names
-    )
+    assert "linode_support_ticket_attachment_create" in srv.registered_tool_names
 
 
 async def test_account_support_ticket_attachment_create_dispatches_from_registry(
@@ -13711,7 +13718,7 @@ async def test_account_support_ticket_attachment_create_dispatches_from_registry
         mock_client_class.return_value = mock_client
 
         result = await srv.dispatch(
-            "linode_account_support_ticket_attachment_create",
+            "linode_support_ticket_attachment_create",
             {"ticket_id": 123, "file": "/Users/e/a.txt", "confirm": True},
         )
 
@@ -13730,7 +13737,7 @@ async def test_default_profile_filters_to_read_only(sample_config: Config) -> No
 
     The default built-in's allow list is strictly smaller than the full
     registry, and it must NOT include obvious mutators like
-    ``linode_instance_create``. A Read tool (``linode_instances_list``)
+    ``linode_instance_create``. A Read tool (``linode_instance_list``)
     confirms the filter is letting through the right side.
     """
     full_registry = get_tool_registry()
@@ -13741,7 +13748,7 @@ async def test_default_profile_filters_to_read_only(sample_config: Config) -> No
     assert len(srv.registered_tool_names) < len(full_registry), (
         "default profile should filter the registry, not pass it through"
     )
-    assert "linode_instances_list" in srv.registered_tool_names
+    assert "linode_instance_list" in srv.registered_tool_names
     assert "linode_instance_create" not in srv.registered_tool_names
     assert "hello" in srv.registered_tool_names
 
@@ -13796,7 +13803,7 @@ async def test_user_defined_profile_registers_listed_tools_only(
         profiles={
             "minimal": UserProfileConfig(
                 description="just two read tools for the filter test",
-                allowed_tools=("linode_instances_list", "linode_account"),
+                allowed_tools=("linode_instance_list", "linode_account_get"),
             ),
         },
     )
@@ -13804,8 +13811,8 @@ async def test_user_defined_profile_registers_listed_tools_only(
 
     assert srv.active_profile.name == "minimal"
     assert srv.registered_tool_names == {
-        "linode_instances_list",
-        "linode_account",
+        "linode_instance_list",
+        "linode_account_get",
     }
     # Mutators outside the allow list must not slip through.
     assert "linode_instance_create" not in srv.registered_tool_names
@@ -13842,7 +13849,7 @@ async def test_reload_profile_swaps_allowed_set(sample_config: Config) -> None:
     assert "linode_instance_create" in after, (
         "reload to full-access must add the write tools"
     )
-    assert "linode_instances_list" in after, "reads stay registered"
+    assert "linode_instance_list" in after, "reads stay registered"
     assert after > before, "full-access is a strict superset of default"
 
     # Reload back to default and confirm the writes come off.
@@ -13864,7 +13871,7 @@ async def test_reload_profile_dispatch_gate_updates(sample_config: Config) -> No
     """
     srv = Server(_full_access_config(sample_config))
 
-    # full-access allows linode_instances_list AND linode_instance_create.
+    # full-access allows linode_instance_list AND linode_instance_create.
     # The default profile drops linode_instance_create; after reload,
     # dispatching it must raise.
     await srv.reload_profile(sample_config)
@@ -13940,26 +13947,25 @@ async def test_linode_images_sharegroup_image_delete_tool_is_exported_and_regist
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_images_sharegroup_image_delete_tool" in tools_mod.__all__
-    assert "handle_linode_images_sharegroup_image_delete" in tools_mod.__all__
+    assert "create_linode_image_sharegroup_image_delete_tool" in tools_mod.__all__
+    assert "handle_linode_image_sharegroup_image_delete" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_images_sharegroup_image_delete_tool()
-    assert tool.name == "linode_images_sharegroup_image_delete"
+    tool, capability = tools_mod.create_linode_image_sharegroup_image_delete_tool()
+    assert tool.name == "linode_image_sharegroup_image_delete"
     assert capability is Capability.Destroy
     assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_images_sharegroup_image_delete" in srv.registered_tool_names
+    assert "linode_image_sharegroup_image_delete" in srv.registered_tool_names
 
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert (
-        entries["linode_images_sharegroup_image_delete"].capability
-        is Capability.Destroy
+        entries["linode_image_sharegroup_image_delete"].capability is Capability.Destroy
     )
     assert (
-        "linode_images_sharegroup_image_delete" in get_version_info().features["tools"]
+        "linode_image_sharegroup_image_delete" in get_version_info().features["tools"]
     )
 
 
@@ -13975,7 +13981,7 @@ async def test_linode_images_sharegroup_image_delete_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_image_delete",
+            "linode_image_sharegroup_image_delete",
             {
                 "sharegroup_id": 123,
                 "image_id": 456,
@@ -14005,7 +14011,7 @@ async def test_linode_images_sharegroup_image_delete_rejects_non_true_confirm(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_image_delete",
+            "linode_image_sharegroup_image_delete",
             {**arguments, "confirm_bypass_dry_run": True},
         )
 
@@ -14062,7 +14068,7 @@ async def test_linode_images_sharegroup_image_delete_rejects_invalid_path_params
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_image_delete",
+            "linode_image_sharegroup_image_delete",
             {**arguments, "confirm_bypass_dry_run": True},
         )
 
@@ -14077,22 +14083,22 @@ async def test_linode_images_sharegroup_delete_tool_is_exported_and_registered(
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_images_sharegroup_delete_tool" in tools_mod.__all__
-    assert "handle_linode_images_sharegroup_delete" in tools_mod.__all__
+    assert "create_linode_image_sharegroup_delete_tool" in tools_mod.__all__
+    assert "handle_linode_image_sharegroup_delete" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_images_sharegroup_delete_tool()
-    assert tool.name == "linode_images_sharegroup_delete"
+    tool, capability = tools_mod.create_linode_image_sharegroup_delete_tool()
+    assert tool.name == "linode_image_sharegroup_delete"
     assert capability is Capability.Destroy
     assert tool.inputSchema["required"] == ["sharegroup_id", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_images_sharegroup_delete" in srv.registered_tool_names
+    assert "linode_image_sharegroup_delete" in srv.registered_tool_names
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert entries["linode_images_sharegroup_delete"].capability is Capability.Destroy
-    assert "linode_images_sharegroup_delete" in get_version_info().features["tools"]
+    assert entries["linode_image_sharegroup_delete"].capability is Capability.Destroy
+    assert "linode_image_sharegroup_delete" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_delete_dispatches_from_registry(
@@ -14107,7 +14113,7 @@ async def test_linode_images_sharegroup_delete_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_delete",
+            "linode_image_sharegroup_delete",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "confirm": True,
@@ -14140,7 +14146,7 @@ async def test_linode_images_sharegroup_delete_rejects_non_true_confirm(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_delete",
+            "linode_image_sharegroup_delete",
             {**arguments, "confirm_bypass_dry_run": True},
         )
 
@@ -14173,7 +14179,7 @@ async def test_linode_images_sharegroup_delete_rejects_invalid_sharegroup_id(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_delete",
+            "linode_image_sharegroup_delete",
             {**arguments, "confirm_bypass_dry_run": True},
         )
 
@@ -14193,7 +14199,7 @@ async def test_linode_images_sharegroup_delete_dry_run_uses_encoded_path(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_delete",
+            "linode_image_sharegroup_delete",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "confirm": True,
@@ -14217,20 +14223,20 @@ async def test_linode_images_sharegroup_get_tool_is_exported_and_registered(
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_images_sharegroup_get_tool" in tools_mod.__all__
-    assert "handle_linode_images_sharegroup_get" in tools_mod.__all__
+    assert "create_linode_image_sharegroup_get_tool" in tools_mod.__all__
+    assert "handle_linode_image_sharegroup_get" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_images_sharegroup_get_tool()
-    assert tool.name == "linode_images_sharegroup_get"
+    tool, capability = tools_mod.create_linode_image_sharegroup_get_tool()
+    assert tool.name == "linode_image_sharegroup_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["sharegroup_id"]
 
     srv = Server(sample_config)
-    assert "linode_images_sharegroup_get" in srv.registered_tool_names
+    assert "linode_image_sharegroup_get" in srv.registered_tool_names
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert entries["linode_images_sharegroup_get"].capability is Capability.Read
-    assert "linode_images_sharegroup_get" in get_version_info().features["tools"]
+    assert entries["linode_image_sharegroup_get"].capability is Capability.Read
+    assert "linode_image_sharegroup_get" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_get_dispatches_from_registry(
@@ -14248,7 +14254,7 @@ async def test_linode_images_sharegroup_get_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_images_sharegroup_get",
+            "linode_image_sharegroup_get",
             {"sharegroup_id": "11111111-1111-4111-8111-111111111111"},
         )
 
@@ -14283,7 +14289,7 @@ async def test_linode_images_sharegroup_get_rejects_invalid_sharegroup_id(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_images_sharegroup_get", arguments)
+        result = await srv.dispatch("linode_image_sharegroup_get", arguments)
 
     assert expected_error in result[0].text
     mock_client.get_image_sharegroup.assert_not_called()
@@ -14296,11 +14302,11 @@ async def test_linode_images_sharegroup_members_add_tool_is_exported_and_registe
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_images_sharegroup_members_add_tool" in tools_mod.__all__
-    assert "handle_linode_images_sharegroup_members_add" in tools_mod.__all__
+    assert "create_linode_image_sharegroup_member_add_tool" in tools_mod.__all__
+    assert "handle_linode_image_sharegroup_member_add" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_images_sharegroup_members_add_tool()
-    assert tool.name == "linode_images_sharegroup_members_add"
+    tool, capability = tools_mod.create_linode_image_sharegroup_member_add_tool()
+    assert tool.name == "linode_image_sharegroup_member_add"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == [
         "sharegroup_id",
@@ -14312,15 +14318,11 @@ async def test_linode_images_sharegroup_members_add_tool_is_exported_and_registe
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_images_sharegroup_members_add" in srv.registered_tool_names
+    assert "linode_image_sharegroup_member_add" in srv.registered_tool_names
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert (
-        entries["linode_images_sharegroup_members_add"].capability is Capability.Write
-    )
-    assert (
-        "linode_images_sharegroup_members_add" in get_version_info().features["tools"]
-    )
+    assert entries["linode_image_sharegroup_member_add"].capability is Capability.Write
+    assert "linode_image_sharegroup_member_add" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_images_add_tool_is_exported_and_registered(
@@ -14330,22 +14332,22 @@ async def test_linode_images_sharegroup_images_add_tool_is_exported_and_register
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_images_sharegroup_images_add_tool" in tools_mod.__all__
-    assert "handle_linode_images_sharegroup_images_add" in tools_mod.__all__
+    assert "create_linode_image_sharegroup_image_add_tool" in tools_mod.__all__
+    assert "handle_linode_image_sharegroup_image_add" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_images_sharegroup_images_add_tool()
-    assert tool.name == "linode_images_sharegroup_images_add"
+    tool, capability = tools_mod.create_linode_image_sharegroup_image_add_tool()
+    assert tool.name == "linode_image_sharegroup_image_add"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["sharegroup_id", "images", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_images_sharegroup_images_add" in srv.registered_tool_names
+    assert "linode_image_sharegroup_image_add" in srv.registered_tool_names
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert entries["linode_images_sharegroup_images_add"].capability is Capability.Write
-    assert "linode_images_sharegroup_images_add" in get_version_info().features["tools"]
+    assert entries["linode_image_sharegroup_image_add"].capability is Capability.Write
+    assert "linode_image_sharegroup_image_add" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
@@ -14364,7 +14366,7 @@ async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_images_add",
+            "linode_image_sharegroup_image_add",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "images": images,
@@ -14400,7 +14402,7 @@ async def test_linode_images_sharegroup_images_add_rejects_non_true_confirm(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_images_sharegroup_images_add", arguments)
+        result = await srv.dispatch("linode_image_sharegroup_image_add", arguments)
 
     assert "confirm" in result[0].text
     mock_client.add_image_sharegroup_images.assert_not_called()
@@ -14419,7 +14421,7 @@ async def test_linode_images_sharegroup_images_add_dry_run_uses_encoded_path(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_images_add",
+            "linode_image_sharegroup_image_add",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "images": images,
@@ -14445,21 +14447,21 @@ async def test_linode_images_sharegroup_update_tool_is_exported_and_registered(
     from linodemcp import tools as tools_mod
     from linodemcp.version import get_version_info
 
-    assert "create_linode_images_sharegroup_update_tool" in tools_mod.__all__
-    assert "handle_linode_images_sharegroup_update" in tools_mod.__all__
+    assert "create_linode_image_sharegroup_update_tool" in tools_mod.__all__
+    assert "handle_linode_image_sharegroup_update" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_images_sharegroup_update_tool()
-    assert tool.name == "linode_images_sharegroup_update"
+    tool, capability = tools_mod.create_linode_image_sharegroup_update_tool()
+    assert tool.name == "linode_image_sharegroup_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["sharegroup_id", "confirm"]
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_images_sharegroup_update" in srv.registered_tool_names
+    assert "linode_image_sharegroup_update" in srv.registered_tool_names
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert entries["linode_images_sharegroup_update"].capability is Capability.Write
-    assert "linode_images_sharegroup_update" in get_version_info().features["tools"]
+    assert entries["linode_image_sharegroup_update"].capability is Capability.Write
+    assert "linode_image_sharegroup_update" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_update_dispatches_from_registry(
@@ -14481,7 +14483,7 @@ async def test_linode_images_sharegroup_update_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_update",
+            "linode_image_sharegroup_update",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "label": "partner-group",
@@ -14519,7 +14521,7 @@ async def test_linode_images_sharegroup_update_dispatches_description_only(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_update",
+            "linode_image_sharegroup_update",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "description": "Shared images",
@@ -14557,7 +14559,7 @@ async def test_linode_images_sharegroup_update_rejects_non_true_confirm(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_images_sharegroup_update", arguments)
+        result = await srv.dispatch("linode_image_sharegroup_update", arguments)
 
     assert "confirm" in result[0].text
     mock_client.update_image_sharegroup.assert_not_called()
@@ -14604,7 +14606,7 @@ async def test_linode_images_sharegroup_update_rejects_invalid_inputs(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_images_sharegroup_update", arguments)
+        result = await srv.dispatch("linode_image_sharegroup_update", arguments)
 
     assert expected_error in result[0].text
     mock_client.update_image_sharegroup.assert_not_called()
@@ -14622,7 +14624,7 @@ async def test_linode_images_sharegroup_update_dry_run_uses_encoded_path(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_images_sharegroup_update",
+            "linode_image_sharegroup_update",
             {
                 "sharegroup_id": "11111111-1111-4111-8111-111111111111",
                 "label": "partner-group",
@@ -14646,8 +14648,8 @@ def test_linode_images_sharegroups_token_create_registered() -> None:
     from linodemcp.server import get_tool_registry
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert "linode_images_sharegroups_token_create" in entries
-    assert entries["linode_images_sharegroups_token_create"].capability.name == "Write"
+    assert "linode_image_sharegroup_token_create" in entries
+    assert entries["linode_image_sharegroup_token_create"].capability.name == "Write"
 
 
 def test_linode_images_sharegroups_token_delete_registered() -> None:
@@ -14655,10 +14657,8 @@ def test_linode_images_sharegroups_token_delete_registered() -> None:
     from linodemcp.server import get_tool_registry
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert "linode_images_sharegroups_token_delete" in entries
-    assert (
-        entries["linode_images_sharegroups_token_delete"].capability.name == "Destroy"
-    )
+    assert "linode_image_sharegroup_token_delete" in entries
+    assert entries["linode_image_sharegroup_token_delete"].capability.name == "Destroy"
 
 
 def test_linode_images_sharegroups_token_sharegroup_images_list_registered() -> None:
@@ -14666,13 +14666,8 @@ def test_linode_images_sharegroups_token_sharegroup_images_list_registered() -> 
     from linodemcp.server import get_tool_registry
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert "linode_images_sharegroups_token_sharegroup_images_list" in entries
-    assert (
-        entries[
-            "linode_images_sharegroups_token_sharegroup_images_list"
-        ].capability.name
-        == "Read"
-    )
+    assert "linode_image_sharegroup_token_image_list" in entries
+    assert entries["linode_image_sharegroup_token_image_list"].capability.name == "Read"
 
 
 def test_linode_images_sharegroups_token_update_registered() -> None:
@@ -14680,8 +14675,8 @@ def test_linode_images_sharegroups_token_update_registered() -> None:
     from linodemcp.server import get_tool_registry
 
     entries = {entry.name: entry for entry in get_tool_registry()}
-    assert "linode_images_sharegroups_token_update" in entries
-    assert entries["linode_images_sharegroups_token_update"].capability.name == "Write"
+    assert "linode_image_sharegroup_token_update" in entries
+    assert entries["linode_image_sharegroup_token_update"].capability.name == "Write"
 
 
 def test_linode_image_upload_registered() -> None:
@@ -14783,11 +14778,11 @@ async def test_linode_regions_availability_list_tool_is_exported_and_registered(
     """Regions availability list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_regions_availability_list_tool" in tools_mod.__all__
-    assert "handle_linode_regions_availability_list" in tools_mod.__all__
+    assert "create_linode_region_availability_list_tool" in tools_mod.__all__
+    assert "handle_linode_region_availability_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_regions_availability_list" in srv.registered_tool_names
+    assert "linode_region_availability_list" in srv.registered_tool_names
 
 
 async def test_linode_regions_availability_get_tool_is_exported_and_registered(
@@ -14796,11 +14791,11 @@ async def test_linode_regions_availability_get_tool_is_exported_and_registered(
     """Region availability tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_regions_availability_get_tool" in tools_mod.__all__
-    assert "handle_linode_regions_availability_get" in tools_mod.__all__
+    assert "create_linode_region_availability_get_tool" in tools_mod.__all__
+    assert "handle_linode_region_availability_get" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_regions_availability_get" in srv.registered_tool_names
+    assert "linode_region_availability_get" in srv.registered_tool_names
 
 
 async def test_profile_security_questions_list_tool_is_exported_and_registered(
@@ -14809,11 +14804,11 @@ async def test_profile_security_questions_list_tool_is_exported_and_registered(
     """Profile security questions list tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_profile_security_questions_list_tool" in tools_mod.__all__
-    assert "handle_linode_profile_security_questions_list" in tools_mod.__all__
+    assert "create_linode_profile_security_question_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_security_question_list" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_profile_security_questions_list" in srv.registered_tool_names
+    assert "linode_profile_security_question_list" in srv.registered_tool_names
 
 
 async def test_profile_security_questions_answer_tool_is_exported_and_registered(
@@ -14822,12 +14817,12 @@ async def test_profile_security_questions_answer_tool_is_exported_and_registered
     """Profile security questions tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_profile_security_questions_answer_tool" in tools_mod.__all__
-    assert "handle_linode_profile_security_questions_answer" in tools_mod.__all__
+    assert "create_linode_profile_security_question_answer_tool" in tools_mod.__all__
+    assert "handle_linode_profile_security_question_answer" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
     assert srv.active_profile.name == "full-access"
-    assert "linode_profile_security_questions_answer" in srv.registered_tool_names
+    assert "linode_profile_security_question_answer" in srv.registered_tool_names
 
 
 async def test_profile_tfa_enable_tool_is_exported_and_registered(
@@ -14934,12 +14929,12 @@ async def test_profile_tokens_list_tool_is_exported_and_registered(
     """Profile token list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_profile_tokens_list_tool" in tools_mod.__all__
-    assert "handle_linode_profile_tokens_list" in tools_mod.__all__
+    assert "create_linode_profile_token_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_token_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
     assert srv.active_profile.name == "full-access"
-    assert "linode_profile_tokens_list" in srv.registered_tool_names
+    assert "linode_profile_token_list" in srv.registered_tool_names
 
 
 async def test_profile_token_get_tool_is_exported_and_registered(
@@ -14962,12 +14957,12 @@ async def test_profile_logins_list_tool_is_exported_and_registered(
     """Profile login list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_profile_logins_list_tool" in tools_mod.__all__
-    assert "handle_linode_profile_logins_list" in tools_mod.__all__
+    assert "create_linode_profile_login_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_login_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
     assert srv.active_profile.name == "full-access"
-    assert "linode_profile_logins_list" in srv.registered_tool_names
+    assert "linode_profile_login_list" in srv.registered_tool_names
 
 
 async def test_profile_login_get_tool_is_exported_and_registered(
@@ -15004,12 +14999,12 @@ async def test_profile_token_revoke_tool_is_exported_and_registered(
     """Profile token revoke tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_profile_token_revoke_tool" in tools_mod.__all__
-    assert "handle_linode_profile_token_revoke" in tools_mod.__all__
+    assert "create_linode_profile_token_delete_tool" in tools_mod.__all__
+    assert "handle_linode_profile_token_delete" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
     assert srv.active_profile.name == "full-access"
-    assert "linode_profile_token_revoke" in srv.registered_tool_names
+    assert "linode_profile_token_delete" in srv.registered_tool_names
 
 
 async def test_profile_devices_list_tool_is_exported_and_registered(
@@ -15022,10 +15017,10 @@ async def test_profile_devices_list_tool_is_exported_and_registered(
 
     assert srv.active_profile.name == "full-access"
 
-    assert "create_linode_profile_devices_list_tool" in tools_mod.__all__
-    assert "handle_linode_profile_devices_list" in tools_mod.__all__
-    assert "linode_profile_devices_list" in registry_names
-    assert "linode_profile_devices_list" in srv.registered_tool_names
+    assert "create_linode_profile_device_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_device_list" in tools_mod.__all__
+    assert "linode_profile_device_list" in registry_names
+    assert "linode_profile_device_list" in srv.registered_tool_names
 
 
 async def test_profile_apps_list_tool_is_exported_and_registered(
@@ -15038,10 +15033,10 @@ async def test_profile_apps_list_tool_is_exported_and_registered(
 
     assert srv.active_profile.name == "full-access"
 
-    assert "create_linode_profile_apps_list_tool" in tools_mod.__all__
-    assert "handle_linode_profile_apps_list" in tools_mod.__all__
-    assert "linode_profile_apps_list" in registry_names
-    assert "linode_profile_apps_list" in srv.registered_tool_names
+    assert "create_linode_profile_app_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_app_list" in tools_mod.__all__
+    assert "linode_profile_app_list" in registry_names
+    assert "linode_profile_app_list" in srv.registered_tool_names
 
 
 async def test_profile_app_get_tool_is_exported_and_registered(
@@ -15096,8 +15091,8 @@ def test_linode_nodebalancer_vpc_configs_list_exported() -> None:
     """NodeBalancer VPC configs list tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_nodebalancer_vpc_configs_list_tool" in tools_mod.__all__
-    assert "handle_linode_nodebalancer_vpc_configs_list" in tools_mod.__all__
+    assert "create_linode_nodebalancer_vpc_config_list_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_vpc_config_list" in tools_mod.__all__
 
 
 def test_linode_nodebalancer_vpc_configs_list_registered() -> None:
@@ -15106,8 +15101,8 @@ def test_linode_nodebalancer_vpc_configs_list_registered() -> None:
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_nodebalancer_vpc_configs_list" in entries
-    assert entries["linode_nodebalancer_vpc_configs_list"].capability == Capability.Read
+    assert "linode_nodebalancer_vpc_config_list" in entries
+    assert entries["linode_nodebalancer_vpc_config_list"].capability == Capability.Read
 
 
 def test_linode_nodebalancer_vpc_config_get_exported() -> None:
@@ -15132,8 +15127,8 @@ def test_linode_nodebalancer_firewalls_update_exported() -> None:
     """NodeBalancer firewall update tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_nodebalancer_firewalls_update_tool" in tools_mod.__all__
-    assert "handle_linode_nodebalancer_firewalls_update" in tools_mod.__all__
+    assert "create_linode_nodebalancer_firewall_update_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_firewall_update" in tools_mod.__all__
 
 
 def test_linode_nodebalancer_firewalls_update_registered() -> None:
@@ -15142,10 +15137,8 @@ def test_linode_nodebalancer_firewalls_update_registered() -> None:
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_nodebalancer_firewalls_update" in entries
-    assert (
-        entries["linode_nodebalancer_firewalls_update"].capability == Capability.Write
-    )
+    assert "linode_nodebalancer_firewall_update" in entries
+    assert entries["linode_nodebalancer_firewall_update"].capability == Capability.Write
 
 
 def test_linode_nodebalancer_config_rebuild_exported() -> None:
@@ -15284,8 +15277,8 @@ def test_linode_instance_stats_exported() -> None:
     """Linode instance stats tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_instance_stats_tool" in tools_mod.__all__
-    assert "handle_linode_instance_stats" in tools_mod.__all__
+    assert "create_linode_instance_stats_get_tool" in tools_mod.__all__
+    assert "handle_linode_instance_stats_get" in tools_mod.__all__
 
 
 def test_linode_instance_stats_registered() -> None:
@@ -15294,8 +15287,8 @@ def test_linode_instance_stats_registered() -> None:
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_instance_stats" in entries
-    entry = entries["linode_instance_stats"]
+    assert "linode_instance_stats_get" in entries
+    entry = entries["linode_instance_stats_get"]
     assert entry.capability == Capability.Read
 
 
@@ -15399,8 +15392,8 @@ def test_linode_instance_config_interfaces_list_exported() -> None:
     """Linode instance config interfaces list tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_instance_config_interfaces_list_tool" in tools_mod.__all__
-    assert "handle_linode_instance_config_interfaces_list" in tools_mod.__all__
+    assert "create_linode_instance_config_interface_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_config_interface_list" in tools_mod.__all__
 
 
 def test_linode_instance_config_interfaces_list_registered(
@@ -15411,12 +15404,12 @@ def test_linode_instance_config_interfaces_list_registered(
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_instance_config_interfaces_list" in entries
-    entry = entries["linode_instance_config_interfaces_list"]
+    assert "linode_instance_config_interface_list" in entries
+    entry = entries["linode_instance_config_interface_list"]
     assert entry.capability == Capability.Read
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_config_interfaces_list" in srv.registered_tool_names
+    assert "linode_instance_config_interface_list" in srv.registered_tool_names
 
 
 async def test_linode_instance_transfer_get_tool_is_exported_and_registered(
@@ -15470,8 +15463,8 @@ def test_linode_instance_configs_list_exported() -> None:
     """Linode instance configs list tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_instance_configs_list_tool" in tools_mod.__all__
-    assert "handle_linode_instance_configs_list" in tools_mod.__all__
+    assert "create_linode_instance_config_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_config_list" in tools_mod.__all__
 
 
 def test_linode_instance_configs_list_registered() -> None:
@@ -15480,8 +15473,8 @@ def test_linode_instance_configs_list_registered() -> None:
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_instance_configs_list" in entries
-    entry = entries["linode_instance_configs_list"]
+    assert "linode_instance_config_list" in entries
+    entry = entries["linode_instance_config_list"]
     assert entry.capability == Capability.Read
 
 
@@ -15489,8 +15482,8 @@ def test_linode_nodebalancer_configs_list_exported() -> None:
     """NodeBalancer configs list tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_nodebalancer_configs_list_tool" in tools_mod.__all__
-    assert "handle_linode_nodebalancer_configs_list" in tools_mod.__all__
+    assert "create_linode_nodebalancer_config_list_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_config_list" in tools_mod.__all__
 
 
 def test_linode_nodebalancer_configs_list_registered() -> None:
@@ -15499,8 +15492,8 @@ def test_linode_nodebalancer_configs_list_registered() -> None:
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_nodebalancer_configs_list" in entries
-    entry = entries["linode_nodebalancer_configs_list"]
+    assert "linode_nodebalancer_config_list" in entries
+    entry = entries["linode_nodebalancer_config_list"]
     assert entry.capability == Capability.Read
 
 
@@ -15527,8 +15520,8 @@ def test_linode_nodebalancer_stats_exported() -> None:
     """NodeBalancer stats tool is exported."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_nodebalancer_stats_tool" in tools_mod.__all__
-    assert "handle_linode_nodebalancer_stats" in tools_mod.__all__
+    assert "create_linode_nodebalancer_stats_get_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_stats_get" in tools_mod.__all__
 
 
 def test_linode_nodebalancer_stats_registered() -> None:
@@ -15537,8 +15530,8 @@ def test_linode_nodebalancer_stats_registered() -> None:
 
     entries = {entry.name: entry for entry in get_tool_registry()}
 
-    assert "linode_nodebalancer_stats" in entries
-    assert entries["linode_nodebalancer_stats"].capability == Capability.Read
+    assert "linode_nodebalancer_stats_get" in entries
+    assert entries["linode_nodebalancer_stats_get"].capability == Capability.Read
 
 
 def test_linode_nodebalancer_config_update_exported() -> None:
@@ -15565,18 +15558,18 @@ async def test_monitor_services_list_tool_is_exported_and_registered(
     """Monitor services list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_monitor_services_list_tool" in tools_mod.__all__
-    assert "handle_linode_monitor_services_list" in tools_mod.__all__
+    assert "create_linode_monitor_service_list_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_service_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_monitor_services_list_tool()
-    assert tool.name == "linode_monitor_services_list"
+    tool, capability = tools_mod.create_linode_monitor_service_list_tool()
+    assert tool.name == "linode_monitor_service_list"
     assert capability is Capability.Read
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_monitor_services_list"].capability is Capability.Read
+    assert registry["linode_monitor_service_list"].capability is Capability.Read
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_monitor_services_list" in srv.registered_tool_names
+    assert "linode_monitor_service_list" in srv.registered_tool_names
 
 
 async def test_monitor_services_list_dispatches_from_registry(
@@ -15598,7 +15591,7 @@ async def test_monitor_services_list_dispatches_from_registry(
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await srv.dispatch("linode_monitor_services_list", {})
+        result = await srv.dispatch("linode_monitor_service_list", {})
 
     payload = json.loads(result[0].text)
     assert payload["services"][0]["service_type"] == "dbaas"
@@ -15803,19 +15796,19 @@ async def test_monitor_alert_channels_list_tool_is_exported_and_registered(
     """Monitor alert channels list tool is exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_monitor_alert_channels_list_tool" in tools_mod.__all__
-    assert "handle_linode_monitor_alert_channels_list" in tools_mod.__all__
+    assert "create_linode_monitor_alert_channel_list_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_alert_channel_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_monitor_alert_channels_list_tool()
-    assert tool.name == "linode_monitor_alert_channels_list"
+    tool, capability = tools_mod.create_linode_monitor_alert_channel_list_tool()
+    assert tool.name == "linode_monitor_alert_channel_list"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_monitor_alert_channels_list"].capability is Capability.Read
+    assert registry["linode_monitor_alert_channel_list"].capability is Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_monitor_alert_channels_list" in srv.registered_tool_names
+    assert "linode_monitor_alert_channel_list" in srv.registered_tool_names
 
 
 async def test_monitor_alert_channels_list_dispatches_from_registry(
@@ -15832,7 +15825,7 @@ async def test_monitor_alert_channels_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_monitor_alert_channels_list", {})
+        result = await srv.dispatch("linode_monitor_alert_channel_list", {})
 
     result_json = json.loads(result[0].text)
     assert result_json["alert_channels"] == response_data["data"]
@@ -15846,21 +15839,21 @@ async def test_monitor_alert_definitions_list_tool_is_exported_and_registered(
     """Monitor alert definitions list tool is exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_monitor_alert_definitions_list_tool" in tools_mod.__all__
-    assert "handle_linode_monitor_alert_definitions_list" in tools_mod.__all__
+    assert "create_linode_monitor_alert_definition_list_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_alert_definition_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_monitor_alert_definitions_list_tool()
-    assert tool.name == "linode_monitor_alert_definitions_list"
+    tool, capability = tools_mod.create_linode_monitor_alert_definition_list_tool()
+    assert tool.name == "linode_monitor_alert_definition_list"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert (
-        registry["linode_monitor_alert_definitions_list"].capability is Capability.Read
+        registry["linode_monitor_alert_definition_list"].capability is Capability.Read
     )
 
     srv = Server(sample_config)
-    assert "linode_monitor_alert_definitions_list" in srv.registered_tool_names
+    assert "linode_monitor_alert_definition_list" in srv.registered_tool_names
 
 
 async def test_monitor_alert_definitions_list_dispatches_from_registry(
@@ -15877,7 +15870,7 @@ async def test_monitor_alert_definitions_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_monitor_alert_definitions_list", {})
+        result = await srv.dispatch("linode_monitor_alert_definition_list", {})
 
     result_json = json.loads(result[0].text)
     assert result_json["alert_definitions"] == response_data["data"]
@@ -15892,25 +15885,25 @@ async def test_monitor_service_alert_definitions_list_tool_is_exported_and_regis
     from linodemcp import tools as tools_mod
 
     assert (
-        "create_linode_monitor_service_alert_definitions_list_tool" in tools_mod.__all__
+        "create_linode_monitor_service_alert_definition_list_tool" in tools_mod.__all__
     )
-    assert "handle_linode_monitor_service_alert_definitions_list" in tools_mod.__all__
+    assert "handle_linode_monitor_service_alert_definition_list" in tools_mod.__all__
 
     tool, capability = (
-        tools_mod.create_linode_monitor_service_alert_definitions_list_tool()
+        tools_mod.create_linode_monitor_service_alert_definition_list_tool()
     )
-    assert tool.name == "linode_monitor_service_alert_definitions_list"
+    assert tool.name == "linode_monitor_service_alert_definition_list"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert (
-        registry["linode_monitor_service_alert_definitions_list"].capability
+        registry["linode_monitor_service_alert_definition_list"].capability
         is Capability.Read
     )
 
     srv = Server(sample_config)
-    assert "linode_monitor_service_alert_definitions_list" in srv.registered_tool_names
+    assert "linode_monitor_service_alert_definition_list" in srv.registered_tool_names
 
 
 async def test_monitor_service_alert_definitions_list_dispatches_from_registry(
@@ -15933,7 +15926,7 @@ async def test_monitor_service_alert_definitions_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_monitor_service_alert_definitions_list",
+            "linode_monitor_service_alert_definition_list",
             {"service_type": "linode"},
         )
 
@@ -15959,7 +15952,7 @@ async def test_monitor_service_alert_definitions_list_rejects_invalid_service_ty
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_monitor_service_alert_definitions_list", arguments
+            "linode_monitor_service_alert_definition_list", arguments
         )
 
     assert "service_type" in result[0].text.lower()
@@ -15972,19 +15965,19 @@ async def test_monitor_dashboards_list_tool_is_exported_and_registered(
     """Monitor dashboards list tool is exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_monitor_dashboards_list_tool" in tools_mod.__all__
-    assert "handle_linode_monitor_dashboards_list" in tools_mod.__all__
+    assert "create_linode_monitor_dashboard_list_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_dashboard_list" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_monitor_dashboards_list_tool()
-    assert tool.name == "linode_monitor_dashboards_list"
+    tool, capability = tools_mod.create_linode_monitor_dashboard_list_tool()
+    assert tool.name == "linode_monitor_dashboard_list"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_monitor_dashboards_list"].capability is Capability.Read
+    assert registry["linode_monitor_dashboard_list"].capability is Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_monitor_dashboards_list" in srv.registered_tool_names
+    assert "linode_monitor_dashboard_list" in srv.registered_tool_names
 
 
 async def test_monitor_dashboards_list_dispatches_from_registry(
@@ -16001,7 +15994,7 @@ async def test_monitor_dashboards_list_dispatches_from_registry(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_monitor_dashboards_list", {})
+        result = await srv.dispatch("linode_monitor_dashboard_list", {})
 
     result_json = json.loads(result[0].text)
     assert result_json["dashboards"] == response_data["data"]
@@ -16080,26 +16073,25 @@ async def test_monitor_service_metric_definitions_list_tool_is_exported_and_regi
     from linodemcp import tools as tools_mod
 
     assert (
-        "create_linode_monitor_service_metric_definitions_list_tool"
-        in tools_mod.__all__
+        "create_linode_monitor_service_metric_definition_list_tool" in tools_mod.__all__
     )
-    assert "handle_linode_monitor_service_metric_definitions_list" in tools_mod.__all__
+    assert "handle_linode_monitor_service_metric_definition_list" in tools_mod.__all__
 
     tool, capability = (
-        tools_mod.create_linode_monitor_service_metric_definitions_list_tool()
+        tools_mod.create_linode_monitor_service_metric_definition_list_tool()
     )
-    assert tool.name == "linode_monitor_service_metric_definitions_list"
+    assert tool.name == "linode_monitor_service_metric_definition_list"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert (
-        registry["linode_monitor_service_metric_definitions_list"].capability
+        registry["linode_monitor_service_metric_definition_list"].capability
         is Capability.Read
     )
 
     srv = Server(sample_config)
-    assert "linode_monitor_service_metric_definitions_list" in srv.registered_tool_names
+    assert "linode_monitor_service_metric_definition_list" in srv.registered_tool_names
 
 
 async def test_monitor_service_metric_definitions_list_dispatches_from_registry(
@@ -16122,7 +16114,7 @@ async def test_monitor_service_metric_definitions_list_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_monitor_service_metric_definitions_list",
+            "linode_monitor_service_metric_definition_list",
             {"service_type": "linode"},
         )
 
@@ -16148,7 +16140,7 @@ async def test_monitor_service_metric_definitions_list_rejects_invalid_service_t
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_monitor_service_metric_definitions_list", arguments
+            "linode_monitor_service_metric_definition_list", arguments
         )
 
     assert "service_type" in result[0].text.lower()
@@ -16161,19 +16153,19 @@ async def test_monitor_service_metrics_read_tool_is_exported_and_registered(
     """Monitor service metrics read tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_monitor_service_metrics_read_tool" in tools_mod.__all__
-    assert "handle_linode_monitor_service_metrics_read" in tools_mod.__all__
+    assert "create_linode_monitor_service_metric_query_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_service_metric_query" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_monitor_service_metrics_read_tool()
-    assert tool.name == "linode_monitor_service_metrics_read"
+    tool, capability = tools_mod.create_linode_monitor_service_metric_query_tool()
+    assert tool.name == "linode_monitor_service_metric_query"
     assert capability is Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_monitor_service_metrics_read"].capability is Capability.Read
+    assert registry["linode_monitor_service_metric_query"].capability is Capability.Read
 
     srv = Server(sample_config)
-    assert "linode_monitor_service_metrics_read" in srv.registered_tool_names
+    assert "linode_monitor_service_metric_query" in srv.registered_tool_names
 
 
 async def test_monitor_service_metrics_read_dispatches_from_registry(
@@ -16191,7 +16183,7 @@ async def test_monitor_service_metrics_read_dispatches_from_registry(
 
         srv = Server(sample_config)
         result = await srv.dispatch(
-            "linode_monitor_service_metrics_read",
+            "linode_monitor_service_metric_query",
             {"service_type": "linode"},
         )
 
@@ -16214,7 +16206,7 @@ async def test_monitor_service_metrics_read_rejects_invalid_service_type(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_monitor_service_metrics_read", arguments)
+        result = await srv.dispatch("linode_monitor_service_metric_query", arguments)
 
     assert "service_type" in result[0].text.lower()
     mock_client_class.assert_not_called()
@@ -16226,11 +16218,11 @@ async def test_ipv4_assign_tool_is_exported_and_registered(
     """IPv4 assign tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_ipv4_assign_tool" in tools_mod.__all__
-    assert "handle_linode_ipv4_assign" in tools_mod.__all__
+    assert "create_linode_networking_ip_assign_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_assign" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_ipv4_assign" in srv.registered_tool_names
+    assert "linode_networking_ip_assign" in srv.registered_tool_names
 
 
 async def test_ipv4_assign_dispatches_from_registry(
@@ -16248,7 +16240,7 @@ async def test_ipv4_assign_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             {
                 "confirm": True,
                 "region": "us-east",
@@ -16269,7 +16261,7 @@ async def test_ipv4_assign_rejects_missing_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             {
                 "region": "us-east",
                 "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
@@ -16287,7 +16279,7 @@ async def test_ipv4_assign_rejects_false_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             {
                 "confirm": False,
                 "region": "us-east",
@@ -16306,7 +16298,7 @@ async def test_ipv4_assign_rejects_string_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             {
                 "confirm": "true",
                 "region": "us-east",
@@ -16325,7 +16317,7 @@ async def test_ipv4_assign_rejects_numeric_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             {
                 "confirm": 1,
                 "region": "us-east",
@@ -16351,7 +16343,7 @@ async def test_ipv4_assign_rejects_invalid_region(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_ipv4_assign", arguments)
+        result = await srv.dispatch("linode_networking_ip_assign", arguments)
 
     assert "region" in result[0].text.lower()
     mock_client_class.assert_not_called()
@@ -16376,7 +16368,7 @@ async def test_ipv4_assign_rejects_invalid_assignments(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             {
                 "confirm": True,
                 "region": "us-east",
@@ -16394,11 +16386,11 @@ async def test_ipv4_share_tool_is_exported_and_registered(
     """IPv4 share tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_ipv4_share_tool" in tools_mod.__all__
-    assert "handle_linode_ipv4_share" in tools_mod.__all__
+    assert "create_linode_networking_ip_share_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_share" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_ipv4_share" in srv.registered_tool_names
+    assert "linode_networking_ip_share" in srv.registered_tool_names
 
 
 async def test_ipv4_share_dispatches_from_registry(
@@ -16416,7 +16408,7 @@ async def test_ipv4_share_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_share",
+            "linode_networking_ip_share",
             {
                 "confirm": True,
                 "ips": ["192.168.1.1"],
@@ -16436,7 +16428,7 @@ async def test_ipv4_share_rejects_missing_confirm(
     """IPv4 share should reject calls without confirm=true."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_ipv4_share",
+        "linode_networking_ip_share",
         {
             "ips": ["192.168.1.1"],
             "linode_id": 12345,
@@ -16452,7 +16444,7 @@ async def test_ipv4_share_rejects_false_confirm(
     """IPv4 share should reject calls with confirm=false."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_ipv4_share",
+        "linode_networking_ip_share",
         {
             "confirm": False,
             "ips": ["192.168.1.1"],
@@ -16471,7 +16463,7 @@ async def test_ipv4_share_rejects_non_boolean_true_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_ipv4_share",
+            "linode_networking_ip_share",
             {
                 "confirm": confirm,
                 "ips": ["192.168.1.1"],
@@ -16489,7 +16481,7 @@ async def test_ipv4_share_rejects_missing_ips(
     """IPv4 share should reject calls without ips."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_ipv4_share",
+        "linode_networking_ip_share",
         {
             "confirm": True,
             "linode_id": 12345,
@@ -16505,7 +16497,7 @@ async def test_ipv4_share_rejects_missing_linode_id(
     """IPv4 share should reject calls without linode_id."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_ipv4_share",
+        "linode_networking_ip_share",
         {
             "confirm": True,
             "ips": ["192.168.1.1"],
@@ -16700,11 +16692,11 @@ async def test_networking_ips_list_tool_is_exported_and_registered(
     """Networking IPs list tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_networking_ips_list_tool" in tools_mod.__all__
-    assert "handle_linode_networking_ips_list" in tools_mod.__all__
+    assert "create_linode_networking_ip_list_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_networking_ips_list" in srv.registered_tool_names
+    assert "linode_networking_ip_list" in srv.registered_tool_names
 
 
 async def test_networking_ips_list_dispatches_happy_path(
@@ -16722,7 +16714,7 @@ async def test_networking_ips_list_dispatches_happy_path(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ips_list",
+            "linode_networking_ip_list",
             {"skip_ipv6_rdns": True},
         )
 
@@ -16746,7 +16738,7 @@ async def test_networking_ips_list_returns_error_response_on_client_failure(
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_networking_ips_list", {})
+        result = await srv.dispatch("linode_networking_ip_list", {})
 
     assert "failed to list networking ips" in result[0].text.lower()
     assert "ListNetworkingIPs" in result[0].text
@@ -16760,7 +16752,7 @@ async def test_networking_ips_list_rejects_invalid_skip_ipv6_rdns_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ips_list",
+            "linode_networking_ip_list",
             {"skip_ipv6_rdns": skip_ipv6_rdns},
         )
 
@@ -17652,14 +17644,14 @@ async def test_instance_volumes_list_tool_is_exported_and_registered(
     """Linode instance volumes list tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_instance_volumes_list_tool" in tools_mod.__all__
-    assert "handle_linode_instance_volumes_list" in tools_mod.__all__
+    assert "create_linode_instance_volume_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_volume_list" in tools_mod.__all__
 
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_instance_volumes_list"].capability is Capability.Read
+    assert registry["linode_instance_volume_list"].capability is Capability.Read
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_volumes_list" in srv.registered_tool_names
+    assert "linode_instance_volume_list" in srv.registered_tool_names
 
 
 async def test_instance_firewalls_list_tool_is_exported_and_registered(
@@ -17668,11 +17660,11 @@ async def test_instance_firewalls_list_tool_is_exported_and_registered(
     """Linode instance firewalls list tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_instance_firewalls_list_tool" in tools_mod.__all__
-    assert "handle_linode_instance_firewalls_list" in tools_mod.__all__
+    assert "create_linode_instance_firewall_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_firewall_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_firewalls_list" in srv.registered_tool_names
+    assert "linode_instance_firewall_list" in srv.registered_tool_names
 
 
 async def test_linode_instance_interface_firewalls_list_tool_is_exported_and_registered(
@@ -17681,11 +17673,11 @@ async def test_linode_instance_interface_firewalls_list_tool_is_exported_and_reg
     """Linode instance interface firewalls list tool is exported and registered."""
     import linodemcp.tools as tools_mod
 
-    assert "create_linode_instance_interface_firewalls_list_tool" in tools_mod.__all__
-    assert "handle_linode_instance_interface_firewalls_list" in tools_mod.__all__
+    assert "create_linode_instance_interface_firewall_list_tool" in tools_mod.__all__
+    assert "handle_linode_instance_interface_firewall_list" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_instance_interface_firewalls_list" in srv.registered_tool_names
+    assert "linode_instance_interface_firewall_list" in srv.registered_tool_names
 
 
 def test_linode_instance_interface_add_tool_is_exported_and_registered(
@@ -17891,12 +17883,12 @@ async def test_lke_tier_versions_list_tool_is_exported_and_registered(
     from linodemcp import tools as tools_mod
     from linodemcp.server import Server
 
-    assert "create_linode_lke_tier_versions_list_tool" in tools_mod.__all__
-    assert "handle_linode_lke_tier_versions_list" in tools_mod.__all__
+    assert "create_linode_lke_tier_version_list_tool" in tools_mod.__all__
+    assert "handle_linode_lke_tier_version_list" in tools_mod.__all__
 
     srv = Server(sample_config)
 
-    assert "linode_lke_tier_versions_list" in srv.registered_tool_names
+    assert "linode_lke_tier_version_list" in srv.registered_tool_names
 
 
 async def test_longview_plan_update_tool_is_exported_registered_and_categorized(
@@ -18120,18 +18112,18 @@ async def test_longview_clients_list_tool_is_exported_and_registered(
     srv = Server(sample_config)
     registry_names = {entry.name for entry in get_tool_registry()}
 
-    assert "create_linode_longview_clients_list_tool" in tools_mod.__all__
+    assert "create_linode_longview_client_list_tool" in tools_mod.__all__
     assert "create_linode_longview_plan_get_tool" in tools_mod.__all__
-    assert "create_linode_longview_types_list_tool" in tools_mod.__all__
-    assert "handle_linode_longview_clients_list" in tools_mod.__all__
+    assert "create_linode_longview_type_list_tool" in tools_mod.__all__
+    assert "handle_linode_longview_client_list" in tools_mod.__all__
     assert "handle_linode_longview_plan_get" in tools_mod.__all__
-    assert "handle_linode_longview_types_list" in tools_mod.__all__
-    assert "linode_longview_clients_list" in registry_names
+    assert "handle_linode_longview_type_list" in tools_mod.__all__
+    assert "linode_longview_client_list" in registry_names
     assert "linode_longview_plan_get" in registry_names
-    assert "linode_longview_types_list" in registry_names
-    assert "linode_longview_clients_list" in srv.registered_tool_names
+    assert "linode_longview_type_list" in registry_names
+    assert "linode_longview_client_list" in srv.registered_tool_names
     assert "linode_longview_plan_get" in srv.registered_tool_names
-    assert "linode_longview_types_list" in srv.registered_tool_names
+    assert "linode_longview_type_list" in srv.registered_tool_names
 
 
 async def test_longview_client_create_tool_is_exported_registered_and_schema(
@@ -18181,10 +18173,10 @@ def test_longview_tools_map_to_longview_scopes() -> None:
     """Longview read/write tools map to the matching Longview scopes."""
     from linodemcp.profiles.scope import Scope, required_scopes
 
-    assert required_scopes("linode_longview_clients_list", Capability.Read) == [
+    assert required_scopes("linode_longview_client_list", Capability.Read) == [
         Scope.LongviewReadOnly
     ]
-    assert required_scopes("linode_longview_types_list", Capability.Read) == [
+    assert required_scopes("linode_longview_type_list", Capability.Read) == [
         Scope.LongviewReadOnly
     ]
     assert required_scopes("linode_longview_client_create", Capability.Write) == [

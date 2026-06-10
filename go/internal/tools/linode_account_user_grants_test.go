@@ -17,7 +17,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-const accountUserGrantsToolName = "linode_account_user_grants"
+const accountUserGrantsToolName = "linode_account_user_grants_get"
 
 func TestLinodeAccountUserGrantsToolDefinition(t *testing.T) {
 	t.Parallel()
@@ -217,8 +217,8 @@ func TestLinodeAccountUserGrantsToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_user_grants") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_user_grants")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_user_grants_get") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_user_grants_get")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

@@ -20,8 +20,8 @@ func TestLinodeNetworkTransferPricesToolDefinition(t *testing.T) {
 
 	tool, capability, handler := tools.NewLinodeNetworkTransferPricesTool(&config.Config{})
 
-	if tool.Name != "linode_network_transfer_prices" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_network_transfer_prices")
+	if tool.Name != "linode_network_transfer_price_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_network_transfer_price_list")
 	}
 
 	if tool.Description == "" {

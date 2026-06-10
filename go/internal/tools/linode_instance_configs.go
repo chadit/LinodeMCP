@@ -247,7 +247,7 @@ func configIDFromTool(request *mcp.CallToolRequest) (int, string) {
 func NewLinodeInstanceConfigInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_config_interfaces_list",
+		"linode_instance_config_interface_list",
 		"Lists interfaces assigned to a specific configuration profile on a Linode instance.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -616,7 +616,7 @@ func formatUpdateConfigInterfaceError(linodeID, configID, interfaceID int, err e
 func NewLinodeInstanceConfigInterfacesReorderTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_config_interfaces_reorder",
+		"linode_instance_config_interface_reorder",
 		"Reorders interfaces on a Linode configuration profile. WARNING: This changes network interface ordering.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -651,7 +651,7 @@ func handleInstanceConfigInterfacesReorderRequest(ctx context.Context, request *
 			return mcp.NewToolResultError(reorderMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_interfaces_reorder", httpMethodPost,
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_interface_reorder", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/configs/%d/interfaces/order", linodeID, configID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetInstanceConfig(ctx, linodeID, configID)

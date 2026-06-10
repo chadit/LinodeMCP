@@ -16,7 +16,7 @@ import (
 
 const (
 	monitorAlertChannelsToolPath     = "/monitor/alert-channels"
-	monitorAlertChannelsToolName     = "linode_monitor_alert_channels"
+	monitorAlertChannelsToolName     = "linode_monitor_alert_channel_list"
 	monitorAlertChannelsToolQuery    = "page=2&page_size=25"
 	monitorAlertChannelToolID        = 10000
 	monitorAlertChannelToolLabel     = "Read-Write Channel"

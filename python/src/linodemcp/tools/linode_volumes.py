@@ -68,10 +68,10 @@ async def handle_linode_volume_get(
     return await execute_tool(cfg, arguments, "retrieve Linode volume", _call)
 
 
-def create_linode_volumes_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_volumes_list tool."""
+def create_linode_volume_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_volume_list tool."""
     return Tool(
-        name="linode_volumes_list",
+        name="linode_volume_list",
         description=(
             "Lists all block storage volumes for the authenticated user "
             "with optional filtering by region or label"
@@ -101,10 +101,10 @@ def create_linode_volumes_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_volume_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_volume_types_list tool."""
+def create_linode_volume_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_volume_type_list tool."""
     return Tool(
-        name="linode_volume_types_list",
+        name="linode_volume_type_list",
         description="Lists available block storage volume types and prices.",
         inputSchema={
             "type": "object",
@@ -120,10 +120,10 @@ def create_linode_volume_types_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_volume_types_list(
+async def handle_linode_volume_type_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_volume_types_list tool request."""
+    """Handle linode_volume_type_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume_types = await client.list_volume_types()
@@ -132,10 +132,10 @@ async def handle_linode_volume_types_list(
     return await execute_tool(cfg, arguments, "list Linode volume types", _call)
 
 
-async def handle_linode_volumes_list(
+async def handle_linode_volume_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_volumes_list tool request."""
+    """Handle linode_volume_list tool request."""
     region_filter: str = arguments.get("region", "")
     label_contains: str = arguments.get("label_contains", "")
 

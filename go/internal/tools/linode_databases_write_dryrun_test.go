@@ -55,8 +55,8 @@ func TestLinodeDatabaseInstanceCreateToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_create") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_create")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_create") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_create")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -182,8 +182,8 @@ func TestLinodeDatabaseInstanceUpdateToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_update") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_update")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_update") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_update")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -291,8 +291,8 @@ func TestLinodeDatabaseInstancePatchToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_patch") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_patch")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_patch") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_patch")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -399,8 +399,8 @@ func TestLinodeDatabaseInstanceSuspendToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_suspend") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_suspend")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_suspend") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_suspend")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -507,8 +507,8 @@ func TestLinodeDatabaseInstanceResumeToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_resume") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_resume")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_resume") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_resume")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -620,8 +620,8 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_credentials_get") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_credentials_get")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_credentials_get") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_credentials_get")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)
@@ -733,8 +733,8 @@ func TestLinodeDatabaseInstanceCredentialsResetToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_database_instance_credentials_reset") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_database_instance_credentials_reset")
+		if !reflect.DeepEqual(body["tool"], "linode_database_mysql_instance_credentials_reset") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_database_mysql_instance_credentials_reset")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)

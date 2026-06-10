@@ -36,8 +36,8 @@ func TestLinodeManagedCredentialsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeManagedCredentialsTool(cfg)
 
-	if tool.Name != "linode_managed_credentials" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_credentials")
+	if tool.Name != "linode_managed_credential_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_credential_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -215,8 +215,8 @@ func TestLinodeManagedCredentialsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_credentials") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_credentials")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_credential_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_credential_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -230,8 +230,8 @@ func TestLinodeManagedSSHKeyToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeManagedSSHKeyTool(cfg)
 
-	if tool.Name != "linode_managed_ssh_key" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_ssh_key")
+	if tool.Name != "linode_managed_sshkey_get" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_sshkey_get")
 	}
 
 	if capability != profiles.CapRead {
@@ -347,8 +347,8 @@ func TestLinodeManagedSSHKeyToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_ssh_key") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_ssh_key")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_sshkey_get") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_sshkey_get")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

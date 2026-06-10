@@ -27,8 +27,8 @@ func TestLinodeNodeBalancerVPCListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_nodebalancer_vpc_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_vpc_list")
+	if tool.Name != "linode_nodebalancer_vpc_config_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_vpc_config_list")
 	}
 
 	if capability != profiles.CapRead {

@@ -172,7 +172,7 @@ const (
 // NewLinodeAccountTool creates a tool for retrieving Linode account information.
 func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_account",
+		cfg, "linode_account_get",
 		"Retrieves the authenticated user's Linode account information including billing details and capabilities",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccount(ctx)
@@ -185,7 +185,7 @@ func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 // NewLinodeAccountTransferTool creates a tool for retrieving account network transfer usage.
 func NewLinodeAccountTransferTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_account_transfer",
+		cfg, "linode_account_transfer_get",
 		"Retrieves the authenticated account's network transfer usage and quota by region.",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccountTransfer(ctx)
@@ -198,7 +198,7 @@ func NewLinodeAccountTransferTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 // NewLinodeAccountSettingsTool creates a tool for retrieving account-wide settings.
 func NewLinodeAccountSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_account_settings",
+		cfg, "linode_account_settings_get",
 		"Retrieves account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccountSettings(ctx)
@@ -252,7 +252,7 @@ func NewLinodeAccountSettingsManagedEnableTool(cfg *config.Config) (mcp.Tool, pr
 // NewLinodeAccountAgreementsTool creates a tool for listing account agreement acknowledgment status.
 func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_account_agreements",
+		cfg, "linode_account_agreement_list",
 		"Lists account agreements and whether each has been acknowledged",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccountAgreements(ctx)
@@ -266,7 +266,7 @@ func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 func NewLinodeManagedCredentialsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_credentials",
+		"linode_managed_credential_list",
 		"Lists stored managed credentials for the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -322,7 +322,7 @@ func NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg *config.Config) (m
 func NewLinodeManagedSSHKeyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_managed_ssh_key",
+		"linode_managed_sshkey_get",
 		"Retrieves the Managed SSH public key assigned to the authenticated account.",
 		nil,
 		handleLinodeManagedSSHKeyRequest,
@@ -392,7 +392,7 @@ func NewLinodeManagedCredentialRevokeTool(cfg *config.Config) (mcp.Tool, profile
 func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_maintenance",
+		"linode_account_maintenance_list",
 		"Lists maintenance records visible to the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -408,7 +408,7 @@ func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 func NewLinodeMaintenancePoliciesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_maintenance_policies",
+		"linode_maintenance_policy_list",
 		"Lists available Linode maintenance policies.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -424,7 +424,7 @@ func NewLinodeMaintenancePoliciesTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 func NewLinodeAccountNotificationsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_notifications",
+		"linode_account_notification_list",
 		"Lists active notifications for the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -440,7 +440,7 @@ func NewLinodeAccountNotificationsTool(cfg *config.Config) (mcp.Tool, profiles.C
 func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_betas",
+		"linode_account_beta_list",
 		"Lists beta programs that the account is enrolled in.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -456,7 +456,7 @@ func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_events",
+		"linode_account_event_list",
 		"Lists events that represent actions taken on the account over the last 90 days.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -472,7 +472,7 @@ func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 func NewLinodeTaggedObjectsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_tagged_objects",
+		"linode_tag_object_list",
 		"Lists Linode objects that have the supplied tag label.",
 		[]mcp.ToolOption{
 			mcp.WithString(tagLabelParam, mcp.Required(), mcp.Description("Tag label to list objects for.")),
@@ -489,7 +489,7 @@ func NewLinodeTaggedObjectsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_users",
+		"linode_account_user_list",
 		"Lists users on the account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -535,7 +535,7 @@ func NewLinodeProfileTokenGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 func NewLinodeAccountUserGrantsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_user_grants",
+		"linode_account_user_grants_get",
 		"Gets grants for one account user by username.",
 		[]mcp.ToolOption{
 			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username whose grants should be retrieved.")),
@@ -635,7 +635,7 @@ func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_support_ticket_create",
+		"linode_support_ticket_create",
 		"Opens a support ticket for the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithString(supportTicketSummaryParam, mcp.Required(), mcp.Description("Short summary for the support ticket.")),
@@ -667,7 +667,7 @@ func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, prof
 func NewLinodeAccountSupportTicketAttachmentCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_support_ticket_attachment_create",
+		"linode_support_ticket_attachment_create",
 		"Creates an attachment on an existing support ticket.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(supportTicketTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to attach the file to.")),
@@ -685,7 +685,7 @@ func NewLinodeAccountSupportTicketAttachmentCreateTool(cfg *config.Config) (mcp.
 func NewLinodeAccountSupportTicketReplyCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_support_ticket_reply_create",
+		"linode_support_ticket_reply_create",
 		"Creates a reply on an existing support ticket.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(supportTicketTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to reply to.")),
@@ -724,7 +724,7 @@ func NewLinodeManagedContactCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 func NewLinodeAccountLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_logins",
+		"linode_account_login_list",
 		"Lists user logins for the account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -756,7 +756,7 @@ func NewLinodeAccountLoginGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_invoices",
+		"linode_account_invoice_list",
 		"Lists invoices for the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -772,7 +772,7 @@ func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 func NewLinodeAccountPaymentsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_payments",
+		"linode_account_payment_list",
 		"Lists payments made on the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -822,7 +822,7 @@ func NewLinodeAccountPaymentCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 func NewLinodeAccountPromoCreditTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_promo_credit",
+		"linode_account_promo_credit_add",
 		"Applies a promo credit to the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithString("promo_code", mcp.Required(), mcp.Description("Promo code to apply to the account.")),
@@ -855,7 +855,7 @@ func NewLinodeAccountInvoiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_invoice_items",
+		"linode_account_invoice_item_list",
 		"Lists line items for one account invoice by ID.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("invoice_id", mcp.Required(),
@@ -983,7 +983,7 @@ func NewLinodeProfileTFAEnableConfirmTool(cfg *config.Config) (mcp.Tool, profile
 func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_profile_devices",
+		"linode_profile_device_list",
 		"Lists trusted devices for the authenticated profile.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1085,7 +1085,7 @@ func NewLinodeProfileDeviceRevokeTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_oauth_clients",
+		"linode_account_oauth_client_list",
 		"Lists OAuth clients registered on the account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1101,7 +1101,7 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 func NewLinodeProfileAppsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_profile_apps",
+		"linode_profile_app_list",
 		"Lists OAuth app authorizations for the authenticated profile.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1117,7 +1117,7 @@ func NewLinodeProfileAppsTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 func NewLinodeLongviewClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_longview_clients",
+		"linode_longview_client_list",
 		"Lists Longview clients configured for the account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1205,7 +1205,7 @@ func NewLinodeLongviewSubscriptionGetTool(cfg *config.Config) (mcp.Tool, profile
 func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_payment_methods",
+		"linode_account_payment_method_list",
 		"Lists payment methods for the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1396,7 +1396,7 @@ func NewLinodeAccountOAuthClientDeleteTool(cfg *config.Config) (mcp.Tool, profil
 func NewLinodeAccountOAuthClientResetSecretTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_oauth_client_reset_secret",
+		"linode_account_oauth_client_secret_reset",
 		"Resets one account OAuth client secret by ID. WARNING: The new secret is only shown once in the response and cannot be retrieved later.",
 		[]mcp.ToolOption{
 			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
@@ -1413,7 +1413,7 @@ func NewLinodeAccountOAuthClientResetSecretTool(cfg *config.Config) (mcp.Tool, p
 func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_child_accounts",
+		"linode_account_child_account_list",
 		"Lists child-level accounts the authenticated account can access.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1429,7 +1429,7 @@ func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.C
 func NewLinodeAccountServiceTransfersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_service_transfers",
+		"linode_account_service_transfer_list",
 		"Lists account service transfer requests.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1569,7 +1569,7 @@ func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles
 func NewLinodeAccountChildAccountTokenTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_child_account_token",
+		"linode_account_child_account_token_create",
 		"Creates a short-lived proxy user token for one child-level account.",
 		[]mcp.ToolOption{
 			mcp.WithString("euuid", mcp.Required(),
@@ -1588,7 +1588,7 @@ func NewLinodeAccountChildAccountTokenTool(cfg *config.Config) (mcp.Tool, profil
 func NewLinodeBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_betas",
+		"linode_beta_list",
 		"Lists available beta programs.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1655,7 +1655,7 @@ func NewLinodeAccountBetaEnrollTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_availability",
+		"linode_account_availability_list",
 		"Lists services available and unavailable to the account in each region.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -1687,7 +1687,7 @@ func NewLinodeAccountAvailabilityGetTool(cfg *config.Config) (mcp.Tool, profiles
 func NewLinodeAccountAgreementsAcknowledgeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_account_agreements_acknowledge",
+		"linode_account_agreement_acknowledge",
 		"Acknowledges one or more account agreements.",
 		[]mcp.ToolOption{
 			mcp.WithBoolean("billing_agreement", mcp.Description("Acknowledge the billing agreement (optional)")),
@@ -1767,7 +1767,7 @@ func handleLinodeAccountNotificationsRequest(ctx context.Context, request *mcp.C
 		return MarshalToolResponse(notifications)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_notifications: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_notification_list: " + listFailure.Error()), nil
 }
 
 func accountNotificationsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -1802,7 +1802,7 @@ func handleLinodeAccountBetasRequest(ctx context.Context, request *mcp.CallToolR
 		return MarshalToolResponse(betas)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_betas: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_beta_list: " + listFailure.Error()), nil
 }
 
 func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -2055,7 +2055,7 @@ func handleLinodeProfileDevicesRequest(ctx context.Context, request *mcp.CallToo
 		return MarshalToolResponse(devices)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_profile_devices: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_device_list: " + listFailure.Error()), nil
 }
 
 func profileDevicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -2288,7 +2288,7 @@ func handleLinodeAccountOAuthClientsRequest(ctx context.Context, request *mcp.Ca
 		return MarshalToolResponse(clients)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_oauth_clients: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_oauth_client_list: " + listFailure.Error()), nil
 }
 
 func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -2323,7 +2323,7 @@ func handleLinodeProfileAppsRequest(ctx context.Context, request *mcp.CallToolRe
 		return MarshalToolResponse(apps)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_profile_apps: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_app_list: " + listFailure.Error()), nil
 }
 
 func profileAppsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -2358,7 +2358,7 @@ func handleLinodeLongviewClientsRequest(ctx context.Context, request *mcp.CallTo
 		return MarshalToolResponse(clients)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_longview_clients: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_longview_client_list: " + listFailure.Error()), nil
 }
 
 func longviewClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -2564,7 +2564,7 @@ func handleLinodeAccountPaymentMethodsRequest(ctx context.Context, request *mcp.
 		return MarshalToolResponse(methods)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_methods: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_method_list: " + listFailure.Error()), nil
 }
 
 func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -3190,7 +3190,7 @@ func handleLinodeAccountOAuthClientResetSecretRequest(ctx context.Context, reque
 	if IsDryRun(request) {
 		// Credential-safe: fetch the client metadata (not the secret) and
 		// preview the POST; the new secret is never surfaced.
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_reset_secret", httpMethodPost,
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_secret_reset", httpMethodPost,
 			accountOAuthClientsPath+"/"+clientID+"/reset-secret",
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetAccountOAuthClient(ctx, clientID)
@@ -3208,7 +3208,7 @@ func handleLinodeAccountOAuthClientResetSecretRequest(ctx context.Context, reque
 
 	secret, resetFailureMessage := resetOAuthClientSecret(ctx, client, clientID)
 	if resetFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to reset linode_account_oauth_client_reset_secret: " + resetFailureMessage), nil
+		return mcp.NewToolResultError("Failed to reset linode_account_oauth_client_secret_reset: " + resetFailureMessage), nil
 	}
 
 	return MarshalToolResponse(struct {
@@ -3308,7 +3308,7 @@ func handleLinodeAccountEventsRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(events)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_events: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_event_list: " + listFailure.Error()), nil
 }
 
 func accountEventsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -3343,7 +3343,7 @@ func handleLinodeTaggedObjectsRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(taggedObjects)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_tagged_objects: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_tag_object_list: " + listFailure.Error()), nil
 }
 
 func taggedObjectsArgsFromTool(request *mcp.CallToolRequest) (string, int, int, string) {
@@ -3383,7 +3383,7 @@ func handleLinodeAccountUsersRequest(ctx context.Context, request *mcp.CallToolR
 		return MarshalToolResponse(users)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_users: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_user_list: " + listFailure.Error()), nil
 }
 
 func accountUsersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -3460,7 +3460,7 @@ func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.Call
 		return MarshalToolResponse(grants)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_user_grants: " + getFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_user_grants_get: " + getFailure.Error()), nil
 }
 
 func handleLinodeAccountUserGrantsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -3837,7 +3837,7 @@ func handleLinodeAccountSupportTicketCreateRequest(ctx context.Context, request 
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_account_support_ticket_create", httpMethodPost, supportTicketsPath, createRequest, nil,
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_support_ticket_create", httpMethodPost, supportTicketsPath, createRequest, nil,
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
 				return supportTicketCreateSideEffects(ctx, request.GetString("summary", ""))
 			})
@@ -3857,7 +3857,7 @@ func handleLinodeAccountSupportTicketCreateRequest(ctx context.Context, request 
 		return MarshalToolResponse(ticket)
 	}
 
-	return mcp.NewToolResultError("Failed to create linode_account_support_ticket_create: " + createFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to create linode_support_ticket_create: " + createFailure.Error()), nil
 }
 
 func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateSupportTicketRequest, string) {
@@ -3992,7 +3992,7 @@ func handleLinodeAccountSupportTicketReplyCreateRequest(ctx context.Context, req
 	}
 
 	return runSupportTicketSubresourceCreate(ctx, request, cfg,
-		"linode_account_support_ticket_reply_create",
+		"linode_support_ticket_reply_create",
 		fmt.Sprintf("%s/%d/replies", supportTicketsPath, ticketID),
 		"This creates a support ticket reply. Set confirm=true to proceed.",
 		"Failed to create support ticket reply: ",
@@ -4025,7 +4025,7 @@ func handleLinodeAccountSupportTicketAttachmentCreateRequest(ctx context.Context
 	}
 
 	return runSupportTicketSubresourceCreate(ctx, request, cfg,
-		"linode_account_support_ticket_attachment_create",
+		"linode_support_ticket_attachment_create",
 		fmt.Sprintf("%s/%d/attachments", supportTicketsPath, ticketID),
 		"This creates a support ticket attachment. Set confirm=true to proceed.",
 		"Failed to create support ticket attachment: ",
@@ -4197,7 +4197,7 @@ func handleLinodeAccountLoginsRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(logins)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_logins: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_login_list: " + listFailure.Error()), nil
 }
 
 func accountLoginsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4275,7 +4275,7 @@ func handleLinodeAccountInvoicesRequest(ctx context.Context, request *mcp.CallTo
 		return MarshalToolResponse(invoices)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_invoices: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_invoice_list: " + listFailure.Error()), nil
 }
 
 func accountInvoicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4310,7 +4310,7 @@ func handleLinodeAccountPaymentsRequest(ctx context.Context, request *mcp.CallTo
 		return MarshalToolResponse(payments)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_payments: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_list: " + listFailure.Error()), nil
 }
 
 func accountPaymentsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4409,7 +4409,7 @@ func handleLinodeAccountPromoCreditRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_promo_credit", httpMethodPost, accountPromoCodesPath, nil)
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_promo_credit_add", httpMethodPost, accountPromoCodesPath, nil)
 	}
 
 	if result := RequireConfirm(request, "This applies a promo credit to the account. Set confirm=true to proceed."); result != nil {
@@ -4422,7 +4422,7 @@ func handleLinodeAccountPromoCreditRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	if addFailureMessage := addAccountPromoCredit(ctx, client, req); addFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to apply linode_account_promo_credit: " + addFailureMessage), nil
+		return mcp.NewToolResultError("Failed to apply linode_account_promo_credit_add: " + addFailureMessage), nil
 	}
 
 	return MarshalToolResponse(struct {
@@ -4558,7 +4558,7 @@ func handleLinodeAccountInvoiceItemsRequest(ctx context.Context, request *mcp.Ca
 		return MarshalToolResponse(items)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_invoice_items: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_invoice_item_list: " + listFailure.Error()), nil
 }
 
 func accountInvoiceItemsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4593,7 +4593,7 @@ func handleLinodeAccountChildAccountsRequest(ctx context.Context, request *mcp.C
 		return MarshalToolResponse(childAccounts)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_child_accounts: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_child_account_list: " + listFailure.Error()), nil
 }
 
 func accountChildAccountsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4640,7 +4640,7 @@ func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *m
 	if IsDryRun(request) {
 		// Credential-safe: fetch the child account metadata (not the proxy
 		// token) and preview the POST; the token is never surfaced.
-		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_child_account_token", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_child_account_token_create", httpMethodPost,
 			accountChildAccountsPath+"/"+euuid+"/token",
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetAccountChildAccount(ctx, euuid)
@@ -4664,7 +4664,7 @@ func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *m
 		return MarshalToolResponse(token)
 	}
 
-	return mcp.NewToolResultError("Failed to create linode_account_child_account_token: " + createFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to create linode_account_child_account_token_create: " + createFailure.Error()), nil
 }
 
 func handleLinodeAccountServiceTransfersRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -4683,7 +4683,7 @@ func handleLinodeAccountServiceTransfersRequest(ctx context.Context, request *mc
 		return MarshalToolResponse(transfers)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_service_transfers: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_service_transfer_list: " + listFailure.Error()), nil
 }
 
 func handleLinodeAccountServiceTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -5190,7 +5190,7 @@ func handleLinodeManagedCredentialsRequest(ctx context.Context, request *mcp.Cal
 		return MarshalToolResponse(credentials)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_credentials: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_credential_list: " + listFailure.Error()), nil
 }
 
 func handleLinodeManagedCredentialUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -5334,7 +5334,7 @@ func handleLinodeManagedSSHKeyRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(sshKey)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_ssh_key: " + getFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_sshkey_get: " + getFailure.Error()), nil
 }
 
 func handleLinodeManagedCredentialGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -5525,7 +5525,7 @@ func handleLinodeAccountMaintenanceRequest(ctx context.Context, request *mcp.Cal
 		return MarshalToolResponse(maintenance)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_maintenance: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_maintenance_list: " + listFailure.Error()), nil
 }
 
 func accountMaintenancePaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -5560,7 +5560,7 @@ func handleLinodeMaintenancePoliciesRequest(ctx context.Context, request *mcp.Ca
 		return MarshalToolResponse(policies)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_maintenance_policies: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_maintenance_policy_list: " + listFailure.Error()), nil
 }
 
 func handleLinodeAccountAvailabilityGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -5636,7 +5636,7 @@ func handleLinodeBetasRequest(ctx context.Context, request *mcp.CallToolRequest,
 		return MarshalToolResponse(betas)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_betas: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_beta_list: " + listFailure.Error()), nil
 }
 
 func betasPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -5671,7 +5671,7 @@ func handleLinodeAccountAvailabilityRequest(ctx context.Context, request *mcp.Ca
 		return MarshalToolResponse(availability)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_account_availability: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_account_availability_list: " + listFailure.Error()), nil
 }
 
 func accountAvailabilityPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -5730,7 +5730,7 @@ func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, reques
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_agreements_acknowledge", httpMethodPost, accountAgreementsPath, nil,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_agreement_acknowledge", httpMethodPost, accountAgreementsPath, nil,
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
 				return accountAgreementsAcknowledgeSideEffects(ctx)
 			})

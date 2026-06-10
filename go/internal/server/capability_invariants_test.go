@@ -285,7 +285,7 @@ func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 
 	for _, info := range infos {
 		switch info.Name {
-		case "linode_networking_ips_list":
+		case "linode_networking_ip_list":
 			found[info.Name] = true
 
 			if info.Capability != profiles.CapRead {
@@ -308,7 +308,7 @@ func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 		}
 	}
 
-	if !found["linode_networking_ips_list"] {
+	if !found["linode_networking_ip_list"] {
 		t.Error("expected condition to be true")
 	}
 
@@ -325,7 +325,7 @@ func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
 	var foundList bool
 
 	for _, info := range srv.ToolInfos() {
-		if info.Name != "linode_firewall_templates_list" {
+		if info.Name != "linode_firewall_template_list" {
 			continue
 		}
 

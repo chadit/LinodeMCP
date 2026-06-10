@@ -34,10 +34,10 @@ _ENV_PROP: dict[str, Any] = {
 }
 
 
-def create_linode_vlans_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_vlans_list tool."""
+def create_linode_vlan_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_vlan_list tool."""
     return Tool(
-        name="linode_vlans_list",
+        name="linode_vlan_list",
         description="Lists all VLANs on the account",
         inputSchema={
             "type": "object",
@@ -48,10 +48,10 @@ def create_linode_vlans_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_vlans_list(
+async def handle_linode_vlan_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_vlans_list tool request."""
+    """Handle linode_vlan_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         vlans = await client.list_vlans()
@@ -200,10 +200,10 @@ async def handle_linode_vlan_delete(
     return await execute_tool(cfg, arguments, "delete VLAN", _call)
 
 
-def create_linode_ipv4_share_tool() -> tuple[Tool, Capability]:
-    """Create the linode_ipv4_share tool."""
+def create_linode_networking_ip_share_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_share tool."""
     return Tool(
-        name="linode_ipv4_share",
+        name="linode_networking_ip_share",
         description="Shares IPv4 addresses with a Linode",
         inputSchema={
             "type": "object",
@@ -247,16 +247,16 @@ def _parse_ipv4_share(
     return typed_ips, linode_id
 
 
-async def handle_linode_ipv4_share(
+async def handle_linode_networking_ip_share(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_ipv4_share tool request."""
+    """Handle linode_networking_ip_share tool request."""
     if is_dry_run(arguments):
         parsed = _parse_ipv4_share(arguments)
         if isinstance(parsed, list):
             return parsed
         return build_dry_run_response(
-            "linode_ipv4_share",
+            "linode_networking_ip_share",
             arguments.get("environment", ""),
             "POST",
             "/networking/ipv4/share",
@@ -377,10 +377,10 @@ async def handle_linode_networking_ips_share(
     return await execute_tool(cfg, arguments, "share IP addresses", _call)
 
 
-def create_linode_ipv4_assign_tool() -> tuple[Tool, Capability]:
-    """Create the linode_ipv4_assign tool."""
+def create_linode_networking_ip_assign_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_assign tool."""
     return Tool(
-        name="linode_ipv4_assign",
+        name="linode_networking_ip_assign",
         description="Assigns IPv4 addresses to Linodes in a region",
         inputSchema={
             "type": "object",
@@ -463,10 +463,10 @@ def _parse_ipv4_assign(
     return region, typed_assignments
 
 
-async def handle_linode_ipv4_assign(
+async def handle_linode_networking_ip_assign(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_ipv4_assign tool request."""
+    """Handle linode_networking_ip_assign tool request."""
     if is_dry_run(arguments):
         parsed = _parse_ipv4_assign(arguments)
         if isinstance(parsed, list):
@@ -474,7 +474,7 @@ async def handle_linode_ipv4_assign(
         region, typed_assignments = parsed
         request_body = {"region": region, "assignments": typed_assignments}
         return build_dry_run_response(
-            "linode_ipv4_assign",
+            "linode_networking_ip_assign",
             arguments.get("environment", ""),
             "POST",
             "/networking/ipv4/assign",

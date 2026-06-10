@@ -444,8 +444,8 @@ func TestLinodeInstanceConfigInterfacesReorderToolDryRun(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(body["tool"], "linode_instance_config_interfaces_reorder") {
-			t.Errorf("got %v, want %v", body["tool"], "linode_instance_config_interfaces_reorder")
+		if !reflect.DeepEqual(body["tool"], "linode_instance_config_interface_reorder") {
+			t.Errorf("got %v, want %v", body["tool"], "linode_instance_config_interface_reorder")
 		}
 
 		would, _ := body["would_execute"].(map[string]any)

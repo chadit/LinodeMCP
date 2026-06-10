@@ -32,10 +32,10 @@ def _redact_profile_token(token: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def create_linode_profile_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile tool."""
+def create_linode_profile_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_get tool."""
     return Tool(
-        name="linode_profile",
+        name="linode_profile_get",
         description="Retrieves Linode user account profile information",
         inputSchema={
             "type": "object",
@@ -51,10 +51,10 @@ def create_linode_profile_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_profile(
+async def handle_linode_profile_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile tool request.
+    """Handle linode_profile_get tool request.
 
     Args:
         arguments: EnvironmentArgs - environment (optional)
@@ -558,10 +558,10 @@ async def handle_linode_profile_phone_number_delete(
     )
 
 
-def create_linode_profile_security_questions_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_security_questions_list tool."""
+def create_linode_profile_security_question_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_security_question_list tool."""
     return Tool(
-        name="linode_profile_security_questions_list",
+        name="linode_profile_security_question_list",
         description="Lists available Linode profile security questions.",
         inputSchema={
             "type": "object",
@@ -572,10 +572,10 @@ def create_linode_profile_security_questions_list_tool() -> tuple[Tool, Capabili
     ), Capability.Read
 
 
-async def handle_linode_profile_security_questions_list(
+async def handle_linode_profile_security_question_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_security_questions_list tool request."""
+    """Handle linode_profile_security_question_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.list_profile_security_questions()
@@ -585,10 +585,10 @@ async def handle_linode_profile_security_questions_list(
     )
 
 
-def create_linode_profile_security_questions_answer_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_security_questions_answer tool."""
+def create_linode_profile_security_question_answer_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_security_question_answer tool."""
     return Tool(
-        name="linode_profile_security_questions_answer",
+        name="linode_profile_security_question_answer",
         description="Answers profile security questions for the Linode account.",
         inputSchema={
             "type": "object",
@@ -628,17 +628,17 @@ def create_linode_profile_security_questions_answer_tool() -> tuple[Tool, Capabi
     ), Capability.Write
 
 
-async def handle_linode_profile_security_questions_answer(
+async def handle_linode_profile_security_question_answer(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_security_questions_answer tool request."""
+    """Handle linode_profile_security_question_answer tool request."""
     if is_dry_run(arguments):
         try:
             build_profile_security_questions_body(arguments.get("security_questions"))
         except (TypeError, ValueError) as exc:
             return error_response(str(exc))
         return build_dry_run_response(
-            "linode_profile_security_questions_answer",
+            "linode_profile_security_question_answer",
             arguments.get("environment", ""),
             "POST",
             "/profile/security-questions",
@@ -775,10 +775,10 @@ async def handle_linode_profile_token_create(
     return await execute_tool(cfg, arguments, "create Linode profile token", _call)
 
 
-def create_linode_profile_tokens_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_tokens_list tool."""
+def create_linode_profile_token_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_token_list tool."""
     return Tool(
-        name="linode_profile_tokens_list",
+        name="linode_profile_token_list",
         description="Lists Linode personal access tokens.",
         inputSchema={
             "type": "object",
@@ -789,10 +789,10 @@ def create_linode_profile_tokens_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_profile_tokens_list(
+async def handle_linode_profile_token_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_tokens_list tool request."""
+    """Handle linode_profile_token_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         tokens = await client.list_profile_tokens()
@@ -836,10 +836,10 @@ async def handle_linode_profile_token_get(
     return await execute_tool(cfg, arguments, "retrieve Linode profile token", _call)
 
 
-def create_linode_profile_logins_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_logins_list tool."""
+def create_linode_profile_login_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_login_list tool."""
     return Tool(
-        name="linode_profile_logins_list",
+        name="linode_profile_login_list",
         description="Lists recent successful Linode profile logins.",
         inputSchema={
             "type": "object",
@@ -850,10 +850,10 @@ def create_linode_profile_logins_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_profile_logins_list(
+async def handle_linode_profile_login_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_logins_list tool request."""
+    """Handle linode_profile_login_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return {"logins": await client.list_profile_logins()}
@@ -861,10 +861,10 @@ async def handle_linode_profile_logins_list(
     return await execute_tool(cfg, arguments, "list Linode profile logins", _call)
 
 
-def create_linode_profile_devices_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_devices_list tool."""
+def create_linode_profile_device_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_device_list tool."""
     return Tool(
-        name="linode_profile_devices_list",
+        name="linode_profile_device_list",
         description="Lists trusted devices for the Linode profile.",
         inputSchema={
             "type": "object",
@@ -875,10 +875,10 @@ def create_linode_profile_devices_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_profile_devices_list(
+async def handle_linode_profile_device_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_devices_list tool request."""
+    """Handle linode_profile_device_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return {"devices": await client.list_profile_devices()}
@@ -1022,10 +1022,10 @@ def _optional_int_argument(
     return value
 
 
-def create_linode_profile_apps_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_apps_list tool."""
+def create_linode_profile_app_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_app_list tool."""
     return Tool(
-        name="linode_profile_apps_list",
+        name="linode_profile_app_list",
         description="Lists OAuth app authorizations from the Linode profile.",
         inputSchema={
             "type": "object",
@@ -1047,10 +1047,10 @@ def create_linode_profile_apps_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_profile_apps_list(
+async def handle_linode_profile_app_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_apps_list tool request."""
+    """Handle linode_profile_app_list tool request."""
     try:
         page = _optional_int_argument(arguments, "page", 1)
         page_size = _optional_int_argument(arguments, "page_size", 25, 500)
@@ -1103,10 +1103,10 @@ async def handle_linode_profile_app_get(
     )
 
 
-def create_linode_profile_app_revoke_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_app_revoke tool."""
+def create_linode_profile_app_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_app_delete tool."""
     return Tool(
-        name="linode_profile_app_revoke",
+        name="linode_profile_app_delete",
         description="Revokes OAuth app access from the Linode profile by app ID.",
         inputSchema={
             "type": "object",
@@ -1128,10 +1128,10 @@ def create_linode_profile_app_revoke_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
-async def handle_linode_profile_app_revoke(
+async def handle_linode_profile_app_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_app_revoke tool request."""
+    """Handle linode_profile_app_delete tool request."""
     if is_dry_run(arguments):
         aid = _profile_required_id(arguments, "app_id")
         if isinstance(aid, list):
@@ -1143,7 +1143,7 @@ async def handle_linode_profile_app_revoke(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_profile_app_revoke",
+            "linode_profile_app_delete",
             "DELETE",
             f"/profile/apps/{aid}",
             _fetch,
@@ -1265,10 +1265,10 @@ async def handle_linode_profile_device_revoke(
     )
 
 
-def create_linode_profile_token_revoke_tool() -> tuple[Tool, Capability]:
-    """Create the linode_profile_token_revoke tool."""
+def create_linode_profile_token_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_token_delete tool."""
     return Tool(
-        name="linode_profile_token_revoke",
+        name="linode_profile_token_delete",
         description="Revokes a Linode personal access token by token ID.",
         inputSchema={
             "type": "object",
@@ -1290,10 +1290,10 @@ def create_linode_profile_token_revoke_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
-async def handle_linode_profile_token_revoke(
+async def handle_linode_profile_token_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile_token_revoke tool request."""
+    """Handle linode_profile_token_delete tool request."""
     if is_dry_run(arguments):
         tid = _profile_required_id(arguments, "token_id")
         if isinstance(tid, list):
@@ -1305,7 +1305,7 @@ async def handle_linode_profile_token_revoke(
         return await execute_dry_run(
             cfg,
             arguments,
-            "linode_profile_token_revoke",
+            "linode_profile_token_delete",
             "DELETE",
             f"/profile/tokens/{tid}",
             _fetch,

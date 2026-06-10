@@ -23,8 +23,8 @@ func TestLinodeInstanceFirewallsApplyToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_firewalls_apply" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_firewalls_apply")
+	if tool.Name != "linode_instance_firewall_apply" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_firewall_apply")
 	}
 
 	if tool.Description == "" {

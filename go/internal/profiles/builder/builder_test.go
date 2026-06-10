@@ -19,7 +19,7 @@ func fixtureProfile(t *testing.T) *profiles.Profile {
 	return &profiles.Profile{
 		Name:                "source",
 		Description:         "Source profile for clone tests",
-		AllowedTools:        []string{"linode_instance_list", "linode_account"},
+		AllowedTools:        []string{"linode_instance_list", "linode_account_get"},
 		AllowedEnvironments: []string{"prod"},
 		RequiredTokenScopes: []string{"linodes:read_only", "account:read_only"},
 		AllowYolo:           true,

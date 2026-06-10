@@ -117,13 +117,13 @@ def _build_tool_registry() -> list[ToolEntry]:
 
     for name in all_names:
         if name.startswith("create_") and name.endswith("_tool"):
-            # create_linode_instances_list_tool -> linode_instances_list
+            # create_linode_instance_list_tool -> linode_instance_list
             tool_name = name[len("create_") : -len("_tool")]
             fn = getattr(tools_module, name, None)
             if fn is not None:
                 create_fns[tool_name] = cast("ToolFactory", fn)
         elif name.startswith("handle_"):
-            # handle_linode_instances_list -> linode_instances_list
+            # handle_linode_instance_list -> linode_instance_list
             tool_name = name[len("handle_") :]
             fn = getattr(tools_module, name, None)
             if fn is not None:

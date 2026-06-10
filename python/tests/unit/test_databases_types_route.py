@@ -14,9 +14,9 @@ from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_databases import (
     create_linode_database_type_get_tool,
-    create_linode_databases_types_list_tool,
+    create_linode_database_type_list_tool,
     handle_linode_database_type_get,
-    handle_linode_databases_types_list,
+    handle_linode_database_type_list,
 )
 
 if TYPE_CHECKING:
@@ -254,9 +254,9 @@ def test_create_linode_database_type_get_tool_schema() -> None:
 
 def test_create_linode_databases_types_list_tool_schema() -> None:
     """Tool schema exposes the documented pagination params."""
-    tool, capability = create_linode_databases_types_list_tool()
+    tool, capability = create_linode_database_type_list_tool()
 
-    assert tool.name == "linode_databases_types_list"
+    assert tool.name == "linode_database_type_list"
     assert capability is Capability.Read
     assert tool.inputSchema["properties"]["page"]["minimum"] == 1
     assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
@@ -322,7 +322,7 @@ async def test_handle_linode_databases_types_list_success(
         "results": 7,
     }
 
-    result = await handle_linode_databases_types_list(
+    result = await handle_linode_database_type_list(
         {"page": 2, "page_size": 50}, sample_config
     )
 
@@ -357,7 +357,7 @@ async def test_handle_linode_databases_types_list_rejects_invalid_pagination(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler rejects invalid pagination before creating a client call."""
-    result = await handle_linode_databases_types_list(arguments, sample_config)
+    result = await handle_linode_database_type_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
     mock_linode_client.list_database_types.assert_not_called()
@@ -372,7 +372,7 @@ def test_linode_databases_types_list_registered() -> None:
     assert type_entry.tool.name == "linode_database_type_get"
     assert type_entry.handle_fn is handle_linode_database_type_get
 
-    entry = entries["linode_databases_types_list"]
+    entry = entries["linode_database_type_list"]
     assert entry.capability is Capability.Read
-    assert entry.tool.name == "linode_databases_types_list"
-    assert entry.handle_fn is handle_linode_databases_types_list
+    assert entry.tool.name == "linode_database_type_list"
+    assert entry.handle_fn is handle_linode_database_type_list

@@ -82,10 +82,10 @@ def _parse_instance_and_backup_ids(
     return iid, backup_id
 
 
-def create_linode_instance_backups_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_instance_backups_list tool."""
+def create_linode_instance_backup_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_backup_list tool."""
     return Tool(
-        name="linode_instance_backups_list",
+        name="linode_instance_backup_list",
         description=("Lists backups for a Linode instance"),
         inputSchema={
             "type": "object",
@@ -98,10 +98,10 @@ def create_linode_instance_backups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_instance_backups_list(
+async def handle_linode_instance_backup_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_backups_list tool request."""
+    """Handle linode_instance_backup_list tool request."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid

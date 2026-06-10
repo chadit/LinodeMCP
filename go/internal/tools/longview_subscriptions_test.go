@@ -26,8 +26,8 @@ func TestLinodeLongviewSubscriptionsToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 
 	tool, capability, handler := tools.NewLinodeLongviewSubscriptionsTool(cfg)
-	if tool.Name != "linode_longview_subscriptions" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_subscriptions")
+	if tool.Name != "linode_longview_subscription_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_subscription_list")
 	}
 
 	if capability != profiles.CapRead {
@@ -153,8 +153,8 @@ func TestLinodeLongviewSubscriptionsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_longview_subscriptions") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_longview_subscriptions")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_longview_subscription_list") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_longview_subscription_list")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

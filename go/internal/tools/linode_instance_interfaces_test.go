@@ -212,8 +212,8 @@ func TestLinodeInstanceInterfacesListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_interfaces_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interfaces_list")
+	if tool.Name != "linode_instance_interface_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interface_list")
 	}
 
 	if tool.Description == "" {

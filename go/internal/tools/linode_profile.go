@@ -22,7 +22,7 @@ const (
 // NewLinodeProfileTool creates a tool for retrieving Linode profile info.
 func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_profile",
+		cfg, "linode_profile_get",
 		"Retrieves Linode user account profile information",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetProfile(ctx)
@@ -35,7 +35,7 @@ func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 // NewLinodeProfilePreferencesTool creates a tool for retrieving Linode profile preferences.
 func NewLinodeProfilePreferencesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_profile_preferences",
+		cfg, "linode_profile_preferences_get",
 		"Retrieves Linode user preference settings",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetProfilePreferences(ctx)
@@ -48,7 +48,7 @@ func NewLinodeProfilePreferencesTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 // NewLinodeProfileSecurityQuestionsTool creates a tool for listing available profile security questions.
 func NewLinodeProfileSecurityQuestionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
-		cfg, "linode_profile_security_questions",
+		cfg, "linode_profile_security_question_list",
 		"Lists available profile security questions for the authenticated profile",
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.ListProfileSecurityQuestions(ctx)
@@ -129,7 +129,7 @@ func profilePreferencesFromTool(request *mcp.CallToolRequest) (linode.ProfilePre
 func NewLinodeProfileTokensTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_profile_tokens",
+		"linode_profile_token_list",
 		"Lists personal access tokens for the authenticated profile.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -157,7 +157,7 @@ func handleLinodeProfileTokensRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(tokens)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_profile_tokens: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_token_list: " + listFailure.Error()), nil
 }
 
 func profileTokensPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -419,7 +419,7 @@ func profileTokenUpdateFromTool(request *mcp.CallToolRequest) (int, linode.Updat
 func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_profile_logins",
+		"linode_profile_login_list",
 		"Lists login history for the authenticated profile.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -447,7 +447,7 @@ func handleLinodeProfileLoginsRequest(ctx context.Context, request *mcp.CallTool
 		return MarshalToolResponse(logins)
 	}
 
-	return mcp.NewToolResultError("Failed to retrieve linode_profile_logins: " + listFailure.Error()), nil
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_login_list: " + listFailure.Error()), nil
 }
 
 func profileLoginsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

@@ -568,8 +568,8 @@ func TestLinodeInstanceConfigInterfacesListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_config_interfaces_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_config_interfaces_list")
+	if tool.Name != "linode_instance_config_interface_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_config_interface_list")
 	}
 
 	if tool.Description == "" {
@@ -3076,8 +3076,8 @@ func TestLinodeInstanceIPUpdateRDNSToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_ip_update_rdns" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_ip_update_rdns")
+	if tool.Name != "linode_instance_ip_update" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_ip_update")
 	}
 
 	if capability != profiles.CapWrite {

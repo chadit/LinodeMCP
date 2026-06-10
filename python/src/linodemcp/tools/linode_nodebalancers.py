@@ -12,10 +12,10 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_nodebalancer_types_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_types_list tool."""
+def create_linode_nodebalancer_type_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_type_list tool."""
     return Tool(
-        name="linode_nodebalancer_types_list",
+        name="linode_nodebalancer_type_list",
         description="Lists all available NodeBalancer types.",
         inputSchema={
             "type": "object",
@@ -26,10 +26,10 @@ def create_linode_nodebalancer_types_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_nodebalancers_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancers_list tool."""
+def create_linode_nodebalancer_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_list tool."""
     return Tool(
-        name="linode_nodebalancers_list",
+        name="linode_nodebalancer_list",
         description=(
             "Lists all NodeBalancers on your account. Can filter by region or label."
         ),
@@ -53,10 +53,10 @@ def create_linode_nodebalancers_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_nodebalancer_types_list(
+async def handle_linode_nodebalancer_type_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_types_list tool request."""
+    """Handle linode_nodebalancer_type_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         types = await client.list_nodebalancer_types()
@@ -78,10 +78,10 @@ async def handle_linode_nodebalancer_types_list(
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer types", _call)
 
 
-async def handle_linode_nodebalancers_list(
+async def handle_linode_nodebalancer_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancers_list tool request."""
+    """Handle linode_nodebalancer_list tool request."""
     region_filter = arguments.get("region", "")
     label_contains = arguments.get("label_contains", "")
 
@@ -231,10 +231,10 @@ def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def create_linode_nodebalancer_vpc_configs_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_vpc_configs_list tool."""
+def create_linode_nodebalancer_vpc_config_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_vpc_config_list tool."""
     return Tool(
-        name="linode_nodebalancer_vpc_configs_list",
+        name="linode_nodebalancer_vpc_config_list",
         description="Lists VPC configurations for a NodeBalancer.",
         inputSchema={
             "type": "object",
@@ -262,10 +262,10 @@ def create_linode_nodebalancer_vpc_configs_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
-async def handle_linode_nodebalancer_vpc_configs_list(
+async def handle_linode_nodebalancer_vpc_config_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_vpc_configs_list tool request."""
+    """Handle linode_nodebalancer_vpc_config_list tool request."""
     nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")
@@ -306,10 +306,10 @@ async def handle_linode_nodebalancer_vpc_config_get(
     )
 
 
-def create_linode_nodebalancer_stats_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_stats tool."""
+def create_linode_nodebalancer_stats_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_stats_get tool."""
     return Tool(
-        name="linode_nodebalancer_stats",
+        name="linode_nodebalancer_stats_get",
         description=(
             "Gets detailed statistics about a specific NodeBalancer by its ID, "
             "including connections and traffic data."
@@ -329,10 +329,10 @@ def create_linode_nodebalancer_stats_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_nodebalancer_stats(
+async def handle_linode_nodebalancer_stats_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_stats tool request."""
+    """Handle linode_nodebalancer_stats_get tool request."""
     nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
 
     if nodebalancer_id is None:
@@ -344,10 +344,10 @@ async def handle_linode_nodebalancer_stats(
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer statistics", _call)
 
 
-def create_linode_nodebalancer_firewalls_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_firewalls_list tool."""
+def create_linode_nodebalancer_firewall_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_firewall_list tool."""
     return Tool(
-        name="linode_nodebalancer_firewalls_list",
+        name="linode_nodebalancer_firewall_list",
         description=("Lists firewalls assigned to a specific NodeBalancer by its ID."),
         inputSchema={
             "type": "object",
@@ -375,10 +375,10 @@ def create_linode_nodebalancer_firewalls_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_nodebalancer_firewalls_list(
+async def handle_linode_nodebalancer_firewall_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_firewalls_list tool request."""
+    """Handle linode_nodebalancer_firewall_list tool request."""
     nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")
@@ -397,10 +397,10 @@ async def handle_linode_nodebalancer_firewalls_list(
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer firewalls", _call)
 
 
-def create_linode_nodebalancer_configs_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_configs_list tool."""
+def create_linode_nodebalancer_config_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_list tool."""
     return Tool(
-        name="linode_nodebalancer_configs_list",
+        name="linode_nodebalancer_config_list",
         description="Lists configs for a NodeBalancer.",
         inputSchema={
             "type": "object",
@@ -428,10 +428,10 @@ def create_linode_nodebalancer_configs_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-async def handle_linode_nodebalancer_configs_list(
+async def handle_linode_nodebalancer_config_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_configs_list tool request."""
+    """Handle linode_nodebalancer_config_list tool request."""
     nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")
@@ -493,10 +493,10 @@ async def handle_linode_nodebalancer_config_get(
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer config", _call)
 
 
-def create_linode_nodebalancer_config_nodes_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_nodebalancer_config_nodes_list tool."""
+def create_linode_nodebalancer_config_node_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_node_list tool."""
     return Tool(
-        name="linode_nodebalancer_config_nodes_list",
+        name="linode_nodebalancer_config_node_list",
         description="Lists backend nodes in a NodeBalancer config.",
         inputSchema={
             "type": "object",
@@ -529,10 +529,10 @@ def create_linode_nodebalancer_config_nodes_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-async def handle_linode_nodebalancer_config_nodes_list(
+async def handle_linode_nodebalancer_config_node_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_nodebalancer_config_nodes_list tool request."""
+    """Handle linode_nodebalancer_config_node_list tool request."""
     nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")

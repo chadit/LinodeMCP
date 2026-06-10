@@ -22,22 +22,22 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "version", Capability: profiles.CapMeta},
 		{Name: toolProfile, Capability: profiles.CapRead},
 		{Name: toolAccount, Capability: profiles.CapRead},
-		{Name: "linode_account_users", Capability: profiles.CapRead},
+		{Name: "linode_account_user_list", Capability: profiles.CapRead},
 		{Name: "linode_account_user_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_user_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
-		{Name: "linode_profile_apps", Capability: profiles.CapRead},
-		{Name: "linode_profile_security_questions", Capability: profiles.CapRead},
+		{Name: "linode_account_oauth_client_list", Capability: profiles.CapRead},
+		{Name: "linode_profile_app_list", Capability: profiles.CapRead},
+		{Name: "linode_profile_security_question_list", Capability: profiles.CapRead},
 		{Name: "linode_profile_tfa_disable", Capability: profiles.CapAdmin},
 		{Name: "linode_profile_tfa_enable_confirm", Capability: profiles.CapAdmin},
-		{Name: "linode_profile_tokens", Capability: profiles.CapRead},
+		{Name: "linode_profile_token_list", Capability: profiles.CapRead},
 		{Name: "linode_profile_token_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_profile_token_update", Capability: profiles.CapAdmin},
-		{Name: "linode_profile_devices", Capability: profiles.CapRead},
+		{Name: "linode_profile_device_list", Capability: profiles.CapRead},
 		{Name: "linode_profile_preferences_update", Capability: profiles.CapWrite},
-		{Name: "linode_longview_plan", Capability: profiles.CapRead},
-		{Name: "linode_longview_subscriptions", Capability: profiles.CapRead},
-		{Name: "linode_longview_clients", Capability: profiles.CapRead},
+		{Name: "linode_longview_plan_get", Capability: profiles.CapRead},
+		{Name: "linode_longview_subscription_list", Capability: profiles.CapRead},
+		{Name: "linode_longview_client_list", Capability: profiles.CapRead},
 		{Name: "linode_longview_client_update", Capability: profiles.CapAdmin},
 		{Name: "linode_longview_client_delete", Capability: profiles.CapDestroy},
 
@@ -51,7 +51,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_region_get", Capability: profiles.CapRead},
 		{Name: "linode_region_availability_list", Capability: profiles.CapRead},
 		{Name: "linode_region_availability_get", Capability: profiles.CapRead},
-		{Name: "linode_placement_groups_list", Capability: profiles.CapRead},
+		{Name: "linode_placement_group_list", Capability: profiles.CapRead},
 		{Name: "linode_placement_group_update", Capability: profiles.CapWrite},
 		{Name: "linode_kernel_list", Capability: profiles.CapRead},
 		{Name: "linode_kernel_get", Capability: profiles.CapRead},
@@ -60,30 +60,30 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_placement_group_create", Capability: profiles.CapWrite},
 		{Name: "linode_placement_group_unassign", Capability: profiles.CapWrite},
 		{Name: "linode_image_update", Capability: profiles.CapWrite},
-		{Name: "linode_image_sharegroups_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_get", Capability: profiles.CapRead},
-		{Name: "linode_image_sharegroups_by_image_list", Capability: profiles.CapRead},
-		{Name: "linode_image_sharegroup_images_list", Capability: profiles.CapRead},
-		{Name: "linode_image_sharegroup_members_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_by_image_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_image_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_member_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_member_token_get", Capability: profiles.CapRead},
-		{Name: "linode_image_sharegroup_member_update", Capability: profiles.CapWrite},
+		{Name: "linode_image_sharegroup_member_token_update", Capability: profiles.CapWrite},
 
 		{Name: "linode_image_sharegroup_create", Capability: profiles.CapWrite},
-		{Name: "linode_image_sharegroup_images_add", Capability: profiles.CapWrite},
+		{Name: "linode_image_sharegroup_image_add", Capability: profiles.CapWrite},
 		{Name: "linode_image_sharegroup_image_update", Capability: profiles.CapWrite},
-		{Name: "linode_image_sharegroup_members_add", Capability: profiles.CapWrite},
+		{Name: "linode_image_sharegroup_member_add", Capability: profiles.CapWrite},
 		{Name: "linode_image_sharegroup_update", Capability: profiles.CapWrite},
 
 		{Name: "linode_image_sharegroup_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_image_sharegroup_image_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_image_sharegroup_tokens_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_token_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_token_get", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_token_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_image_sharegroup_member_token_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_image_sharegroup_token_images_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_token_image_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_token_update", Capability: profiles.CapAdmin},
 		{Name: "linode_image_sharegroup_by_token_get", Capability: profiles.CapRead},
-		{Name: "linode_network_transfer_prices", Capability: profiles.CapRead},
+		{Name: "linode_network_transfer_price_list", Capability: profiles.CapRead},
 		{Name: "linode_stackscript_get", Capability: profiles.CapRead},
 		{Name: "linode_stackscript_list", Capability: profiles.CapRead},
 
@@ -94,23 +94,23 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_database_engine_get", Capability: profiles.CapRead},
 		{Name: "linode_database_mysql_config_get", Capability: profiles.CapRead},
 		{Name: "linode_database_postgresql_config_get", Capability: profiles.CapRead},
-		{Name: "linode_database_instance_list", Capability: profiles.CapRead},
+		{Name: "linode_database_mysql_instance_list", Capability: profiles.CapRead},
 		{Name: "linode_database_postgresql_instance_list", Capability: profiles.CapRead},
-		{Name: "linode_database_instance_get", Capability: profiles.CapRead},
+		{Name: "linode_database_mysql_instance_get", Capability: profiles.CapRead},
 		{Name: "linode_database_postgresql_instance_get", Capability: profiles.CapRead},
-		{Name: "linode_database_instance_ssl_get", Capability: profiles.CapRead},
+		{Name: "linode_database_mysql_instance_ssl_get", Capability: profiles.CapRead},
 		{Name: "linode_database_postgresql_instance_ssl_get", Capability: profiles.CapRead},
-		{Name: "linode_database_instance_credentials_get", Capability: profiles.CapAdmin},
-		{Name: "linode_database_instance_credentials_reset", Capability: profiles.CapAdmin},
+		{Name: "linode_database_mysql_instance_credentials_get", Capability: profiles.CapAdmin},
+		{Name: "linode_database_mysql_instance_credentials_reset", Capability: profiles.CapAdmin},
 		{Name: "linode_database_postgresql_instance_credentials_reset", Capability: profiles.CapAdmin},
-		{Name: "linode_database_instance_update", Capability: profiles.CapWrite},
-		{Name: "linode_database_instance_delete", Capability: profiles.CapDestroy},
+		{Name: "linode_database_mysql_instance_update", Capability: profiles.CapWrite},
+		{Name: "linode_database_mysql_instance_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_database_postgresql_instance_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_database_instance_patch", Capability: profiles.CapWrite},
+		{Name: "linode_database_mysql_instance_patch", Capability: profiles.CapWrite},
 		{Name: "linode_database_postgresql_instance_patch", Capability: profiles.CapWrite},
-		{Name: "linode_database_instance_suspend", Capability: profiles.CapWrite},
+		{Name: "linode_database_mysql_instance_suspend", Capability: profiles.CapWrite},
 		{Name: "linode_database_postgresql_instance_suspend", Capability: profiles.CapWrite},
-		{Name: "linode_database_instance_resume", Capability: profiles.CapWrite},
+		{Name: "linode_database_mysql_instance_resume", Capability: profiles.CapWrite},
 		{Name: "linode_database_postgresql_instance_resume", Capability: profiles.CapWrite},
 		// Compute writes / destroys
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
@@ -132,20 +132,20 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_backup_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_stats_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_backup_create", Capability: profiles.CapWrite},
-		{Name: "linode_instance_firewalls_apply", Capability: profiles.CapWrite},
-		{Name: "linode_interfaces_upgrade", Capability: profiles.CapWrite},
-		{Name: "linode_instance_interface_firewalls_list", Capability: profiles.CapRead},
+		{Name: "linode_instance_firewall_apply", Capability: profiles.CapWrite},
+		{Name: "linode_instance_interface_upgrade", Capability: profiles.CapWrite},
+		{Name: "linode_instance_interface_firewall_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_interface_settings_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_interface_settings_update", Capability: profiles.CapWrite},
 		{Name: "linode_instance_interface_history_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_interface_update", Capability: profiles.CapWrite},
 		{Name: toolLinodeInstanceConfigList, Capability: profiles.CapRead},
-		{Name: "linode_instance_config_interfaces_list", Capability: profiles.CapRead},
+		{Name: "linode_instance_config_interface_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_config_create", Capability: profiles.CapWrite},
 		{Name: "linode_instance_config_interface_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_config_interface_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_instance_config_update", Capability: profiles.CapWrite},
-		{Name: "linode_instance_config_interfaces_reorder", Capability: profiles.CapWrite},
+		{Name: "linode_instance_config_interface_reorder", Capability: profiles.CapWrite},
 		{Name: "linode_instance_config_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_instance_firewall_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_disk_list", Capability: profiles.CapRead},
@@ -153,7 +153,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_disk_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_instance_ip_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_ip_allocate", Capability: profiles.CapWrite},
-		{Name: "linode_instance_ip_update_rdns", Capability: profiles.CapWrite},
+		{Name: "linode_instance_ip_update", Capability: profiles.CapWrite},
 
 		// Block storage
 		{Name: toolVolumesList, Capability: profiles.CapRead},
@@ -165,34 +165,34 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 
 		// Object storage
 		{Name: "linode_object_storage_bucket_list", Capability: profiles.CapRead},
-		{Name: "linode_object_storage_bucket_list_by_region", Capability: profiles.CapRead},
+		{Name: "linode_object_storage_bucket_by_region_list", Capability: profiles.CapRead},
 		{Name: "linode_object_storage_bucket_create", Capability: profiles.CapWrite},
 		{Name: "linode_object_storage_bucket_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_object_storage_cancel", Capability: profiles.CapAdmin},
 
 		// Networking
 		{Name: "linode_firewall_list", Capability: profiles.CapRead},
-		{Name: "linode_vlans_list", Capability: profiles.CapRead},
+		{Name: "linode_vlan_list", Capability: profiles.CapRead},
 		{Name: "linode_vlan_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_firewall_rules_list", Capability: profiles.CapRead},
+		{Name: "linode_firewall_rules_get", Capability: profiles.CapRead},
 		{Name: "linode_firewall_rules_update", Capability: profiles.CapWrite},
-		{Name: "linode_firewall_rule_versions_list", Capability: profiles.CapRead},
+		{Name: "linode_firewall_rule_version_list", Capability: profiles.CapRead},
 		{Name: "linode_firewall_create", Capability: profiles.CapWrite},
 		{Name: "linode_firewall_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_nodebalancer_types", Capability: profiles.CapRead},
+		{Name: "linode_nodebalancer_type_list", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_list", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_config_rebuild", Capability: profiles.CapWrite},
 		{Name: "linode_nodebalancer_create", Capability: profiles.CapWrite},
-		{Name: "linode_nodebalancer_node_update", Capability: profiles.CapWrite},
+		{Name: "linode_nodebalancer_config_node_update", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ip_get", Capability: profiles.CapRead},
-		{Name: "linode_networking_ip_update_rdns", Capability: profiles.CapWrite},
+		{Name: "linode_networking_ip_update", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ip_allocate", Capability: profiles.CapWrite},
-		{Name: "linode_networking_ips_assign", Capability: profiles.CapWrite},
+		{Name: "linode_networking_ip_assign", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ipv4_assign", Capability: profiles.CapWrite},
-		{Name: "linode_networking_ips_share", Capability: profiles.CapWrite},
-		{Name: "linode_ipv6_pools_list", Capability: profiles.CapRead},
-		{Name: "linode_ipv6_ranges_list", Capability: profiles.CapRead},
+		{Name: "linode_networking_ipv4_share", Capability: profiles.CapWrite},
+		{Name: "linode_ipv6_pool_list", Capability: profiles.CapRead},
+		{Name: "linode_ipv6_range_list", Capability: profiles.CapRead},
 		{Name: "linode_ipv6_range_get", Capability: profiles.CapRead},
 		{Name: "linode_ipv6_range_create", Capability: profiles.CapWrite},
 		{Name: "linode_ipv6_range_delete", Capability: profiles.CapDestroy},
@@ -224,7 +224,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_settings_managed_enable", Capability: profiles.CapAdmin},
-		{Name: "linode_profile_security_questions_answer", Capability: profiles.CapAdmin},
+		{Name: "linode_profile_security_question_answer", Capability: profiles.CapAdmin},
 		{Name: "linode_firewall_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_beta_enroll", Capability: profiles.CapAdmin},
 		{Name: "linode_account_cancel", Capability: profiles.CapAdmin},
@@ -385,24 +385,24 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 		t.Errorf("allowed does not contain %v", "linode_networking_ip_get")
 	}
 
-	if !slices.Contains(allowed, "linode_networking_ip_update_rdns") {
-		t.Errorf("allowed does not contain %v", "linode_networking_ip_update_rdns")
+	if !slices.Contains(allowed, "linode_networking_ip_update") {
+		t.Errorf("allowed does not contain %v", "linode_networking_ip_update")
 	}
 
 	if !slices.Contains(allowed, "linode_networking_ip_allocate") {
 		t.Errorf("allowed does not contain %v", "linode_networking_ip_allocate")
 	}
 
-	if !slices.Contains(allowed, "linode_networking_ips_assign") {
-		t.Errorf("allowed does not contain %v", "linode_networking_ips_assign")
+	if !slices.Contains(allowed, "linode_networking_ip_assign") {
+		t.Errorf("allowed does not contain %v", "linode_networking_ip_assign")
 	}
 
 	if !slices.Contains(allowed, "linode_networking_ipv4_assign") {
 		t.Errorf("allowed does not contain %v", "linode_networking_ipv4_assign")
 	}
 
-	if !slices.Contains(allowed, "linode_networking_ips_share") {
-		t.Errorf("allowed does not contain %v", "linode_networking_ips_share")
+	if !slices.Contains(allowed, "linode_networking_ipv4_share") {
+		t.Errorf("allowed does not contain %v", "linode_networking_ipv4_share")
 	}
 
 	if !slices.Contains(allowed, "linode_domain_create") {
@@ -432,8 +432,8 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_settings_managed_enable")
 		}
 
-		if slices.Contains(profile.AllowedTools, "linode_profile_security_questions_answer") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_profile_security_questions_answer")
+		if slices.Contains(profile.AllowedTools, "linode_profile_security_question_answer") {
+			t.Errorf("profile.AllowedTools should not contain %v", "linode_profile_security_question_answer")
 		}
 
 		if slices.Contains(profile.AllowedTools, "linode_account_beta_enroll") {
@@ -625,11 +625,11 @@ func TestJSONRoundtrip(t *testing.T) {
 func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_invoices"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_invoice_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_payments"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_payment_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
@@ -637,11 +637,11 @@ func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_promo_credit"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_promo_credit_add"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_invoice_items"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_invoice_item_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 }
@@ -649,7 +649,7 @@ func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
 func TestCategoriesIncludesAccountPaymentMethodsInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_payment_methods"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_payment_method_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
@@ -673,11 +673,11 @@ func TestCategoriesIncludesAccountPaymentMethodsInCore(t *testing.T) {
 func TestCategoriesIncludesProfilePreferencesInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_profile_preferences"), "core") {
+	if !slices.Contains(profiles.Categories("linode_profile_preferences_get"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_profile_security_questions_answer"), "core") {
+	if !slices.Contains(profiles.Categories("linode_profile_security_question_answer"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 }
@@ -693,7 +693,7 @@ func TestCategoriesIncludesProfileTokenCreateInCore(t *testing.T) {
 func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_oauth_clients"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_oauth_client_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 }
@@ -749,15 +749,15 @@ func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_profile_apps"), "core") {
+	if !slices.Contains(profiles.Categories("linode_profile_app_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_profile_security_questions"), "core") {
+	if !slices.Contains(profiles.Categories("linode_profile_security_question_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_profile_devices"), "core") {
+	if !slices.Contains(profiles.Categories("linode_profile_device_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
@@ -769,7 +769,7 @@ func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 func TestCategoriesIncludesMaintenancePoliciesInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_maintenance_policies"), "core") {
+	if !slices.Contains(profiles.Categories("linode_maintenance_policy_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 }
@@ -801,7 +801,7 @@ func TestTagCreateExcludedFromNarrowBuiltinProfiles(t *testing.T) {
 func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_users"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_user_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
@@ -813,7 +813,7 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_user_grants"), "core") {
+	if !slices.Contains(profiles.Categories("linode_account_user_grants_get"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
@@ -833,15 +833,15 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_support_ticket_create"), "core") {
+	if !slices.Contains(profiles.Categories("linode_support_ticket_create"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_support_ticket_attachment_create"), "core") {
+	if !slices.Contains(profiles.Categories("linode_support_ticket_attachment_create"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_account_support_ticket_reply_create"), "core") {
+	if !slices.Contains(profiles.Categories("linode_support_ticket_reply_create"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 
@@ -861,7 +861,7 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 func TestCategoriesIncludesLongviewClientsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_longview_clients"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_longview_client_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 }
@@ -869,7 +869,7 @@ func TestCategoriesIncludesLongviewClientsInMonitor(t *testing.T) {
 func TestCategoriesIncludesLongviewSubscriptionsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_longview_subscriptions"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_longview_subscription_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 }
@@ -877,7 +877,7 @@ func TestCategoriesIncludesLongviewSubscriptionsInMonitor(t *testing.T) {
 func TestCategoriesIncludesMonitorServicesInMonitor(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_monitor_services"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_service_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
@@ -885,15 +885,15 @@ func TestCategoriesIncludesMonitorServicesInMonitor(t *testing.T) {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_monitor_service_dashboards"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_service_dashboard_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_monitor_service_metrics"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_service_metric_query"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_monitor_service_metric_definitions"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_service_metric_definition_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 }
@@ -901,7 +901,7 @@ func TestCategoriesIncludesMonitorServicesInMonitor(t *testing.T) {
 func TestCategoriesIncludesMonitorAlertDefinitionsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_monitor_alert_definitions"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_alert_definition_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 }
@@ -909,7 +909,7 @@ func TestCategoriesIncludesMonitorAlertDefinitionsInMonitor(t *testing.T) {
 func TestCategoriesIncludesMonitorAlertChannelsInMonitor(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_monitor_alert_channels"), "monitor") {
+	if !slices.Contains(profiles.Categories("linode_monitor_alert_channel_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
 	}
 }
@@ -924,23 +924,23 @@ func TestCategoriesDatabasesTools(t *testing.T) {
 		"linode_database_engine_get",
 		"linode_database_mysql_config_get",
 		"linode_database_postgresql_config_get",
-		"linode_database_instance_list",
+		"linode_database_mysql_instance_list",
 		"linode_database_postgresql_instance_list",
-		"linode_database_instance_get",
+		"linode_database_mysql_instance_get",
 		"linode_database_postgresql_instance_get",
-		"linode_database_instance_ssl_get",
+		"linode_database_mysql_instance_ssl_get",
 		"linode_database_postgresql_instance_ssl_get",
-		"linode_database_instance_credentials_get",
-		"linode_database_instance_credentials_reset",
+		"linode_database_mysql_instance_credentials_get",
+		"linode_database_mysql_instance_credentials_reset",
 		"linode_database_postgresql_instance_credentials_reset",
-		"linode_database_instance_update",
-		"linode_database_instance_delete",
+		"linode_database_mysql_instance_update",
+		"linode_database_mysql_instance_delete",
 		"linode_database_postgresql_instance_delete",
-		"linode_database_instance_patch",
+		"linode_database_mysql_instance_patch",
 		"linode_database_postgresql_instance_patch",
-		"linode_database_instance_suspend",
+		"linode_database_mysql_instance_suspend",
 		"linode_database_postgresql_instance_suspend",
-		"linode_database_instance_resume",
+		"linode_database_mysql_instance_resume",
 		"linode_database_postgresql_instance_resume",
 	} {
 		if !slices.Contains(profiles.Categories(tool), "databases") {
@@ -964,7 +964,7 @@ func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 		t.Errorf("collection does not contain %v", "compute")
 	}
 
-	if !slices.Contains(profiles.Categories("linode_placement_groups_list"), "compute") {
+	if !slices.Contains(profiles.Categories("linode_placement_group_list"), "compute") {
 		t.Errorf("collection does not contain %v", "compute")
 	}
 
@@ -980,7 +980,7 @@ func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 func TestCategoriesIncludesTagsInCore(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_tags"), "core") {
+	if !slices.Contains(profiles.Categories("linode_tag_list"), "core") {
 		t.Errorf("collection does not contain %v", "core")
 	}
 }

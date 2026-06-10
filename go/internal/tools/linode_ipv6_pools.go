@@ -14,7 +14,7 @@ import (
 func NewLinodeIPv6PoolsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newLinodeIPv6ListTool(
 		cfg,
-		"linode_ipv6_pools_list",
+		"linode_ipv6_pool_list",
 		"Lists IPv6 pools on the account with optional pagination.",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.IPv6Pool], string) {
 			items, err := client.ListIPv6Pools(ctx, page, pageSize)

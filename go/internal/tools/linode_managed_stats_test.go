@@ -16,7 +16,7 @@ import (
 
 const (
 	managedStatsToolPath   = "/managed/stats"
-	managedStatsToolName   = "linode_managed_stats"
+	managedStatsToolName   = "linode_managed_stats_get"
 	managedStatsToolCPUKey = "cpu"
 )
 
@@ -153,8 +153,8 @@ func TestLinodeManagedStatsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_stats") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_stats")
+	if !strings.Contains(textContent.Text, "Failed to retrieve linode_managed_stats_get") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_managed_stats_get")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

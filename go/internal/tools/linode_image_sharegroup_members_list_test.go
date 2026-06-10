@@ -22,8 +22,8 @@ func TestLinodeImageShareGroupMembersListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, capability, handler := tools.NewLinodeImageShareGroupMembersListTool(cfg)
 
-	if tool.Name != "linode_image_sharegroup_members_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_members_list")
+	if tool.Name != "linode_image_sharegroup_member_list" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_member_list")
 	}
 
 	if capability != profiles.CapRead {

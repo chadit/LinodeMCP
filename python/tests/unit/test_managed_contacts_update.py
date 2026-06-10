@@ -9,16 +9,16 @@ import pytest
 from linodemcp.config import Config
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_account import (
-    create_linode_managed_contacts_update_tool,
-    handle_linode_managed_contacts_update,
+    create_linode_managed_contact_update_tool,
+    handle_linode_managed_contact_update,
 )
 
 
 def test_create_linode_managed_contacts_update_tool() -> None:
-    """Test linode_managed_contacts_update tool schema."""
-    tool, capability = create_linode_managed_contacts_update_tool()
+    """Test linode_managed_contact_update tool schema."""
+    tool, capability = create_linode_managed_contact_update_tool()
 
-    assert tool.name == "linode_managed_contacts_update"
+    assert tool.name == "linode_managed_contact_update"
     assert capability is Capability.Write
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["contact_id", "confirm"]
@@ -36,7 +36,7 @@ def test_create_linode_managed_contacts_update_tool() -> None:
 
 
 async def test_handle_linode_managed_contacts_update(sample_config: Config) -> None:
-    """Test linode_managed_contacts_update tool."""
+    """Test linode_managed_contact_update tool."""
     response_data: dict[str, Any] = {
         "id": 174,
         "name": "Ops",
@@ -50,7 +50,7 @@ async def test_handle_linode_managed_contacts_update(sample_config: Config) -> N
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {
                 "contact_id": 174,
                 "email": "ops@example.com",
@@ -84,7 +84,7 @@ async def test_handle_linode_managed_contacts_update_allows_null_group(
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {"contact_id": 174, "group": None, "confirm": True}, sample_config
         )
 
@@ -101,7 +101,7 @@ async def test_handle_linode_managed_contacts_update_requires_boolean_confirm(
     if confirm is not None:
         arguments["confirm"] = confirm
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(arguments, sample_config)
+        result = await handle_linode_managed_contact_update(arguments, sample_config)
 
     assert "confirm=true" in result[0].text
     mock_client_class.assert_not_called()
@@ -113,7 +113,7 @@ async def test_handle_linode_managed_contacts_update_rejects_invalid_contact_id(
 ) -> None:
     """Managed contact update validates contact_id before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {"contact_id": contact_id, "email": "ops@example.com", "confirm": True},
             sample_config,
         )
@@ -138,7 +138,7 @@ async def test_handle_linode_managed_contacts_update_rejects_invalid_writable_st
 ) -> None:
     """Managed contact update validates writable string fields."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {"contact_id": 174, field: value, "confirm": True}, sample_config
         )
 
@@ -151,7 +151,7 @@ async def test_handle_linode_managed_contacts_update_rejects_read_only_fields(
 ) -> None:
     """Managed contact update does not forward read-only fields."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {"contact_id": 174, "id": 174, "updated": "2024-01-01", "confirm": True},
             sample_config,
         )
@@ -165,7 +165,7 @@ async def test_handle_linode_managed_contacts_update_requires_field(
 ) -> None:
     """Managed contact update requires at least one writable field."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {"contact_id": 174, "confirm": True}, sample_config
         )
 
@@ -188,7 +188,7 @@ async def test_handle_linode_managed_contacts_update_rejects_malformed_phone(
 ) -> None:
     """Managed contact update validates phone before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {"contact_id": 174, "phone": phone, "confirm": True}, sample_config
         )
 
@@ -201,7 +201,7 @@ async def test_handle_linode_managed_contacts_update_dry_run(
 ) -> None:
     """Managed contact update dry-run previews the request without calling client."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contacts_update(
+        result = await handle_linode_managed_contact_update(
             {
                 "contact_id": 174,
                 "email": "ops@example.com",

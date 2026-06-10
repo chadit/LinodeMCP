@@ -15,7 +15,7 @@ import (
 func NewLinodeLongviewPlanTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_longview_plan",
+		"linode_longview_plan_get",
 		"Gets the current Longview subscription plan for the account.",
 		nil,
 		handleLinodeLongviewPlanRequest,
@@ -32,7 +32,7 @@ func handleLinodeLongviewPlanRequest(ctx context.Context, request *mcp.CallToolR
 
 	plan, getFailureMessage := getLongviewPlan(ctx, client)
 	if getFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_longview_plan: " + getFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_longview_plan_get: " + getFailureMessage), nil
 	}
 
 	return MarshalToolResponse(plan)
@@ -51,7 +51,7 @@ func getLongviewPlan(ctx context.Context, client *linode.Client) (*linode.Longvi
 func NewLinodeLongviewTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_longview_types",
+		"linode_longview_type_list",
 		"Lists available Longview subscription types.",
 		nil,
 		handleLinodeLongviewTypesRequest,
@@ -68,7 +68,7 @@ func handleLinodeLongviewTypesRequest(ctx context.Context, request *mcp.CallTool
 
 	types, listFailureMessage := listLongviewTypes(ctx, client)
 	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_longview_types: " + listFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_longview_type_list: " + listFailureMessage), nil
 	}
 
 	return MarshalToolResponse(types)
@@ -87,7 +87,7 @@ func listLongviewTypes(ctx context.Context, client *linode.Client) (*linode.Pagi
 func NewLinodeLongviewSubscriptionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_longview_subscriptions",
+		"linode_longview_subscription_list",
 		"Lists available Longview subscription plans.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
@@ -112,7 +112,7 @@ func handleLinodeLongviewSubscriptionsRequest(ctx context.Context, request *mcp.
 
 	subscriptions, listFailureMessage := listLongviewSubscriptions(ctx, client, page, pageSize)
 	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_longview_subscriptions: " + listFailureMessage), nil
+		return mcp.NewToolResultError("Failed to retrieve linode_longview_subscription_list: " + listFailureMessage), nil
 	}
 
 	return MarshalToolResponse(subscriptions)
