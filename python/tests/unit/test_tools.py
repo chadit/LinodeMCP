@@ -22993,9 +22993,9 @@ async def test_networking_ip_update_dry_run_still_validates_address(
 
 async def test_ipv4_share_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the share POST with no call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_share
+    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
 
-    result = await handle_linode_networking_ip_share(
+    result = await handle_linode_networking_ipv4_share(
         {"ips": ["192.0.2.10"], "linode_id": 123, "dry_run": True},
         sample_config,
     )
@@ -23003,7 +23003,7 @@ async def test_ipv4_share_dry_run_returns_preview(sample_config: Config) -> None
     assert len(result) == 1
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert body["tool"] == "linode_networking_ip_share"
+    assert body["tool"] == "linode_networking_ipv4_share"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/networking/ipv4/share"
     assert body["would_execute"]["body"] == {
@@ -23018,9 +23018,9 @@ async def test_ipv4_share_dry_run_still_validates_linode_id(
     sample_config: Config,
 ) -> None:
     """A missing linode_id errors out under dry_run."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_share
+    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
 
-    result = await handle_linode_networking_ip_share(
+    result = await handle_linode_networking_ipv4_share(
         {"ips": ["192.0.2.10"], "dry_run": True}, sample_config
     )
     assert len(result) == 1
@@ -23169,9 +23169,9 @@ async def test_networking_ips_share_validates_inputs_before_client(
 
 async def test_ipv4_assign_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the assign POST with no call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
+    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_assign
 
-    result = await handle_linode_networking_ip_assign(
+    result = await handle_linode_networking_ipv4_assign(
         {
             "region": "us-east",
             "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
@@ -23183,7 +23183,7 @@ async def test_ipv4_assign_dry_run_returns_preview(sample_config: Config) -> Non
     assert len(result) == 1
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert body["tool"] == "linode_networking_ip_assign"
+    assert body["tool"] == "linode_networking_ipv4_assign"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/networking/ipv4/assign"
     assert body["would_execute"]["body"] == {
@@ -23195,6 +23195,150 @@ async def test_ipv4_assign_dry_run_returns_preview(sample_config: Config) -> Non
 
 
 async def test_ipv4_assign_dry_run_still_validates_region(
+    sample_config: Config,
+) -> None:
+    """A missing region errors out under dry_run."""
+    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_assign
+
+    result = await handle_linode_networking_ipv4_assign(
+        {
+            "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+def test_networking_ip_assign_tool_definition() -> None:
+    """The generic IP assign tool advertises the expected schema."""
+    from linodemcp.tools.linode_networking import (
+        create_linode_networking_ip_assign_tool,
+    )
+
+    tool, capability = create_linode_networking_ip_assign_tool()
+
+    assert tool.name == "linode_networking_ip_assign"
+    assert capability is Capability.Write
+    assert tool.description
+
+    props = tool.inputSchema["properties"]
+    for key in ("environment", "region", "assignments", "confirm", "dry_run"):
+        assert key in props, f"schema missing property {key}"
+
+    assert tool.inputSchema["required"] == ["region", "assignments", "confirm"]
+
+
+async def test_networking_ip_assign_success(sample_config: Config) -> None:
+    """Confirmed assign posts to the generic endpoint via assign_ips."""
+    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
+
+    assignments = [{"address": "192.0.2.10", "linode_id": 123}]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.assign_ips.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_networking_ip_assign(
+            {
+                "confirm": True,
+                "region": "us-east",
+                "assignments": assignments,
+            },
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["region"] == "us-east"
+    assert payload["assignments"] == assignments
+    mock_client.assign_ips.assert_awaited_once_with("us-east", assignments)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_networking_ip_assign_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Anything but the literal boolean true is rejected before any client call."""
+    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
+
+    arguments: dict[str, Any] = {
+        "region": "us-east",
+        "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        result = await handle_linode_networking_ip_assign(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_cls.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("assignments", "expected"),
+    [
+        ("192.0.2.1", "assignments"),
+        ([], "assignments"),
+        ([{"linode_id": 123}], "address"),
+        ([{"address": "192.0.2.1"}], "linode_id"),
+    ],
+)
+async def test_networking_ip_assign_rejects_invalid_assignments(
+    sample_config: Config, assignments: Any, expected: str
+) -> None:
+    """Malformed assignments are rejected before any client call."""
+    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        result = await handle_linode_networking_ip_assign(
+            {
+                "confirm": True,
+                "region": "us-east",
+                "assignments": assignments,
+            },
+            sample_config,
+        )
+
+    assert expected in result[0].text.lower()
+    mock_cls.assert_not_called()
+
+
+async def test_networking_ip_assign_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the generic assign POST and never calls the API."""
+    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        result = await handle_linode_networking_ip_assign(
+            {
+                "region": "us-east",
+                "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_networking_ip_assign"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/ips/assign"
+    assert body["would_execute"]["body"] == {
+        "region": "us-east",
+        "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
+    }
+    assert body["current_state"] is None
+    mock_cls.assert_not_called()
+
+
+async def test_networking_ip_assign_dry_run_still_validates_region(
     sample_config: Config,
 ) -> None:
     """A missing region errors out under dry_run."""

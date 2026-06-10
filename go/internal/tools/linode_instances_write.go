@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -365,6 +366,218 @@ func buildDefaultRoute(ipv4, ipv6 bool) *linode.InterfaceDefaultRoute {
 	}
 
 	return &linode.InterfaceDefaultRoute{IPv4: ipv4, IPv6: ipv6}
+}
+
+// toolInstanceUpdate is the update tool's name, shared by the constructor and
+// the dry-run preview branch.
+const toolInstanceUpdate = "linode_instance_update"
+
+// NewLinodeInstanceUpdateTool creates a tool for updating editable fields on a Linode instance.
+func NewLinodeInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		toolInstanceUpdate,
+		"Updates editable fields on a Linode instance. Pass dry_run=true to preview without updating.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("instance_id", mcp.Required(),
+				mcp.Description("The ID of the instance to update (required)")),
+			mcp.WithString("label",
+				mcp.Description("New Linode label (optional)")),
+			mcp.WithString("group",
+				mcp.Description("Deprecated group label (optional)")),
+			mcp.WithArray("tags",
+				mcp.Description("Tags to assign to the Linode (optional)")),
+			mcp.WithObject("alerts",
+				mcp.Description("Alert threshold settings (optional)")),
+			mcp.WithString("maintenance_policy",
+				mcp.Description("Maintenance policy, such as linode/migrate (optional)")),
+			mcp.WithBoolean("watchdog_enabled",
+				mcp.Description("Whether Lassie shutdown watchdog is enabled (optional)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm the update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeInstanceUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeInstanceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	instanceID := request.GetInt("instance_id", 0)
+
+	if IsDryRun(request) {
+		if instanceID == 0 {
+			return mcp.NewToolResultError("instance_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, toolInstanceUpdate, httpMethodPut,
+			fmt.Sprintf("/linode/instances/%d", instanceID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, instanceID) })
+	}
+
+	if result := RequireConfirm(request, "This updates a Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if instanceID == 0 {
+		return mcp.NewToolResultError("instance_id is required"), nil
+	}
+
+	req, validationMessage := instanceUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.UpdateInstance(ctx, instanceID, req)
+	if err != nil {
+		msg := fmt.Sprint("instance ", instanceID, " update failed: ", err)
+
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	response := struct {
+		Message  string                `json:"message"`
+		Instance instanceUpdateSummary `json:"instance"`
+	}{
+		Message: fmt.Sprintf("Instance %d updated successfully", instance.ID),
+		Instance: instanceUpdateSummary{
+			ID:              instance.ID,
+			Label:           instance.Label,
+			Status:          instance.Status,
+			Type:            instance.Type,
+			Region:          instance.Region,
+			Tags:            instance.Tags,
+			WatchdogEnabled: instance.WatchdogEnabled,
+		},
+	}
+
+	return MarshalToolResponse(response)
+}
+
+// instanceUpdateSummary is the condensed instance view linode_instance_update
+// returns, matching the Python implementation's response shape for this tool.
+type instanceUpdateSummary struct {
+	ID              int      `json:"id"`
+	Label           string   `json:"label"`
+	Status          string   `json:"status"`
+	Type            string   `json:"type"`
+	Region          string   `json:"region"`
+	Tags            []string `json:"tags"`
+	WatchdogEnabled bool     `json:"watchdog_enabled"`
+}
+
+// instanceUpdateRequestFromTool builds the UpdateInstanceRequest from the tool
+// args. Returns a validation message when an arg has the wrong shape or no
+// updatable field was provided at all.
+func instanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceRequest, string) {
+	args := request.GetArguments()
+	req := &linode.UpdateInstanceRequest{}
+
+	var hasField bool
+
+	if label := request.GetString("label", ""); label != "" {
+		req.Label = label
+		hasField = true
+	}
+
+	if group := request.GetString("group", ""); group != "" {
+		req.Group = group
+		hasField = true
+	}
+
+	if policy := request.GetString("maintenance_policy", ""); policy != "" {
+		req.MaintenancePolicy = policy
+		hasField = true
+	}
+
+	if raw, exists := args["tags"]; exists {
+		tags, validationMessage := instanceUpdateTagsFromArg(raw)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.Tags = tags
+		hasField = true
+	}
+
+	if raw, exists := args["alerts"]; exists {
+		alerts, validationMessage := instanceUpdateAlertsFromArg(raw)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.Alerts = alerts
+		hasField = true
+	}
+
+	if raw, exists := args["watchdog_enabled"]; exists {
+		enabled, ok := raw.(bool)
+		if !ok {
+			return nil, "watchdog_enabled must be a boolean"
+		}
+
+		req.WatchdogEnabled = &enabled
+		hasField = true
+	}
+
+	if !hasField {
+		return nil, "at least one update field is required: label, group, tags, alerts, maintenance_policy, or watchdog_enabled"
+	}
+
+	return req, ""
+}
+
+// instanceUpdateTagsFromArg converts the raw tags argument into a string
+// slice, rejecting non-array values and non-string entries.
+func instanceUpdateTagsFromArg(raw any) ([]string, string) {
+	rawList, ok := raw.([]any)
+	if !ok {
+		return nil, "tags must be an array of strings"
+	}
+
+	tags := make([]string, 0, len(rawList))
+
+	for _, item := range rawList {
+		tag, ok := item.(string)
+		if !ok {
+			return nil, "tags entries must be strings"
+		}
+
+		tags = append(tags, tag)
+	}
+
+	return tags, ""
+}
+
+// errAlertsMustBeObject is the validation message every malformed-alerts
+// branch below shares.
+const errAlertsMustBeObject = "alerts must be an object of alert thresholds"
+
+// instanceUpdateAlertsFromArg decodes the raw alerts object into the typed
+// alert-threshold struct via a JSON round trip so field names and numeric
+// types validate against the API shape.
+func instanceUpdateAlertsFromArg(raw any) (*linode.Alerts, string) {
+	if _, ok := raw.(map[string]any); !ok {
+		return nil, errAlertsMustBeObject
+	}
+
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, errAlertsMustBeObject
+	}
+
+	var alerts linode.Alerts
+	if err := json.Unmarshal(data, &alerts); err != nil {
+		return nil, errAlertsMustBeObject
+	}
+
+	return &alerts, ""
 }
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.

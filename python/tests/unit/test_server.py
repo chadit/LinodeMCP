@@ -16218,11 +16218,11 @@ async def test_ipv4_assign_tool_is_exported_and_registered(
     """IPv4 assign tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_networking_ip_assign_tool" in tools_mod.__all__
-    assert "handle_linode_networking_ip_assign" in tools_mod.__all__
+    assert "create_linode_networking_ipv4_assign_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ipv4_assign" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_networking_ip_assign" in srv.registered_tool_names
+    assert "linode_networking_ipv4_assign" in srv.registered_tool_names
 
 
 async def test_ipv4_assign_dispatches_from_registry(
@@ -16240,7 +16240,7 @@ async def test_ipv4_assign_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             {
                 "confirm": True,
                 "region": "us-east",
@@ -16261,7 +16261,7 @@ async def test_ipv4_assign_rejects_missing_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             {
                 "region": "us-east",
                 "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
@@ -16279,7 +16279,7 @@ async def test_ipv4_assign_rejects_false_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             {
                 "confirm": False,
                 "region": "us-east",
@@ -16298,7 +16298,7 @@ async def test_ipv4_assign_rejects_string_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             {
                 "confirm": "true",
                 "region": "us-east",
@@ -16317,7 +16317,7 @@ async def test_ipv4_assign_rejects_numeric_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             {
                 "confirm": 1,
                 "region": "us-east",
@@ -16343,7 +16343,7 @@ async def test_ipv4_assign_rejects_invalid_region(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
-        result = await srv.dispatch("linode_networking_ip_assign", arguments)
+        result = await srv.dispatch("linode_networking_ipv4_assign", arguments)
 
     assert "region" in result[0].text.lower()
     mock_client_class.assert_not_called()
@@ -16368,7 +16368,7 @@ async def test_ipv4_assign_rejects_invalid_assignments(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             {
                 "confirm": True,
                 "region": "us-east",
@@ -16380,17 +16380,59 @@ async def test_ipv4_assign_rejects_invalid_assignments(
     mock_client_class.assert_not_called()
 
 
+async def test_ip_assign_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Generic IP assign tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_networking_ip_assign_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_assign" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_networking_ip_assign" in srv.registered_tool_names
+
+
+async def test_ip_assign_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Generic IP assign is callable through server dispatch with confirm=true."""
+    assignments = [{"address": "192.0.2.1", "linode_id": 123}]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.assign_ips.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_assign",
+            {
+                "confirm": True,
+                "region": "us-east",
+                "assignments": assignments,
+            },
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["region"] == "us-east"
+    assert result_json["assignments"] == assignments
+    mock_client.assign_ips.assert_awaited_once_with("us-east", assignments)
+
+
 async def test_ipv4_share_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
     """IPv4 share tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_networking_ip_share_tool" in tools_mod.__all__
-    assert "handle_linode_networking_ip_share" in tools_mod.__all__
+    assert "create_linode_networking_ipv4_share_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ipv4_share" in tools_mod.__all__
 
     srv = Server(_full_access_config(sample_config))
-    assert "linode_networking_ip_share" in srv.registered_tool_names
+    assert "linode_networking_ipv4_share" in srv.registered_tool_names
 
 
 async def test_ipv4_share_dispatches_from_registry(
@@ -16408,7 +16450,7 @@ async def test_ipv4_share_dispatches_from_registry(
 
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_share",
+            "linode_networking_ipv4_share",
             {
                 "confirm": True,
                 "ips": ["192.168.1.1"],
@@ -16428,7 +16470,7 @@ async def test_ipv4_share_rejects_missing_confirm(
     """IPv4 share should reject calls without confirm=true."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_networking_ip_share",
+        "linode_networking_ipv4_share",
         {
             "ips": ["192.168.1.1"],
             "linode_id": 12345,
@@ -16444,7 +16486,7 @@ async def test_ipv4_share_rejects_false_confirm(
     """IPv4 share should reject calls with confirm=false."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_networking_ip_share",
+        "linode_networking_ipv4_share",
         {
             "confirm": False,
             "ips": ["192.168.1.1"],
@@ -16463,7 +16505,7 @@ async def test_ipv4_share_rejects_non_boolean_true_confirm_before_client(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
-            "linode_networking_ip_share",
+            "linode_networking_ipv4_share",
             {
                 "confirm": confirm,
                 "ips": ["192.168.1.1"],
@@ -16481,7 +16523,7 @@ async def test_ipv4_share_rejects_missing_ips(
     """IPv4 share should reject calls without ips."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_networking_ip_share",
+        "linode_networking_ipv4_share",
         {
             "confirm": True,
             "linode_id": 12345,
@@ -16497,7 +16539,7 @@ async def test_ipv4_share_rejects_missing_linode_id(
     """IPv4 share should reject calls without linode_id."""
     srv = Server(_full_access_config(sample_config))
     result = await srv.dispatch(
-        "linode_networking_ip_share",
+        "linode_networking_ipv4_share",
         {
             "confirm": True,
             "ips": ["192.168.1.1"],

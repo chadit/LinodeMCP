@@ -1,11 +1,12 @@
 """Cross-language tool-surface parity gate.
 
 ``docs/tools-manifest.txt`` is the canonical tool surface for both
-implementations. This test asserts the Python registry equals exactly the
-manifest's names minus the go-only lines. The Go twin
-(``go/internal/server/tools_manifest_test.go``) enforces the same manifest
-minus the py-only lines. Together they stop the two tool surfaces from
-drifting apart again.
+implementations. Every listed tool must exist in BOTH implementations:
+this test asserts the Python registry equals exactly the full manifest
+set, and the Go twin (``go/internal/server/tools_manifest_test.go``)
+enforces the same. Any tab annotation on a manifest line (the retired
+go-only/py-only mechanism) fails the test outright, so one-sided tools
+cannot quietly return.
 """
 
 from __future__ import annotations
@@ -16,42 +17,31 @@ from linodemcp.server import get_tool_registry
 
 _MANIFEST_PATH = Path(__file__).resolve().parents[3] / "docs" / "tools-manifest.txt"
 
-_ANNOTATION_GO_ONLY = "go-only"
-_ANNOTATION_PY_ONLY = "py-only"
 
-
-def _load_manifest() -> dict[str, str]:
-    """Parse the manifest into name -> annotation ('' when registered in both)."""
-    entries: dict[str, str] = {}
+def _load_manifest() -> set[str]:
+    """Parse the manifest into the set of tool names, rejecting annotations."""
+    entries: set[str] = set()
 
     for raw_line in _MANIFEST_PATH.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
 
-        name, _, annotation = line.partition("\t")
-        name = name.strip()
-        annotation = annotation.strip()
-
-        assert annotation in ("", _ANNOTATION_GO_ONLY, _ANNOTATION_PY_ONLY), (
-            f"manifest line {name!r} has unknown annotation {annotation!r}"
+        assert "\t" not in raw_line, (
+            f"manifest line {raw_line!r} carries a tab annotation; "
+            "one-sided tools are not allowed"
         )
-        assert name not in entries, f"manifest lists {name!r} twice"
 
-        entries[name] = annotation
+        assert stripped not in entries, f"manifest lists {stripped!r} twice"
+
+        entries.add(stripped)
 
     return entries
 
 
 def test_tool_surface_matches_manifest() -> None:
-    """The Python registry must equal the manifest minus go-only lines."""
-    manifest = _load_manifest()
-
-    expected = {
-        name
-        for name, annotation in manifest.items()
-        if annotation != _ANNOTATION_GO_ONLY
-    }
+    """The Python registry must equal the full manifest set exactly."""
+    expected = _load_manifest()
     actual = {entry.name for entry in get_tool_registry()}
 
     missing = sorted(expected - actual)

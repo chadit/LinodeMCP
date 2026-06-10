@@ -24,6 +24,7 @@ const (
 	databaseEngineID                          = "mysql/8.0.26"
 	databaseEngineEscapedPath                 = "/databases/engines/mysql%2F8.0.26"
 	databaseEngineVersion                     = "8.0.26"
+	databaseAllInstancesPath                  = "/databases/instances"
 	databaseInstancesPath                     = "/databases/mysql/instances"
 	databasePostgreSQLInstancesPath           = "/databases/postgresql/instances"
 	databaseMySQLConfigPath                   = "/databases/mysql/config"
@@ -755,6 +756,96 @@ func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
 
 	if attempts.Load() != int32(2) {
 		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
+	}
+}
+
+func TestClientListAllDatabaseInstancesSuccess(t *testing.T) {
+	t.Parallel()
+
+	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != databaseAllInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseAllInstancesPath)
+		}
+
+		if r.URL.RawQuery != longviewSubscriptionsQuery {
+			t.Errorf("r.URL.RawQuery = %v, want %v", r.URL.RawQuery, longviewSubscriptionsQuery)
+		}
+
+		if r.Header.Get("Authorization") != authHeaderTestToken {
+			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    instances,
+			keyPage:    2,
+			keyPages:   3,
+			keyResults: 51,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.ListAllDatabaseInstances(t.Context(), 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want %d", len(got), 1)
+	}
+
+	if got[0].ID != databaseInstanceID {
+		t.Errorf("got[0].ID = %v, want %v", got[0].ID, databaseInstanceID)
+	}
+
+	if got[0].Engine != databaseEngineMySQL {
+		t.Errorf("got[0].Engine = %v, want %v", got[0].Engine, databaseEngineMySQL)
+	}
+}
+
+func TestClientListAllDatabaseInstancesAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != databaseAllInstancesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseAllInstancesPath)
+		}
+
+		w.WriteHeader(http.StatusForbidden)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAllDatabaseInstances(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	apiErr, ok := errors.AsType[*linode.APIError](err)
+	if !ok {
+		t.Fatalf("error = %v, want %v", err, &apiErr)
+	}
+
+	if apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
 	}
 }
 

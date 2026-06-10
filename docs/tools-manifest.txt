@@ -1,6 +1,7 @@
 # Canonical LinodeMCP tool surface.
-# One tool name per line, sorted. Names present in only one implementation
-# carry a tab-separated annotation: "go-only" or "py-only".
+# One tool name per line, sorted. Every tool listed here exists in BOTH
+# implementations; one-sided tools are not allowed and annotations on a
+# line fail the gates.
 # Parity tests in both languages enforce this file:
 #   go/internal/server/tools_manifest_test.go
 #   python/tests/unit/test_tools_manifest.py
@@ -72,7 +73,7 @@ linode_beta_get
 linode_beta_list
 linode_database_engine_get
 linode_database_engine_list
-linode_database_instance_list	py-only
+linode_database_instance_list
 linode_database_mysql_config_get
 linode_database_mysql_instance_create
 linode_database_mysql_instance_credentials_get
@@ -118,7 +119,7 @@ linode_firewall_device_create
 linode_firewall_device_delete
 linode_firewall_device_get
 linode_firewall_device_list
-linode_firewall_get	py-only
+linode_firewall_get
 linode_firewall_list
 linode_firewall_rule_version_get
 linode_firewall_rule_version_list
@@ -220,7 +221,7 @@ linode_instance_stats_get
 linode_instance_stats_month_get
 linode_instance_transfer_get
 linode_instance_transfer_month_get
-linode_instance_update	py-only
+linode_instance_update
 linode_instance_volume_list
 linode_ipv6_pool_list
 linode_ipv6_range_create
@@ -314,10 +315,9 @@ linode_networking_ip_allocate
 linode_networking_ip_assign
 linode_networking_ip_get
 linode_networking_ip_list
-linode_networking_ip_share	py-only
 linode_networking_ip_update
-linode_networking_ipv4_assign	go-only
-linode_networking_ipv4_share	go-only
+linode_networking_ipv4_assign
+linode_networking_ipv4_share
 linode_nodebalancer_config_create
 linode_nodebalancer_config_delete
 linode_nodebalancer_config_get
@@ -442,7 +442,7 @@ linode_volume_clone
 linode_volume_create
 linode_volume_delete
 linode_volume_detach
-linode_volume_get	py-only
+linode_volume_get
 linode_volume_list
 linode_volume_resize
 linode_volume_type_list

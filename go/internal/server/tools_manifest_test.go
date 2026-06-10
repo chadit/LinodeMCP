@@ -14,15 +14,11 @@ import (
 // truth; this test runs from go/internal/server, three levels below it.
 const manifestPath = "../../../docs/tools-manifest.txt"
 
-const (
-	annotationGoOnly = "go-only"
-	annotationPyOnly = "py-only"
-)
-
-// loadManifest parses docs/tools-manifest.txt into a name -> annotation map.
-// Annotation is "" for tools both implementations register, or one of the
-// one-sided markers. Comment lines (#) and blanks are skipped.
-func loadManifest(t *testing.T) map[string]string {
+// loadManifest parses docs/tools-manifest.txt into the set of tool names.
+// Every listed tool must exist in BOTH implementations, so any tab-separated
+// annotation on a line (the retired go-only/py-only mechanism) is a fatal
+// failure. Comment lines (#) and blanks are skipped.
+func loadManifest(t *testing.T) map[string]bool {
 	t.Helper()
 
 	file, err := os.Open(filepath.Clean(manifestPath))
@@ -36,29 +32,25 @@ func loadManifest(t *testing.T) map[string]string {
 		}
 	}()
 
-	entries := make(map[string]string)
+	entries := make(map[string]bool)
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+		line := scanner.Text()
+		if trimmed := strings.TrimSpace(line); trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 
-		name, annotation, _ := strings.Cut(line, "\t")
-
-		name = strings.TrimSpace(name)
-		annotation = strings.TrimSpace(annotation)
-
-		if annotation != "" && annotation != annotationGoOnly && annotation != annotationPyOnly {
-			t.Fatalf("manifest line %q has unknown annotation %q", name, annotation)
+		if strings.Contains(line, "\t") {
+			t.Fatalf("manifest line %q carries a tab annotation; one-sided tools are not allowed", line)
 		}
 
-		if _, dup := entries[name]; dup {
+		name := strings.TrimSpace(line)
+		if entries[name] {
 			t.Fatalf("manifest lists %q twice", name)
 		}
 
-		entries[name] = annotation
+		entries[name] = true
 	}
 
 	if scanErr := scanner.Err(); scanErr != nil {
@@ -69,24 +61,14 @@ func loadManifest(t *testing.T) map[string]string {
 }
 
 // TestToolSurfaceMatchesManifest enforces cross-language tool-name parity:
-// the Go catalog must equal exactly the manifest's names minus the py-only
-// lines. A failure names every missing and extra tool so drift is obvious.
-// The Python twin (tests/unit/test_tools_manifest.py) enforces the same
-// manifest minus the go-only lines.
+// the Go catalog must equal EXACTLY the manifest's names. A failure names
+// every missing and extra tool so drift is obvious. The Python twin
+// (tests/unit/test_tools_manifest.py) enforces the same full set, so a tool
+// cannot ship in one implementation without the other.
 func TestToolSurfaceMatchesManifest(t *testing.T) {
 	t.Parallel()
 
-	manifest := loadManifest(t)
-
-	expected := make(map[string]bool, len(manifest))
-
-	for name, annotation := range manifest {
-		if annotation == annotationPyOnly {
-			continue
-		}
-
-		expected[name] = true
-	}
+	expected := loadManifest(t)
 
 	srv := newCapabilityTestServer(t)
 	catalog := srv.ToolCatalog()

@@ -200,10 +200,10 @@ async def handle_linode_vlan_delete(
     return await execute_tool(cfg, arguments, "delete VLAN", _call)
 
 
-def create_linode_networking_ip_share_tool() -> tuple[Tool, Capability]:
-    """Create the linode_networking_ip_share tool."""
+def create_linode_networking_ipv4_share_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ipv4_share tool."""
     return Tool(
-        name="linode_networking_ip_share",
+        name="linode_networking_ipv4_share",
         description="Shares IPv4 addresses with a Linode",
         inputSchema={
             "type": "object",
@@ -247,16 +247,16 @@ def _parse_ipv4_share(
     return typed_ips, linode_id
 
 
-async def handle_linode_networking_ip_share(
+async def handle_linode_networking_ipv4_share(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_networking_ip_share tool request."""
+    """Handle linode_networking_ipv4_share tool request."""
     if is_dry_run(arguments):
         parsed = _parse_ipv4_share(arguments)
         if isinstance(parsed, list):
             return parsed
         return build_dry_run_response(
-            "linode_networking_ip_share",
+            "linode_networking_ipv4_share",
             arguments.get("environment", ""),
             "POST",
             "/networking/ipv4/share",
@@ -377,10 +377,10 @@ async def handle_linode_networking_ips_share(
     return await execute_tool(cfg, arguments, "share IP addresses", _call)
 
 
-def create_linode_networking_ip_assign_tool() -> tuple[Tool, Capability]:
-    """Create the linode_networking_ip_assign tool."""
+def create_linode_networking_ipv4_assign_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ipv4_assign tool."""
     return Tool(
-        name="linode_networking_ip_assign",
+        name="linode_networking_ipv4_assign",
         description="Assigns IPv4 addresses to Linodes in a region",
         inputSchema={
             "type": "object",
@@ -463,10 +463,10 @@ def _parse_ipv4_assign(
     return region, typed_assignments
 
 
-async def handle_linode_networking_ip_assign(
+async def handle_linode_networking_ipv4_assign(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_networking_ip_assign tool request."""
+    """Handle linode_networking_ipv4_assign tool request."""
     if is_dry_run(arguments):
         parsed = _parse_ipv4_assign(arguments)
         if isinstance(parsed, list):
@@ -474,7 +474,7 @@ async def handle_linode_networking_ip_assign(
         region, typed_assignments = parsed
         request_body = {"region": region, "assignments": typed_assignments}
         return build_dry_run_response(
-            "linode_networking_ip_assign",
+            "linode_networking_ipv4_assign",
             arguments.get("environment", ""),
             "POST",
             "/networking/ipv4/assign",
@@ -502,3 +502,93 @@ async def handle_linode_networking_ip_assign(
         }
 
     return await execute_tool(cfg, arguments, "assign IPv4 addresses", _call)
+
+
+def create_linode_networking_ip_assign_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_assign tool.
+
+    The generic assign endpoint (/networking/ips/assign), distinct from
+    linode_networking_ipv4_assign which hits /networking/ipv4/assign.
+    """
+    return Tool(
+        name="linode_networking_ip_assign",
+        description=(
+            "Assigns IP addresses to Linodes in a region. WARNING: This "
+            "changes IP ownership assignments."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "region": {
+                    "type": "string",
+                    "description": "Region ID for the assignments (required)",
+                },
+                "assignments": {
+                    "type": "array",
+                    "description": "IP assignment objects with address and linode_id",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "address": {
+                                "type": "string",
+                                "description": "IP address to assign",
+                            },
+                            "linode_id": {
+                                "type": "integer",
+                                "description": "Linode ID receiving the address",
+                            },
+                        },
+                        "required": ["address", "linode_id"],
+                    },
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm assigning IP addresses.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["region", "assignments", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_networking_ip_assign(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ip_assign tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_ipv4_assign(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        region, typed_assignments = parsed
+        request_body = {"region": region, "assignments": typed_assignments}
+        return build_dry_run_response(
+            "linode_networking_ip_assign",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/ips/assign",
+            None,
+            request_body=request_body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This assigns IP addresses to Linodes. Set confirm=true to proceed."
+        )
+
+    parsed = _parse_ipv4_assign(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    region, typed_assignments = parsed
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.assign_ips(region, typed_assignments)
+        return {
+            "message": f"IP assignments completed in region {region}",
+            "region": region,
+            "assignments": typed_assignments,
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "assign IP addresses", _call)

@@ -10,6 +10,7 @@ import (
 const (
 	endpointDatabaseEngines             = "/databases/engines"
 	endpointDatabaseTypes               = "/databases/types"
+	endpointDatabaseAllInstances        = "/databases/instances"
 	endpointDatabaseInstances           = "/databases/mysql/instances"
 	endpointDatabasePostgreSQLInstances = "/databases/postgresql/instances"
 	endpointDatabaseMySQLConfig         = "/databases/mysql/config"
@@ -81,6 +82,31 @@ func (c *Client) httpGetDatabaseType(ctx context.Context, typeID string, page, p
 	}
 
 	return &databaseType, nil
+}
+
+// ListAllDatabaseInstances retrieves Managed Database instances across
+// every engine via the cross-engine /databases/instances endpoint. The
+// per-engine lists below hit /databases/mysql/instances and
+// /databases/postgresql/instances instead.
+func (c *Client) httpListAllDatabaseInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointDatabaseAllInstances, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAllDatabaseInstances", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[DatabaseInstance]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
 }
 
 // ListDatabaseInstances retrieves Managed Database instances.

@@ -1104,6 +1104,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceRebootTool,
 		tools.NewLinodeInstanceShutdownTool,
 		tools.NewLinodeInstanceCreateTool,
+		tools.NewLinodeInstanceUpdateTool,
 		tools.NewLinodeInstanceDeleteTool,
 		tools.NewLinodeInstanceResizeTool,
 	})
@@ -1112,6 +1113,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 func networkingToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeFirewallListTool,
+		tools.NewLinodeFirewallGetTool,
 		tools.NewLinodeVLANsListTool,
 		tools.NewLinodeVLANDeleteTool,
 		tools.NewLinodeFirewallRulesListTool,
@@ -1189,6 +1191,7 @@ func dnsToolEntries(cfg *config.Config) []toolEntry {
 func volumeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeVolumeListTool,
+		tools.NewLinodeVolumeGetTool,
 		tools.NewLinodeVolumeTypeListTool,
 		tools.NewLinodeVolumeCreateTool,
 		tools.NewLinodeVolumeCloneTool,
@@ -1240,6 +1243,7 @@ func databaseToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeDatabaseEngineGetTool,
 		tools.NewLinodeDatabaseMySQLConfigGetTool,
 		tools.NewLinodeDatabasePostgreSQLConfigGetTool,
+		tools.NewLinodeDatabaseAllInstancesListTool,
 		tools.NewLinodeDatabaseInstanceListTool,
 		tools.NewLinodeDatabasePostgreSQLInstanceListTool,
 		tools.NewLinodeDatabaseInstanceGetTool,

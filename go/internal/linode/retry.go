@@ -2009,6 +2009,22 @@ func (c *Client) GetDatabasePostgreSQLConfig(ctx context.Context) (map[string]an
 	return config, err
 }
 
+// ListAllDatabaseInstances retrieves Managed Database instances across every
+// engine with automatic retry on transient failures.
+func (c *Client) ListAllDatabaseInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
+	var instances []DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "ListAllDatabaseInstances", func() error {
+		var err error
+
+		instances, err = c.httpListAllDatabaseInstances(ctx, page, pageSize)
+
+		return err
+	})
+
+	return instances, err
+}
+
 // ListDatabaseInstances retrieves Managed Database instances with automatic retry on transient failures.
 func (c *Client) ListDatabaseInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
 	var instances []DatabaseInstance

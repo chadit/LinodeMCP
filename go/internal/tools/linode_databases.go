@@ -46,6 +46,8 @@ const (
 
 	dbMessagePrefixMySQL      = "Managed Database"
 	dbMessagePrefixPostgreSQL = "PostgreSQL Managed Database"
+
+	responseKeyDatabaseInstances = "database_instances"
 )
 
 // NewLinodeDatabaseEngineListTool creates a tool for listing Managed Database engines.
@@ -146,6 +148,25 @@ func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleDatabaseInstancesListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeDatabaseAllInstancesListTool creates a tool for listing Managed
+// Database instances across every engine. Unlike the MySQL and PostgreSQL
+// list tools, this one hits the cross-engine /databases/instances endpoint.
+func NewLinodeDatabaseAllInstancesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_list",
+		mcp.WithDescription("Lists Managed Database instances across all engines with optional pagination."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseAllInstancesListRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -931,7 +952,26 @@ func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database instances: %v", err)), nil
 	}
 
-	return FormatListResponse(instances, nil, "database_instances")
+	return FormatListResponse(instances, nil, responseKeyDatabaseInstances)
+}
+
+func handleDatabaseAllInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instances, err := client.ListAllDatabaseInstances(ctx, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database instances across engines: %v", err)), nil
+	}
+
+	return FormatListResponse(instances, nil, responseKeyDatabaseInstances)
 }
 
 func handleDatabasePostgreSQLInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -950,7 +990,7 @@ func handleDatabasePostgreSQLInstancesListRequest(ctx context.Context, request *
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database instances: %v", err)), nil
 	}
 
-	return FormatListResponse(instances, nil, "database_instances")
+	return FormatListResponse(instances, nil, responseKeyDatabaseInstances)
 }
 
 // runDatabaseInstanceCreate validates create args, previews on dry_run

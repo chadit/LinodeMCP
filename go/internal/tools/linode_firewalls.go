@@ -48,6 +48,74 @@ func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeFirewallGetTool creates a tool for retrieving a single Cloud Firewall by ID.
+func NewLinodeFirewallGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_get",
+		"Gets a Cloud Firewall by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall to retrieve (required)")),
+		},
+		handleLinodeFirewallGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID := request.GetInt(paramFirewallID, 0)
+	if firewallID <= 0 {
+		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	firewall, err := client.GetFirewall(ctx, firewallID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve firewall %d: %v", firewallID, err)), nil
+	}
+
+	// Summary shape (rule counts instead of full rule bodies) matches the
+	// Python implementation's response for this tool; the full rules are
+	// available via linode_firewall_rules_get.
+	return MarshalToolResponse(firewallGetResponse{
+		Firewall: firewallSummary{
+			ID:                 firewall.ID,
+			Label:              firewall.Label,
+			Status:             firewall.Status,
+			RulesInboundCount:  len(firewall.Rules.Inbound),
+			RulesOutboundCount: len(firewall.Rules.Outbound),
+			Created:            firewall.Created,
+			Updated:            firewall.Updated,
+			Tags:               firewall.Tags,
+		},
+	})
+}
+
+// firewallGetResponse wraps the firewall summary under a "firewall" key to
+// match the Python implementation's response shape for linode_firewall_get.
+type firewallGetResponse struct {
+	Firewall firewallSummary `json:"firewall"`
+}
+
+// firewallSummary is the condensed firewall view linode_firewall_get returns:
+// identity, status, rule counts, and timestamps without the full rule bodies.
+type firewallSummary struct {
+	ID                 int      `json:"id"`
+	Label              string   `json:"label"`
+	Status             string   `json:"status"`
+	RulesInboundCount  int      `json:"rules_inbound_count"`
+	RulesOutboundCount int      `json:"rules_outbound_count"`
+	Created            string   `json:"created"`
+	Updated            string   `json:"updated"`
+	Tags               []string `json:"tags"`
+}
+
 // NewLinodeVLANsListTool creates a tool for listing VLANs.
 func NewLinodeVLANsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newLinodeIPv6ListTool(
