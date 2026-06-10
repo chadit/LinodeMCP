@@ -4395,6 +4395,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ShareIPv4s", e) from e
 
+    async def share_ips(self, ips: list[str], linode_id: int) -> dict[str, Any]:
+        """Share IP addresses with a Linode."""
+        try:
+            body: dict[str, Any] = {"ips": ips, "linode_id": linode_id}
+            response = await self.make_request("POST", "/networking/ips/share", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ShareIPs", e) from e
+
     async def assign_ips(
         self, region: str, assignments: list[dict[str, Any]]
     ) -> dict[str, Any]:
@@ -11880,6 +11890,10 @@ class RetryableClient:
     async def share_ipv4s(self, ips: list[str], linode_id: int) -> dict[str, Any]:
         """Share IPv4s without replay retry."""
         return await self.client.share_ipv4s(ips, linode_id)
+
+    async def share_ips(self, ips: list[str], linode_id: int) -> dict[str, Any]:
+        """Share IPs without replay retry."""
+        return await self.client.share_ips(ips, linode_id)
 
     async def assign_ips(
         self, region: str, assignments: list[dict[str, Any]]

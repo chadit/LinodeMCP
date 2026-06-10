@@ -689,10 +689,12 @@ from linodemcp.tools.linode_network_transfer import (
 from linodemcp.tools.linode_networking import (
     create_linode_ipv4_assign_tool,
     create_linode_ipv4_share_tool,
+    create_linode_networking_ips_share_tool,
     create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
     handle_linode_ipv4_assign,
     handle_linode_ipv4_share,
+    handle_linode_networking_ips_share,
     handle_linode_vlan_delete,
     handle_linode_vlans_list,
 )
@@ -1310,6 +1312,7 @@ __all__ = [
     "create_linode_networking_ip_get_tool",
     "create_linode_networking_ip_update_tool",
     "create_linode_networking_ips_list_tool",
+    "create_linode_networking_ips_share_tool",
     "create_linode_nodebalancer_config_create_tool",
     "create_linode_nodebalancer_config_delete_tool",
     "create_linode_nodebalancer_config_get_tool",
@@ -1755,6 +1758,7 @@ __all__ = [
     "handle_linode_networking_ip_get",
     "handle_linode_networking_ip_update",
     "handle_linode_networking_ips_list",
+    "handle_linode_networking_ips_share",
     "handle_linode_nodebalancer_config_create",
     "handle_linode_nodebalancer_config_delete",
     "handle_linode_nodebalancer_config_get",

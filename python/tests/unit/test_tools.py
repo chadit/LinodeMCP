@@ -23063,6 +23063,146 @@ async def test_ipv4_share_dry_run_still_validates_linode_id(
     assert "linode_id is required" in result[0].text
 
 
+def test_networking_ips_share_schema_requires_confirm_ips_linode_id() -> None:
+    """Networking IP share schema requires ips, linode_id, and confirm."""
+    from linodemcp.tools.linode_networking import (
+        create_linode_networking_ips_share_tool,
+    )
+
+    tool, capability = create_linode_networking_ips_share_tool()
+
+    assert tool.name == "linode_networking_ips_share"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["ips", "linode_id", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "IP addresses" in (tool.description or "")
+
+
+async def test_networking_ips_share_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the generic IP share POST with no client call."""
+    from linodemcp.tools.linode_networking import (
+        handle_linode_networking_ips_share,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_networking_ips_share(
+            {"ips": ["192.0.2.10"], "linode_id": 123, "dry_run": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_networking_ips_share"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/ips/share"
+    assert body["would_execute"]["body"] == {
+        "ips": ["192.0.2.10"],
+        "linode_id": 123,
+    }
+    assert body["current_state"] is None
+    mock_client_class.assert_not_called()
+
+
+async def test_networking_ips_share_happy_path_calls_share_ips(
+    sample_config: Config,
+) -> None:
+    """confirm=true calls RetryableClient.share_ips once."""
+    from linodemcp.tools.linode_networking import (
+        handle_linode_networking_ips_share,
+    )
+
+    response_data = {"success": True, "shared": ["192.0.2.10"]}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.share_ips.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_networking_ips_share(
+            {
+                "confirm": True,
+                "ips": ["192.0.2.10"],
+                "linode_id": 123,
+            },
+            sample_config,
+        )
+
+    body = json.loads(result[0].text)
+    assert body["message"] == "IP addresses shared with Linode 123"
+    assert body["linode_id"] == 123
+    assert body["ips"] == ["192.0.2.10"]
+    assert body["result"] == response_data
+    mock_client.share_ips.assert_awaited_once_with(["192.0.2.10"], 123)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"ips": ["192.0.2.10"], "linode_id": 123},
+        {"confirm": False, "ips": ["192.0.2.10"], "linode_id": 123},
+        {"confirm": "true", "ips": ["192.0.2.10"], "linode_id": 123},
+        {"confirm": 1, "ips": ["192.0.2.10"], "linode_id": 123},
+    ],
+)
+async def test_networking_ips_share_rejects_confirm_before_client(
+    sample_config: Config, arguments: dict[str, Any]
+) -> None:
+    """Networking IP share requires literal confirm=true before client creation."""
+    from linodemcp.tools.linode_networking import (
+        handle_linode_networking_ips_share,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_networking_ips_share(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({"confirm": True, "linode_id": 123}, "ips must be a non-empty list"),
+        (
+            {"confirm": True, "ips": [], "linode_id": 123},
+            "ips must be a non-empty list",
+        ),
+        (
+            {"confirm": True, "ips": ["192.0.2.10", 123], "linode_id": 123},
+            "ips entries must be non-empty strings",
+        ),
+        (
+            {"confirm": True, "ips": [""], "linode_id": 123},
+            "ips entries must be non-empty strings",
+        ),
+        ({"confirm": True, "ips": ["192.0.2.10"]}, "linode_id is required"),
+        (
+            {"confirm": True, "ips": ["192.0.2.10"], "linode_id": "123"},
+            "linode_id must be an integer",
+        ),
+    ],
+)
+async def test_networking_ips_share_validates_inputs_before_client(
+    sample_config: Config, arguments: dict[str, Any], expected: str
+) -> None:
+    """Networking IP share validates local inputs before client creation."""
+    from linodemcp.tools.linode_networking import (
+        handle_linode_networking_ips_share,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_networking_ips_share(arguments, sample_config)
+
+    assert len(result) == 1
+    assert expected in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_ipv4_assign_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the assign POST with no call."""
     from linodemcp.tools.linode_networking import handle_linode_ipv4_assign
