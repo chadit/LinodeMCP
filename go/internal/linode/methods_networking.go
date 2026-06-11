@@ -13,7 +13,8 @@ import (
 const (
 	endpointNetworkingIPs         = "/networking/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
-	endpointNetworkingIPsShare    = "/networking/ipv4/share"
+	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
+	endpointNetworkingIPv4Share   = "/networking/ipv4/share"
 	endpointNetworkingIPv4Assign  = "/networking/ipv4/assign"
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
@@ -799,7 +800,41 @@ func validateAssignNetworkingIPsRequest(req AssignNetworkingIPsRequest) error {
 	return nil
 }
 
-// ShareNetworkingIPs shares IP addresses with a primary Linode.
+// ShareNetworkingIPv4s shares IP addresses with a primary Linode.
+func (c *Client) httpShareNetworkingIPv4s(ctx context.Context, req ShareNetworkingIPsRequest) (map[string]any, error) {
+	if req.LinodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req.IPs == nil {
+		return nil, ErrIPAddressRequired
+	}
+
+	if slices.Contains(req.IPs, "") {
+		return nil, ErrIPAddressRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPv4Share, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ShareNetworkingIPv4s", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	response := map[string]any{}
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// ShareNetworkingIPs shares IP addresses with a primary Linode via the
+// generic /networking/ips/share endpoint (the IPv4-specific variant above
+// uses /networking/ipv4/share).
 func (c *Client) httpShareNetworkingIPs(ctx context.Context, req ShareNetworkingIPsRequest) (map[string]any, error) {
 	if req.LinodeID <= 0 {
 		return nil, ErrLinodeIDPositive

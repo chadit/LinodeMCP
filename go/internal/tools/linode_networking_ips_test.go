@@ -1352,10 +1352,10 @@ func TestLinodeNetworkingIPv4AssignToolArgs(t *testing.T) {
 	}
 }
 
-func TestLinodeNetworkingIPShareToolDefinition(t *testing.T) {
+func TestLinodeNetworkingIPv4ShareToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+	tool, capability, handler := tools.NewLinodeNetworkingIPv4ShareTool(&config.Config{})
 
 	if tool.Name != "linode_networking_ipv4_share" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ipv4_share")
@@ -1384,7 +1384,84 @@ func TestLinodeNetworkingIPShareToolDefinition(t *testing.T) {
 	}
 }
 
+func TestLinodeNetworkingIPShareToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	tool, capability, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+
+	if tool.Name != "linode_networking_ip_share" {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_ip_share")
+	}
+
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	}
+
+	for _, key := range []string{keyLinodeID, keyIPs, keyConfirm} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
+	}
+
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+// TestLinodeNetworkingIPShareToolSuccess proves the generic share tool posts
+// to /networking/ips/share, not the IPv4-specific route its sibling uses.
 func TestLinodeNetworkingIPShareToolSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if r.URL.Path != "/networking/ips/share" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/ips/share")
+		}
+
+		var body linode.ShareNetworkingIPsRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+
+			return
+		}
+
+		if body.LinodeID != 123 {
+			t.Errorf("body.LinodeID = %v, want %v", body.LinodeID, 123)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		_, writeErr := w.Write([]byte(`{}`))
+		if writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: 123,
+		keyIPs:      networkingIPShareJSON,
+		keyConfirm:  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("result.IsError = true, text: %s", dryRunResultText(t, result))
+	}
+}
+
+func TestLinodeNetworkingIPv4ShareToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1433,7 +1510,7 @@ func TestLinodeNetworkingIPShareToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+	_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLinodeID: 123,
@@ -1462,7 +1539,7 @@ func TestLinodeNetworkingIPShareToolSuccess(t *testing.T) {
 	}
 }
 
-func TestLinodeNetworkingIPShareToolEmptyIpsArray(t *testing.T) {
+func TestLinodeNetworkingIPv4ShareToolEmptyIpsArray(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1501,7 +1578,7 @@ func TestLinodeNetworkingIPShareToolEmptyIpsArray(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+	_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLinodeID: 123,
@@ -1521,7 +1598,7 @@ func TestLinodeNetworkingIPShareToolEmptyIpsArray(t *testing.T) {
 	}
 }
 
-func TestLinodeNetworkingIPShareToolApiError(t *testing.T) {
+func TestLinodeNetworkingIPv4ShareToolApiError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1538,7 +1615,7 @@ func TestLinodeNetworkingIPShareToolApiError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+	_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLinodeID: 123,
@@ -1566,7 +1643,7 @@ func TestLinodeNetworkingIPShareToolApiError(t *testing.T) {
 	}
 }
 
-func TestLinodeNetworkingIPShareToolConfirm(t *testing.T) {
+func TestLinodeNetworkingIPv4ShareToolConfirm(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
@@ -1588,7 +1665,7 @@ func TestLinodeNetworkingIPShareToolConfirm(t *testing.T) {
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, handler := tools.NewLinodeNetworkingIPShareTool(cfg)
+			_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(cfg)
 
 			args := map[string]any{keyLinodeID: 123, keyIPs: networkingIPShareJSON}
 			if confirm != nil {
@@ -1615,7 +1692,7 @@ func TestLinodeNetworkingIPShareToolConfirm(t *testing.T) {
 	}
 }
 
-func TestLinodeNetworkingIPShareToolArgs(t *testing.T) {
+func TestLinodeNetworkingIPv4ShareToolArgs(t *testing.T) {
 	t.Parallel()
 
 	for name, args := range map[string]map[string]any{
@@ -1630,7 +1707,7 @@ func TestLinodeNetworkingIPShareToolArgs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, _, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+			_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(&config.Config{})
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 			if err != nil {

@@ -287,10 +287,10 @@ async def handle_linode_networking_ipv4_share(
     return await execute_tool(cfg, arguments, "share IPv4 addresses", _call)
 
 
-def create_linode_networking_ips_share_tool() -> tuple[Tool, Capability]:
-    """Create the linode_networking_ips_share tool."""
+def create_linode_networking_ip_share_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_share tool."""
     return Tool(
-        name="linode_networking_ips_share",
+        name="linode_networking_ip_share",
         description="Shares IP addresses with a Linode",
         inputSchema={
             "type": "object",
@@ -337,16 +337,16 @@ def _parse_ips_share(
     return typed_ips, linode_id
 
 
-async def handle_linode_networking_ips_share(
+async def handle_linode_networking_ip_share(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_networking_ips_share tool request."""
+    """Handle linode_networking_ip_share tool request."""
     if is_dry_run(arguments):
         parsed = _parse_ips_share(arguments)
         if isinstance(parsed, list):
             return parsed
         return build_dry_run_response(
-            "linode_networking_ips_share",
+            "linode_networking_ip_share",
             arguments.get("environment", ""),
             "POST",
             "/networking/ips/share",

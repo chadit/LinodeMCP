@@ -365,11 +365,48 @@ func handleLinodeNetworkingIPv4AssignRequest(ctx context.Context, request *mcp.C
 	})
 }
 
-// NewLinodeNetworkingIPShareTool creates a tool for sharing IP addresses with a primary Linode.
-func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeNetworkingIPv4ShareTool creates a tool for sharing IP addresses with a primary Linode.
+func NewLinodeNetworkingIPv4ShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_networking_ipv4_share",
+		"Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the primary Linode that receives the shared IP addresses.")),
+			mcp.WithString(paramIPs, mcp.Required(),
+				mcp.Description("JSON array of IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm changing shared IP assignments. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeNetworkingIPv4ShareRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeNetworkingIPv4ShareRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req, validationMessage := networkingIPShareRequestFromTool(request.GetArguments())
+
+	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
+		ToolName:       "linode_networking_ipv4_share",
+		Path:           "/networking/ipv4/share",
+		ConfirmMessage: "This changes shared IP assignments. Set confirm=true to proceed.",
+		SuccessMessage: "Networking IP sharing updated",
+		FailureLabel:   "Failed to share networking IPs",
+	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
+		return client.ShareNetworkingIPv4s(ctx, req)
+	})
+}
+
+// NewLinodeNetworkingIPShareTool creates a tool for sharing IP addresses with a
+// primary Linode via the generic /networking/ips/share endpoint (the IPv4-only
+// variant above uses /networking/ipv4/share).
+func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_networking_ip_share",
 		"Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
@@ -390,8 +427,8 @@ func handleLinodeNetworkingIPShareRequest(ctx context.Context, request *mcp.Call
 	req, validationMessage := networkingIPShareRequestFromTool(request.GetArguments())
 
 	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
-		ToolName:       "linode_networking_ipv4_share",
-		Path:           "/networking/ipv4/share",
+		ToolName:       "linode_networking_ip_share",
+		Path:           "/networking/ips/share",
 		ConfirmMessage: "This changes shared IP assignments. Set confirm=true to proceed.",
 		SuccessMessage: "Networking IP sharing updated",
 		FailureLabel:   "Failed to share networking IPs",

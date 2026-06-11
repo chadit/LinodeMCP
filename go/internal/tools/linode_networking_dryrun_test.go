@@ -602,7 +602,7 @@ func TestLinodeNetworkingIPShareToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+		tool, _, _ := tools.NewLinodeNetworkingIPv4ShareTool(&config.Config{})
 		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
 			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
 		}
@@ -611,7 +611,7 @@ func TestLinodeNetworkingIPShareToolDryRun(t *testing.T) {
 	t.Run("preview without sharing", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeNetworkingIPShareTool(dryRunNoCallServer(t))
+		_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123),
@@ -652,7 +652,7 @@ func TestLinodeNetworkingIPShareToolDryRun(t *testing.T) {
 	t.Run("still validates linode_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeNetworkingIPShareTool(&config.Config{})
+		_, _, handler := tools.NewLinodeNetworkingIPv4ShareTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyIPs:    databaseJSONArray,

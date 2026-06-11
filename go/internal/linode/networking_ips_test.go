@@ -14,7 +14,7 @@ import (
 const (
 	endpointNetworkingIPs         = "/networking/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
-	endpointNetworkingIPsShare    = "/networking/ipv4/share"
+	endpointNetworkingIPv4Share   = "/networking/ipv4/share"
 	endpointNetworkingIPv4Assign  = "/networking/ipv4/assign"
 	networkingIPv4Type            = "ipv4"
 	networkingIPAddressFixture    = "198.51.100.5"
@@ -1195,8 +1195,8 @@ func TestClientShareNetworkingIPsSuccess(t *testing.T) {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		if r.URL.Path != endpointNetworkingIPsShare {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsShare)
+		if r.URL.Path != endpointNetworkingIPv4Share {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv4Share)
 		}
 
 		if r.URL.RawQuery != "" {
@@ -1235,7 +1235,7 @@ func TestClientShareNetworkingIPsSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+	result, err := client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{
 		LinodeID: 123,
 		IPs:      []string{networkingIPAddressFixture},
 	})
@@ -1256,8 +1256,8 @@ func TestClientShareNetworkingIPsAcceptsEmptyList(t *testing.T) {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		if r.URL.Path != endpointNetworkingIPsShare {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsShare)
+		if r.URL.Path != endpointNetworkingIPv4Share {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv4Share)
 		}
 
 		var body linode.ShareNetworkingIPsRequest
@@ -1286,7 +1286,7 @@ func TestClientShareNetworkingIPsAcceptsEmptyList(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+	result, err := client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{
 		LinodeID: 123,
 		IPs:      []string{},
 	})
@@ -1307,8 +1307,8 @@ func TestClientShareNetworkingIPsAPIError(t *testing.T) {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		if r.URL.Path != endpointNetworkingIPsShare {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPsShare)
+		if r.URL.Path != endpointNetworkingIPv4Share {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointNetworkingIPv4Share)
 		}
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
@@ -1323,7 +1323,7 @@ func TestClientShareNetworkingIPsAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+	_, err := client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{
 		LinodeID: 123,
 		IPs:      []string{networkingIPAddressFixture},
 	})
@@ -1371,7 +1371,7 @@ func TestClientShareNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+	_, err := client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{
 		LinodeID: 123,
 		IPs:      []string{networkingIPAddressFixture},
 	})
@@ -1389,17 +1389,17 @@ func TestClientShareNetworkingIPsRejectsInvalidRequest(t *testing.T) {
 
 	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{})
+	_, err := client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{})
 	if !errors.Is(err, linode.ErrLinodeIDPositive) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
 	}
 
-	_, err = client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{LinodeID: 123})
+	_, err = client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{LinodeID: 123})
 	if !errors.Is(err, linode.ErrIPAddressRequired) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrIPAddressRequired)
 	}
 
-	_, err = client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+	_, err = client.ShareNetworkingIPv4s(t.Context(), linode.ShareNetworkingIPsRequest{
 		LinodeID: 123,
 		IPs:      []string{""},
 	})

@@ -315,6 +315,7 @@ linode_networking_ip_allocate
 linode_networking_ip_assign
 linode_networking_ip_get
 linode_networking_ip_list
+linode_networking_ip_share
 linode_networking_ip_update
 linode_networking_ipv4_assign
 linode_networking_ipv4_share
