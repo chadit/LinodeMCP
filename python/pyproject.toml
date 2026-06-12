@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "LinodeMCP Contributors" }]
 keywords = ["mcp", "linode", "api", "server"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -68,7 +68,7 @@ addopts = [
     "--cov=linodemcp",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=54",
+    "--cov-fail-under=80",
 ]
 
 [tool.coverage.run]

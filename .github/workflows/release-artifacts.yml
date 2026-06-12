@@ -1,0 +1,482 @@
+name: Release Artifacts
+
+# Builds and publishes the artifact set for one release tag: verify
+# gates in both languages, six Go binaries with checksums, and the
+# Python wheel + sdist. Reached three ways:
+#
+#   1. Called from release.yml after it pushes the tag. Tag pushes made
+#      with GITHUB_TOKEN never fire push events (GitHub's recursion
+#      guard), so the explicit workflow_call edge is required.
+#   2. A manually pushed v* tag (those do fire push events).
+#   3. Manual dispatch against an existing tag, for re-runs and for
+#      testing the workflow itself.
+#
+# Binaries are staged as run artifacts and only attached to the GitHub
+# release by the final publish job, so a failed platform aborts the set
+# instead of leaving a partial release.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing tag to build artifacts for"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build artifacts for"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-artifacts-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  verify-go:
+    name: Verify Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go/go.mod
+          cache: true
+          cache-dependency-path: go/go.sum
+
+      - name: Install Go format tools
+        run: |
+          set -euo pipefail
+          go install mvdan.cc/gofumpt@latest
+          go install golang.org/x/tools/cmd/goimports@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+      - name: make fmt-check
+        working-directory: go
+        run: make fmt-check
+
+      - name: make lint-fast
+        working-directory: go
+        run: make lint-fast
+
+      - name: make test-race
+        working-directory: go
+        run: make test-race
+
+  verify-python:
+    name: Verify Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: python/pyproject.toml
+
+      - name: Install dev deps
+        working-directory: python
+        run: pip install -e ".[dev]"
+
+      - name: ruff check
+        working-directory: python
+        run: ruff check src/ tests/
+
+      - name: ruff format check
+        working-directory: python
+        run: ruff format --check src/ tests/
+
+      - name: mypy
+        working-directory: python
+        run: mypy --ignore-missing-imports src/ tests/
+
+      # pyproject.toml addopts enforce the coverage gate.
+      - name: pytest (full suite + coverage gate)
+        working-directory: python
+        run: pytest tests/
+
+  build-go:
+    name: Go ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: [verify-go, verify-python]
+    runs-on: ubuntu-latest
+    strategy:
+      # One failed platform aborts the set: partial-platform releases
+      # are confusing and we don't ship them.
+      fail-fast: true
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64, pie: true }
+          - { goos: linux, goarch: arm64, pie: true }
+          - { goos: darwin, goarch: amd64, pie: true }
+          - { goos: darwin, goarch: arm64, pie: true }
+          # PIE stays off for Windows; Go's PE output gets ASLR via the
+          # default relocatable build, matching the spec's linux/darwin
+          # PIE scope.
+          - { goos: windows, goarch: amd64, pie: false }
+          - { goos: windows, goarch: arm64, pie: false }
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go/go.mod
+          cache: true
+          cache-dependency-path: go/go.sum
+
+      - name: Build, package, checksum
+        working-directory: go
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          PIE: ${{ matrix.pie }}
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+          commit="$(git rev-parse --short HEAD)"
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          appinfo="github.com/chadit/LinodeMCP/internal/appinfo"
+
+          build_args=(-trimpath "-tags=netgo,osusergo")
+          if [[ "${PIE}" == "true" ]]; then
+            build_args+=(-buildmode=pie)
+          fi
+
+          bin="linodemcp"
+          if [[ "${GOOS}" == "windows" ]]; then
+            bin="linodemcp.exe"
+          fi
+
+          CGO_ENABLED=0 go build "${build_args[@]}" \
+            -ldflags="-s -w -buildid= -X '${appinfo}.Version=${version}' -X '${appinfo}.commit=${commit}' -X '${appinfo}.buildDate=${build_date}'" \
+            -o "out/${bin}" ./cmd/linodemcp
+
+          artifact="linodemcp-${GOOS}-${GOARCH}"
+          if [[ "${GOOS}" == "windows" ]]; then
+            (cd out && zip -q "../${artifact}.zip" "${bin}")
+            artifact_file="${artifact}.zip"
+          else
+            tar -czf "${artifact}.tar.gz" -C out "${bin}"
+            artifact_file="${artifact}.tar.gz"
+          fi
+
+          sha256sum "${artifact_file}" > "${artifact_file}.sha256"
+
+      # SBOMs ride with every binary in both spec formats. syft tracks
+      # the latest release on purpose, matching the CI scanner
+      # convention (fresh CVE data lands on rebuild).
+      - name: Generate binary SBOMs
+        working-directory: go
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+
+          curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+
+          artifact="linodemcp-${GOOS}-${GOARCH}"
+          bin="linodemcp"
+          if [[ "${GOOS}" == "windows" ]]; then
+            bin="linodemcp.exe"
+          fi
+
+          syft "file:out/${bin}" \
+            -o "cyclonedx-json=${artifact}.cdx.json" \
+            -o "spdx-json=${artifact}.spdx.json"
+
+          sha256sum "${artifact}.cdx.json" > "${artifact}.cdx.json.sha256"
+          sha256sum "${artifact}.spdx.json" > "${artifact}.spdx.json.sha256"
+
+      - name: Stage artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            go/linodemcp-*.tar.gz*
+            go/linodemcp-*.zip*
+            go/linodemcp-*.cdx.json*
+            go/linodemcp-*.spdx.json*
+          retention-days: 7
+          if-no-files-found: error
+
+  build-python:
+    name: Python wheel + sdist
+    needs: [verify-go, verify-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: python/pyproject.toml
+
+      - name: Build wheel and sdist
+        working-directory: python
+        run: |
+          set -euo pipefail
+
+          # Stamp the working copy (never committed) so the built
+          # artifacts carry the tag's version, mirroring the Go
+          # binaries' ldflags injection.
+          version="${RELEASE_TAG#v}"
+          sed -i "s/^version = \".*\"/version = \"${version}\"/" pyproject.toml
+          sed -i "s/^VERSION = \".*\"/VERSION = \"${version}\"/" src/linodemcp/version.py
+
+          pip install --upgrade build
+          python -m build
+
+          cd dist
+          for f in *; do
+            sha256sum "${f}" > "${f}.sha256"
+          done
+
+      - name: Stage artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist-python
+          path: python/dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  build-container:
+    name: Container (linux/amd64 + arm64)
+    needs: [verify-go, verify-python]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Keyless cosign signing exchanges the runner's OIDC token for a
+      # short-lived certificate.
+      id-token: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/linodemcp
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # The Dockerfile cross-compiles in a BUILDPLATFORM-pinned builder
+      # stage and the runtime stage only copies files, so the
+      # multi-arch build needs no QEMU emulation.
+      - name: Build and push multi-arch image
+        id: image
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+          minor="${version%.*}"
+          commit="$(git rev-parse --short HEAD)"
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          tags=(-t "${IMAGE}:${RELEASE_TAG}")
+          # Floating tags track stable releases only; a pre-release
+          # must not move "0.2" or "latest".
+          if [[ "${RELEASE_TAG}" != *-* ]]; then
+            tags+=(-t "${IMAGE}:${minor}" -t "${IMAGE}:latest")
+          fi
+
+          docker buildx create --name release-builder --use
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg "VERSION=${version}" \
+            --build-arg "COMMIT=${commit}" \
+            --build-arg "BUILD_DATE=${build_date}" \
+            "${tags[@]}" \
+            --metadata-file /tmp/buildx-meta.json \
+            --push \
+            go
+
+          digest="$(jq -r '."containerimage.digest"' /tmp/buildx-meta.json)"
+          if [[ -z "${digest}" || "${digest}" == "null" ]]; then
+            echo "no image digest in buildx metadata" >&2
+            exit 1
+          fi
+
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      # Release binaries, not go install: cosign's module pulls heavy
+      # deps and the project ships signed binaries anyway. Same fetch
+      # pattern ci.yml uses for betterleaks.
+      - name: Install cosign (latest release binary)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag="$(gh release view --repo sigstore/cosign --json tagName -q .tagName)"
+          gh release download "${tag}" \
+            --repo sigstore/cosign \
+            --pattern "cosign-linux-amd64" \
+            --output /tmp/cosign
+          sudo install -m 0755 /tmp/cosign /usr/local/bin/cosign
+          cosign version
+
+      - name: Sign image and attach SBOM
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+
+          syft "${IMAGE}@${DIGEST}" \
+            -o "cyclonedx-json=linodemcp-image.cdx.json" \
+            -o "spdx-json=linodemcp-image.spdx.json"
+
+          cosign attach sbom --sbom linodemcp-image.spdx.json "${IMAGE}@${DIGEST}"
+
+          sha256sum linodemcp-image.cdx.json > linodemcp-image.cdx.json.sha256
+          sha256sum linodemcp-image.spdx.json > linodemcp-image.spdx.json.sha256
+
+      - name: Stage image SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist-image-sbom
+          path: linodemcp-image.*
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    name: Publish release assets
+    # The container is in the gate on purpose: assets only reach the
+    # release when the whole set (binaries, dists, image SBOMs) built,
+    # so a partial release can't exist.
+    needs: [build-go, build-python, build-container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      hashes: ${{ steps.checksums.outputs.hashes }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # Full history so the manual-tag path can generate the same
+      # changelog the bump workflow produces.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Collect staged artifacts
+        run: gh run download "${GITHUB_RUN_ID}" --dir collected
+
+      - name: Assemble and write combined checksums
+        id: checksums
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          find collected -type f -print0 | xargs -0 -I {} cp {} dist/
+
+          cd dist
+          find . -maxdepth 1 -type f ! -name '*.sha256' ! -name 'checksums.txt' -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            | sed 's|\./||' > checksums.txt
+
+          cat checksums.txt
+
+          # The SLSA generic generator takes its subjects as the
+          # base64 of exactly these sha256sum lines.
+          echo "hashes=$(base64 -w0 < checksums.txt)" >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure release exists and upload
+        run: |
+          set -euo pipefail
+
+          # Absence probe: stderr noise from gh is expected when the
+          # release does not exist yet (a manually pushed tag).
+          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            # Manually pushed tag: generate the changelog here so this
+            # path produces the same draft the bump workflow would.
+            # The describe probe fails on the first tag ever; stderr
+            # suppressed because that case is expected.
+            previous="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)"
+            if [[ -n "${previous}" ]]; then
+              notes="$(.github/scripts/generate-release-notes.sh "${previous}")"
+            else
+              notes="$(.github/scripts/generate-release-notes.sh)"
+            fi
+
+            create_args=(--draft --title "${RELEASE_TAG}" --notes "${notes}")
+            if [[ "${RELEASE_TAG}" == *-* ]]; then
+              create_args+=(--prerelease)
+            fi
+            gh release create "${RELEASE_TAG}" "${create_args[@]}"
+          elif [[ "${RELEASE_TAG}" == *-* ]]; then
+            gh release edit "${RELEASE_TAG}" --prerelease
+          fi
+
+          gh release upload "${RELEASE_TAG}" dist/* --clobber
+
+  # SLSA Build L3 provenance via the official reusable generators. The
+  # generators must be referenced by their release tag (they verify
+  # their own ref at run time), so these two uses: lines are the one
+  # place a movable tag is correct.
+  provenance-binaries:
+    name: Provenance (release assets)
+    needs: [publish]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.publish.outputs.hashes }}
+      provenance-name: linodemcp.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ inputs.tag || github.ref_name }}
+
+  provenance-container:
+    name: Provenance (container image)
+    needs: [build-container]
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/linodemcp
+      digest: ${{ needs.build-container.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

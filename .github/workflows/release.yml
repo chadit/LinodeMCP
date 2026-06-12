@@ -2,7 +2,11 @@ name: Release
 
 # Manual-only release workflow. Pick a bump type, the workflow computes
 # the next semver tag, generates a grouped changelog from commits, pushes
-# the tag, and creates the GitHub release.
+# the tag, and creates the GitHub release as a DRAFT. The artifacts job
+# then calls release-artifacts.yml to verify, build, and attach binaries,
+# checksums, SBOMs, and the Python wheel/sdist; the maintainer reviews
+# the draft and publishes it. The call edge exists because tags pushed
+# with GITHUB_TOKEN never fire push-event workflows.
 
 on:
   workflow_dispatch:
@@ -33,6 +37,8 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -142,3 +148,24 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
           body: ${{ steps.notes.outputs.body }}
+          # The maintainer reviews the generated notes and the attached
+          # artifacts, then publishes. Users never see an asset-less
+          # release.
+          draft: true
+
+  artifacts:
+    name: Artifacts
+    needs: release
+    if: ${{ !inputs.dryRun }}
+    # Caller permissions cap everything the called workflow's jobs may
+    # request: release uploads (contents), GHCR push (packages),
+    # keyless signing + SLSA (id-token), generator introspection
+    # (actions: read).
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}

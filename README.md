@@ -34,10 +34,12 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 | [Audit log](docs/audit-log.md) | What the AI did: event schema, sinks, retention, redaction, and the query tools |
 | [Audit reports](docs/audit-reports.md) | The custom-report filter grammar with worked examples |
 | [Host integrations](docs/host-integrations/README.md) | Wiring Claude Desktop / Claude Code / Gemini / Copilot and their slash commands |
+| [Verifying releases](docs/verifying-releases.md) | Checking checksums, cosign signatures, SBOMs, and SLSA provenance on anything we ship |
 
 **For implementers & contributors**, working on the code:
 
 - [Development](#development): build, test, and lint commands for both implementations
+- [Release process](docs/release-process.md): cutting a release, the artifact pipeline, failure handling
 - [Project layout](#project-layout) and [key design decisions](#key-design-decisions)
 
 ## Installation
@@ -157,7 +159,15 @@ You can also set configuration through environment variables:
 
 ### Container
 
-Build a container image for either implementation:
+Pull the released multi-arch image (linux/amd64 + linux/arm64) from GHCR:
+
+```bash
+docker pull ghcr.io/chadit/linodemcp:latest
+```
+
+Pin a version tag (`ghcr.io/chadit/linodemcp:v0.2.0`) when you want reproducible setups; `latest` and the floating minor tag only ever point at stable releases. Images are signed with cosign and ship SBOMs and SLSA provenance, see [Verifying releases](docs/verifying-releases.md).
+
+Or build a container image locally for either implementation:
 
 ```bash
 make docker-build-go      # builds linodemcp:go
@@ -328,6 +338,8 @@ Both Cursor and Windsurf use the same `.mcp.json` format as Claude Code. See the
 ### Docker / Podman
 
 Running LinodeMCP in a container avoids installing Go or Python locally. MCP uses stdio transport, so the container needs `-i` (keep stdin open) and `-e` to forward your API token.
+
+The examples below use locally built images; substitute `ghcr.io/chadit/linodemcp:latest` (or a pinned version tag) to use the released image instead.
 
 **Go image:**
 
@@ -611,7 +623,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 103 tools covering compute, block storage, object storage, networking, DNS, security, Kubernetes (LKE), and VPCs/subnets. Both read and write operations are fully implemented across Go and Python.
+This project is in active development (v0.1.0). Both implementations expose the same 454-tool surface, pinned by [docs/tools-manifest.txt](docs/tools-manifest.txt) and enforced by parity tests in each language. Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
 
 ## License
 

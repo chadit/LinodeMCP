@@ -23,6 +23,10 @@ func TestGet(t *testing.T) {
 		t.Fatalf("BuildDate = %q, want %q", got, want)
 	}
 
+	if got, want := info.Commit, "unknown"; got != want {
+		t.Fatalf("Commit = %q, want %q", got, want)
+	}
+
 	if info.Platform == "" {
 		t.Fatal("Platform is empty")
 	}
