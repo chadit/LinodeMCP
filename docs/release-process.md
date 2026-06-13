@@ -26,14 +26,16 @@ The maintainer's job is the first click and the last one: start the bump, then r
 
 ## Cutting a pre-release
 
-The bump workflow only produces plain `X.Y.Z` tags, so release candidates are tagged by hand:
+Use the same workflow with the explicit `tag` input: Actions, "Release", "Run workflow", enter `v0.2.0-rc1` in the tag field (the bump choice is ignored when a tag is given). The run validates the format, refuses existing tags, and marks the draft as a pre-release. The same input promotes an rc to stable: enter `v0.2.0` once the rc proves out. The bump path refuses to run while the latest tag is a pre-release, so an rc cycle always ends through the explicit input.
+
+A manually pushed tag works too and produces the same result (`release-artifacts.yml` fires on the tag push, generates the changelog, creates the pre-release draft itself):
 
 ```bash
 git tag v0.2.0-rc1
 git push origin v0.2.0-rc1
 ```
 
-A manually pushed tag fires `release-artifacts.yml` directly. It generates the same changelog, creates the draft itself, marks it as a pre-release, and attaches the full artifact set. Floating image tags do not move for pre-releases. Review and publish as above.
+Floating image tags do not move for pre-releases. Review and publish as above.
 
 ## Re-running
 

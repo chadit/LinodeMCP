@@ -1,9 +1,11 @@
 name: Release
 
-# Manual-only release workflow. Pick a bump type, the workflow computes
-# the next semver tag, generates a grouped changelog from commits, pushes
-# the tag, and creates the GitHub release as a DRAFT. The artifacts job
-# then calls release-artifacts.yml to verify, build, and attach binaries,
+# Manual-only release workflow. Pick a bump type (or enter an explicit
+# tag, the path for pre-releases like v0.2.0-rc1 and for promoting an
+# rc to stable), the workflow computes or validates the tag, generates
+# a grouped changelog from commits, pushes the tag, and creates the
+# GitHub release as a DRAFT. The artifacts job then calls
+# release-artifacts.yml to verify, build, and attach binaries,
 # checksums, SBOMs, and the Python wheel/sdist; the maintainer reviews
 # the draft and publishes it. The call edge exists because tags pushed
 # with GITHUB_TOKEN never fire push-event workflows.
@@ -20,6 +22,10 @@ on:
           - minor
           - major
         default: patch
+      tag:
+        description: "Explicit tag (e.g. v0.2.0-rc1). Overrides the bump; required for pre-releases and rc promotion."
+        required: false
+        type: string
       dryRun:
         description: "Dry run (validates and previews notes; skips tag/release)"
         required: false
@@ -48,23 +54,39 @@ jobs:
       - name: Compute next version
         id: version
         shell: bash
+        env:
+          EXPLICIT_TAG: ${{ inputs.tag }}
+          BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
           previous=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [[ -z "${previous}" ]]; then
-            base="v0.0.0"
+
+          if [[ -n "${EXPLICIT_TAG}" ]]; then
+            # Explicit path: pre-releases (v0.2.0-rc1, rc2, ...) and
+            # promoting an rc to its stable version. Bump is ignored.
+            if [[ ! "${EXPLICIT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+              echo "::error::Tag '${EXPLICIT_TAG}' is not vX.Y.Z or vX.Y.Z-suffix."
+              exit 1
+            fi
+            next="${EXPLICIT_TAG}"
+            mode="explicit tag"
           else
-            base="${previous}"
+            if [[ "${previous}" == *-* ]]; then
+              echo "::error::Latest tag ${previous} is a pre-release; use the explicit tag input to cut the next rc or promote it to stable."
+              exit 1
+            fi
+            base="${previous:-v0.0.0}"
+            major=$(echo "${base#v}" | cut -d. -f1)
+            minor=$(echo "${base#v}" | cut -d. -f2)
+            patch=$(echo "${base#v}" | cut -d. -f3)
+            case "${BUMP}" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            next="v${major}.${minor}.${patch}"
+            mode="${BUMP} bump"
           fi
-          major=$(echo "${base#v}" | cut -d. -f1)
-          minor=$(echo "${base#v}" | cut -d. -f2)
-          patch=$(echo "${base#v}" | cut -d. -f3)
-          case "${{ inputs.bump }}" in
-            major) major=$((major + 1)); minor=0; patch=0 ;;
-            minor) minor=$((minor + 1)); patch=0 ;;
-            patch) patch=$((patch + 1)) ;;
-          esac
-          next="v${major}.${minor}.${patch}"
 
           # Pre-flight: refuse to clobber an existing tag. This catches
           # double-runs (workflow triggered twice for the same bump) and
@@ -78,13 +100,13 @@ jobs:
             echo "tag=${next}"
             echo "previous=${previous}"
           } >> "${GITHUB_OUTPUT}"
-          echo "Previous: ${previous:-<none>} -> Next: ${next} (${{ inputs.bump }} bump)"
+          echo "Previous: ${previous:-<none>} -> Next: ${next} (${mode})"
 
           {
             echo "## Version"
             echo ""
             echo "- **Latest tag:** \`${previous:-<none>}\`"
-            echo "- **Next tag:** \`${next}\` (${{ inputs.bump }} bump)"
+            echo "- **Next tag:** \`${next}\` (${mode})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Generate release notes
@@ -152,6 +174,9 @@ jobs:
           # artifacts, then publishes. Users never see an asset-less
           # release.
           draft: true
+          # An rc tag is a pre-release by definition; release-artifacts
+          # applies the same dash rule on the manual-tag path.
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
 
   artifacts:
     name: Artifacts
