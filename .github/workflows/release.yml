@@ -59,7 +59,14 @@ jobs:
           BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
-          previous=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # previous = last STABLE tag (pre-releases excluded), so the
+          # changelog and the bump base always span from the last real
+          # release. Without --exclude, cutting v0.2.0 after v0.2.0-rc1
+          # would base the changelog on the rc and show almost nothing.
+          previous=$(git describe --tags --abbrev=0 --exclude='*-*' 2>/dev/null || echo "")
+          # latest_any includes pre-releases, used only to detect that
+          # we are mid-rc-cycle and force the explicit-tag path.
+          latest_any=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
           if [[ -n "${EXPLICIT_TAG}" ]]; then
             # Explicit path: pre-releases (v0.2.0-rc1, rc2, ...) and
@@ -71,8 +78,8 @@ jobs:
             next="${EXPLICIT_TAG}"
             mode="explicit tag"
           else
-            if [[ "${previous}" == *-* ]]; then
-              echo "::error::Latest tag ${previous} is a pre-release; use the explicit tag input to cut the next rc or promote it to stable."
+            if [[ -n "${latest_any}" && "${latest_any}" == *-* ]]; then
+              echo "::error::Latest tag ${latest_any} is a pre-release; use the explicit tag input to cut the next rc or promote it to stable."
               exit 1
             fi
             base="${previous:-v0.0.0}"

@@ -427,10 +427,12 @@ jobs:
           # release does not exist yet (a manually pushed tag).
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             # Manually pushed tag: generate the changelog here so this
-            # path produces the same draft the bump workflow would.
+            # path produces the same draft the bump workflow would. Base
+            # on the last STABLE tag (--exclude pre-releases) so the
+            # notes span from the last real release, matching release.yml.
             # The describe probe fails on the first tag ever; stderr
             # suppressed because that case is expected.
-            previous="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)"
+            previous="$(git describe --tags --abbrev=0 --exclude='*-*' "${RELEASE_TAG}^" 2>/dev/null || true)"
             if [[ -n "${previous}" ]]; then
               notes="$(.github/scripts/generate-release-notes.sh "${previous}")"
             else
