@@ -463,8 +463,33 @@ jobs:
     with:
       base64-subjects: ${{ needs.publish.outputs.hashes }}
       provenance-name: linodemcp.intoto.jsonl
-      upload-assets: true
-      upload-tag-name: ${{ inputs.tag || github.ref_name }}
+      # The generator's own uploader can't see draft releases (drafts
+      # don't resolve by tag), so with upload-assets it creates a
+      # second, published release holding just the attestation; the
+      # first rc1 run proved it. attach-provenance below uploads to
+      # the draft instead.
+      upload-assets: false
+
+  attach-provenance:
+    name: Attach provenance to the release
+    needs: [provenance-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      # Matches the provenance-name passed to the generator above; the
+      # generator stages the attestation as a run artifact by this name.
+      PROVENANCE_NAME: linodemcp.intoto.jsonl
+    steps:
+      - name: Download the attestation and attach it to the draft
+        run: |
+          set -euo pipefail
+          gh run download "${GITHUB_RUN_ID}" --name "${PROVENANCE_NAME}" --dir prov
+          gh release upload "${RELEASE_TAG}" prov/* --clobber
 
   provenance-container:
     name: Provenance (container image)
