@@ -3,7 +3,7 @@
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
 	python-build python-install-dev python-test python-lint python-fmt python-clean python-run python-check \
-	betterleaks trivy
+	betterleaks trivy actionlint
 
 CONTAINER_ENGINE ?= docker
 GO_IMAGE := linodemcp:go
@@ -23,8 +23,8 @@ build: go-build python-build
 ## check: Run all linters and tests (go-check + python-check)
 check: go-check python-check
 
-## lint: Run all linters (go-lint, python-lint, betterleaks, trivy)
-lint: go-lint python-lint betterleaks trivy
+## lint: Run all linters (go-lint, python-lint, betterleaks, trivy, actionlint)
+lint: go-lint python-lint betterleaks trivy actionlint
 
 ## test: Run all tests (go-test + python-test)
 test: go-test python-test
@@ -140,6 +140,18 @@ trivy:
 		trivy fs --scanners vuln,misconfig --exit-code 1 .; \
 	else \
 		echo "[warn] trivy not installed, skipping security scan"; \
+	fi
+
+## actionlint: Lint GitHub Actions workflow files
+# Tracks latest, matching how the CI security job runs its scanners
+# (gosec, cairnlint). A prefer-local-binary fallback keeps offline runs
+# working when actionlint is installed; otherwise go fetches it.
+actionlint:
+	@echo "Running actionlint..."
+	@if command -v actionlint >/dev/null 2>&1; then \
+		actionlint; \
+	else \
+		go run github.com/rhysd/actionlint/cmd/actionlint@latest; \
 	fi
 
 # --- Cleanup targets ---

@@ -38,6 +38,21 @@ repos:
 
   - repo: local
     hooks:
+      # GitHub Actions workflow linter. language: golang + @latest mirrors
+      # gofumpt/goimports below and the CI scanners (gosec, cairnlint),
+      # which all track latest so new checks land without a manual bump
+      # (Renovate does not monitor this pin). pass_filenames: false so a
+      # change to any workflow re-lints the whole set, since the release
+      # workflows call each other.
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        files: ^\.github/workflows/.*\.ya?ml$
+        types: [yaml]
+        language: golang
+        pass_filenames: false
+        additional_dependencies: ['github.com/rhysd/actionlint/cmd/actionlint@latest']
+
       # Go formatting (managed via language: golang)
       - id: gofumpt
         name: gofumpt
