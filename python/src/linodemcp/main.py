@@ -2,9 +2,11 @@
 
 import asyncio
 import contextlib
+import json
 import logging
 import sys
 from pathlib import Path
+from typing import TextIO
 
 import structlog
 
@@ -16,7 +18,12 @@ from linodemcp.audit import (
     SQLiteSink,
     resolve_default_audit_dir,
 )
-from linodemcp.cli import run_profile_command
+from linodemcp.cli import (
+    run_audit_command,
+    run_call_command,
+    run_profile_command,
+    run_tools_command,
+)
 from linodemcp.config import Config, ConfigError, get_config_path
 from linodemcp.config.watcher import ConfigWatcher
 from linodemcp.observability import Observability
@@ -28,6 +35,7 @@ from linodemcp.server import Server
 from linodemcp.tools import helpers as tool_helpers
 from linodemcp.tools.linode_audit_report import set_audit_reports
 from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
+from linodemcp.tui import run_tui
 from linodemcp.version import get_version_info
 
 # Number of positional arguments required before sys.argv[1] is safe to
@@ -360,17 +368,57 @@ async def async_main() -> int:
     return 0
 
 
+def _print_version(stdout: TextIO) -> int:
+    """Write the version info (the same payload the ``version`` tool returns)
+    to ``stdout`` and return 0. Kept synchronous so ``linodemcp version`` does
+    not spin up the event loop or build a server. The stream is a parameter so
+    a test can assert on the captured output."""
+    info = get_version_info()
+    print(json.dumps(info.to_dict(), indent=2), file=stdout)
+    return 0
+
+
+def _run_subcommand(sub: str, rest: list[str]) -> int:
+    """Run a non-server subcommand and return its exit code.
+
+    Routes each verb to its CLI handler. ``call`` is async (dispatch is async)
+    so it is wrapped in ``asyncio.run`` here; ``audit`` manages its own loop
+    internally; ``profile`` and ``tools`` are synchronous. ``version`` prints
+    without a server. Output streams are the process streams; the handlers take
+    them as parameters so tests can drive the same functions with captures.
+    """
+    if sub == "profile":
+        return run_profile_command(rest, sys.stdout, sys.stderr)
+    if sub == "tools":
+        return run_tools_command(rest, sys.stdout, sys.stderr)
+    if sub == "call":
+        return asyncio.run(run_call_command(rest, sys.stdout, sys.stderr))
+    if sub == "audit":
+        return run_audit_command(rest, sys.stdout, sys.stderr)
+    if sub == "tui":
+        return run_tui()
+    return _print_version(sys.stdout)
+
+
+# Subcommands handled without starting the stdio server. ``serve`` is absent on
+# purpose: it (and bare invocation) fall through to the server runtime below.
+_CLI_SUBCOMMANDS = frozenset({"profile", "tools", "call", "audit", "tui", "version"})
+
+
 def main() -> None:
     """Main entry point.
 
-    Bare invocation (``linodemcp``) starts the MCP server via stdio.
-    Phase 7a profile subcommand: ``linodemcp profile list|show ...``
-    dispatches to the CLI helpers and exits without touching the
-    server runtime. Subcommand mode is synchronous and never calls
-    ``asyncio.run`` so simple operations don't pay the event-loop tax.
+    Bare invocation (``linodemcp``) starts the MCP server via stdio; ``serve``
+    is an explicit alias for the same path so existing host configs keep
+    working. The non-interactive subcommands (``call``, ``tools``, ``audit``,
+    ``profile``, ``version``) dispatch to the CLI handlers and exit without
+    starting the long-running server, its metrics endpoint, or the config
+    watcher. Only the server path pays the event-loop and observability cost.
     """
-    if len(sys.argv) >= _MIN_ARGV_FOR_SUBCOMMAND and sys.argv[1] == "profile":
-        sys.exit(run_profile_command(sys.argv[2:], sys.stdout, sys.stderr))
+    if len(sys.argv) >= _MIN_ARGV_FOR_SUBCOMMAND:
+        sub = sys.argv[1]
+        if sub in _CLI_SUBCOMMANDS:
+            sys.exit(_run_subcommand(sub, sys.argv[2:]))
 
     try:
         exit_code = asyncio.run(async_main())

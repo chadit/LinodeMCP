@@ -14,6 +14,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/internal/cli"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/observability"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -26,12 +27,37 @@ const (
 )
 
 func main() {
-	if len(os.Args) >= 2 && os.Args[1] == "profile" {
-		os.Exit(runProfileCommand(os.Args[2:]))
+	os.Exit(dispatch(os.Args[1:]))
+}
+
+// dispatch routes a subcommand to its handler and returns the process
+// exit code. A bare invocation (no subcommand) and the explicit `serve`
+// alias both start the MCP stdio server, so existing host configs that
+// run the binary with no arguments keep working unchanged. Every other
+// subcommand is a non-interactive CLI command in internal/cli.
+func dispatch(args []string) int {
+	if len(args) == 0 {
+		return run()
 	}
 
-	exitCode := run()
-	os.Exit(exitCode)
+	switch args[0] {
+	case "serve":
+		return run()
+	case "profile":
+		return cli.RunProfileCommand(args[1:], os.Stdout, os.Stderr)
+	case "call":
+		return cli.RunCallCommand(args[1:], os.Stdout, os.Stderr)
+	case "tools":
+		return cli.RunToolsCommand(args[1:], os.Stdout, os.Stderr)
+	case "audit":
+		return cli.RunAuditCommand(args[1:], os.Stdout, os.Stderr)
+	case "tui":
+		return cli.RunTUICommand(os.Stdout, os.Stderr)
+	case "version":
+		return cli.RunVersionCommand(os.Stdout, os.Stderr)
+	default:
+		return run()
+	}
 }
 
 // auditLogger is the minimal logging surface the audit setup needs.
