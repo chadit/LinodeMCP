@@ -98,14 +98,19 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      # Final lint gate before push. Mirrors the CI workflow so anything
-      # that bypassed commit-time hooks (e.g. via --no-verify) still gets
-      # caught locally before it reaches the remote. Run:
+      # Final lint gate before push. Runs the root `make lint`, which is
+      # the same set CI runs: go-lint (golangci + gosec + cairnlint),
+      # python-lint (ruff + format + mypy + pyright), betterleaks, trivy,
+      # and actionlint. This mirrors the CI security job too, so a trivy
+      # CVE or a betterleaks finding fails here before the push instead of
+      # surfacing only in CI. trivy and betterleaks self-skip with a
+      # warning when not installed locally, so this stays usable without
+      # them, but install both to get the full pre-push gate. Run:
       #   pre-commit install --hook-type pre-push
       # so this hook actually fires on `git push`.
       - id: make-lint
-        name: make lint (full, both languages)
-        entry: bash -c 'cd go && make lint && cd ../python && make lint && make typecheck'
+        name: make lint (full, both languages plus security scans)
+        entry: make lint
         language: system
         pass_filenames: false
         always_run: true

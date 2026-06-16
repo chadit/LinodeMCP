@@ -134,10 +134,13 @@ betterleaks:
 	fi
 
 ## trivy: Run trivy security scan
+# Severity is pinned to HIGH,CRITICAL to match the CI security job
+# (.github/workflows/ci.yml), so the local pre-push gate fails on the
+# same findings CI does, no stricter and no looser.
 trivy:
 	@if command -v trivy >/dev/null 2>&1; then \
 		echo "Running trivy security scan..."; \
-		trivy fs --scanners vuln,misconfig --exit-code 1 .; \
+		trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 .; \
 	else \
 		echo "[warn] trivy not installed, skipping security scan"; \
 	fi
