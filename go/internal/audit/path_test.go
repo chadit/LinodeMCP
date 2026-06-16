@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // TestResolveDefaultAuditDirHonorsXDGStateHome verifies that when

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
 )
 
 // TestAuditHealthSucceeds checks `audit health` drives the health query

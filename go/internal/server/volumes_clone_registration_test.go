@@ -3,8 +3,8 @@ package server_test
 import (
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 func TestVolumeCloneToolRegisteredAsWrite(t *testing.T) {

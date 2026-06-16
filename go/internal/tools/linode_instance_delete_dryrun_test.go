@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
-	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // TestLinodeInstanceDeleteToolDryRunDependencies exercises the Phase 2 Tier A

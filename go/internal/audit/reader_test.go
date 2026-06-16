@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // testYear is the fixed year for reader test timestamps. Extracted so

@@ -8,10 +8,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // healthResult mirrors the subset of the linode_audit_health JSON

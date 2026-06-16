@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
-	"github.com/chadit/LinodeMCP/internal/cli"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // auditPayloadWith builds a linode_audit_recent JSON payload around the

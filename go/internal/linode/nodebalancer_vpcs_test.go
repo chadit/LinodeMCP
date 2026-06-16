@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 const nodeBalancerVPCsPath = "/nodebalancers/123/vpcs"

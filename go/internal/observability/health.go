@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // HealthCheck is a function that checks the health of a dependency.

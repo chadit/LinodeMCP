@@ -1,4 +1,4 @@
-module github.com/chadit/LinodeMCP
+module github.com/chadit/LinodeMCP/go
 
 go 1.26
 

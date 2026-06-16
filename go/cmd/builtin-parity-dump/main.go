@@ -10,7 +10,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // inputTool matches the fixture JSON shape: {name, capability}.

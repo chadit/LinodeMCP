@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // TestCollectHealthJSONL verifies the JSONL portion of the report:

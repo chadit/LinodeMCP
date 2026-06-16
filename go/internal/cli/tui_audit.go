@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // auditRecentLimit caps how many events the viewer pulls in one refresh.

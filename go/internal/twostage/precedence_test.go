@@ -3,8 +3,8 @@ package twostage_test
 import (
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/twostage"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // TestResolveTable is Layer 1 of the precedence-helper test plan: a hand-picked

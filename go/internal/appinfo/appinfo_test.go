@@ -3,7 +3,7 @@ package appinfo_test
 import (
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 )
 
 func TestGet(t *testing.T) {

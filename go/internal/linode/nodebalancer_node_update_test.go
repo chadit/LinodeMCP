@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestClientUpdateNodeBalancerNodeSuccess(t *testing.T) {

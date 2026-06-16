@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // Linode grant permission strings used across the scopecheck tests.

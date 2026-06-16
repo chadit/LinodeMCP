@@ -6,9 +6,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/cli"
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // TestCatalogEntriesGroupByCategory checks the catalog builder emits one

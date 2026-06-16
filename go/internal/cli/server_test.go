@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // Fixture config constants. The default environment carries a

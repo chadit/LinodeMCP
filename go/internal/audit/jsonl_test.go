@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // testProfile is the profile name reused across audit tests. Lifted

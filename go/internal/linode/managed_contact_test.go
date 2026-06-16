@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 const (

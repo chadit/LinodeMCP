@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (

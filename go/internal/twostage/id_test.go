@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/chadit/LinodeMCP/internal/twostage"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 func TestNewPlanIDHasPrefixAndIsValidV7(t *testing.T) {

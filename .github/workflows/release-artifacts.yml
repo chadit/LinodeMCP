@@ -156,7 +156,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           commit="$(git rev-parse --short HEAD)"
           build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          appinfo="github.com/chadit/LinodeMCP/internal/appinfo"
+          appinfo="github.com/chadit/LinodeMCP/go/internal/appinfo"
 
           build_args=(-trimpath "-tags=netgo,osusergo")
           if [[ "${PIE}" == "true" ]]; then

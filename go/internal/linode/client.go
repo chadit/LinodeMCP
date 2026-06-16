@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 const (

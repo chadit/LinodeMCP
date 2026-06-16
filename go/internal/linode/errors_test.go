@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 // Ensures API error messages are informative for debugging.

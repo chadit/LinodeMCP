@@ -7,9 +7,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // NewLinodeAuditHealthTool returns the linode_audit_health query tool.

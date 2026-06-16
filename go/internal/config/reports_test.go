@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // reportBaseYAML is a minimal valid config with an audit.reports block

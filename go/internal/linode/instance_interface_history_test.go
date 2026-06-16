@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestClientListInstanceInterfaceHistorySuccess(t *testing.T) {

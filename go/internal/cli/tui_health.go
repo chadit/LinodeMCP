@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // metricsEndpointNote points the user at where Prometheus metrics are

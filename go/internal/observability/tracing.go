@@ -16,7 +16,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 const (

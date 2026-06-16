@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // openTestSQLiteSink builds a SQLite sink at a temp path with the

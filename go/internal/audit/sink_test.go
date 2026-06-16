@@ -3,7 +3,7 @@ package audit_test
 import (
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // TestNoopSinkSatisfiesInterface locks the type-level contract:

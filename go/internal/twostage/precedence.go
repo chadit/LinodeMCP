@@ -1,6 +1,6 @@
 package twostage
 
-import "github.com/chadit/LinodeMCP/internal/profiles"
+import "github.com/chadit/LinodeMCP/go/internal/profiles"
 
 // Branch is the execution path the precedence helper resolves a call to. It is
 // the keystone of the safety story: every two-stage-aware tool routes through

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 // ParsePATScopes splits a Linode PAT scope string (the value returned in

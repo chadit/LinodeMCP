@@ -13,7 +13,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // Draft is the in-memory shape of a profile under construction. Field

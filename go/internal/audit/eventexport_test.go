@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // TestExportEventsJSONL confirms the JSONL-backed export honors the

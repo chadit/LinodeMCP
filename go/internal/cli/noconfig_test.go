@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
 )
 
 // missingConfigPath returns a config path inside a fresh tempdir that is

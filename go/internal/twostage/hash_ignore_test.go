@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/twostage"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // TestHashIgnoreFields guards the per-resource-type cosmetic-field lists. A

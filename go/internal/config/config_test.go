@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // Shared test constants. Pulled out so goconst stops flagging the

@@ -19,7 +19,7 @@ build: _ensure-hooks
 	@echo "Building linodemcp..."
 	@go build -o bin/linodemcp ./cmd/linodemcp
 
-APPINFO_PKG := github.com/chadit/LinodeMCP/internal/appinfo
+APPINFO_PKG := github.com/chadit/LinodeMCP/go/internal/appinfo
 LDFLAGS := -s -w -buildid= \
 	-X '$(APPINFO_PKG).buildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)'
 

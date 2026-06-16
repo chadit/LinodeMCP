@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // fakeInspector is a stub TokenInspector for the validator tests. It

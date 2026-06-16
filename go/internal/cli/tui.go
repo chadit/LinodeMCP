@@ -8,9 +8,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // tuiScreen identifies which screen the TUI is showing. The catalog is the

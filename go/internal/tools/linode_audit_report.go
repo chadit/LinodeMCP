@@ -10,9 +10,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // auditReportResponse is the wire shape of the linode_audit_report

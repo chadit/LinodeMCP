@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
 
 // writeRotatedFile creates a rotated-log file in dir so the sweeper

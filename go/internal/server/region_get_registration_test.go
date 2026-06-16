@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 func TestRegionGetToolRegisteredAsRead(t *testing.T) {

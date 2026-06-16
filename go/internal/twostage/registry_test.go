@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/twostage"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 const toolOther = "linode_other"

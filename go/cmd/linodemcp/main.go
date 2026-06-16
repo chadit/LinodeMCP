@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/cli"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/observability"
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/server"
-	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/observability"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (

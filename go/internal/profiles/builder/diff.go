@@ -3,7 +3,7 @@ package builder
 import (
 	"slices"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // FieldDiff carries an old/new value pair for one scalar or list field

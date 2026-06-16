@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // auditDBName is the SQLite filename used when audit.sqlite.path is

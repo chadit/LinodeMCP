@@ -9,7 +9,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/twostage"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 const (

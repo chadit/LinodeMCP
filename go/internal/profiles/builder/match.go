@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // wildcardChar is the only glob metacharacter the builder honors in

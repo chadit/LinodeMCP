@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // minimalWritableConfig returns a Config that passes validation so the

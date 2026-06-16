@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/cli"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 const (

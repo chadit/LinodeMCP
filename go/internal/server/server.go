@@ -13,15 +13,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/linode"
-	"github.com/chadit/LinodeMCP/internal/profiles"
-	"github.com/chadit/LinodeMCP/internal/profiles/builder"
-	"github.com/chadit/LinodeMCP/internal/tools"
-	"github.com/chadit/LinodeMCP/internal/twostage"
-	"github.com/chadit/LinodeMCP/pkg/contracts"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
+	"github.com/chadit/LinodeMCP/go/pkg/contracts"
 )
 
 // toolHandler is the callback signature mcp-go invokes for each tool call.

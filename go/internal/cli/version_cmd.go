@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/chadit/LinodeMCP/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 )
 
 // RunVersionCommand prints the build and version metadata as JSON and

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestResetInstanceDiskPasswordSuccess(t *testing.T) {

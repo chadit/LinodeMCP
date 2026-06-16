@@ -51,6 +51,16 @@ The tag is the single version for both implementations:
 
 Source defaults stay at their development values between releases; do not bump them as part of cutting a release.
 
+## Tags
+
+One release is one version, with a tag per supported language at the same commit, all the same version number:
+
+- `vX.Y.Z` is the umbrella tag. The GitHub release attaches here, and it is the only tag that matches the artifacts workflow's `v*.*.*` push trigger.
+- `go/vX.Y.Z` is the Go module tag. Go requires the subdirectory prefix for a module rooted in `go/`, so this is the tag `go install github.com/chadit/LinodeMCP/go/cmd/linodemcp@vX.Y.Z` resolves.
+- `python/vX.Y.Z` is the matching Python tag.
+
+The Release workflow creates and pushes all three. If you ever tag by hand instead, push all three at the same commit, or `go install` against the new version won't resolve.
+
 ## Failure modes
 
 - **One platform fails to build.** The matrix is fail-fast, the publish job never runs, and no assets attach. Fix the cause and re-run via dispatch.

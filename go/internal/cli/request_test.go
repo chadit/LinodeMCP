@@ -6,7 +6,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/cli"
+	"github.com/chadit/LinodeMCP/go/internal/cli"
 )
 
 // schemaWith builds a ToolInputSchema whose properties carry the given

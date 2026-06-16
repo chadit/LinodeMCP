@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // minimalConfigWith returns a minimal valid config with the supplied

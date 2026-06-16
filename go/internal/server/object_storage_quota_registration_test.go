@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 func TestObjectStorageQuotaGetToolRegisteredAsRead(t *testing.T) {

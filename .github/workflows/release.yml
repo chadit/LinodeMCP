@@ -148,7 +148,7 @@ jobs:
           {
             echo "## Dry run: no tag pushed, no release created"
             echo ""
-            echo "**Would tag:** \`${TAG}\`"
+            echo "**Would tag:** \`${TAG}\`, \`go/${TAG}\`, \`python/${TAG}\` (same commit)"
             echo ""
             echo "**Would publish release body:**"
             echo ""
@@ -161,14 +161,24 @@ jobs:
           echo "${BODY}"
           echo "------------------------"
 
-      - name: Create tag
+      - name: Create tags
         if: ${{ !inputs.dryRun }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+          # One release, one version, a tag per supported language at the
+          # same commit. The umbrella vX.Y.Z carries the GitHub release and
+          # is the only tag matching the artifacts workflow's v*.*.* push
+          # trigger. go/vX.Y.Z is what `go install` resolves (Go requires
+          # the subdirectory prefix for a module rooted in go/).
+          # python/vX.Y.Z is the matching Python tag.
+          for t in "${TAG}" "go/${TAG}" "python/${TAG}"; do
+            git tag -a "${t}" -m "Release ${TAG}"
+          done
+          git push origin "${TAG}" "go/${TAG}" "python/${TAG}"
 
       - name: Create GitHub release
         if: ${{ !inputs.dryRun }}

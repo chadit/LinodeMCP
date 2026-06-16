@@ -20,6 +20,9 @@ go.work
 bin/
 build/
 dist/
+# Stray binary from `go build ./cmd/linodemcp` without -o (the Makefile
+# uses -o bin/). Anchored so it can't match the cmd/linodemcp source dir.
+/linodemcp
 
 # Environment files
 .env

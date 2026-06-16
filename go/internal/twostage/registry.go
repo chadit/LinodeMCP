@@ -16,7 +16,7 @@ package twostage
 import (
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
 // DefaultPlanTTL is how long a plan stays valid before it expires. Five

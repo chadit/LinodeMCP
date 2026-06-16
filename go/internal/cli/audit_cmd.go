@@ -5,7 +5,7 @@ import (
 	"flag"
 	"io"
 
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 // Audit query tool names the subcommands wrap. They are the same

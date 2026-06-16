@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/internal/audit"
-	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
 const helloCallMessage = `{

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/config"
-	"github.com/chadit/LinodeMCP/internal/observability"
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/observability"
 )
 
 // newTestObservability constructs a fresh instance with all subsystems off

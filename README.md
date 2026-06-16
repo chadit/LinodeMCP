@@ -105,7 +105,36 @@ You can also set configuration through environment variables:
 | `LINODEMCP_LINODE_API_URL` | Linode API base URL |
 | `LINODEMCP_LINODE_TOKEN` | Linode API token |
 
-### Go
+### Install a prebuilt binary (no toolchain needed)
+
+Each release ships signed, prebuilt binaries for Linux, macOS, and Windows (amd64 and arm64), so you don't need a Go or Python toolchain to run the server or the CLI.
+
+Download the archive for your platform from the [latest release](https://github.com/chadit/LinodeMCP/releases/latest), verify its checksum, and put the binary on your `PATH`:
+
+```bash
+ver=v0.2.0
+base=https://github.com/chadit/LinodeMCP/releases/download/${ver}
+curl -fsSL -O ${base}/linodemcp-linux-amd64.tar.gz
+curl -fsSL -O ${base}/linodemcp-linux-amd64.tar.gz.sha256
+sha256sum -c linodemcp-linux-amd64.tar.gz.sha256
+tar -xzf linodemcp-linux-amd64.tar.gz
+sudo install linodemcp /usr/local/bin/
+linodemcp version
+```
+
+Swap `linux-amd64` for `darwin-arm64`, `windows-amd64` (a `.zip`), and so on. Releases are signed with cosign and carry SLSA provenance; see [Verifying releases](docs/verifying-releases.md).
+
+### Install with the Go toolchain
+
+```bash
+go install github.com/chadit/LinodeMCP/go/cmd/linodemcp@latest
+```
+
+This builds and installs the `linodemcp` binary into `$(go env GOPATH)/bin`. Pin a version with `@v0.2.0` instead of `@latest` for reproducible installs.
+
+### Build from source
+
+#### Go
 
 1. Clone the repo and change into the Go directory:
 
@@ -134,7 +163,7 @@ You can also set configuration through environment variables:
    make run
    ```
 
-### Python
+#### Python
 
 1. Clone the repo and change into the Python directory:
 

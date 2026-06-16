@@ -7,7 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // keyDryRun is the dry-run argument name in MCP request maps. Local

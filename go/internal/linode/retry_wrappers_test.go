@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func writeRawTestResponse(t *testing.T, w http.ResponseWriter, body string) {

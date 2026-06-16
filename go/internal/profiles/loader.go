@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
 // wildcardChar is the only glob metacharacter recognized in profile tool

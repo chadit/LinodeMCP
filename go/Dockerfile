@@ -30,9 +30,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     "-tags=netgo,osusergo" \
     -ldflags="-s -w -buildid= \
-      -X 'github.com/chadit/LinodeMCP/internal/appinfo.Version=${VERSION}' \
-      -X 'github.com/chadit/LinodeMCP/internal/appinfo.commit=${COMMIT}' \
-      -X 'github.com/chadit/LinodeMCP/internal/appinfo.buildDate=${BUILD_DATE}'" \
+      -X 'github.com/chadit/LinodeMCP/go/internal/appinfo.Version=${VERSION}' \
+      -X 'github.com/chadit/LinodeMCP/go/internal/appinfo.commit=${COMMIT}' \
+      -X 'github.com/chadit/LinodeMCP/go/internal/appinfo.buildDate=${BUILD_DATE}'" \
     -o /out/linodemcp ./cmd/linodemcp
 
 # Runtime stage: distroless static (CA certs included), nonroot user.
