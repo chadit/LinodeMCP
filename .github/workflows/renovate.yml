@@ -16,8 +16,10 @@ name: Renovate
 
 on:
   schedule:
-    # Mondays 04:00 UTC. Adjust if you want a different cadence.
-    - cron: "0 4 * * 1"
+    # Daily at 04:00 UTC. Renovate can only act when it runs, so a daily
+    # run is what lets the config schedule and the OSV vulnerability
+    # alerts open fix PRs within a day instead of waiting for a weekly run.
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       logLevel:

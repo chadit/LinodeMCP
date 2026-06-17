@@ -116,6 +116,18 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      # uv.lock must stay in sync with pyproject.toml. A drift here is how
+      # the lock kept shipping stale (CVE-flagged) versions while pyproject
+      # looked fine, and how a new dep (textual) never got locked. Skips
+      # with a warning when uv isn't installed so the hook stays usable.
+      - id: uv-lock-check
+        name: uv.lock in sync with pyproject
+        entry: bash -c 'if command -v uv >/dev/null 2>&1; then cd python && uv lock --check; else echo "[warn] uv not installed, skipping lock-sync check"; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       # Build gate before push. Ensures both Go and Python artifacts build
       # cleanly from the root Makefile. Requires:
       #   pre-commit install --hook-type pre-push
