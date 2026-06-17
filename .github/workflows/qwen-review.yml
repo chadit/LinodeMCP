@@ -203,12 +203,12 @@ jobs:
                     raw_file="qwen-review/review-${index}.raw"
                     stderr_file="qwen-review/qwen-${index}.stderr"
                     exit_file="qwen-review/qwen-${index}.exitcode"
-                    # Qwen may perform one internal/tool-planning call even when the
-                    # prompt says not to use tools. A zero budget aborts the review
-                    # before it emits JSON, hiding the useful result behind artifacts.
+                    # Qwen may perform tool-planning calls before JSON.
+                    # Allow two calls so planning does not abort review.
+                    # Keep the budget bounded against unbounded tool use.
                     qwen --auth-type openai \
                       --approval-mode plan \
-                      --max-tool-calls 1 \
+                      --max-tool-calls 2 \
                       --max-session-turns 4 \
                       --max-wall-time 180s \
                       --output-format text \
