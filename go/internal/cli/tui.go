@@ -430,6 +430,8 @@ func (m *tuiModel) openForm() (tea.Model, tea.Cmd) {
 // submit. Plain typing and the field cursor are handled by the focused
 // text input via the form's update.
 func (m *tuiModel) handleFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	pressed := msg.Key()
+
 	switch {
 	case key.Matches(msg, m.keys.Back):
 		m.screen = screenCatalog
@@ -437,11 +439,11 @@ func (m *tuiModel) handleFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Submit):
 		return m.submitForm()
-	case msg.String() == "tab":
+	case pressed.Code == tea.KeyTab && pressed.Mod == 0:
 		m.form.focusNext()
 
 		return m, nil
-	case msg.String() == "shift+tab":
+	case pressed.Code == tea.KeyTab && pressed.Mod&tea.ModShift != 0:
 		m.form.focusPrev()
 
 		return m, nil
