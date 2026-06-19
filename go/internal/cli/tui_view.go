@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Lipgloss colors for the TUI chrome. Kept as ANSI 256 codes (strings) so

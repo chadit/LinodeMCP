@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/chadit/LinodeMCP/go/internal/server"
 )
@@ -132,7 +132,7 @@ type auditModel struct {
 func newAuditModel(srv *server.Server) auditModel {
 	return auditModel{
 		srv:      srv,
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(),
 	}
 }
 
@@ -140,8 +140,8 @@ func newAuditModel(srv *server.Server) auditModel {
 func (m *auditModel) setSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 }
 
 // refreshCmd returns a tea.Cmd that dispatches linode_audit_recent through

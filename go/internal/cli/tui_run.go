@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/server"
@@ -68,7 +68,7 @@ func newRunModel(
 		tool:            tool,
 		args:            args,
 		cap:             capability,
-		viewport:        viewport.New(0, 0),
+		viewport:        viewport.New(),
 		awaitingConfirm: requiresConfirmGate(capability),
 		format:          resultFormatJSON,
 	}
@@ -87,8 +87,8 @@ func requiresConfirmGate(capability profiles.Capability) bool {
 func (m *runModel) setSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 
 	if m.done {
 		m.viewport.SetContent(m.renderedResult())

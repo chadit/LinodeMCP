@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 	"github.com/chadit/LinodeMCP/go/internal/server"
@@ -110,7 +110,7 @@ type healthModel struct {
 func newHealthModel(srv *server.Server) healthModel {
 	return healthModel{
 		srv:      srv,
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(),
 	}
 }
 
@@ -118,8 +118,8 @@ func newHealthModel(srv *server.Server) healthModel {
 func (m *healthModel) setSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 }
 
 // refreshCmd returns a tea.Cmd that dispatches linode_audit_health through
