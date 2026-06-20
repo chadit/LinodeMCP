@@ -203,14 +203,14 @@ jobs:
                     raw_file="qwen-review/review-${index}.raw"
                     stderr_file="qwen-review/qwen-${index}.stderr"
                     exit_file="qwen-review/qwen-${index}.exitcode"
-                    # Qwen may perform tool-planning calls before JSON.
-                    # Allow two calls so planning does not abort review.
-                    # Keep the budget bounded against unbounded tool use.
-                    qwen --auth-type openai \
+                    # Block unrelated tool use and rely on the normalizer below to
+                    # extract a review JSON object from plain text or CLI wrappers.
+                    qwen --bare \
+                      --auth-type openai \
                       --approval-mode plan \
-                      --max-tool-calls 2 \
-                      --max-session-turns 4 \
-                      --max-wall-time 180s \
+                      --max-tool-calls 0 \
+                      --max-session-turns 2 \
+                      --max-wall-time 300s \
                       --output-format text \
                       < "${prompt_file}" \
                       > "${raw_file}" 2> "${stderr_file}"
@@ -250,12 +250,76 @@ jobs:
                   }
 
                   def load_review(raw_path: pathlib.Path) -> dict:
-                      text = raw_path.read_text() if raw_path.exists() else ''
-                      text = text.strip()
-                      if text.startswith('```'):
-                          text = re.sub(r'^```(?:json)?\s*', '', text)
-                          text = re.sub(r'\s*```$', '', text).strip()
-                      review = json.loads(text)
+                      raw_text = raw_path.read_text() if raw_path.exists() else ''
+
+                      def strip_fences(value: str) -> str:
+                          value = value.strip()
+                          if value.startswith('```'):
+                              value = re.sub(r'^```(?:json)?\s*', '', value)
+                              value = re.sub(r'\s*```$', '', value).strip()
+                          return value
+
+                      def coerce_review(value):
+                          if isinstance(value, dict):
+                              if {'event', 'body', 'comments'} <= set(value):
+                                  return value
+                              result = value.get('result')
+                              if isinstance(result, str):
+                                  found = extract_review(result)
+                                  if found is not None:
+                                      return found
+                              if isinstance(result, dict):
+                                  found = coerce_review(result)
+                                  if found is not None:
+                                      return found
+                              message = value.get('message')
+                              if isinstance(message, dict):
+                                  found = coerce_review(message.get('content'))
+                                  if found is not None:
+                                      return found
+                              content = value.get('content')
+                              if isinstance(content, list):
+                                  texts = []
+                                  for item in content:
+                                      if isinstance(item, dict) and item.get('type') == 'text':
+                                          texts.append(str(item.get('text') or ''))
+                                      elif isinstance(item, str):
+                                          texts.append(item)
+                                  if texts:
+                                      found = extract_review('\n'.join(texts))
+                                      if found is not None:
+                                          return found
+                          if isinstance(value, list):
+                              for item in reversed(value):
+                                  found = coerce_review(item)
+                                  if found is not None:
+                                      return found
+                          return None
+
+                      def extract_review(value: str):
+                          clean = strip_fences(value)
+                          if not clean:
+                              return None
+                          try:
+                              found = coerce_review(json.loads(clean))
+                              if found is not None:
+                                  return found
+                          except Exception:
+                              pass
+                          decoder = json.JSONDecoder()
+                          for index, char in enumerate(clean):
+                              if char != '{':
+                                  continue
+                              try:
+                                  parsed, _ = decoder.raw_decode(clean[index:])
+                              except Exception:
+                                  continue
+                              found = coerce_review(parsed)
+                              if found is not None:
+                                  return found
+                          return None
+
+                      review = extract_review(raw_text)
                       if not isinstance(review, dict):
                           raise ValueError(f'{raw_path.name}: review must be a JSON object')
                       event = review.get('event')

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/chadit/LinodeMCP/go/internal/server"
 )
@@ -118,12 +118,14 @@ const (
 // through the shared server and renders the projected events in a
 // scrollable viewport, so the user sees the TUI's own recent activity.
 type auditModel struct {
-	srv      *server.Server
-	viewport viewport.Model
-	loaded   bool
-	err      error
-	width    int
-	height   int
+	srv       *server.Server
+	viewport  viewport.Model
+	cancel    context.CancelFunc
+	loaded    bool
+	err       error
+	requestID uint64
+	width     int
+	height    int
 }
 
 // newAuditModel builds the audit viewer over an open server. The first
@@ -132,7 +134,7 @@ type auditModel struct {
 func newAuditModel(srv *server.Server) auditModel {
 	return auditModel{
 		srv:      srv,
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(),
 	}
 }
 
@@ -140,8 +142,8 @@ func newAuditModel(srv *server.Server) auditModel {
 func (m *auditModel) setSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 }
 
 // refreshCmd returns a tea.Cmd that dispatches linode_audit_recent through
@@ -149,28 +151,49 @@ func (m *auditModel) setSize(width, height int) {
 // result as an auditLoadedMsg. include_meta is true so the viewer shows the
 // TUI's own meta calls, which is the point: seeing what the TUI just did.
 func (m *auditModel) refreshCmd() tea.Cmd {
+	m.cancelRefresh()
+
+	m.requestID++
+	requestID := m.requestID
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
 	srv := m.srv
+	target := m
 
 	return func() tea.Msg {
+		defer cancel()
+
 		args := map[string]any{"limit": auditRecentLimit, "include_meta": true}
 
-		result, err := dispatchCall(context.Background(), srv, toolAuditRecent, args)
+		result, err := dispatchCall(ctx, srv, toolAuditRecent, args)
 
-		return auditLoadedMsg{result: result, err: err}
+		return auditLoadedMsg{model: target, requestID: requestID, result: result, err: err}
 	}
+}
+
+func (m *auditModel) cancelRefresh() {
+	if m.cancel == nil {
+		return
+	}
+
+	m.cancel()
+	m.cancel = nil
 }
 
 // auditLoadedMsg carries a finished linode_audit_recent dispatch back into
 // the update loop.
 type auditLoadedMsg struct {
-	result CallResult
-	err    error
+	model     *auditModel
+	requestID uint64
+	result    CallResult
+	err       error
 }
 
 // handleLoaded records a finished refresh and loads the rendered events
 // into the viewport. A transport error or an error result shows its text
 // so the user sees why the table is empty.
 func (m *auditModel) handleLoaded(msg auditLoadedMsg) {
+	m.cancel = nil
 	m.loaded = true
 	m.err = msg.err
 

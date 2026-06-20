@@ -4,9 +4,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
@@ -143,21 +143,37 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.handleResize(typed)
 	case runResultMsg:
+		if m.screen != screenRun || m.run == nil || typed.model != m.run {
+			return m, nil
+		}
+
 		m.run.handleResult(typed)
 		m.status = resultStatus(typed)
 
 		return m, nil
 	case auditLoadedMsg:
+		if m.screen != screenAudit || m.audit == nil || typed.model != m.audit || typed.requestID != m.audit.requestID {
+			return m, nil
+		}
+
 		m.audit.handleLoaded(typed)
 
 		return m, nil
 	case healthLoadedMsg:
+		if m.screen != screenHealth || m.health == nil || typed.model != m.health || typed.requestID != m.health.requestID {
+			return m, nil
+		}
+
 		m.health.handleLoaded(typed)
 
 		return m, nil
 	case profileSwitchedMsg:
+		if m.profile == nil {
+			return m, nil
+		}
+
 		return m.handleProfileSwitched(typed)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(typed)
 	default:
 		return m.routeToScreen(msg)
@@ -165,11 +181,13 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the active screen wrapped in the shared header and footer.
-func (m *tuiModel) View() string {
+func (m *tuiModel) View() tea.View {
 	header := tuiHeaderStyle.Render(screenTitle(m.screen))
 	footer := tuiFooterStyle.Render(m.footer())
+	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, header, m.body(), footer))
+	view.AltScreen = true
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, m.body(), footer)
+	return view
 }
 
 // handleProfileSwitched applies the outcome of a profile switch. On
@@ -245,8 +263,10 @@ func (m *tuiModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 // routes anything unhandled to the active screen. The quit binding is
 // suppressed while the catalog filter is open so typing "q" into a filter
 // doesn't exit the app.
-func (m *tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Quit) && !m.catalogIsFiltering() {
+		m.cancelActive()
+
 		return m, tea.Quit
 	}
 
@@ -270,6 +290,20 @@ func (m *tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // catalogIsFiltering reports whether the catalog screen is active with its
 // text filter open, so global single-letter keys defer to the filter.
+func (m *tuiModel) cancelActive() {
+	if m.run != nil {
+		m.run.cancelDispatch()
+	}
+
+	if m.audit != nil {
+		m.audit.cancelRefresh()
+	}
+
+	if m.health != nil {
+		m.health.cancelRefresh()
+	}
+}
+
 func (m *tuiModel) catalogIsFiltering() bool {
 	return m.screen == screenCatalog && m.catalog.filtering()
 }
@@ -278,7 +312,7 @@ func (m *tuiModel) catalogIsFiltering() bool {
 // profile/full scope, open the form for the selected tool, or fall through
 // to the list (navigation and filtering). The select and toggle keys defer
 // to the list while its filter is open.
-func (m *tuiModel) handleCatalogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleCatalogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if !m.catalog.filtering() {
 		switch {
 		case key.Matches(msg, m.keys.Toggle):
@@ -304,6 +338,10 @@ func (m *tuiModel) handleCatalogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // openAudit opens the audit viewer and kicks off its first refresh, which
 // dispatches linode_audit_recent through the shared dispatch.
 func (m *tuiModel) openAudit() (tea.Model, tea.Cmd) {
+	if m.audit != nil {
+		m.audit.cancelRefresh()
+	}
+
 	audit := newAuditModel(m.srv)
 	audit.setSize(m.width, max(m.height-chromeReservedRows, 1))
 	m.audit = &audit
@@ -327,6 +365,10 @@ func (m *tuiModel) openProfile() (tea.Model, tea.Cmd) {
 // openHealth opens the health view and kicks off its first refresh, which
 // dispatches linode_audit_health through the shared dispatch.
 func (m *tuiModel) openHealth() (tea.Model, tea.Cmd) {
+	if m.health != nil {
+		m.health.cancelRefresh()
+	}
+
 	health := newHealthModel(m.srv)
 	health.setSize(m.width, max(m.height-chromeReservedRows, 1))
 	m.health = &health
@@ -338,9 +380,10 @@ func (m *tuiModel) openHealth() (tea.Model, tea.Cmd) {
 
 // handleAuditKey handles keys on the audit viewer: back to the catalog,
 // refresh the feed, or scroll the viewport.
-func (m *tuiModel) handleAuditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleAuditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
+		m.audit.cancelRefresh()
 		m.screen = screenCatalog
 		m.status = ""
 
@@ -357,7 +400,7 @@ func (m *tuiModel) handleAuditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handleProfileKey handles keys on the profile switcher: back to the
 // catalog, switch to the highlighted profile, or move through the list.
 // The select key defers to the list filter while it is open.
-func (m *tuiModel) handleProfileKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleProfileKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back) && !m.profile.filtering():
 		m.screen = screenCatalog
@@ -389,9 +432,10 @@ func (m *tuiModel) switchProfile() (tea.Model, tea.Cmd) {
 
 // handleHealthKey handles keys on the health view: back to the catalog,
 // refresh the report, or scroll the viewport.
-func (m *tuiModel) handleHealthKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
+		m.health.cancelRefresh()
 		m.screen = screenCatalog
 		m.status = ""
 
@@ -409,6 +453,10 @@ func (m *tuiModel) handleHealthKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // tool, building the form fields from that tool's schema. A no-op (stay on
 // the catalog) when the list is empty because every tool filtered out.
 func (m *tuiModel) openForm() (tea.Model, tea.Cmd) {
+	if m.run != nil {
+		m.run.cancelDispatch()
+	}
+
 	item, ok := m.catalog.selected()
 	if !ok || item.meta == nil {
 		return m, nil
@@ -427,7 +475,9 @@ func (m *tuiModel) openForm() (tea.Model, tea.Cmd) {
 // focus between fields and controls, toggle the focused control, or
 // submit. Plain typing and the field cursor are handled by the focused
 // text input via the form's update.
-func (m *tuiModel) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	pressed := msg.Key()
+
 	switch {
 	case key.Matches(msg, m.keys.Back):
 		m.screen = screenCatalog
@@ -435,11 +485,11 @@ func (m *tuiModel) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Submit):
 		return m.submitForm()
-	case msg.Type == tea.KeyTab:
+	case pressed.Code == tea.KeyTab && pressed.Mod == 0:
 		m.form.focusNext()
 
 		return m, nil
-	case msg.Type == tea.KeyShiftTab:
+	case pressed.Code == tea.KeyTab && pressed.Mod == tea.ModShift:
 		m.form.focusPrev()
 
 		return m, nil
@@ -485,9 +535,10 @@ func (m *tuiModel) submitForm() (tea.Model, tea.Cmd) {
 // handleRunKey handles keys on the run screen: back to the catalog, confirm
 // a gated destructive call, toggle the result format, or scroll the result
 // viewport. Confirm only fires while the gate is up.
-func (m *tuiModel) handleRunKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) handleRunKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
+		m.run.cancelDispatch()
 		m.screen = screenCatalog
 		m.status = ""
 
@@ -584,8 +635,8 @@ func (m *tuiModel) footer() string {
 // focused form control: space or enter. Enter doubles as the control
 // advance only when focus is on a control; the submit key (ctrl+r) is the
 // dedicated run trigger so enter never accidentally dispatches.
-func isControlToggleKey(msg tea.KeyMsg) bool {
-	return msg.Type == tea.KeySpace || msg.Type == tea.KeyEnter
+func isControlToggleKey(msg tea.KeyPressMsg) bool {
+	return msg.Key().Code == tea.KeySpace || msg.Key().Code == tea.KeyEnter
 }
 
 // resultStatus turns a finished dispatch into a one-line status. A
@@ -636,7 +687,7 @@ func RunTUICommand(out, errOut io.Writer) int {
 	}
 	defer runtime.Close()
 
-	program := tea.NewProgram(newTUIModel(runtime), tea.WithOutput(out), tea.WithAltScreen())
+	program := tea.NewProgram(newTUIModel(runtime), tea.WithOutput(out))
 	if _, runErr := program.Run(); runErr != nil {
 		writef(errOut, "tui error: %v\n", runErr)
 

@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/server"
@@ -26,6 +26,7 @@ const (
 // transport/JSON-RPC failure (nil on a normal tool result, including a
 // tool-level error which lands in result.IsError instead).
 type runResultMsg struct {
+	model  *runModel
 	result CallResult
 	err    error
 }
@@ -41,6 +42,7 @@ type runModel struct {
 	args     map[string]any
 	cap      profiles.Capability
 	viewport viewport.Model
+	cancel   context.CancelFunc
 
 	awaitingConfirm bool
 	done            bool
@@ -68,7 +70,7 @@ func newRunModel(
 		tool:            tool,
 		args:            args,
 		cap:             capability,
-		viewport:        viewport.New(0, 0),
+		viewport:        viewport.New(),
 		awaitingConfirm: requiresConfirmGate(capability),
 		format:          resultFormatJSON,
 	}
@@ -87,8 +89,8 @@ func requiresConfirmGate(capability profiles.Capability) bool {
 func (m *runModel) setSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 
 	if m.done {
 		m.viewport.SetContent(m.renderedResult())
@@ -110,18 +112,35 @@ func (m *runModel) confirm() tea.Cmd {
 // uses, so the TUI gets the identical audit, profile, dry-run, and
 // two-stage behavior with no duplicated logic.
 func (m *runModel) dispatchCmd() tea.Cmd {
+	m.cancelDispatch()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
 	srv, tool, args := m.srv, m.tool, m.args
+	target := m
 
 	return func() tea.Msg {
-		result, err := dispatchCall(context.Background(), srv, tool, args)
+		defer cancel()
 
-		return runResultMsg{result: result, err: err}
+		result, err := dispatchCall(ctx, srv, tool, args)
+
+		return runResultMsg{model: target, result: result, err: err}
 	}
+}
+
+func (m *runModel) cancelDispatch() {
+	if m.cancel == nil {
+		return
+	}
+
+	m.cancel()
+	m.cancel = nil
 }
 
 // handleResult records a finished dispatch and loads the rendered text
 // into the viewport. Called by the parent when a runResultMsg arrives.
 func (m *runModel) handleResult(msg runResultMsg) {
+	m.cancel = nil
 	m.done = true
 	m.result = msg.result
 	m.err = msg.err
