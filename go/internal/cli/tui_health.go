@@ -98,11 +98,13 @@ func healthAuditLines(payload string) []string {
 // renders both in a scrollable viewport, plus a pointer to the metrics
 // endpoint.
 type healthModel struct {
-	srv      *server.Server
-	viewport viewport.Model
-	loaded   bool
-	width    int
-	height   int
+	srv       *server.Server
+	viewport  viewport.Model
+	cancel    context.CancelFunc
+	loaded    bool
+	requestID uint64
+	width     int
+	height    int
 }
 
 // newHealthModel builds the health view over an open server. The first
@@ -126,26 +128,47 @@ func (m *healthModel) setSize(width, height int) {
 // the shared dispatch and delivers the result as a healthLoadedMsg. Reuses
 // the same dispatch path the run and audit screens use.
 func (m *healthModel) refreshCmd() tea.Cmd {
+	m.cancelRefresh()
+
+	m.requestID++
+	requestID := m.requestID
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
 	srv := m.srv
+	target := m
 
 	return func() tea.Msg {
-		result, err := dispatchCall(context.Background(), srv, toolAuditHealth, map[string]any{})
+		defer cancel()
 
-		return healthLoadedMsg{result: result, err: err}
+		result, err := dispatchCall(ctx, srv, toolAuditHealth, map[string]any{})
+
+		return healthLoadedMsg{model: target, requestID: requestID, result: result, err: err}
 	}
+}
+
+func (m *healthModel) cancelRefresh() {
+	if m.cancel == nil {
+		return
+	}
+
+	m.cancel()
+	m.cancel = nil
 }
 
 // healthLoadedMsg carries a finished linode_audit_health dispatch back into
 // the update loop.
 type healthLoadedMsg struct {
-	result CallResult
-	err    error
+	model     *healthModel
+	requestID uint64
+	result    CallResult
+	err       error
 }
 
 // handleLoaded records a finished refresh and loads the rendered health
 // report into the viewport. The version block renders even when the audit
 // dispatch fails, so the user always sees the build info.
 func (m *healthModel) handleLoaded(msg healthLoadedMsg) {
+	m.cancel = nil
 	m.loaded = true
 
 	payload := msg.result.Text

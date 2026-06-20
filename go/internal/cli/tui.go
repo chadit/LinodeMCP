@@ -143,19 +143,35 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.handleResize(typed)
 	case runResultMsg:
+		if m.screen != screenRun || m.run == nil || typed.model != m.run {
+			return m, nil
+		}
+
 		m.run.handleResult(typed)
 		m.status = resultStatus(typed)
 
 		return m, nil
 	case auditLoadedMsg:
+		if m.screen != screenAudit || m.audit == nil || typed.model != m.audit || typed.requestID != m.audit.requestID {
+			return m, nil
+		}
+
 		m.audit.handleLoaded(typed)
 
 		return m, nil
 	case healthLoadedMsg:
+		if m.screen != screenHealth || m.health == nil || typed.model != m.health || typed.requestID != m.health.requestID {
+			return m, nil
+		}
+
 		m.health.handleLoaded(typed)
 
 		return m, nil
 	case profileSwitchedMsg:
+		if m.profile == nil {
+			return m, nil
+		}
+
 		return m.handleProfileSwitched(typed)
 	case tea.KeyPressMsg:
 		return m.handleKey(typed)
@@ -249,6 +265,8 @@ func (m *tuiModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 // doesn't exit the app.
 func (m *tuiModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Quit) && !m.catalogIsFiltering() {
+		m.cancelActive()
+
 		return m, tea.Quit
 	}
 
@@ -272,6 +290,20 @@ func (m *tuiModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // catalogIsFiltering reports whether the catalog screen is active with its
 // text filter open, so global single-letter keys defer to the filter.
+func (m *tuiModel) cancelActive() {
+	if m.run != nil {
+		m.run.cancelDispatch()
+	}
+
+	if m.audit != nil {
+		m.audit.cancelRefresh()
+	}
+
+	if m.health != nil {
+		m.health.cancelRefresh()
+	}
+}
+
 func (m *tuiModel) catalogIsFiltering() bool {
 	return m.screen == screenCatalog && m.catalog.filtering()
 }
@@ -306,6 +338,10 @@ func (m *tuiModel) handleCatalogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // openAudit opens the audit viewer and kicks off its first refresh, which
 // dispatches linode_audit_recent through the shared dispatch.
 func (m *tuiModel) openAudit() (tea.Model, tea.Cmd) {
+	if m.audit != nil {
+		m.audit.cancelRefresh()
+	}
+
 	audit := newAuditModel(m.srv)
 	audit.setSize(m.width, max(m.height-chromeReservedRows, 1))
 	m.audit = &audit
@@ -329,6 +365,10 @@ func (m *tuiModel) openProfile() (tea.Model, tea.Cmd) {
 // openHealth opens the health view and kicks off its first refresh, which
 // dispatches linode_audit_health through the shared dispatch.
 func (m *tuiModel) openHealth() (tea.Model, tea.Cmd) {
+	if m.health != nil {
+		m.health.cancelRefresh()
+	}
+
 	health := newHealthModel(m.srv)
 	health.setSize(m.width, max(m.height-chromeReservedRows, 1))
 	m.health = &health
@@ -343,6 +383,7 @@ func (m *tuiModel) openHealth() (tea.Model, tea.Cmd) {
 func (m *tuiModel) handleAuditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
+		m.audit.cancelRefresh()
 		m.screen = screenCatalog
 		m.status = ""
 
@@ -394,6 +435,7 @@ func (m *tuiModel) switchProfile() (tea.Model, tea.Cmd) {
 func (m *tuiModel) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
+		m.health.cancelRefresh()
 		m.screen = screenCatalog
 		m.status = ""
 
@@ -411,6 +453,10 @@ func (m *tuiModel) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // tool, building the form fields from that tool's schema. A no-op (stay on
 // the catalog) when the list is empty because every tool filtered out.
 func (m *tuiModel) openForm() (tea.Model, tea.Cmd) {
+	if m.run != nil {
+		m.run.cancelDispatch()
+	}
+
 	item, ok := m.catalog.selected()
 	if !ok || item.meta == nil {
 		return m, nil
@@ -443,7 +489,7 @@ func (m *tuiModel) handleFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.form.focusNext()
 
 		return m, nil
-	case pressed.Code == tea.KeyTab && pressed.Mod&tea.ModShift != 0:
+	case pressed.Code == tea.KeyTab && pressed.Mod == tea.ModShift:
 		m.form.focusPrev()
 
 		return m, nil
@@ -492,6 +538,7 @@ func (m *tuiModel) submitForm() (tea.Model, tea.Cmd) {
 func (m *tuiModel) handleRunKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
+		m.run.cancelDispatch()
 		m.screen = screenCatalog
 		m.status = ""
 
