@@ -181,29 +181,6 @@ jobs:
                       'max_chunk_chars': max_chars,
                       'prompt_files': [str(p) for p in sorted(chunks_dir.glob('prompt-*.txt'))],
                   }, indent=2) + '\n')
-                  review_schema = {
-                      'type': 'object',
-                      'additionalProperties': False,
-                      'required': ['event', 'body', 'comments'],
-                      'properties': {
-                          'event': {'type': 'string', 'enum': ['COMMENT', 'REQUEST_CHANGES']},
-                          'body': {'type': 'string', 'minLength': 1},
-                          'comments': {
-                              'type': 'array',
-                              'items': {
-                                  'type': 'object',
-                                  'additionalProperties': False,
-                                  'required': ['path', 'line', 'body'],
-                                  'properties': {
-                                      'path': {'type': 'string', 'minLength': 1},
-                                      'line': {'type': 'integer', 'minimum': 1},
-                                      'body': {'type': 'string', 'minLength': 1},
-                                  },
-                              },
-                          },
-                      },
-                  }
-                  (root / 'review-schema.json').write_text(json.dumps(review_schema, indent=2) + '\n')
                   print(f"Prepared {len(chunks)} Qwen review prompt chunk(s)")
                   PY
 
@@ -226,16 +203,14 @@ jobs:
                     raw_file="qwen-review/review-${index}.raw"
                     stderr_file="qwen-review/qwen-${index}.stderr"
                     exit_file="qwen-review/qwen-${index}.exitcode"
-                    # Require a structured review object and block unrelated tool use.
-                    # The synthetic structured-output call from --json-schema is exempt
-                    # from --max-tool-calls, so any ordinary tool call still fails fast.
+                    # Block unrelated tool use and rely on the normalizer below to
+                    # extract a review JSON object from plain text or CLI wrappers.
                     qwen --bare \
                       --auth-type openai \
-                      --approval-mode yolo \
+                      --approval-mode plan \
                       --max-tool-calls 0 \
                       --max-session-turns 2 \
                       --max-wall-time 300s \
-                      --json-schema @qwen-review/review-schema.json \
                       --output-format text \
                       < "${prompt_file}" \
                       > "${raw_file}" 2> "${stderr_file}"
