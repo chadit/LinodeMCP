@@ -92,6 +92,14 @@ jobs:
           cache: pip
           cache-dependency-path: python/pyproject.toml
 
+      # A release must not ship from a lock that drifted off pyproject;
+      # this is the same check the pre-push hook runs, enforced server-side.
+      - name: uv.lock in sync with pyproject
+        working-directory: python
+        run: |
+          pip install uv
+          uv lock --check
+
       - name: Install dev deps
         working-directory: python
         run: pip install -e ".[dev]"

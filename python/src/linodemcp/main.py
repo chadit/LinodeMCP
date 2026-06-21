@@ -57,7 +57,9 @@ structlog.configure(
     ],
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
+    # MCP stdio reserves stdout for the JSON-RPC stream; logs must go to
+    # stderr or they corrupt the protocol the client reads on stdout.
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
     cache_logger_on_first_use=False,
 )
 

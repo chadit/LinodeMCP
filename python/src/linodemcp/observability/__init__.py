@@ -7,6 +7,7 @@ pattern; that's been removed.
 """
 
 import os
+import sys
 import threading
 import time
 from collections.abc import Callable, Generator
@@ -148,7 +149,9 @@ class Observability:
             ],
             wrapper_class=structlog.make_filtering_bound_logger(log_level),
             context_class=dict,
-            logger_factory=structlog.PrintLoggerFactory(),
+            # MCP stdio reserves stdout for the JSON-RPC stream; logs must
+            # go to stderr or they corrupt the protocol the client reads.
+            logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
             cache_logger_on_first_use=True,
         )
 

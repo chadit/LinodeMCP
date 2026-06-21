@@ -63,6 +63,15 @@ jobs:
           cache: pip
           cache-dependency-path: python/pyproject.toml
 
+      # Mirrors the pre-push uv-lock-check hook so a lock/pyproject drift
+      # fails in CI even when a push skips local hooks. The lock is what
+      # trivy scans, so a stale lock is how a CVE slips back in unseen.
+      - name: uv.lock in sync with pyproject
+        working-directory: python
+        run: |
+          pip install uv
+          uv lock --check
+
       - name: Install dev deps
         working-directory: python
         run: pip install -e ".[dev]"
@@ -139,7 +148,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       # pyproject.toml addopts already include --cov=linodemcp and
-      # --cov-fail-under=54, so this run enforces the threshold.
+      # --cov-fail-under=80, so this run enforces the threshold.
       - name: pytest (full suite + coverage gate)
         working-directory: python
         run: pytest tests/
