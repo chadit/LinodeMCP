@@ -279,6 +279,18 @@ def _wire_profile_hot_reload(
     watcher.set_on_change(_on_config_change)
 
 
+def _build_server(cfg: Config, obs: Observability) -> Server:
+    """Construct the server and wire its metrics recorder together.
+
+    Keeping the recorder wiring next to construction means a serving Server
+    records tool-dispatch and Linode API metrics on the meter exposed at
+    /metrics; the recording middleware is otherwise built but never reached.
+    """
+    server = Server(cfg)
+    server.set_metrics_recorder(obs)
+    return server
+
+
 async def async_main() -> int:
     """Async main function."""
     path = get_config_path()
@@ -317,7 +329,7 @@ async def async_main() -> int:
     sqlite_sink: SQLiteSink | None = None
     audit_tasks: list[asyncio.Task[None]] = []
     try:
-        server = Server(cfg)
+        server = _build_server(cfg, obs)
 
         # Phase 2a/2b/3b/3c: attach the JSONL sink (and SQLite sink when
         # enabled) so every tool call lands on disk, and start the

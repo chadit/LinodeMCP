@@ -95,6 +95,15 @@ type Server struct {
 	// so a two-stage-aware destroy handler can produce a plan and later
 	// apply it after a drift check. Start launches the TTL janitor.
 	planStore *twostage.PlanStore
+
+	// metrics wraps each tool dispatch so request totals, durations, and
+	// errors record on the OpenTelemetry meter. Defaults to a no-op so a
+	// Server built without observability (tests, the CLI front-end)
+	// dispatches unchanged; the serve path injects the real
+	// *observability.Observability via SetMetricsRecorder. Without this the
+	// recording middleware is built but never reached, so the /metrics
+	// endpoint carries no application series.
+	metrics MetricsRecorder
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -120,6 +129,7 @@ func New(cfg *config.Config) (*Server, error) {
 		draftRegistry: builder.NewRegistry(),
 		auditSink:     audit.NoopSink{},
 		planStore:     twostage.NewPlanStore(),
+		metrics:       noopMetricsRecorder{},
 	}
 
 	srv.allEntries = collectAllToolEntries(cfg)
@@ -558,6 +568,43 @@ func (s *Server) SetAuditRedactPII(redactPII bool) {
 	s.auditRedactPII = redactPII
 }
 
+// MetricsRecorder records metrics for tool dispatch and the Linode API calls
+// a tool makes. *observability.Observability satisfies it. The Server depends
+// on this narrow interface rather than the concrete type so the package stays
+// decoupled from observability and tests can inject a fake recorder. Both
+// methods return nothing, mirroring the audit sink's Write: recording is a
+// side effect that must never alter the dispatch result or error.
+//
+// RecordAPIRequest is here, rather than only on the linode client, because
+// the dispatch chokepoint is the one place that holds the recorder; it
+// injects the recorder into the request context (linode.WithAPIRecorder) so
+// the client can report each API round trip without an observability import.
+type MetricsRecorder interface {
+	RecordToolCall(ctx context.Context, toolName string, duration time.Duration, err error)
+	RecordAPIRequest(ctx context.Context, endpoint, method string, status int, duration float64)
+}
+
+// noopMetricsRecorder records nothing. It is the default so a Server built
+// without observability dispatches unchanged.
+type noopMetricsRecorder struct{}
+
+func (noopMetricsRecorder) RecordToolCall(context.Context, string, time.Duration, error) {}
+
+func (noopMetricsRecorder) RecordAPIRequest(context.Context, string, string, int, float64) {}
+
+// SetMetricsRecorder wires the recorder used to wrap tool dispatch. The
+// serve path passes the real *observability.Observability so every call
+// records request totals, durations, and errors; the recording middleware
+// is otherwise built but never reached. Passing nil restores the no-op
+// default rather than producing a nil-deref crash.
+func (s *Server) SetMetricsRecorder(recorder MetricsRecorder) {
+	if recorder == nil {
+		recorder = noopMetricsRecorder{}
+	}
+
+	s.metrics = recorder
+}
+
 // addTool registers a tool with mcp-go and the local list, wrapping the
 // handler so each in-flight invocation is tracked in s.inflight. Shutdown
 // uses that WaitGroup to drain handlers before returning. Takes the tool by
@@ -601,9 +648,11 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		}
 
 		ctx = tools.WithPlanStore(ctx, s.planStore)
+		ctx = linode.WithAPIRecorder(ctx, s.metrics)
 
 		result, err := handler(ctx, req)
 
+		s.metrics.RecordToolCall(ctx, toolName, time.Since(start), err)
 		finalizeAuditEvent(&evt, start, err)
 		s.auditSink.Write(context.WithoutCancel(ctx), &evt)
 

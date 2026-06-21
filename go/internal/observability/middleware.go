@@ -9,7 +9,20 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// ToolExecution wraps tool execution with tracing and metric recording.
+// Metric labels shared by the tool-dispatch recorders. Extracted so
+// ToolExecution and RecordToolCall agree on the exact label values the
+// /metrics endpoint exposes.
+const (
+	metricMethodExecute  = "execute"
+	metricStatusSuccess  = "success"
+	metricStatusError    = "error"
+	metricExecutionError = "execution_error"
+)
+
+// ToolExecution wraps tool execution with tracing and metric recording. The
+// server dispatch path uses RecordToolCall instead (it owns execution and
+// needs only the recording side effect); ToolExecution stays for callers
+// that want the span and the wrap in one step.
 func (o *Observability) ToolExecution(ctx context.Context, toolName string, executeFn func(ctx context.Context) error) error {
 	ctx, span := o.tracer.Start(
 		ctx, "mcp.tool.execute",
@@ -25,16 +38,33 @@ func (o *Observability) ToolExecution(ctx context.Context, toolName string, exec
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
-		o.RecordError(ctx, toolName, "execution_error")
-		o.RecordRequest(ctx, toolName, "execute", "error", duration)
+		o.RecordError(ctx, toolName, metricExecutionError)
+		o.RecordRequest(ctx, toolName, metricMethodExecute, metricStatusError, duration)
 
 		return err
 	}
 
 	span.SetStatus(codes.Ok, "")
-	o.RecordRequest(ctx, toolName, "execute", "success", duration)
+	o.RecordRequest(ctx, toolName, metricMethodExecute, metricStatusSuccess, duration)
 
 	return nil
+}
+
+// RecordToolCall records metrics for a tool dispatch that already ran: the
+// request total and duration always, plus an execution-error count when err
+// is non-nil. It is the non-wrapping counterpart to ToolExecution, for the
+// server's dispatch chokepoint, which owns execution and the audit event and
+// needs only the recording side effect. It returns nothing so recording can
+// never change the call's result or error.
+func (o *Observability) RecordToolCall(ctx context.Context, toolName string, duration time.Duration, err error) {
+	status := metricStatusSuccess
+	if err != nil {
+		status = metricStatusError
+
+		o.RecordError(ctx, toolName, metricExecutionError)
+	}
+
+	o.RecordRequest(ctx, toolName, metricMethodExecute, status, duration.Seconds())
 }
 
 // APICall wraps a Linode API call with tracing and metric recording.

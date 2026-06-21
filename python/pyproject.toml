@@ -67,6 +67,12 @@ include = ["/src", "/tests", "/README.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# opentelemetry ships PEP 420 namespace packages (opentelemetry.exporter is
+# split across the otlp and prometheus distributions). Without this, pytest's
+# default import handling resolves the namespace from only the first
+# contributor it sees during full-suite collection, so importing
+# opentelemetry.exporter.prometheus fails with "exporter is not a package".
+consider_namespace_packages = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

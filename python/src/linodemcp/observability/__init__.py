@@ -18,11 +18,13 @@ from typing import Any
 import structlog
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
 from linodemcp.config import (
     HealthConfig,
@@ -49,6 +51,12 @@ class Observability:
         self._tracer: trace.Tracer = trace.get_tracer("linodemcp")
         self._shutdown_funcs: list[Callable[[], None]] = []
         self._health_server: HTTPServer | None = None
+        self._metrics_server: HTTPServer | None = None
+        self._requests_total: metrics.Counter | None = None
+        self._request_duration: metrics.Histogram | None = None
+        self._errors_total: metrics.Counter | None = None
+        self._api_requests: metrics.Counter | None = None
+        self._api_request_duration: metrics.Histogram | None = None
 
         self._init_logging(config.logging)
         self.logger = structlog.get_logger("linodemcp")
@@ -199,7 +207,57 @@ class Observability:
                 {"service.name": "linodemcp", "service.version": _get_version()}
             )
 
-            self._meter_provider = MeterProvider(resource=resource)
+            readers: list[PrometheusMetricReader] = []
+            registry: CollectorRegistry | None = None
+
+            if config.prometheus.enabled and config.prometheus.port > 0:
+                # A per-instance registry (not the global default) keeps
+                # multiple Observability instances, and parallel tests, from
+                # colliding on duplicate collector registration. The reader
+                # bridges the instruments to the scrape endpoint; without it
+                # the meter provider records into nothing exposed.
+                registry = CollectorRegistry()
+                readers.append(PrometheusMetricReader(registry=registry))
+
+            self._meter_provider = MeterProvider(
+                resource=resource, metric_readers=readers
+            )
+            metrics.set_meter_provider(self._meter_provider)
+
+            meter = self._meter_provider.get_meter("github.com/chadit/LinodeMCP")
+            self._requests_total = meter.create_counter(
+                "linodemcp.requests.total",
+                unit="1",
+                description="Total number of MCP requests",
+            )
+            self._request_duration = meter.create_histogram(
+                "linodemcp.request.duration.seconds",
+                unit="s",
+                description="Duration of MCP requests in seconds",
+            )
+            self._errors_total = meter.create_counter(
+                "linodemcp.errors.total",
+                unit="1",
+                description="Total number of MCP errors",
+            )
+            self._api_requests = meter.create_counter(
+                "linodemcp.api.requests.total",
+                unit="1",
+                description="Total number of Linode API requests",
+            )
+            self._api_request_duration = meter.create_histogram(
+                "linodemcp.api.request.duration.seconds",
+                unit="s",
+                description="Duration of Linode API requests in seconds",
+            )
+
+            if registry is not None:
+                self._start_metrics_server(
+                    config.prometheus.host,
+                    config.prometheus.port,
+                    config.prometheus.path,
+                    registry,
+                )
 
             if config.host:
                 try:
@@ -209,11 +267,86 @@ class Observability:
                         self.logger.exception(
                             "failed to start host metrics", error=str(exc)
                         )
-
-            metrics.set_meter_provider(self._meter_provider)
         except Exception as exc:
             if self.logger:
                 self.logger.exception("failed to initialize metrics", error=str(exc))
+
+    def _start_metrics_server(
+        self, host: str, port: int, path: str, registry: CollectorRegistry
+    ) -> None:
+        metrics_path = path
+
+        class MetricsHandler(BaseHTTPRequestHandler):
+            def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - signature must match BaseHTTPRequestHandler.log_message
+                """Suppress default request logging."""
+
+            def do_GET(self) -> None:
+                if self.path != metrics_path:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+
+                output = generate_latest(registry)
+                self.send_response(200)
+                self.send_header("Content-Type", CONTENT_TYPE_LATEST)
+                self.end_headers()
+                self.wfile.write(output)
+
+        self._metrics_server = HTTPServer((host, port), MetricsHandler)
+
+        thread = threading.Thread(
+            target=self._metrics_server.serve_forever, daemon=True
+        )
+        thread.start()
+
+        if self.logger:
+            self.logger.info("metrics server started", port=port, path=path)
+
+        def _shutdown_metrics() -> None:
+            if self._metrics_server is not None:
+                self._metrics_server.shutdown()
+                self._metrics_server = None
+
+        self._shutdown_funcs.append(_shutdown_metrics)
+
+    def record_tool_call(self, tool: str, duration_seconds: float, error: bool) -> None:
+        """Record metrics for a tool dispatch that already ran.
+
+        The request total and duration always move; an execution-error count
+        moves only when error is True. The non-recording observability path
+        leaves the instruments None, so this is a no-op until metrics init.
+        """
+        if self._requests_total is None or self._request_duration is None:
+            return
+
+        status = "error" if error else "success"
+        self._requests_total.add(
+            1, {"tool": tool, "method": "execute", "status": status}
+        )
+
+        if duration_seconds > 0:
+            self._request_duration.record(
+                duration_seconds, {"tool": tool, "method": "execute"}
+            )
+
+        if error and self._errors_total is not None:
+            self._errors_total.add(1, {"tool": tool, "error_type": "execution_error"})
+
+    def record_api_request(
+        self, endpoint: str, method: str, status: int, duration_seconds: float
+    ) -> None:
+        """Record metrics for a completed Linode API request."""
+        if self._api_requests is None or self._api_request_duration is None:
+            return
+
+        self._api_requests.add(
+            1, {"endpoint": endpoint, "method": method, "status_code": status}
+        )
+
+        if duration_seconds > 0:
+            self._api_request_duration.record(
+                duration_seconds, {"endpoint": endpoint, "method": method}
+            )
 
     def _init_health(self, config: HealthConfig) -> None:
         try:
@@ -242,7 +375,7 @@ class Observability:
                         self.send_response(404)
                         self.end_headers()
 
-            self._health_server = HTTPServer(("127.0.0.1", config.port), HealthHandler)
+            self._health_server = HTTPServer((config.host, config.port), HealthHandler)
 
             thread = threading.Thread(
                 target=self._health_server.serve_forever, daemon=True

@@ -539,8 +539,8 @@ class HealthScreen(Screen[None]):
         metrics = self._runtime.config.observability.metrics
         pointer = extras.metrics_pointer(
             enabled=metrics.enabled,
-            port=metrics.prometheus_port,
-            path=metrics.prometheus_path,
+            port=metrics.prometheus.port,
+            path=metrics.prometheus.path,
         )
         self.query_one("#metrics-pointer", Static).update(pointer)
         self.sub_title = "audit health and build info"

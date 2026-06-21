@@ -52,14 +52,27 @@ class ServerConfig:
 
 
 @dataclass
+class PrometheusConfig:
+    """Prometheus exporter settings, nested under metrics to mirror Go's
+    observability.metrics.prometheus block."""
+
+    enabled: bool = True
+    # Loopback by default: the metrics endpoint leaks operational signal
+    # (tool names, call counts, error rates), so remote exposure must be an
+    # explicit choice (set to 0.0.0.0 or a specific interface).
+    host: str = "127.0.0.1"
+    port: int = 8888
+    path: str = "/metrics"
+
+
+@dataclass
 class MetricsConfig:
-    """Prometheus metrics settings."""
+    """Metrics settings: the Prometheus exporter plus runtime/host metrics."""
 
     enabled: bool = True
     runtime: bool = True
     host: bool = True
-    prometheus_port: int = 8888
-    prometheus_path: str = "/metrics"
+    prometheus: PrometheusConfig = field(default_factory=PrometheusConfig)
 
 
 @dataclass
@@ -102,6 +115,7 @@ class HealthConfig:
     """Health check configuration."""
 
     enabled: bool = True
+    host: str = "127.0.0.1"
     port: int = 8889
     path: str = "/healthz"
 
@@ -669,6 +683,7 @@ def _data_to_config(data: dict[str, Any]) -> Config:
 
     tracing_data = data.get("observability", {}).get("tracing", {})
     metrics_data = data.get("observability", {}).get("metrics", {})
+    prometheus_data = metrics_data.get("prometheus", {})
     logging_data = data.get("observability", {}).get("logging", {})
     health_data = data.get("observability", {}).get("health", {})
 
@@ -682,8 +697,12 @@ def _data_to_config(data: dict[str, Any]) -> Config:
             enabled=metrics_data.get("enabled", True),
             runtime=metrics_data.get("runtime", True),
             host=metrics_data.get("host", True),
-            prometheus_port=metrics_data.get("prometheusPort", 8888),
-            prometheus_path=metrics_data.get("prometheusPath", "/metrics"),
+            prometheus=PrometheusConfig(
+                enabled=prometheus_data.get("enabled", True),
+                host=prometheus_data.get("host", "127.0.0.1"),
+                port=prometheus_data.get("port", 8888),
+                path=prometheus_data.get("path", "/metrics"),
+            ),
         ),
         logging=LoggingConfig(
             level=logging_data.get("level", "info"),
@@ -691,6 +710,7 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         ),
         health=HealthConfig(
             enabled=health_data.get("enabled", True),
+            host=health_data.get("host", "127.0.0.1"),
             port=health_data.get("port", 8889),
             path=health_data.get("path", "/healthz"),
         ),
@@ -985,8 +1005,12 @@ def _config_to_data(cfg: Config) -> dict[str, Any]:
                 "enabled": cfg.observability.metrics.enabled,
                 "runtime": cfg.observability.metrics.runtime,
                 "host": cfg.observability.metrics.host,
-                "prometheusPort": cfg.observability.metrics.prometheus_port,
-                "prometheusPath": cfg.observability.metrics.prometheus_path,
+                "prometheus": {
+                    "enabled": cfg.observability.metrics.prometheus.enabled,
+                    "host": cfg.observability.metrics.prometheus.host,
+                    "port": cfg.observability.metrics.prometheus.port,
+                    "path": cfg.observability.metrics.prometheus.path,
+                },
             },
             "logging": {
                 "format": cfg.observability.logging.format,
@@ -994,6 +1018,7 @@ def _config_to_data(cfg: Config) -> dict[str, Any]:
             },
             "health": {
                 "enabled": cfg.observability.health.enabled,
+                "host": cfg.observability.health.host,
                 "port": cfg.observability.health.port,
                 "path": cfg.observability.health.path,
             },

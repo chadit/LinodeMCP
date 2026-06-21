@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
@@ -64,7 +66,12 @@ func (o *Observability) initHealth(cfg config.HealthConfig) {
 	mux.HandleFunc(cfg.Path+"/ready", o.handleReady)
 	mux.HandleFunc(cfg.Path+"/healthz", o.handleReady)
 
-	addr := fmt.Sprintf(":%d", cfg.Port)
+	bindHost := cfg.Host
+	if bindHost == "" {
+		bindHost = config.DefaultBindHost
+	}
+
+	addr := net.JoinHostPort(bindHost, strconv.Itoa(cfg.Port))
 	o.healthServer = &http.Server{
 		Addr:              addr,
 		Handler:           mux,

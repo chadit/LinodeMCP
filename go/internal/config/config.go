@@ -30,6 +30,13 @@ const (
 	DefaultHealthPath      = "/healthz"
 	DefaultTracingSample   = 1.0
 	DefaultTracingProtocol = "grpc"
+
+	// DefaultBindHost is the loopback address the metrics and health servers
+	// bind to unless an operator overrides it. Loopback-only is the safe
+	// default: those endpoints leak operational signal (tool names, call
+	// counts, error rates), so remote exposure must be an explicit choice
+	// (set the host to 0.0.0.0 or a specific interface).
+	DefaultBindHost = "127.0.0.1"
 )
 
 // Default resilience configuration values.
@@ -253,6 +260,7 @@ type MetricsConfig struct {
 // PrometheusConfig holds Prometheus-specific metrics settings.
 type PrometheusConfig struct {
 	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Host    string `json:"host"    yaml:"host"`
 	Port    int    `json:"port"    yaml:"port"`
 	Path    string `json:"path"    yaml:"path"`
 }
@@ -275,6 +283,7 @@ type LoggingConfig struct {
 // HealthConfig holds health check settings.
 type HealthConfig struct {
 	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Host    string `json:"host"    yaml:"host"`
 	Port    int    `json:"port"    yaml:"port"`
 	Path    string `json:"path"    yaml:"path"`
 }
@@ -444,6 +453,10 @@ func setResilienceDefaults(cfg *Config) {
 
 func setObservabilityDefaults(cfg *Config) {
 	// Metrics defaults
+	if cfg.Observability.Metrics.Prometheus.Host == "" {
+		cfg.Observability.Metrics.Prometheus.Host = DefaultBindHost
+	}
+
 	if cfg.Observability.Metrics.Prometheus.Port == 0 {
 		cfg.Observability.Metrics.Prometheus.Port = DefaultMetricsPort
 	}
@@ -453,6 +466,10 @@ func setObservabilityDefaults(cfg *Config) {
 	}
 
 	// Health defaults
+	if cfg.Observability.Health.Host == "" {
+		cfg.Observability.Health.Host = DefaultBindHost
+	}
+
 	if cfg.Observability.Health.Port == 0 {
 		cfg.Observability.Health.Port = DefaultHealthPort
 	}

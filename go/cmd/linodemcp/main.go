@@ -318,6 +318,11 @@ func run() int {
 		return 1
 	}
 
+	// Wire the metrics recorder so every tool dispatch records request
+	// totals, durations, and errors on the meter exposed at /metrics. The
+	// recording middleware is otherwise built but never reached.
+	srv.SetMetricsRecorder(obs)
+
 	// Phase 2a/2b/3b: open the JSONL sink (always on), add the SQLite
 	// sink when audit.sqlite.enabled, attach the combined sink, and
 	// start the retention sweeper. setupAudit returns a cleanup that

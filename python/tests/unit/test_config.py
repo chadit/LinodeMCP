@@ -32,8 +32,48 @@ def test_config_defaults() -> None:
     assert cfg.server.log_level == "info"
     assert cfg.server.transport == "stdio"
     assert cfg.server.port == 8080
-    assert cfg.observability.metrics.prometheus_port == 8888
+    assert cfg.observability.metrics.prometheus.port == 8888
     assert cfg.resilience.max_retries == 3
+
+
+def test_bind_host_defaults() -> None:
+    """Metrics and health servers default to loopback.
+
+    Parity with Go's TestBindHostDefaults / config.DefaultBindHost: loopback
+    is the safe default because those endpoints leak operational signal, so
+    remote exposure must be an explicit choice.
+    """
+    cfg = Config()
+    assert cfg.observability.metrics.prometheus.host == "127.0.0.1"
+    assert cfg.observability.health.host == "127.0.0.1"
+
+
+def test_bind_host_override(tmp_path: Path) -> None:
+    """An explicit host is honored so operators can expose the endpoints."""
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        yaml.dump(
+            {
+                "environments": {
+                    "default": {
+                        "label": "d",
+                        "linode": {
+                            "apiUrl": "https://api.linode.com/v4",
+                            "token": "t",
+                        },
+                    }
+                },
+                "observability": {
+                    "metrics": {"enabled": True, "prometheus": {"host": "192.0.2.10"}},
+                    "health": {"enabled": True, "host": "192.0.2.10"},
+                },
+            }
+        )
+    )
+
+    cfg = load_from_file(config_file)
+    assert cfg.observability.metrics.prometheus.host == "192.0.2.10"
+    assert cfg.observability.health.host == "192.0.2.10"
 
 
 def test_load_from_file(temp_config_file: Path) -> None:

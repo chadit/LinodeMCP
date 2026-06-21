@@ -14,6 +14,8 @@ sys.modules["opentelemetry.exporter.otlp"] = MagicMock()
 sys.modules["opentelemetry.exporter.otlp.proto"] = MagicMock()
 sys.modules["opentelemetry.exporter.otlp.proto.grpc"] = MagicMock()
 sys.modules["opentelemetry.exporter.otlp.proto.grpc.trace_exporter"] = MagicMock()
+sys.modules["opentelemetry.exporter.prometheus"] = MagicMock()
+sys.modules["prometheus_client"] = MagicMock()
 sys.modules["opentelemetry.sdk"] = MagicMock()
 sys.modules["opentelemetry.sdk.metrics"] = MagicMock()
 sys.modules["opentelemetry.sdk.resources"] = MagicMock()
@@ -27,6 +29,7 @@ from linodemcp.config import (  # noqa: E402 - imports after sys.modules mocking
     LoggingConfig,
     MetricsConfig,
     ObservabilityConfig,
+    PrometheusConfig,
     TracingConfig,
 )
 from linodemcp.observability import (  # noqa: E402 - imports after sys.modules mocking
@@ -44,6 +47,39 @@ def _make_obs() -> Observability:
             logging=LoggingConfig(level="info", format="json"),
         )
     )
+
+
+def test_metrics_recording_drives_instruments() -> None:
+    """Enabling metrics builds instruments; record_* drive them without error.
+
+    opentelemetry is mocked at module level, so this exercises _init_metrics and
+    the record methods against MagicMock instruments rather than a live meter.
+    The real end-to-end export is exercised by the runtime smoke and the Go
+    scrape test (TestPrometheusEndpointExposesApplicationMetrics); a Python
+    in-process scrape test can't coexist with this module's global mock.
+    prometheus.enabled=False keeps the metrics HTTP server from binding a port.
+    """
+    obs = Observability(
+        ObservabilityConfig(
+            tracing=TracingConfig(enabled=False),
+            metrics=MetricsConfig(
+                enabled=True,
+                host=False,
+                runtime=False,
+                prometheus=PrometheusConfig(enabled=False),
+            ),
+            health=HealthConfig(enabled=False),
+            logging=LoggingConfig(level="error", format="json"),
+        )
+    )
+    try:
+        # The mocked meter yields non-None instruments, so the recording
+        # branches run instead of the None-guard early return.
+        obs.record_tool_call("hello", 0.01, error=False)
+        obs.record_tool_call("boom", 0.02, error=True)
+        obs.record_api_request("/regions", "GET", 200, 0.03)
+    finally:
+        obs.shutdown()
 
 
 class TestConstruction:

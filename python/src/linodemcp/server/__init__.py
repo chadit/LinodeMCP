@@ -9,7 +9,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
@@ -20,6 +20,7 @@ from linodemcp.audit import Capability as AuditCapability
 from linodemcp.audit import Mode, NoopSink, Sink, Status, new_event
 from linodemcp.config import get_config_path
 from linodemcp.linode import RetryableClient
+from linodemcp.linode.metrics import reset_api_recorder, set_api_recorder
 from linodemcp.profiles import (
     Capability,
     Profile,
@@ -253,6 +254,39 @@ def get_tool_registry() -> list[ToolEntry]:
     return _TOOL_REGISTRY
 
 
+class MetricsRecorder(Protocol):
+    """Records metrics for tool dispatch and the Linode API calls a tool makes.
+
+    Observability satisfies it. The Server depends on this narrow protocol
+    rather than the concrete type so the package stays decoupled from
+    observability and tests can inject a fake recorder.
+    """
+
+    def record_tool_call(self, tool: str, duration_seconds: float, error: bool) -> None:
+        """Record a completed tool dispatch."""
+        ...
+
+    def record_api_request(
+        self, endpoint: str, method: str, status: int, duration_seconds: float
+    ) -> None:
+        """Record a completed Linode API request."""
+        ...
+
+
+class NoopMetricsRecorder:
+    """Records nothing; the default for a Server without observability."""
+
+    def record_tool_call(self, tool: str, duration_seconds: float, error: bool) -> None:
+        """Discard tool-call metrics."""
+        del tool, duration_seconds, error
+
+    def record_api_request(
+        self, endpoint: str, method: str, status: int, duration_seconds: float
+    ) -> None:
+        """Discard API-request metrics."""
+        del endpoint, method, status, duration_seconds
+
+
 class Server:
     """LinodeMCP server."""
 
@@ -268,6 +302,11 @@ class Server:
         # nothing yet. Phase 2 swaps in the JSONL writer; tests inject
         # CapturingSink via set_audit_sink before exercising dispatch.
         self._audit_sink: Sink = NoopSink()
+        # Metrics recorder defaults to a no-op so a Server built without
+        # observability (tests) dispatches unchanged; the serve path injects
+        # the real Observability via set_metrics_recorder so each tool call
+        # records on the meter exposed at /metrics.
+        self._metrics: MetricsRecorder = NoopMetricsRecorder()
         # Phase 4c: PII redaction tier flag. Default False so tests
         # that build a Server without going through main keep
         # credential-only redaction. main flips it to
@@ -400,23 +439,31 @@ class Server:
         event.set_mode(self._execution_mode(arguments), "")
 
         plan_store_token = set_plan_store(self._plan_store)
+        # Bind the API recorder for this dispatch so the client records each
+        # Linode API round trip it makes (mirrors the Go WithAPIRecorder ctx).
+        api_recorder_token = set_api_recorder(self._metrics)
         try:
             result = await self._dispatch_inner(name, arguments)
-            event.finalize(Status.SUCCESS, _elapsed_ms(start_ns), "", "")
+            elapsed_ms = _elapsed_ms(start_ns)
+            event.finalize(Status.SUCCESS, elapsed_ms, "", "")
             self._audit_sink.write(event)
+            self._metrics.record_tool_call(name, elapsed_ms / 1000.0, error=False)
             return result
         except ValueError as exc:
             # _dispatch_inner raises ValueError for unknown / filtered
             # tool names. Audit as refused, not error: the handler
-            # never ran.
+            # never ran, so no tool-call metric is recorded.
             event.finalize(Status.REFUSED, _elapsed_ms(start_ns), str(exc), "")
             self._audit_sink.write(event)
             raise
         except Exception as exc:
-            event.finalize(Status.ERROR, _elapsed_ms(start_ns), str(exc), "")
+            elapsed_ms = _elapsed_ms(start_ns)
+            event.finalize(Status.ERROR, elapsed_ms, str(exc), "")
             self._audit_sink.write(event)
+            self._metrics.record_tool_call(name, elapsed_ms / 1000.0, error=True)
             raise
         finally:
+            reset_api_recorder(api_recorder_token)
             reset_plan_store(plan_store_token)
             self._inflight -= 1
             if self._inflight == 0:
@@ -431,6 +478,16 @@ class Server:
         producing a None-deref on the next call.
         """
         self._audit_sink = sink if sink is not None else NoopSink()
+
+    def set_metrics_recorder(self, recorder: MetricsRecorder | None) -> None:
+        """Wire the recorder used to record tool-dispatch and API metrics.
+
+        The serve path passes the real Observability so each call records on
+        the meter exposed at /metrics; the recording is otherwise a no-op.
+        Passing None restores the no-op default rather than producing a
+        None-deref on the next dispatch.
+        """
+        self._metrics = recorder if recorder is not None else NoopMetricsRecorder()
 
     def set_audit_redact_pii(self, redact_pii: bool) -> None:
         """Select the redaction tier the capture middleware applies to

@@ -14,6 +14,7 @@ from linodemcp.config import (
     LinodeConfig,
     MetricsConfig,
     ObservabilityConfig,
+    PrometheusConfig,
     ResilienceConfig,
     ServerConfig,
     TracingConfig,
@@ -78,8 +79,7 @@ def sample_config() -> Config:
                 enabled=True,
                 runtime=True,
                 host=True,
-                prometheus_port=8888,
-                prometheus_path="/metrics",
+                prometheus=PrometheusConfig(enabled=True, port=8888, path="/metrics"),
             ),
             tracing=TracingConfig(
                 enabled=False,

@@ -19,6 +19,8 @@ from urllib.parse import quote, urlencode
 
 import httpx
 
+from linodemcp.linode.metrics import get_api_recorder, metrics_endpoint
+
 _MANAGED_SERVICE_TIMEOUT_MAX = 255
 
 T = TypeVar("T")
@@ -9902,12 +9904,22 @@ class Client:
             "User-Agent": "LinodeMCP/1.0",
         }
 
+        start = time.monotonic()
         if body is not None:
             response = await self.client.request(
                 method, url, headers=headers, json=body
             )
         else:
             response = await self.client.request(method, url, headers=headers)
+
+        recorder = get_api_recorder()
+        if recorder is not None:
+            recorder.record_api_request(
+                metrics_endpoint(endpoint),
+                method,
+                response.status_code,
+                time.monotonic() - start,
+            )
 
         if response.status_code >= HTTP_BAD_REQUEST:
             self._handle_error_response(response)

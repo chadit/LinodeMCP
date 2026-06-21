@@ -168,7 +168,18 @@ func (c *Client) makeRequestWithContentType(ctx context.Context, method, endpoin
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", "LinodeMCP/"+appinfo.Version)
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+
+	if recorder := apiRecorderFromContext(ctx); recorder != nil {
+		var status int
+		if resp != nil {
+			status = resp.StatusCode
+		}
+
+		recorder.RecordAPIRequest(ctx, metricsEndpoint(endpoint), method, status, time.Since(start).Seconds())
+	}
+
 	if err != nil {
 		// Carry the method so the retry layer can tell whether replaying this
 		// failed request is safe (idempotent) or risks a duplicate side effect.

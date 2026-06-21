@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/host"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -74,7 +78,12 @@ func (o *Observability) initMetrics(cfg *config.MetricsConfig) error {
 	var readers []sdkmetric.Reader
 
 	if cfg.Prometheus.Enabled {
-		readers = append(readers, o.newPrometheusReader(cfg.Prometheus.Port, cfg.Prometheus.Path))
+		reader, err := o.newPrometheusReader(ctx, cfg.Prometheus.Host, cfg.Prometheus.Port, cfg.Prometheus.Path)
+		if err != nil {
+			return fmt.Errorf("failed to create prometheus reader: %w", err)
+		}
+
+		readers = append(readers, reader)
 	}
 
 	if cfg.OTLP.Enabled {
@@ -126,33 +135,69 @@ func (o *Observability) initMetrics(cfg *config.MetricsConfig) error {
 	return nil
 }
 
-// newPrometheusReader creates a Prometheus exporter and starts the scrape
-// HTTP server. Caller must hold no metrics-related locks.
-func (o *Observability) newPrometheusReader(port int, path string) *sdkmetric.ManualReader {
-	reader := sdkmetric.NewManualReader()
+// newPrometheusReader creates an OpenTelemetry Prometheus exporter backed by a
+// dedicated registry and starts the scrape HTTP server against that same
+// registry. The exporter IS the SDK reader: registering it on the meter
+// provider is what bridges the linodemcp.* instruments to the /metrics
+// endpoint. An earlier version handed back a bare ManualReader and served the
+// global default registry, so the instruments recorded into a reader nobody
+// read and the endpoint only ever showed go_*/process_*. A per-instance
+// registry (rather than the global default) also keeps multiple Observability
+// instances, and parallel tests, from colliding on duplicate collector
+// registration. The Go runtime and process collectors are registered
+// explicitly so the endpoint still carries go_* and process_* alongside the
+// application metrics. Caller must hold no metrics-related locks.
+func (o *Observability) newPrometheusReader(ctx context.Context, bindHost string, port int, path string) (sdkmetric.Reader, error) {
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
+
+	exporter, err := otelprom.New(otelprom.WithRegisterer(registry))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prometheus exporter: %w", err)
+	}
 
 	if o.metricsServer != nil {
-		return reader
+		return exporter, nil
 	}
 
 	mux := http.NewServeMux()
 	mux.Handle(path, promhttp.HandlerFor(
-		prometheus.DefaultGatherer,
+		registry,
 		promhttp.HandlerOpts{EnableOpenMetrics: true},
 	))
 
-	addr := fmt.Sprintf(":%d", port)
+	if bindHost == "" {
+		bindHost = config.DefaultBindHost
+	}
+
+	addr := net.JoinHostPort(bindHost, strconv.Itoa(port))
+
+	// Bind the listener synchronously so the endpoint is reachable the moment
+	// New returns. Serving in a goroutine before binding left a startup window
+	// where an immediate scrape raced the listener, and a bind failure (port
+	// in use) only surfaced as a log line from a detached goroutine instead of
+	// an init error the caller can see.
+	var listenCfg net.ListenConfig
+
+	listener, err := listenCfg.Listen(ctx, "tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("bind metrics server on %s: %w", addr, err)
+	}
+
 	o.metricsServer = &http.Server{
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	go func() {
-		o.logger.Info("starting metrics server", "address", addr, "path", path)
+	o.logger.Info("starting metrics server", "address", addr, "path", path)
 
-		if err := o.metricsServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			o.logger.Error("metrics server failed", "error", err)
+	go func() {
+		if serveErr := o.metricsServer.Serve(listener); !errors.Is(serveErr, http.ErrServerClosed) {
+			o.logger.Error("metrics server failed", "error", serveErr)
 		}
 	}()
 
@@ -164,7 +209,7 @@ func (o *Observability) newPrometheusReader(port int, path string) *sdkmetric.Ma
 		return nil
 	})
 
-	return reader
+	return exporter, nil
 }
 
 // newOTLPReader creates an OTLP metrics reader.
