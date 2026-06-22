@@ -74,12 +74,32 @@ def test_metrics_recording_drives_instruments() -> None:
     )
     try:
         # The mocked meter yields non-None instruments, so the recording
-        # branches run instead of the None-guard early return.
+        # branches run (not the None-guard early return); these must not raise.
         obs.record_tool_call("hello", 0.01, error=False)
         obs.record_tool_call("boom", 0.02, error=True)
         obs.record_api_request("/regions", "GET", 200, 0.03)
     finally:
         obs.shutdown()
+
+    # Metrics disabled: instruments stay None, so record_* take the guarded
+    # no-op path and must also not raise. This is the behavior asserted
+    # directly here; correct label/value EXPORT is verified by the Go scrape
+    # test (same OTel->Prometheus mechanism) and the runtime smoke, since this
+    # module's global opentelemetry mock blocks an in-process scrape assertion.
+    disabled = Observability(
+        ObservabilityConfig(
+            tracing=TracingConfig(enabled=False),
+            metrics=MetricsConfig(enabled=False),
+            health=HealthConfig(enabled=False),
+            logging=LoggingConfig(level="error", format="json"),
+        )
+    )
+    try:
+        disabled.record_tool_call("hello", 0.01, error=False)
+        disabled.record_tool_call("boom", 0.02, error=True)
+        disabled.record_api_request("/regions", "GET", 0, 0.03)
+    finally:
+        disabled.shutdown()
 
 
 class TestConstruction:

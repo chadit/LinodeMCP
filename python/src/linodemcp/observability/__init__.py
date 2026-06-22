@@ -34,6 +34,13 @@ from linodemcp.config import (
     TracingConfig,
 )
 
+# Loopback fallback for the metrics/health bind host. The config dataclass
+# defaults to this when the key is absent, but an explicit empty string in YAML
+# would otherwise bind all interfaces; the bind sites coerce "" back to
+# loopback so the secure default can't be silently bypassed (mirrors Go's
+# config.DefaultBindHost fallback in newPrometheusReader/initHealth).
+_DEFAULT_BIND_HOST = "127.0.0.1"
+
 
 class Observability:
     """Bundles tracing, metrics, logging, and health endpoints.
@@ -274,6 +281,9 @@ class Observability:
     def _start_metrics_server(
         self, host: str, port: int, path: str, registry: CollectorRegistry
     ) -> None:
+        # An explicit empty host in config would bind all interfaces; coerce
+        # it back to loopback so the secure default can't be bypassed.
+        host = host or _DEFAULT_BIND_HOST
         metrics_path = path
 
         class MetricsHandler(BaseHTTPRequestHandler):
@@ -375,7 +385,8 @@ class Observability:
                         self.send_response(404)
                         self.end_headers()
 
-            self._health_server = HTTPServer((config.host, config.port), HealthHandler)
+            bind_host = config.host or _DEFAULT_BIND_HOST
+            self._health_server = HTTPServer((bind_host, config.port), HealthHandler)
 
             thread = threading.Thread(
                 target=self._health_server.serve_forever, daemon=True

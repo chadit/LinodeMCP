@@ -9905,21 +9905,29 @@ class Client:
         }
 
         start = time.monotonic()
-        if body is not None:
-            response = await self.client.request(
-                method, url, headers=headers, json=body
-            )
-        else:
-            response = await self.client.request(method, url, headers=headers)
-
-        recorder = get_api_recorder()
-        if recorder is not None:
-            recorder.record_api_request(
-                metrics_endpoint(endpoint),
-                method,
-                response.status_code,
-                time.monotonic() - start,
-            )
+        # Record in a finally so a transport failure (httpx ConnectError,
+        # ReadTimeout, etc.) still counts: those raise before a response
+        # exists, and an operator most wants failed calls on the dashboard.
+        # Mirrors the Go client, which records right after the round trip with
+        # status 0 when there is no response.
+        status = 0
+        try:
+            if body is not None:
+                response = await self.client.request(
+                    method, url, headers=headers, json=body
+                )
+            else:
+                response = await self.client.request(method, url, headers=headers)
+            status = response.status_code
+        finally:
+            recorder = get_api_recorder()
+            if recorder is not None:
+                recorder.record_api_request(
+                    metrics_endpoint(endpoint),
+                    method,
+                    status,
+                    time.monotonic() - start,
+                )
 
         if response.status_code >= HTTP_BAD_REQUEST:
             self._handle_error_response(response)

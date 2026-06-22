@@ -684,6 +684,17 @@ def _data_to_config(data: dict[str, Any]) -> Config:
     tracing_data = data.get("observability", {}).get("tracing", {})
     metrics_data = data.get("observability", {}).get("metrics", {})
     prometheus_data = metrics_data.get("prometheus", {})
+    # The flat observability.metrics.prometheusPort / prometheusPath keys were
+    # replaced by the nested observability.metrics.prometheus.{port,path} block.
+    # The loader no longer reads the old keys; warn instead of silently
+    # ignoring them so a stale config surfaces the break rather than quietly
+    # falling back to the defaults.
+    if "prometheusPort" in metrics_data or "prometheusPath" in metrics_data:
+        logger.warning(
+            "ignoring deprecated observability.metrics.prometheusPort / "
+            "prometheusPath; move them under observability.metrics.prometheus "
+            "(port / path)"
+        )
     logging_data = data.get("observability", {}).get("logging", {})
     health_data = data.get("observability", {}).get("health", {})
 
