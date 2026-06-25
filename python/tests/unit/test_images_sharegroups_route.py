@@ -1385,7 +1385,7 @@ def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
     sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
     assert set(tool.inputSchema["properties"]) == {"environment", "sharegroup_id"}
     assert tool.inputSchema["required"] == ["sharegroup_id"]
-    assert "[0-9a-fA-F]{8}" in sharegroup_id_schema["pattern"]
+    assert sharegroup_id_schema["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -1393,7 +1393,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns members associated with a share group."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     mock_linode_client.list_image_sharegroup_members.return_value = {
         "data": [{"username": "alice", "status": "accepted"}],
         "page": 1,
@@ -1402,7 +1402,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
     }
 
     result = await handle_linode_image_sharegroup_member_list(
-        {"sharegroup_id": f" {sharegroup_id} "}, sample_config
+        {"sharegroup_id": sharegroup_id}, sample_config
     )
 
     payload = json.loads(result[0].text)
@@ -1415,7 +1415,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
         "results": 1,
     }
     mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
-        sharegroup_id
+        str(sharegroup_id)
     )
 
 
@@ -1424,7 +1424,7 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler supplies stable pagination defaults for sparse API responses."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     mock_linode_client.list_image_sharegroup_members.return_value = {}
 
     result = await handle_linode_image_sharegroup_member_list(
@@ -1441,7 +1441,7 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
         "results": 0,
     }
     mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
-        sharegroup_id
+        str(sharegroup_id)
     )
 
 
@@ -1455,7 +1455,7 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
         {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
         {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
         {"sharegroup_id": ".."},
-        {"sharegroup_id": 123},
+        {"sharegroup_id": 0},
     ],
 )
 async def test_handle_linode_images_sharegroup_members_list_rejects_invalid_uuid(
@@ -1612,7 +1612,7 @@ def test_create_linode_images_sharegroup_member_token_get_tool_schema() -> None:
     assert tool.inputSchema["required"] == ["sharegroup_id", "token_uuid"]
     sharegroup_schema = tool.inputSchema["properties"]["sharegroup_id"]
     token_schema = tool.inputSchema["properties"]["token_uuid"]
-    assert "[0-9a-fA-F]{8}" in sharegroup_schema["pattern"]
+    assert sharegroup_schema["type"] == "integer"
     assert "[0-9a-fA-F]{8}" in token_schema["pattern"]
 
 
@@ -1621,7 +1621,7 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns a membership token associated with a share group."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
     mock_linode_client.get_image_sharegroup_member_token.return_value = {
         "id": "member-token-record-1",
@@ -1630,7 +1630,7 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
     }
 
     result = await handle_linode_image_sharegroup_member_token_get(
-        {"sharegroup_id": f" {sharegroup_id} ", "token_uuid": f" {token_uuid} "},
+        {"sharegroup_id": sharegroup_id, "token_uuid": f" {token_uuid} "},
         sample_config,
     )
 
@@ -1644,7 +1644,7 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
         },
     }
     mock_linode_client.get_image_sharegroup_member_token.assert_awaited_once_with(
-        sharegroup_id, token_uuid
+        str(sharegroup_id), token_uuid
     )
 
 
@@ -1653,31 +1653,16 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
     ("sharegroup_id", "token_uuid"),
     [
         (None, "11111111-1111-4111-8111-111111111111"),
-        ("", "11111111-1111-4111-8111-111111111111"),
-        ("not-a-uuid", "11111111-1111-4111-8111-111111111111"),
-        (
-            "22222222/2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ),
-        (
-            "22222222?2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ),
-        ("..", "11111111-1111-4111-8111-111111111111"),
-        (123, "11111111-1111-4111-8111-111111111111"),
-        ("22222222-2222-4222-8222-222222222222", None),
-        ("22222222-2222-4222-8222-222222222222", ""),
-        ("22222222-2222-4222-8222-222222222222", "not-a-uuid"),
-        (
-            "22222222-2222-4222-8222-222222222222",
-            "11111111/1111-4111-8111-111111111111",
-        ),
-        (
-            "22222222-2222-4222-8222-222222222222",
-            "11111111?1111-4111-8111-111111111111",
-        ),
-        ("22222222-2222-4222-8222-222222222222", ".."),
-        ("22222222-2222-4222-8222-222222222222", 123),
+        ("not-an-integer", "11111111-1111-4111-8111-111111111111"),
+        (0, "11111111-1111-4111-8111-111111111111"),
+        (-1, "11111111-1111-4111-8111-111111111111"),
+        (3, None),
+        (3, ""),
+        (3, "not-a-uuid"),
+        (3, "11111111/1111-4111-8111-111111111111"),
+        (3, "11111111?1111-4111-8111-111111111111"),
+        (3, ".."),
+        (3, 123),
     ],
 )
 async def test_member_token_get_rejects_invalid_path_params(
@@ -1876,9 +1861,7 @@ def test_create_linode_images_sharegroup_member_token_update_tool_schema() -> No
     ]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert (
-        "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["sharegroup_id"]["pattern"]
-    )
+    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
     assert "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["token_uuid"]["pattern"]
 
 
@@ -1887,7 +1870,7 @@ async def test_handle_linode_images_sharegroup_member_token_update_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler updates a member token label through the client."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
     mock_linode_client.update_image_sharegroup_member_token.return_value = {
         "id": "member-token-record-1",
@@ -1897,7 +1880,7 @@ async def test_handle_linode_images_sharegroup_member_token_update_success(
 
     result = await handle_linode_image_sharegroup_member_token_update(
         {
-            "sharegroup_id": f" {sharegroup_id} ",
+            "sharegroup_id": sharegroup_id,
             "token_uuid": f" {token_uuid} ",
             "label": " renamed-member ",
             "confirm": True,
@@ -1915,7 +1898,7 @@ async def test_handle_linode_images_sharegroup_member_token_update_success(
         },
     }
     mock_linode_client.update_image_sharegroup_member_token.assert_awaited_once_with(
-        sharegroup_id, token_uuid, label="renamed-member"
+        str(sharegroup_id), token_uuid, label="renamed-member"
     )
 
 
@@ -1926,7 +1909,7 @@ async def test_member_token_update_requires_true_confirm(
 ) -> None:
     """Handler rejects non-true confirm values before the client call."""
     arguments: dict[str, Any] = {
-        "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+        "sharegroup_id": 3,
         "token_uuid": "11111111-1111-4111-8111-111111111111",
         "label": "renamed-member",
     }
@@ -1947,31 +1930,16 @@ async def test_member_token_update_requires_true_confirm(
     ("sharegroup_id", "token_uuid"),
     [
         (None, "11111111-1111-4111-8111-111111111111"),
-        ("", "11111111-1111-4111-8111-111111111111"),
-        ("not-a-uuid", "11111111-1111-4111-8111-111111111111"),
-        (
-            "22222222/2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ),
-        (
-            "22222222?2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ),
-        ("..", "11111111-1111-4111-8111-111111111111"),
-        (123, "11111111-1111-4111-8111-111111111111"),
-        ("22222222-2222-4222-8222-222222222222", None),
-        ("22222222-2222-4222-8222-222222222222", ""),
-        ("22222222-2222-4222-8222-222222222222", "not-a-uuid"),
-        (
-            "22222222-2222-4222-8222-222222222222",
-            "11111111/1111-4111-8111-111111111111",
-        ),
-        (
-            "22222222-2222-4222-8222-222222222222",
-            "11111111?1111-4111-8111-111111111111",
-        ),
-        ("22222222-2222-4222-8222-222222222222", ".."),
-        ("22222222-2222-4222-8222-222222222222", 123),
+        ("not-an-integer", "11111111-1111-4111-8111-111111111111"),
+        (0, "11111111-1111-4111-8111-111111111111"),
+        (-1, "11111111-1111-4111-8111-111111111111"),
+        (3, None),
+        (3, ""),
+        (3, "not-a-uuid"),
+        (3, "11111111/1111-4111-8111-111111111111"),
+        (3, "11111111?1111-4111-8111-111111111111"),
+        (3, ".."),
+        (3, 123),
     ],
 )
 async def test_member_token_update_rejects_invalid_path_params(
@@ -2003,7 +1971,7 @@ async def test_member_token_update_rejects_invalid_label(
     """Handler requires a non-empty label before the client call."""
     result = await handle_linode_image_sharegroup_member_token_update(
         {
-            "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+            "sharegroup_id": 3,
             "token_uuid": "11111111-1111-4111-8111-111111111111",
             "label": bad_label,
             "confirm": True,
@@ -2023,7 +1991,7 @@ async def test_image_sharegroup_member_token_update_dry_run_previews_without_con
     """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_image_sharegroup_member_token_update(
         {
-            "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+            "sharegroup_id": 3,
             "token_uuid": "11111111-1111-4111-8111-111111111111",
             "label": "renamed-member",
             "dry_run": True,
@@ -2039,7 +2007,7 @@ async def test_image_sharegroup_member_token_update_dry_run_returns_encoded_prev
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """dry_run=true previews member token update without calling the client."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
     result = await handle_linode_image_sharegroup_member_token_update(
@@ -2205,9 +2173,7 @@ def test_create_linode_images_sharegroup_member_token_delete_tool_schema() -> No
     ]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert (
-        "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["sharegroup_id"]["pattern"]
-    )
+    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
     assert "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["token_uuid"]["pattern"]
 
 
@@ -2216,12 +2182,12 @@ async def test_handle_linode_images_sharegroup_member_token_delete_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler revokes a member token through the client."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
     result = await handle_linode_image_sharegroup_member_token_delete(
         {
-            "sharegroup_id": f" {sharegroup_id} ",
+            "sharegroup_id": sharegroup_id,
             "token_uuid": f" {token_uuid} ",
             "confirm": True,
         },
@@ -2232,7 +2198,7 @@ async def test_handle_linode_images_sharegroup_member_token_delete_success(
         "message": "Image share group member token revoked"
     }
     mock_linode_client.delete_image_sharegroup_member_token.assert_awaited_once_with(
-        sharegroup_id, token_uuid
+        str(sharegroup_id), token_uuid
     )
 
 
@@ -2243,7 +2209,7 @@ async def test_member_token_delete_requires_true_confirm(
 ) -> None:
     """Handler rejects non-true confirm values before the client call."""
     arguments: dict[str, Any] = {
-        "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+        "sharegroup_id": 3,
         "token_uuid": "11111111-1111-4111-8111-111111111111",
     }
     if bad_confirm is not None:
@@ -2263,31 +2229,16 @@ async def test_member_token_delete_requires_true_confirm(
     ("sharegroup_id", "token_uuid"),
     [
         (None, "11111111-1111-4111-8111-111111111111"),
-        ("", "11111111-1111-4111-8111-111111111111"),
-        ("not-a-uuid", "11111111-1111-4111-8111-111111111111"),
-        (
-            "22222222/2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ),
-        (
-            "22222222?2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ),
-        ("..", "11111111-1111-4111-8111-111111111111"),
-        (123, "11111111-1111-4111-8111-111111111111"),
-        ("22222222-2222-4222-8222-222222222222", None),
-        ("22222222-2222-4222-8222-222222222222", ""),
-        ("22222222-2222-4222-8222-222222222222", "not-a-uuid"),
-        (
-            "22222222-2222-4222-8222-222222222222",
-            "11111111/1111-4111-8111-111111111111",
-        ),
-        (
-            "22222222-2222-4222-8222-222222222222",
-            "11111111?1111-4111-8111-111111111111",
-        ),
-        ("22222222-2222-4222-8222-222222222222", ".."),
-        ("22222222-2222-4222-8222-222222222222", 123),
+        ("not-an-integer", "11111111-1111-4111-8111-111111111111"),
+        (0, "11111111-1111-4111-8111-111111111111"),
+        (-1, "11111111-1111-4111-8111-111111111111"),
+        (3, None),
+        (3, ""),
+        (3, "not-a-uuid"),
+        (3, "11111111/1111-4111-8111-111111111111"),
+        (3, "11111111?1111-4111-8111-111111111111"),
+        (3, ".."),
+        (3, 123),
     ],
 )
 async def test_member_token_delete_rejects_invalid_path_params(
@@ -2317,7 +2268,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_previews_without_con
     """Dry-run previews without requiring the confirm gate."""
     result = await handle_linode_image_sharegroup_member_token_delete(
         {
-            "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+            "sharegroup_id": 3,
             "token_uuid": "11111111-1111-4111-8111-111111111111",
             "dry_run": True,
         },
@@ -2332,7 +2283,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_returns_encoded_prev
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """dry_run=true previews member token revoke without calling the client."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
     result = await handle_linode_image_sharegroup_member_token_delete(
@@ -2811,9 +2762,7 @@ def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
     }
     assert tool.inputSchema["required"] == ["sharegroup_id", "images", "confirm"]
     assert tool.inputSchema["properties"]["images"]["minItems"] == 1
-    assert (
-        "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["sharegroup_id"]["pattern"]
-    )
+    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -2821,12 +2770,12 @@ async def test_handle_linode_images_sharegroup_images_add_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler adds images to a share group."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     images = [{"id": "private/ubuntu", "label": "Private Ubuntu"}]
     mock_linode_client.add_image_sharegroup_images.return_value = {"images": images}
 
     result = await handle_linode_image_sharegroup_image_add(
-        {"sharegroup_id": f" {sharegroup_id} ", "images": images, "confirm": True},
+        {"sharegroup_id": sharegroup_id, "images": images, "confirm": True},
         sample_config,
     )
 
@@ -2836,7 +2785,7 @@ async def test_handle_linode_images_sharegroup_images_add_success(
         "result": {"images": images},
     }
     mock_linode_client.add_image_sharegroup_images.assert_awaited_once_with(
-        sharegroup_id, images
+        str(sharegroup_id), images
     )
 
 
@@ -2847,7 +2796,7 @@ async def test_handle_linode_images_sharegroup_images_add_requires_literal_confi
 ) -> None:
     """Handler rejects omitted and non-literal confirm before the client call."""
     arguments: dict[str, Any] = {
-        "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+        "sharegroup_id": 3,
         "images": [{"id": "private/ubuntu"}],
     }
     if confirm is not None:
@@ -2869,7 +2818,7 @@ async def test_handle_linode_images_sharegroup_images_add_requires_literal_confi
         {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
         {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
         {"sharegroup_id": ".."},
-        {"sharegroup_id": 123},
+        {"sharegroup_id": 0},
     ],
 )
 async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_uuid(
@@ -2894,7 +2843,7 @@ async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_body(
     """Handler rejects invalid images payloads before confirm/client calls."""
     result = await handle_linode_image_sharegroup_image_add(
         {
-            "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+            "sharegroup_id": 3,
             "images": images,
             "confirm": True,
         },
@@ -2910,7 +2859,7 @@ async def test_handle_linode_images_sharegroup_images_add_dry_run(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry run previews the encoded mutating request without client call."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     images = [{"id": "private/ubuntu"}]
 
     result = await handle_linode_image_sharegroup_image_add(
@@ -3102,8 +3051,8 @@ def test_create_linode_images_sharegroup_members_add_tool_schema() -> None:
         "token",
         "confirm",
     ]
-    sharegroup_pattern = tool.inputSchema["properties"]["sharegroup_id"]["pattern"]
-    assert "[0-9a-fA-F]{8}" in sharegroup_pattern
+    sharegroup_schema = tool.inputSchema["properties"]["sharegroup_id"]
+    assert sharegroup_schema["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -3111,14 +3060,14 @@ async def test_handle_linode_images_sharegroup_members_add_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler adds members to a share group."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     mock_linode_client.add_members_to_image_sharegroup.return_value = {
         "member": {"label": "team-a"}
     }
 
     result = await handle_linode_image_sharegroup_member_add(
         {
-            "sharegroup_id": f" {sharegroup_id} ",
+            "sharegroup_id": sharegroup_id,
             "label": "team-a",
             "token": "share-token",
             "confirm": True,
@@ -3132,7 +3081,7 @@ async def test_handle_linode_images_sharegroup_members_add_success(
         "result": {"member": {"label": "team-a"}},
     }
     mock_linode_client.add_members_to_image_sharegroup.assert_awaited_once_with(
-        sharegroup_id, label="team-a", token="share-token"
+        str(sharegroup_id), label="team-a", token="share-token"
     )
 
 
@@ -3143,7 +3092,7 @@ async def test_handle_linode_images_sharegroup_members_add_requires_literal_conf
 ) -> None:
     """Handler rejects omitted and non-literal confirm before the client call."""
     arguments: dict[str, Any] = {
-        "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+        "sharegroup_id": 3,
         "label": "team-a",
         "token": "share-token",
     }
@@ -3166,7 +3115,7 @@ async def test_handle_linode_images_sharegroup_members_add_requires_literal_conf
         {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
         {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
         {"sharegroup_id": ".."},
-        {"sharegroup_id": 123},
+        {"sharegroup_id": 0},
     ],
 )
 async def test_handle_linode_images_sharegroup_members_add_rejects_invalid_uuid(
@@ -3207,7 +3156,7 @@ async def test_handle_linode_images_sharegroup_members_add_rejects_invalid_body(
     """Handler rejects invalid label/token body fields before client calls."""
     result = await handle_linode_image_sharegroup_member_add(
         {
-            "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+            "sharegroup_id": 3,
             "confirm": True,
             **arguments,
         },
@@ -3223,7 +3172,7 @@ async def test_handle_linode_images_sharegroup_members_add_dry_run(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry run previews the encoded mutating request without client call."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
 
     result = await handle_linode_image_sharegroup_member_add(
         {
@@ -3280,7 +3229,7 @@ def test_create_linode_images_sharegroup_images_list_tool_schema() -> None:
     sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
     assert set(tool.inputSchema["properties"]) == {"environment", "sharegroup_id"}
     assert tool.inputSchema["required"] == ["sharegroup_id"]
-    assert "[0-9a-fA-F]{8}" in sharegroup_id_schema["pattern"]
+    assert sharegroup_id_schema["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -3288,7 +3237,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns images associated with a share group."""
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    sharegroup_id = 3
     mock_linode_client.list_image_sharegroup_images.return_value = {
         "data": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
         "page": 1,
@@ -3297,7 +3246,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
     }
 
     result = await handle_linode_image_sharegroup_image_list(
-        {"sharegroup_id": f" {sharegroup_id} "}, sample_config
+        {"sharegroup_id": sharegroup_id}, sample_config
     )
 
     payload = json.loads(result[0].text)
@@ -3310,7 +3259,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
         "results": 1,
     }
     mock_linode_client.list_image_sharegroup_images.assert_awaited_once_with(
-        sharegroup_id
+        str(sharegroup_id)
     )
 
 
@@ -3324,7 +3273,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
         {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
         {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
         {"sharegroup_id": ".."},
-        {"sharegroup_id": 123},
+        {"sharegroup_id": 0},
     ],
 )
 async def test_handle_linode_images_sharegroup_images_list_rejects_invalid_uuid(
@@ -4037,7 +3986,7 @@ def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
     assert tool.inputSchema["properties"]["sharegroup_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["image_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["image_id"]["type"] == "string"
     assert "dry_run" in tool.inputSchema["properties"]
     assert "label" in tool.inputSchema["properties"]
     assert "description" in tool.inputSchema["properties"]
@@ -4050,7 +3999,7 @@ async def test_handle_linode_images_sharegroup_image_update_success(
 ) -> None:
     """Handler updates one shared image and returns the response."""
     sharegroup_id = 123
-    image_id = 1234
+    image_id = "shared/1234"
     mock_linode_client.update_image_sharegroup_image.return_value = {
         "id": str(image_id),
         "label": "new-label",
@@ -4089,7 +4038,7 @@ async def test_handle_linode_images_sharegroup_image_update_description_only_suc
     result = await handle_linode_image_sharegroup_image_update(
         {
             "sharegroup_id": 123,
-            "image_id": 1234,
+            "image_id": "shared/1234",
             "description": " new description ",
             "confirm": True,
         },
@@ -4102,7 +4051,7 @@ async def test_handle_linode_images_sharegroup_image_update_description_only_suc
         "image": {"id": "1234", "description": "new description"},
     }
     mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
-        "123", "1234", label=None, description="new description"
+        "123", "shared/1234", label=None, description="new description"
     )
 
 
@@ -4114,7 +4063,7 @@ async def test_handle_linode_images_sharegroup_image_update_requires_literal_con
     """Missing, false, string, and numeric confirm are rejected before client call."""
     arguments: dict[str, object] = {
         "sharegroup_id": 123,
-        "image_id": 1234,
+        "image_id": "shared/1234",
         "label": "new-label",
     }
     if confirm_value is not None:
@@ -4133,24 +4082,25 @@ async def test_handle_linode_images_sharegroup_image_update_requires_literal_con
 @pytest.mark.parametrize(
     "arguments",
     [
-        {"sharegroup_id": 0, "image_id": 1234},
-        {"sharegroup_id": "123", "image_id": 1234},
-        {"sharegroup_id": True, "image_id": 1234},
-        {"sharegroup_id": 123, "image_id": 0},
-        {"sharegroup_id": 123, "image_id": "1234"},
+        {"sharegroup_id": 0, "image_id": "shared/1234"},
+        {"sharegroup_id": "123", "image_id": "shared/1234"},
+        {"sharegroup_id": True, "image_id": "shared/1234"},
+        {"sharegroup_id": "123/4", "image_id": "shared/1234"},
+        {"sharegroup_id": "123?4", "image_id": "shared/1234"},
+        {"sharegroup_id": "..", "image_id": "shared/1234"},
+        {"sharegroup_id": 123, "image_id": 1234},
         {"sharegroup_id": 123, "image_id": True},
-        {"sharegroup_id": "123/4", "image_id": 1234},
-        {"sharegroup_id": "123?4", "image_id": 1234},
-        {"sharegroup_id": "..", "image_id": 1234},
+        {"sharegroup_id": 123, "image_id": "1234"},
         {"sharegroup_id": 123, "image_id": "123/4"},
         {"sharegroup_id": 123, "image_id": "123?4"},
         {"sharegroup_id": 123, "image_id": ".."},
+        {"sharegroup_id": 123, "image_id": "shared/0"},
     ],
 )
 async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_path_params(
     arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler rejects malformed numeric share group and image IDs."""
+    """Handler rejects malformed share group and shared image IDs."""
     result = await handle_linode_image_sharegroup_image_update(
         {**arguments, "label": "new-label", "confirm": True}, sample_config
     )
@@ -4183,7 +4133,7 @@ async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_body
     result = await handle_linode_image_sharegroup_image_update(
         {
             "sharegroup_id": 123,
-            "image_id": 1234,
+            "image_id": "shared/1234",
             **arguments,
             "confirm": True,
         },
@@ -4200,7 +4150,7 @@ async def test_handle_linode_images_sharegroup_image_update_dry_run(
 ) -> None:
     """Dry run previews the encoded mutating request without client call."""
     sharegroup_id = 123
-    image_id = 1234
+    image_id = "shared/1234"
 
     result = await handle_linode_image_sharegroup_image_update(
         {
@@ -4216,7 +4166,9 @@ async def test_handle_linode_images_sharegroup_image_update_dry_run(
     payload = json.loads(result[0].text)
     assert payload["tool"] == "linode_image_sharegroup_image_update"
     assert payload["would_execute"]["method"] == "PUT"
-    assert payload["would_execute"]["path"] == ("/images/sharegroups/123/images/1234")
+    assert payload["would_execute"]["path"] == (
+        "/images/sharegroups/123/images/shared%2F1234"
+    )
     assert payload["would_execute"]["body"] == {"description": "new description"}
     mock_linode_client.update_image_sharegroup_image.assert_not_called()
 

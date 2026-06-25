@@ -90,7 +90,7 @@ _CASES = [
     ),
     pytest.param(
         handle_linode_image_sharegroup_delete,
-        {"sharegroup_id": "22222222-2222-2222-2222-222222222222"},
+        {"sharegroup_id": 3},
         "get_image_sharegroup",
         {
             "uuid": "22222222-2222-2222-2222-222222222222",

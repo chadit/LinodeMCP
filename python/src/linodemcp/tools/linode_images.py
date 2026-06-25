@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 
 _IMAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+/[A-Za-z0-9._-]+$")
+_SHARED_IMAGE_ID_PATTERN = re.compile(r"^shared/[1-9]\d*$")
 
 
 def _optional_int_argument(
@@ -215,8 +216,9 @@ def create_linode_image_sharegroup_delete_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "confirm": {
                     "type": "boolean",
@@ -292,8 +294,9 @@ def create_linode_image_sharegroup_get_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
             },
             "required": ["sharegroup_id"],
@@ -316,13 +319,9 @@ def create_linode_image_sharegroup_image_list_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": (
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-                        "[0-9a-fA-F]{12}$"
-                    ),
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
             },
             "required": ["sharegroup_id"],
@@ -345,13 +344,9 @@ def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": (
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-                        "[0-9a-fA-F]{12}$"
-                    ),
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
             },
             "required": ["sharegroup_id"],
@@ -374,13 +369,9 @@ def create_linode_image_sharegroup_member_token_get_tool() -> tuple[Tool, Capabi
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": (
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-                        "[0-9a-fA-F]{12}$"
-                    ),
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "token_uuid": {
                     "type": "string",
@@ -419,9 +410,9 @@ def create_linode_image_sharegroup_member_token_delete_tool() -> tuple[
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": uuid_pattern,
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "token_uuid": {
                     "type": "string",
@@ -461,9 +452,9 @@ def create_linode_image_sharegroup_member_token_update_tool() -> tuple[
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": uuid_pattern,
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "token_uuid": {
                     "type": "string",
@@ -501,13 +492,9 @@ def create_linode_image_sharegroup_member_add_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": (
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-                        "[0-9a-fA-F]{12}$"
-                    ),
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "label": {
                     "type": "string",
@@ -593,11 +580,8 @@ def create_linode_image_sharegroup_image_update_tool() -> tuple[Tool, Capability
                     "description": "Image share group numeric ID (required)",
                 },
                 "image_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "Shared image numeric ID, for example 1234 (required)"
-                    ),
+                    "type": "string",
+                    "description": ("Shared image ID, for example shared/1 (required)"),
                 },
                 "label": {
                     "type": "string",
@@ -636,13 +620,9 @@ def create_linode_image_sharegroup_image_add_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "pattern": (
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-                        "[0-9a-fA-F]{12}$"
-                    ),
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "images": {
                     "type": "array",
@@ -684,8 +664,9 @@ def create_linode_image_sharegroup_update_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "sharegroup_id": {
-                    "type": "string",
-                    "description": "Image share group UUID (required)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group ID (required)",
                 },
                 "label": {
                     "type": "string",
@@ -1671,11 +1652,6 @@ def _image_sharegroup_token_uuid_error(value: Any, name: str) -> str | None:
     return None
 
 
-def _image_sharegroup_id_error(value: Any) -> str | None:
-    """Validate a sharegroup_id arg."""
-    return _image_sharegroup_token_uuid_error(value, "sharegroup_id")
-
-
 def _image_sharegroup_numeric_id_error(value: Any) -> str | None:
     """Validate the numeric sharegroup_id arg for shared image routes.
 
@@ -1691,6 +1667,13 @@ def _image_sharegroup_image_id_error(value: Any) -> str | None:
     """Validate the shared image numeric ID path arg."""
     if type(value) is not int or value <= 0:
         return "image_id must be a positive integer"
+    return None
+
+
+def _image_sharegroup_shared_image_id_error(value: Any) -> str | None:
+    """Validate the shared image string ID path arg (for example shared/1)."""
+    if not isinstance(value, str) or not _SHARED_IMAGE_ID_PATTERN.fullmatch(value):
+        return "image_id must match shared/<positive integer>"
     return None
 
 
@@ -1764,11 +1747,11 @@ async def handle_linode_image_sharegroup_delete(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_delete tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
 
     two_stage = await _images_sharegroup_delete_two_stage(
         arguments, cfg, sharegroup_id_str
@@ -1803,11 +1786,11 @@ async def handle_linode_image_sharegroup_get(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_get tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         sharegroup = await client.get_image_sharegroup(sharegroup_id_str)
@@ -1824,11 +1807,11 @@ async def handle_linode_image_sharegroup_image_list(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_image_list request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_image_sharegroup_images(sharegroup_id_str)
@@ -1850,11 +1833,11 @@ async def handle_linode_image_sharegroup_member_list(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_list request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_image_sharegroup_members(sharegroup_id_str)
@@ -1876,7 +1859,7 @@ async def handle_linode_image_sharegroup_member_token_get(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_token_get request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_id_error(sharegroup_id)
+    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if sharegroup_error is not None:
         return error_response(sharegroup_error)
 
@@ -1885,7 +1868,7 @@ async def handle_linode_image_sharegroup_member_token_get(
     if token_error is not None:
         return error_response(token_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1907,7 +1890,7 @@ async def handle_linode_image_sharegroup_member_token_delete(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_token_delete tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_id_error(sharegroup_id)
+    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if sharegroup_error is not None:
         return error_response(sharegroup_error)
 
@@ -1916,7 +1899,7 @@ async def handle_linode_image_sharegroup_member_token_delete(
     if token_error is not None:
         return error_response(token_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
     token_uuid_str = cast("str", token_uuid).strip()
 
     if is_dry_run(arguments):
@@ -1954,7 +1937,7 @@ async def handle_linode_image_sharegroup_member_token_update(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_token_update tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_id_error(sharegroup_id)
+    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if sharegroup_error is not None:
         return error_response(sharegroup_error)
 
@@ -1967,7 +1950,7 @@ async def handle_linode_image_sharegroup_member_token_update(
     if label_error is not None:
         return error_response(label_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
     token_uuid_str = cast("str", token_uuid).strip()
     label = cast("str", arguments["label"]).strip()
 
@@ -2061,7 +2044,7 @@ async def handle_linode_image_sharegroup_image_update(
         return error_response(id_error)
 
     image_id = arguments.get("image_id")
-    image_id_error = _image_sharegroup_image_id_error(image_id)
+    image_id_error = _image_sharegroup_shared_image_id_error(image_id)
     if image_id_error is not None:
         return error_response(image_id_error)
 
@@ -2072,7 +2055,7 @@ async def handle_linode_image_sharegroup_image_update(
         return error_response(body_error)
 
     sharegroup_id_str = str(cast("int", sharegroup_id))
-    image_id_str = str(cast("int", image_id))
+    image_id_str = cast("str", image_id).strip()
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -2113,7 +2096,7 @@ async def handle_linode_image_sharegroup_member_add(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_add tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
@@ -2121,7 +2104,7 @@ async def handle_linode_image_sharegroup_member_add(
     if body_error is not None:
         return error_response(body_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
     body = cast("dict[str, str]", body)
 
     if is_dry_run(arguments):
@@ -2157,7 +2140,7 @@ async def handle_linode_image_sharegroup_image_add(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_image_add tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
@@ -2165,7 +2148,7 @@ async def handle_linode_image_sharegroup_image_add(
     if images_error is not None:
         return error_response(images_error)
 
-    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
     images = cast("list[dict[str, str]]", images)
 
     if is_dry_run(arguments):
@@ -2199,7 +2182,7 @@ async def handle_linode_image_sharegroup_update(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_update tool request."""
     sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_id_error(sharegroup_id)
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
     if id_error is not None:
         return error_response(id_error)
 
@@ -2209,9 +2192,7 @@ async def handle_linode_image_sharegroup_update(
     if body_error is not None:
         return error_response(body_error)
 
-    if not isinstance(sharegroup_id, str):
-        return error_response("sharegroup_id must be a non-empty string")
-    sharegroup_id_str = sharegroup_id.strip()
+    sharegroup_id_str = str(cast("int", sharegroup_id))
 
     if is_dry_run(arguments):
         return build_dry_run_response(

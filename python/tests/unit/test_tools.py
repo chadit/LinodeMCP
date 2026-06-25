@@ -20230,7 +20230,7 @@ def test_create_linode_profile_token_update_tool() -> None:
 
     assert tool.name == "linode_profile_token_update"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["token_id", "label", "confirm"]
+    assert tool.inputSchema["required"] == ["token_id", "confirm"]
     assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["label"]["maxLength"] == 100
 
@@ -21860,7 +21860,7 @@ async def test_linode_nodebalancer_config_create_tool_definition() -> None:
     assert capability == Capability.Write
     assert "nodebalancer_id" in tool.inputSchema["properties"]
     assert "confirm" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id", "confirm"]
+    assert tool.inputSchema["required"] == ["nodebalancer_id", "port", "confirm"]
     # Verify optional body fields are present
     props = tool.inputSchema["properties"]
     assert "port" in props

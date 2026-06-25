@@ -286,7 +286,7 @@ func NewLinodeManagedCredentialUpdateTool(cfg *config.Config) (mcp.Tool, profile
 		"Updates one stored managed credential by ID. Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(managedUpdateIDParam, mcp.Required(), mcp.Description("The numeric Managed credential ID to update.")),
-			mcp.WithString("label", mcp.Description("Updated credential label.")),
+			mcp.WithString("label", mcp.Required(), mcp.Description("Updated credential label.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed credential. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -1607,7 +1607,7 @@ func NewLinodeBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 		"linode_beta_get",
 		"Gets one available beta program.",
 		[]mcp.ToolOption{
-			mcp.WithString("id", mcp.Required(),
+			mcp.WithString("beta_id", mcp.Required(),
 				mcp.Description("Unique identifier for the beta program.")),
 		},
 		handleLinodeBetaGetRequest,
@@ -1623,7 +1623,7 @@ func NewLinodeAccountBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		"linode_account_beta_get",
 		"Gets one beta program that the account is enrolled in.",
 		[]mcp.ToolOption{
-			mcp.WithString("id", mcp.Required(),
+			mcp.WithString("beta_id", mcp.Required(),
 				mcp.Description("Unique identifier for the beta program.")),
 		},
 		handleLinodeAccountBetaGetRequest,
@@ -5036,7 +5036,7 @@ func accountChildAccountEUUIDFromTool(request *mcp.CallToolRequest) (string, str
 }
 
 func handleLinodeBetaGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	betaID, validationMessage := accountBetaIDFromTool(request)
+	betaID, validationMessage := accountBetaIDFromTool(request, "beta_id")
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -5055,7 +5055,7 @@ func handleLinodeBetaGetRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 func handleLinodeAccountBetaGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	betaID, validationMessage := accountBetaIDFromTool(request)
+	betaID, validationMessage := accountBetaIDFromTool(request, "beta_id")
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -5112,7 +5112,7 @@ func handleLinodeAccountBetaEnrollRequest(ctx context.Context, request *mcp.Call
 }
 
 func enrollAccountBetaRequestFromTool(request *mcp.CallToolRequest) (*linode.EnrollAccountBetaRequest, string) {
-	id, validationMessage := accountBetaIDFromTool(request)
+	id, validationMessage := accountBetaIDFromTool(request, "id")
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -5120,19 +5120,19 @@ func enrollAccountBetaRequestFromTool(request *mcp.CallToolRequest) (*linode.Enr
 	return &linode.EnrollAccountBetaRequest{ID: id}, ""
 }
 
-func accountBetaIDFromTool(request *mcp.CallToolRequest) (string, string) {
-	raw, exists := request.GetArguments()["id"]
+func accountBetaIDFromTool(request *mcp.CallToolRequest, field string) (string, string) {
+	raw, exists := request.GetArguments()[field]
 	if !exists {
-		return "", "id is required"
+		return "", field + " is required"
 	}
 
 	id, ok := raw.(string)
 	if !ok || strings.TrimSpace(id) == "" {
-		return "", "id must be a non-empty string"
+		return "", field + " must be a non-empty string"
 	}
 
 	if id != strings.TrimSpace(id) || !isAccountBetaID(id) {
-		return "", "id must contain only letters, numbers, underscores, and hyphens"
+		return "", field + " must contain only letters, numbers, underscores, and hyphens"
 	}
 
 	return id, ""

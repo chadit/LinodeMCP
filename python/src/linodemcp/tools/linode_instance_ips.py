@@ -208,6 +208,7 @@ def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
             "required": [
                 "linode_id",
                 "type",
+                "public",
                 "confirm",
             ],
         },
@@ -496,6 +497,7 @@ def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
             "required": [
                 "linode_id",
                 "type",
+                "public",
                 "confirm",
             ],
         },

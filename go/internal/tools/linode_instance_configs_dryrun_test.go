@@ -428,7 +428,7 @@ func TestLinodeInstanceConfigInterfacesReorderToolDryRun(t *testing.T) {
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123),
 			keyConfigID: float64(456),
-			keyIDs:      `[101,102,103]`,
+			keyIDs:      []any{float64(101), float64(102), float64(103)},
 			keyDryRun:   true,
 		}))
 		if err != nil {

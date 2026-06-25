@@ -138,6 +138,7 @@ const (
 	keyErrors                    = "errors"
 	keyReason                    = "reason"
 	keyBetaID                    = "id"
+	keyBetaIDPath                = "beta_id"
 	keyLongviewClientID          = "client_id"
 	keyCredentialID              = "credential_id"
 	keyLongviewAPIKey            = "api_key"
@@ -209,6 +210,7 @@ const (
 	longviewClientSlashID        = "789/1"
 	interfaceIDQueryValue        = "456?query"
 	singleInterfaceIDsJSON       = "[101]"
+	errReorderIDsArray           = "ids must be an array of positive integers"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID                   = "linode_id"

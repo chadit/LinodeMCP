@@ -2352,8 +2352,8 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDefinition(t *testing.T) {
 		t.Errorf("props missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if _, ok := props[keyConfirm]; !ok {
+		t.Errorf("props missing key %v", keyConfirm)
 	}
 }
 
@@ -2388,7 +2388,7 @@ func TestLinodeDatabaseInstanceCredentialsGetToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -2438,7 +2438,7 @@ func TestLinodeDatabaseInstanceCredentialsGetToolClientError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -2469,7 +2469,7 @@ func TestLinodeDatabaseInstanceCredentialsGetToolClientConfigurationError(t *tes
 	cfg := &config.Config{}
 	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {

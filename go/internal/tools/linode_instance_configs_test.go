@@ -1319,12 +1319,11 @@ func TestLinodeInstanceConfigInterfacesReorderToolValidation(t *testing.T) {
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: "missing ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: "ids is required"},
-		{name: "non-string ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: []any{float64(101)}, keyConfirm: true}, wantContains: "ids must be a string"},
-		{name: "empty ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: databaseJSONArray, keyConfirm: true}, wantContains: "ids must include at least one interface ID"},
-		{name: "invalid ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "[", keyConfirm: true}, wantContains: "ids must be a JSON array"},
-		{name: "zero id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "[0]", keyConfirm: true}, wantContains: "ids must contain only positive integer"},
-		{name: "duplicate id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "[101,101]", keyConfirm: true}, wantContains: "ids must not contain duplicate interface IDs"},
-		{name: "string id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: `["101"]`, keyConfirm: true}, wantContains: "ids must be a JSON array"},
+		{name: "non-array ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "notanarray", keyConfirm: true}, wantContains: errReorderIDsArray},
+		{name: "empty ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: []any{}, keyConfirm: true}, wantContains: "ids must include at least one ID"},
+		{name: "zero id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: []any{float64(0)}, keyConfirm: true}, wantContains: errReorderIDsArray},
+		{name: "duplicate id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: []any{float64(101), float64(101)}, keyConfirm: true}, wantContains: "ids must not contain duplicate interface IDs"},
+		{name: "string element ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: []any{"101"}, keyConfirm: true}, wantContains: errReorderIDsArray},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1390,7 +1389,7 @@ func TestLinodeInstanceConfigInterfacesReorderToolSuccessfulReorder(t *testing.T
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLinodeID: float64(123),
 		keyConfigID: float64(789),
-		keyIDs:      "[101,102,103]",
+		keyIDs:      []any{float64(101), float64(102), float64(103)},
 		keyConfirm:  true,
 	}))
 	if err != nil {
@@ -1441,7 +1440,7 @@ func TestLinodeInstanceConfigInterfacesReorderToolClientError(t *testing.T) {
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLinodeID: float64(123),
 		keyConfigID: float64(789),
-		keyIDs:      singleInterfaceIDsJSON,
+		keyIDs:      []any{float64(101)},
 		keyConfirm:  true,
 	}))
 	if err != nil {

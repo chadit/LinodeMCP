@@ -260,6 +260,7 @@ func NewLinodeDatabaseInstanceCredentialsGetTool(cfg *config.Config) (mcp.Tool, 
 		mcp.WithDescription("Retrieves credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID whose credentials to retrieve.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm retrieving the database credentials. Ignored when dry_run=true.")),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
@@ -277,6 +278,7 @@ func NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool(cfg *config.Config) (
 		mcp.WithDescription("Retrieves credentials for a PostgreSQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID whose credentials to retrieve.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm retrieving the database credentials. Ignored when dry_run=true.")),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
@@ -745,12 +747,16 @@ func handleDatabasePostgreSQLInstanceSSLGetRequest(ctx context.Context, request 
 	return MarshalToolResponse(ssl)
 }
 
-func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+func handleDatabaseCredentialsGet(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, instancesPath, engineLabel string,
+	fetchInstance func(ctx context.Context, c *linode.Client, id int) (any, error),
+	fetchCredentials func(ctx context.Context, c *linode.Client, id int) (any, error),
+) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return runDatabaseInstanceActionDryRun(ctx, request, cfg, "linode_database_mysql_instance_credentials_get", "GET", dbMySQLInstancesPath, "credentials",
-			func(ctx context.Context, c *linode.Client, id int) (any, error) {
-				return c.GetDatabaseInstance(ctx, id)
-			})
+		return runDatabaseInstanceActionDryRun(ctx, request, cfg, toolName, "GET", instancesPath, "credentials", fetchInstance)
 	}
 
 	instanceID, validationMessage := databaseInstanceIDFromTool(request)
@@ -758,43 +764,47 @@ func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
+	if result := RequireConfirm(request, "This retrieves Managed Database credentials. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	credentials, err := client.GetDatabaseInstanceCredentials(ctx, instanceID)
+	credentials, err := fetchCredentials(ctx, client, instanceID)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database credentials: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve %s Managed Database credentials: %v", engineLabel, err)), nil
 	}
 
 	return MarshalToolResponse(credentials)
 }
 
+func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return handleDatabaseCredentialsGet(
+		ctx, request, cfg,
+		"linode_database_mysql_instance_credentials_get", dbMySQLInstancesPath, "MySQL",
+		func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetDatabaseInstance(ctx, id)
+		},
+		func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetDatabaseInstanceCredentials(ctx, id)
+		},
+	)
+}
+
 func handleDatabasePostgreSQLInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if IsDryRun(request) {
-		return runDatabaseInstanceActionDryRun(ctx, request, cfg, "linode_database_postgresql_instance_credentials_get", "GET", dbPostgreSQLInstancesPath, "credentials",
-			func(ctx context.Context, c *linode.Client, id int) (any, error) {
-				return c.GetDatabasePostgreSQLInstance(ctx, id)
-			})
-	}
-
-	instanceID, validationMessage := databaseInstanceIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	credentials, err := client.GetDatabasePostgreSQLInstanceCredentials(ctx, instanceID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database credentials: %v", err)), nil
-	}
-
-	return MarshalToolResponse(credentials)
+	return handleDatabaseCredentialsGet(
+		ctx, request, cfg,
+		"linode_database_postgresql_instance_credentials_get", dbPostgreSQLInstancesPath, "PostgreSQL",
+		func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetDatabasePostgreSQLInstance(ctx, id)
+		},
+		func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetDatabasePostgreSQLInstanceCredentials(ctx, id)
+		},
+	)
 }
 
 func handleDatabaseInstanceCredentialsResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

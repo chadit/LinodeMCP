@@ -2473,8 +2473,8 @@ func TestLinodeBetaGetToolDefinition(t *testing.T) {
 	}
 
 	props := tool.InputSchema.Properties
-	if _, ok := props[keyBetaID]; !ok {
-		t.Errorf("props missing key %v", keyBetaID)
+	if _, ok := props[keyBetaIDPath]; !ok {
+		t.Errorf("props missing key %v", keyBetaIDPath)
 	}
 
 	if _, ok := props[keyConfirm]; ok {
@@ -2532,7 +2532,7 @@ func TestLinodeBetaGetToolSuccess(t *testing.T) {
 	}
 	_, _, handler := tools.NewLinodeBetaGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -2598,7 +2598,7 @@ func TestLinodeBetaGetToolApiError(t *testing.T) {
 	}
 	_, _, handler := tools.NewLinodeBetaGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -2631,13 +2631,13 @@ func TestLinodeBetaGetToolInvalidIdRejectsBeforeClient(t *testing.T) {
 		wantMessage string
 	}{
 		{name: caseMissing, args: map[string]any{}, wantMessage: errBetaIDRequired},
-		{name: caseEmpty, args: map[string]any{keyBetaID: ""}, wantMessage: errBetaIDNonEmpty},
-		{name: caseBlank, args: map[string]any{keyBetaID: blankString}, wantMessage: errBetaIDNonEmpty},
-		{name: caseNumeric, args: map[string]any{keyBetaID: 123}, wantMessage: errBetaIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyBetaID: invalidBetaIDSlash}, wantMessage: errBetaIDChars},
-		{name: caseQuery, args: map[string]any{keyBetaID: invalidBetaIDQuery}, wantMessage: errBetaIDChars},
-		{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue}, wantMessage: errBetaIDChars},
-		{name: caseWhitespacePadded, args: map[string]any{keyBetaID: invalidBetaIDPadded}, wantMessage: errBetaIDChars},
+		{name: caseEmpty, args: map[string]any{keyBetaIDPath: ""}, wantMessage: errBetaIDNonEmpty},
+		{name: caseBlank, args: map[string]any{keyBetaIDPath: blankString}, wantMessage: errBetaIDNonEmpty},
+		{name: caseNumeric, args: map[string]any{keyBetaIDPath: 123}, wantMessage: errBetaIDNonEmpty},
+		{name: caseSlash, args: map[string]any{keyBetaIDPath: invalidBetaIDSlash}, wantMessage: errBetaIDChars},
+		{name: caseQuery, args: map[string]any{keyBetaIDPath: invalidBetaIDQuery}, wantMessage: errBetaIDChars},
+		{name: caseDotTraversal, args: map[string]any{keyBetaIDPath: pathTraversalValue}, wantMessage: errBetaIDChars},
+		{name: caseWhitespacePadded, args: map[string]any{keyBetaIDPath: invalidBetaIDPadded}, wantMessage: errBetaIDChars},
 	}
 
 	for _, testCase := range cases {
@@ -12698,8 +12698,8 @@ func TestLinodeAccountBetaGetToolDefinition(t *testing.T) {
 	}
 
 	props := tool.InputSchema.Properties
-	if _, ok := props[keyBetaID]; !ok {
-		t.Errorf("props missing key %v", keyBetaID)
+	if _, ok := props[keyBetaIDPath]; !ok {
+		t.Errorf("props missing key %v", keyBetaIDPath)
 	}
 
 	if _, ok := props[keyConfirm]; ok {
@@ -12755,7 +12755,7 @@ func TestLinodeAccountBetaGetToolSuccess(t *testing.T) {
 	}
 	_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -12817,7 +12817,7 @@ func TestLinodeAccountBetaGetToolApiError(t *testing.T) {
 	}
 	_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -12850,13 +12850,13 @@ func TestLinodeAccountBetaGetToolInvalidIdRejectsBeforeClient(t *testing.T) {
 		wantMessage string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{}, wantMessage: errBetaIDRequired},
-		{name: caseEmpty, args: map[string]any{keyBetaID: ""}, wantMessage: errBetaIDNonEmpty},
-		{name: caseBlank, args: map[string]any{keyBetaID: blankString}, wantMessage: errBetaIDNonEmpty},
-		{name: caseNumeric, args: map[string]any{keyBetaID: 123}, wantMessage: errBetaIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyBetaID: invalidBetaIDSlash}, wantMessage: errBetaIDChars},
-		{name: caseQuery, args: map[string]any{keyBetaID: invalidBetaIDQuery}, wantMessage: errBetaIDChars},
-		{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue}, wantMessage: errBetaIDChars},
-		{name: caseWhitespacePadded, args: map[string]any{keyBetaID: invalidBetaIDPadded}, wantMessage: errBetaIDChars},
+		{name: caseEmpty, args: map[string]any{keyBetaIDPath: ""}, wantMessage: errBetaIDNonEmpty},
+		{name: caseBlank, args: map[string]any{keyBetaIDPath: blankString}, wantMessage: errBetaIDNonEmpty},
+		{name: caseNumeric, args: map[string]any{keyBetaIDPath: 123}, wantMessage: errBetaIDNonEmpty},
+		{name: caseSlash, args: map[string]any{keyBetaIDPath: invalidBetaIDSlash}, wantMessage: errBetaIDChars},
+		{name: caseQuery, args: map[string]any{keyBetaIDPath: invalidBetaIDQuery}, wantMessage: errBetaIDChars},
+		{name: caseDotTraversal, args: map[string]any{keyBetaIDPath: pathTraversalValue}, wantMessage: errBetaIDChars},
+		{name: caseWhitespacePadded, args: map[string]any{keyBetaIDPath: invalidBetaIDPadded}, wantMessage: errBetaIDChars},
 	}
 
 	for _, testCase := range cases {

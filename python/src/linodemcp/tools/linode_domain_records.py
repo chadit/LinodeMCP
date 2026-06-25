@@ -223,7 +223,7 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["domain_id", "type", "confirm"],
+            "required": ["domain_id", "type", "target", "confirm"],
         },
     ), Capability.Write
 

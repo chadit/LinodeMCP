@@ -14120,16 +14120,14 @@ async def test_linode_images_sharegroup_delete_dispatches_from_registry(
         result = await srv.dispatch(
             "linode_image_sharegroup_delete",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "confirm": True,
                 "confirm_bypass_dry_run": True,
             },
         )
 
     assert json.loads(result[0].text) == {"message": "Image share group deleted"}
-    mock_client.delete_image_sharegroup.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111"
-    )
+    mock_client.delete_image_sharegroup.assert_awaited_once_with("3")
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -14138,7 +14136,7 @@ async def test_linode_images_sharegroup_delete_rejects_non_true_confirm(
 ) -> None:
     """Image share group delete requires literal confirm=True before calls."""
     arguments: dict[str, object] = {
-        "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+        "sharegroup_id": 3,
     }
     if confirm is not None:
         arguments["confirm"] = confirm
@@ -14162,12 +14160,15 @@ async def test_linode_images_sharegroup_delete_rejects_non_true_confirm(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": ""}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": 123}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": "12/34"}, "sharegroup_id must be a valid UUID"),
-        ({"sharegroup_id": "12?x=y"}, "sharegroup_id must be a valid UUID"),
-        ({"sharegroup_id": ".."}, "sharegroup_id must be a valid UUID"),
+        ({}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": ""}, "sharegroup_id must be a positive integer"),
+        (
+            {"sharegroup_id": "not-an-integer"},
+            "sharegroup_id must be a positive integer",
+        ),
+        ({"sharegroup_id": 0}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": -1}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": True}, "sharegroup_id must be a positive integer"),
     ],
 )
 async def test_linode_images_sharegroup_delete_rejects_invalid_sharegroup_id(
@@ -14206,7 +14207,7 @@ async def test_linode_images_sharegroup_delete_dry_run_uses_encoded_path(
         result = await srv.dispatch(
             "linode_image_sharegroup_delete",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "confirm": True,
                 "dry_run": True,
             },
@@ -14216,7 +14217,7 @@ async def test_linode_images_sharegroup_delete_dry_run_uses_encoded_path(
     assert payload["dry_run"] is True
     assert payload["would_execute"] == {
         "method": "DELETE",
-        "path": "/images/sharegroups/11111111-1111-4111-8111-111111111111",
+        "path": "/images/sharegroups/3",
     }
     mock_client.delete_image_sharegroup.assert_not_called()
 
@@ -14260,27 +14261,28 @@ async def test_linode_images_sharegroup_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch(
             "linode_image_sharegroup_get",
-            {"sharegroup_id": "11111111-1111-4111-8111-111111111111"},
+            {"sharegroup_id": 3},
         )
 
     assert json.loads(result[0].text) == {
         "message": "Image share group retrieved",
         "sharegroup": response_data,
     }
-    mock_client.get_image_sharegroup.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111"
-    )
+    mock_client.get_image_sharegroup.assert_awaited_once_with("3")
 
 
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": ""}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": 123}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": "12/34"}, "sharegroup_id must be a valid UUID"),
-        ({"sharegroup_id": "12?x=y"}, "sharegroup_id must be a valid UUID"),
-        ({"sharegroup_id": ".."}, "sharegroup_id must be a valid UUID"),
+        ({}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": ""}, "sharegroup_id must be a positive integer"),
+        (
+            {"sharegroup_id": "not-an-integer"},
+            "sharegroup_id must be a positive integer",
+        ),
+        ({"sharegroup_id": 0}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": -1}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": True}, "sharegroup_id must be a positive integer"),
     ],
 )
 async def test_linode_images_sharegroup_get_rejects_invalid_sharegroup_id(
@@ -14373,7 +14375,7 @@ async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
         result = await srv.dispatch(
             "linode_image_sharegroup_image_add",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "images": images,
                 "confirm": True,
             },
@@ -14383,9 +14385,7 @@ async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
         "message": "Images added to image share group",
         "result": response_data,
     }
-    mock_client.add_image_sharegroup_images.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111", images
-    )
+    mock_client.add_image_sharegroup_images.assert_awaited_once_with("3", images)
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -14394,7 +14394,7 @@ async def test_linode_images_sharegroup_images_add_rejects_non_true_confirm(
 ) -> None:
     """Image share group add-images requires literal confirm=True before calls."""
     arguments: dict[str, object] = {
-        "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+        "sharegroup_id": 3,
         "images": [{"id": "private/ubuntu"}],
     }
     if confirm is not None:
@@ -14428,7 +14428,7 @@ async def test_linode_images_sharegroup_images_add_dry_run_uses_encoded_path(
         result = await srv.dispatch(
             "linode_image_sharegroup_image_add",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "images": images,
                 "confirm": True,
                 "dry_run": True,
@@ -14439,7 +14439,7 @@ async def test_linode_images_sharegroup_images_add_dry_run_uses_encoded_path(
     assert payload["dry_run"] is True
     assert payload["would_execute"] == {
         "method": "POST",
-        "path": "/images/sharegroups/11111111-1111-4111-8111-111111111111/images",
+        "path": "/images/sharegroups/3/images",
         "body": {"images": images},
     }
     mock_client.add_image_sharegroup_images.assert_not_called()
@@ -14490,7 +14490,7 @@ async def test_linode_images_sharegroup_update_dispatches_from_registry(
         result = await srv.dispatch(
             "linode_image_sharegroup_update",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "label": "partner-group",
                 "description": "Shared images",
                 "confirm": True,
@@ -14502,7 +14502,7 @@ async def test_linode_images_sharegroup_update_dispatches_from_registry(
         "sharegroup": response_data,
     }
     mock_client.update_image_sharegroup.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111",
+        "3",
         label="partner-group",
         description="Shared images",
     )
@@ -14528,7 +14528,7 @@ async def test_linode_images_sharegroup_update_dispatches_description_only(
         result = await srv.dispatch(
             "linode_image_sharegroup_update",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "description": "Shared images",
                 "confirm": True,
             },
@@ -14539,7 +14539,7 @@ async def test_linode_images_sharegroup_update_dispatches_description_only(
         "sharegroup": response_data,
     }
     mock_client.update_image_sharegroup.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111",
+        "3",
         label=None,
         description="Shared images",
     )
@@ -14551,7 +14551,7 @@ async def test_linode_images_sharegroup_update_rejects_non_true_confirm(
 ) -> None:
     """Image share group update requires literal confirm=True before calls."""
     arguments: dict[str, object] = {
-        "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+        "sharegroup_id": 3,
         "label": "partner-group",
     }
     if confirm is not None:
@@ -14573,26 +14573,29 @@ async def test_linode_images_sharegroup_update_rejects_non_true_confirm(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": ""}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": 123}, "sharegroup_id must be a non-empty string"),
-        ({"sharegroup_id": "12/34"}, "sharegroup_id must be a valid UUID"),
-        ({"sharegroup_id": "12?x=y"}, "sharegroup_id must be a valid UUID"),
-        ({"sharegroup_id": ".."}, "sharegroup_id must be a valid UUID"),
+        ({}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": ""}, "sharegroup_id must be a positive integer"),
         (
-            {"sharegroup_id": "11111111-1111-4111-8111-111111111111"},
+            {"sharegroup_id": "not-an-integer"},
+            "sharegroup_id must be a positive integer",
+        ),
+        ({"sharegroup_id": 0}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": -1}, "sharegroup_id must be a positive integer"),
+        ({"sharegroup_id": True}, "sharegroup_id must be a positive integer"),
+        (
+            {"sharegroup_id": 3},
             "at least one of label or description must be provided",
         ),
         (
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "label": "",
             },
             "label must be a non-empty string when provided",
         ),
         (
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "description": 1,
             },
             "description must be a non-empty string when provided",
@@ -14631,7 +14634,7 @@ async def test_linode_images_sharegroup_update_dry_run_uses_encoded_path(
         result = await srv.dispatch(
             "linode_image_sharegroup_update",
             {
-                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "sharegroup_id": 3,
                 "label": "partner-group",
                 "confirm": True,
                 "dry_run": True,
@@ -14642,7 +14645,7 @@ async def test_linode_images_sharegroup_update_dry_run_uses_encoded_path(
     assert payload["dry_run"] is True
     assert payload["would_execute"] == {
         "method": "PUT",
-        "path": "/images/sharegroups/11111111-1111-4111-8111-111111111111",
+        "path": "/images/sharegroups/3",
         "body": {"label": "partner-group"},
     }
     mock_client.update_image_sharegroup.assert_not_called()

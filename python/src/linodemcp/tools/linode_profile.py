@@ -948,7 +948,7 @@ def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["token_id", "label", "confirm"],
+            "required": ["token_id", "confirm"],
         },
     ), Capability.Admin
 

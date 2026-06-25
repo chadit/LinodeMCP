@@ -1439,7 +1439,7 @@ def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["nodebalancer_id", "confirm"],
+            "required": ["nodebalancer_id", "port", "confirm"],
         },
     ), Capability.Write
 

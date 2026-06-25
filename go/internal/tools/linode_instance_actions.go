@@ -264,10 +264,10 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 				mcp.Description("The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use linode_image_list to find valid values.")),
 			mcp.WithString("root_pass", mcp.Required(),
 				mcp.Description("Root password for the rebuilt instance (min 12 chars, must include upper, lower, and digits)")),
-			mcp.WithString("authorized_keys",
-				mcp.Description("Comma-separated SSH public keys to add to root's authorized_keys (optional)")),
-			mcp.WithString("authorized_users",
-				mcp.Description("Comma-separated Linode usernames whose SSH keys to add (optional)")),
+			mcp.WithArray("authorized_keys",
+				mcp.Description("SSH public keys to add to root's authorized_keys (optional)")),
+			mcp.WithArray("authorized_users",
+				mcp.Description("Linode usernames whose SSH keys to add (optional)")),
 			mcp.WithBoolean("booted",
 				mcp.Description("Whether to boot the instance after rebuild (optional, defaults to true)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
@@ -307,12 +307,22 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 		RootPass: rootPass,
 	}
 
-	if keys := request.GetString("authorized_keys", ""); keys != "" {
-		req.AuthorizedKeys = splitCommaSeparated(keys)
+	if raw, exists := request.GetArguments()["authorized_keys"]; exists {
+		keys, validationMessage := stringSliceFromToolArg(raw, "authorized_keys")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		req.AuthorizedKeys = keys
 	}
 
-	if users := request.GetString("authorized_users", ""); users != "" {
-		req.AuthorizedUsers = splitCommaSeparated(users)
+	if raw, exists := request.GetArguments()["authorized_users"]; exists {
+		users, validationMessage := stringSliceFromToolArg(raw, "authorized_users")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		req.AuthorizedUsers = users
 	}
 
 	// Only set Booted when the caller explicitly passed the parameter.

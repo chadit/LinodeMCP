@@ -623,8 +623,8 @@ func NewLinodeInstanceConfigInterfacesReorderTool(cfg *config.Config) (mcp.Tool,
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithNumber("config_id", mcp.Required(),
 				mcp.Description("The ID of the configuration profile")),
-			mcp.WithString("ids", mcp.Required(),
-				mcp.Description("JSON array of existing configuration profile interface IDs in the desired order, e.g. [101,102,103]")),
+			mcp.WithArray("ids", mcp.Required(),
+				mcp.Description("Existing configuration profile interface IDs in the desired order, e.g. [101,102,103]")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm configuration interface reorder. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -699,38 +699,13 @@ func buildReorderConfigInterfacesRequest(request *mcp.CallToolRequest) (*linode.
 		return nil, "ids is required"
 	}
 
-	idsJSON, ok := value.(string)
-	if !ok {
-		return nil, "ids must be a string"
-	}
-
-	idsJSON = strings.TrimSpace(idsJSON)
-	if idsJSON == "" {
-		return nil, "ids is required"
-	}
-
-	var ids []int
-
-	decoder := json.NewDecoder(strings.NewReader(idsJSON))
-	if err := decoder.Decode(&ids); err != nil {
-		return nil, "ids must be a JSON array of positive integer interface IDs"
-	}
-
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return nil, "ids must be a JSON array of positive integer interface IDs"
-	}
-
-	if len(ids) == 0 {
-		return nil, "ids must include at least one interface ID"
+	ids, validationMessage := intSliceFromToolArg(value, "ids")
+	if validationMessage != "" {
+		return nil, validationMessage
 	}
 
 	seen := make(map[int]struct{}, len(ids))
 	for _, id := range ids {
-		if id <= 0 {
-			return nil, "ids must contain only positive integer interface IDs"
-		}
-
 		if _, exists := seen[id]; exists {
 			return nil, "ids must not contain duplicate interface IDs"
 		}
