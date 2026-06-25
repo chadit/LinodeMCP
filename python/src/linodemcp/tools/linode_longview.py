@@ -70,9 +70,10 @@ def create_linode_longview_subscription_get_tool() -> tuple[Tool, Capability]:
             "properties": {
                 **ENV_PARAM_SCHEMA,
                 "subscription_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Longview subscription ID to retrieve",
+                    "type": "string",
+                    "description": (
+                        "Longview subscription ID to retrieve, for example longview-10"
+                    ),
                 },
             },
             "required": ["subscription_id"],
@@ -243,6 +244,26 @@ def _required_positive_int_argument(arguments: dict[str, Any], name: str) -> int
         msg = f"{name} must be a positive integer"
         raise ValueError(msg)
     return value
+
+
+def _required_subscription_id(arguments: dict[str, Any]) -> str:
+    # Longview subscription IDs are opaque strings (for example "longview-10"),
+    # not integers, so this mirrors the Go side: a non-empty string with no path
+    # or query separators that could escape the URL path segment.
+    if "subscription_id" not in arguments:
+        msg = "subscription_id is required"
+        raise ValueError(msg)
+    raw = arguments["subscription_id"]
+    if not isinstance(raw, str) or not raw.strip():
+        msg = "subscription_id must be a non-empty string"
+        raise ValueError(msg)
+    if raw != raw.strip() or "/" in raw or "?" in raw or ".." in raw:
+        msg = (
+            "subscription_id must not contain path separators, query separators, "
+            "or traversal segments"
+        )
+        raise ValueError(msg)
+    return raw
 
 
 def _longview_client_id_error(value: object) -> str | None:
@@ -565,7 +586,7 @@ async def handle_linode_longview_subscription_get(
 ) -> list[TextContent]:
     """Handle linode_longview_subscription_get tool request."""
     try:
-        subscription_id = _required_positive_int_argument(arguments, "subscription_id")
+        subscription_id = _required_subscription_id(arguments)
     except ValueError as exc:
         return error_response(str(exc))
 

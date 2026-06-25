@@ -25,6 +25,7 @@ from linodemcp.linode import (
     Grant,
     Grants,
     Image,
+    Instance,
     InstanceType,
     LinodeError,
     NetworkError,
@@ -35,6 +36,7 @@ from linodemcp.linode import (
     Resolver,
     RetryableClient,
     RetryConfig,
+    instance_to_response_dict,
     is_retryable,
     validate_disk_size,
     validate_dns_record_name,
@@ -7707,6 +7709,203 @@ async def test_get_instance_parses_interfaces(
     assert instance.interfaces[0].default_route.ipv6 is True
 
     await client.close()
+
+
+async def _instance_from_response(data: dict[str, Any]) -> Instance:
+    """Parse an Instance through the client's get_instance with a mocked HTTP
+    layer, so the test exercises the real _parse_instance path.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = data
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        instance = await client.get_instance(123456)
+    await client.close()
+    return instance
+
+
+async def test_parse_instance_interface_parses_public_vpc_vlan_subconfigs(
+    sample_instance_data: dict[str, Any],
+) -> None:
+    """A read must surface the public ipv4/ipv6, vpc, and vlan sub-configs plus
+    the created/updated/version fields, matching the Go client's struct-tag
+    deserialization of Instance.Interfaces.
+    """
+    response_data = {
+        **sample_instance_data,
+        "interface_generation": "linode",
+        "interfaces": [
+            {
+                "id": 1,
+                "public": {
+                    "ipv4": {"addresses": [{"address": "1.2.3.4", "primary": True}]},
+                    "ipv6": {"ranges": [{"range": "2600::/64"}]},
+                },
+                "default_route": {"ipv4": True},
+            },
+            {
+                "id": 2,
+                "vpc": {
+                    "subnet_id": 99,
+                    "ipv4": {"addresses": [{"address": "10.0.0.5"}]},
+                },
+                "firewall_id": 777,
+            },
+            {
+                "id": 3,
+                "vlan": {"vlan_label": "lan-1", "ipam_address": "10.0.0.6/24"},
+                "mac_address": "aa:bb:cc:dd:ee:ff",
+                "created": "2026-01-01T00:00:00",
+                "updated": "2026-01-02T00:00:00",
+                "version": 2,
+            },
+        ],
+    }
+
+    instance = await _instance_from_response(response_data)
+
+    public = instance.interfaces[0].public
+    assert public is not None
+    assert public.ipv4 is not None
+    assert public.ipv4.addresses[0].address == "1.2.3.4"
+    assert public.ipv4.addresses[0].primary is True
+    assert public.ipv6 is not None
+    assert public.ipv6.ranges[0].range == "2600::/64"
+
+    vpc = instance.interfaces[1].vpc
+    assert vpc is not None
+    assert vpc.subnet_id == 99
+    assert vpc.ipv4 is not None
+    assert vpc.ipv4.addresses[0].address == "10.0.0.5"
+    assert vpc.ipv4.addresses[0].primary is False
+
+    third = instance.interfaces[2]
+    assert third.vlan is not None
+    assert third.vlan.vlan_label == "lan-1"
+    assert third.vlan.ipam_address == "10.0.0.6/24"
+    assert third.mac_address == "aa:bb:cc:dd:ee:ff"
+    assert third.created == "2026-01-01T00:00:00"
+    assert third.updated == "2026-01-02T00:00:00"
+    assert third.version == 2
+
+    # Round-trip the same interfaces through the serializer and confirm the
+    # vpc, vlan, firewall_id, and default-route-ipv4-only forms match Go's
+    # omitempty output.
+    assert instance_to_response_dict(instance)["interfaces"] == [
+        {
+            "id": 1,
+            "public": {
+                "ipv4": {"addresses": [{"address": "1.2.3.4", "primary": True}]},
+                "ipv6": {"ranges": [{"range": "2600::/64"}]},
+            },
+            "default_route": {"ipv4": True},
+        },
+        {
+            "id": 2,
+            "vpc": {"subnet_id": 99, "ipv4": {"addresses": [{"address": "10.0.0.5"}]}},
+            "firewall_id": 777,
+        },
+        {
+            "id": 3,
+            "vlan": {"vlan_label": "lan-1", "ipam_address": "10.0.0.6/24"},
+            "mac_address": "aa:bb:cc:dd:ee:ff",
+            "created": "2026-01-01T00:00:00",
+            "updated": "2026-01-02T00:00:00",
+            "version": 2,
+        },
+    ]
+
+
+async def test_instance_to_response_dict_matches_go_interface_shape(
+    sample_instance_data: dict[str, Any],
+) -> None:
+    """instance_to_response_dict emits the Go MarshalToolResponse shape: the
+    full struct in field order, with interface_generation and the deep
+    interface subtree present and Go's omitempty applied per field.
+    """
+    response_data = {
+        **sample_instance_data,
+        "interface_generation": "linode",
+        "interfaces": [
+            {
+                "id": 1234,
+                "mac_address": "22:00:AB:CD:EF:01",
+                "version": 1,
+                "public": {
+                    "ipv4": {"addresses": [{"address": "172.30.0.50", "primary": True}]}
+                },
+                "default_route": {"ipv4": True, "ipv6": True},
+            }
+        ],
+    }
+
+    instance = await _instance_from_response(response_data)
+    result = instance_to_response_dict(instance)
+
+    assert list(result.keys()) == [
+        "id",
+        "label",
+        "status",
+        "type",
+        "region",
+        "image",
+        "ipv4",
+        "ipv6",
+        "hypervisor",
+        "specs",
+        "alerts",
+        "backups",
+        "created",
+        "updated",
+        "group",
+        "tags",
+        "watchdog_enabled",
+        "interface_generation",
+        "interfaces",
+    ]
+    assert result["interface_generation"] == "linode"
+    assert result["interfaces"] == [
+        {
+            "id": 1234,
+            "public": {
+                "ipv4": {"addresses": [{"address": "172.30.0.50", "primary": True}]}
+            },
+            "default_route": {"ipv4": True, "ipv6": True},
+            "mac_address": "22:00:AB:CD:EF:01",
+            "version": 1,
+        }
+    ]
+    assert set(result["specs"].keys()) == {
+        "disk",
+        "memory",
+        "vcpus",
+        "gpus",
+        "transfer",
+    }
+    assert list(result["backups"].keys()) == [
+        "schedule",
+        "last_successful",
+        "enabled",
+        "available",
+    ]
+
+
+async def test_instance_to_response_dict_omits_empty_interface_fields(
+    sample_instance_data: dict[str, Any],
+) -> None:
+    """With no interfaces, interface_generation and interfaces are omitted like
+    Go's omitempty, while the always-present struct fields stay.
+    """
+    instance = await _instance_from_response(dict(sample_instance_data))
+    result = instance_to_response_dict(instance)
+
+    assert "interfaces" not in result
+    assert "interface_generation" not in result
+    assert "watchdog_enabled" in result
+    assert "specs" in result
+    assert "backups" in result
 
 
 async def test_api_error_401() -> None:
@@ -20298,48 +20497,31 @@ async def test_retryable_lke_tier_versions_forwards_tier_argument() -> None:
 async def test_get_longview_subscription_sends_get_to_subscription_route() -> None:
     """Longview subscription get sends GET /longview/subscriptions/{id}."""
     client = Client("https://api.linode.com/v4", "test-token")
-    response_data = {"id": 12345, "label": "Longview Pro"}
+    response_data = {"id": "longview-10", "label": "Longview Pro"}
     response = MagicMock()
     response.json.return_value = response_data
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = response
-        result = await client.get_longview_subscription(12345)
+        result = await client.get_longview_subscription("longview-10")
 
     assert result == response_data
-    mock_request.assert_awaited_once_with("GET", "/longview/subscriptions/12345")
-    await client.close()
-
-
-@pytest.mark.parametrize("subscription_id", [0, -1, True, "123/../x", "123?x=1"])
-async def test_get_longview_subscription_rejects_invalid_subscription_id(
-    subscription_id: Any,
-) -> None:
-    """Longview subscription get rejects invalid IDs before dispatch."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with (
-        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
-        pytest.raises((TypeError, ValueError), match="subscription_id"),
-    ):
-        await client.get_longview_subscription(subscription_id)
-
-    mock_request.assert_not_called()
+    mock_request.assert_awaited_once_with("GET", "/longview/subscriptions/longview-10")
     await client.close()
 
 
 async def test_retryable_client_get_longview_subscription_delegates() -> None:
     """RetryableClient delegates Longview subscription GET through retry."""
     client = RetryableClient("https://api.linode.com/v4", "test-token")
-    mock_method = AsyncMock(return_value={"id": 12345})
+    mock_method = AsyncMock(return_value={"id": "longview-10"})
     object.__setattr__(client.client, "get_longview_subscription", mock_method)
     try:
-        result = await client.get_longview_subscription(12345)
+        result = await client.get_longview_subscription("longview-10")
     finally:
         await client.close()
 
-    assert result == {"id": 12345}
-    mock_method.assert_awaited_once_with(12345)
+    assert result == {"id": "longview-10"}
+    mock_method.assert_awaited_once_with("longview-10")
 
 
 async def test_handle_linode_longview_subscription_get_success(
@@ -20352,7 +20534,7 @@ async def test_handle_linode_longview_subscription_get_success(
 
     mock_client = AsyncMock()
     mock_client.get_longview_subscription.return_value = {
-        "id": 12345,
+        "id": "longview-10",
         "label": "Longview Pro",
     }
 
@@ -20369,16 +20551,16 @@ async def test_handle_linode_longview_subscription_get_success(
         side_effect=fake_execute_tool,
     ):
         result = await handle_linode_longview_subscription_get(
-            {"subscription_id": 12345}, sample_config
+            {"subscription_id": "longview-10"}, sample_config
         )
 
     assert json.loads(result[0].text) == {
-        "subscription": {"id": 12345, "label": "Longview Pro"}
+        "subscription": {"id": "longview-10", "label": "Longview Pro"}
     }
-    mock_client.get_longview_subscription.assert_awaited_once_with(12345)
+    mock_client.get_longview_subscription.assert_awaited_once_with("longview-10")
 
 
-@pytest.mark.parametrize("subscription_id", [None, 0, -1, True, "123/../x", "123?x=1"])
+@pytest.mark.parametrize("subscription_id", [None, 0, True, "123/../x", "123?x=1"])
 async def test_handle_linode_longview_subscription_get_rejects_bad_id(
     sample_config: Config, subscription_id: object
 ) -> None:
@@ -20391,11 +20573,15 @@ async def test_handle_linode_longview_subscription_get_rejects_bad_id(
     with patch("linodemcp.tools.linode_longview.execute_tool") as execute_tool:
         result = await handle_linode_longview_subscription_get(arguments, sample_config)
 
-    expected = (
-        "Error: subscription_id is required"
-        if subscription_id is None
-        else "Error: subscription_id must be a positive integer"
-    )
+    if subscription_id is None:
+        expected = "Error: subscription_id is required"
+    elif not isinstance(subscription_id, str):
+        expected = "Error: subscription_id must be a non-empty string"
+    else:
+        expected = (
+            "Error: subscription_id must not contain path separators, "
+            "query separators, or traversal segments"
+        )
     assert result[0].text == expected
     execute_tool.assert_not_called()
 

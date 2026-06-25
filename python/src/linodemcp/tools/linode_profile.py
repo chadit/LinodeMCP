@@ -195,7 +195,7 @@ def create_linode_profile_tfa_enable_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_tfa_enable(
@@ -256,7 +256,7 @@ def create_linode_profile_tfa_disable_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_tfa_disable(
@@ -312,7 +312,7 @@ def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
             },
             "required": ["tfa_code", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_tfa_enable_confirm(
@@ -382,7 +382,7 @@ def create_linode_profile_phone_number_send_tool() -> tuple[Tool, Capability]:
             },
             "required": ["iso_code", "phone_number", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _profile_required_id(
@@ -476,7 +476,7 @@ def create_linode_profile_phone_number_verify_tool() -> tuple[Tool, Capability]:
             },
             "required": ["otp_code", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_phone_number_verify(
@@ -529,7 +529,7 @@ def create_linode_profile_phone_number_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_phone_number_delete(
@@ -625,7 +625,7 @@ def create_linode_profile_security_question_answer_tool() -> tuple[Tool, Capabil
             },
             "required": ["security_questions", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_security_question_answer(
@@ -701,7 +701,7 @@ def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _token_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
@@ -950,7 +950,7 @@ def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["token_id", "label", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_profile_token_update(
@@ -1125,7 +1125,7 @@ def create_linode_profile_app_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["app_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_profile_app_delete(
@@ -1224,7 +1224,7 @@ def create_linode_profile_device_revoke_tool() -> tuple[Tool, Capability]:
             },
             "required": ["device_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_profile_device_revoke(
@@ -1287,7 +1287,7 @@ def create_linode_profile_token_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["token_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_profile_token_delete(

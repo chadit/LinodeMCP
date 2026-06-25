@@ -10,10 +10,10 @@ type CreateSupportTicketRequest struct {
 	LinodeID         *int    `json:"linode_id,omitempty"`
 	LKEClusterID     *int    `json:"lkecluster_id,omitempty"`
 	LongviewClientID *int    `json:"longviewclient_id,omitempty"`
-	ManagedIssue     *string `json:"managed_issue,omitempty"`
+	ManagedIssue     *bool   `json:"managed_issue,omitempty"`
 	NodeBalancerID   *int    `json:"nodebalancer_id,omitempty"`
 	Region           *string `json:"region,omitempty"`
-	Severity         *string `json:"severity,omitempty"`
+	Severity         *int    `json:"severity,omitempty"`
 	Summary          string  `json:"summary"`
 	VLAN             *string `json:"vlan,omitempty"`
 	VolumeID         *int    `json:"volume_id,omitempty"`

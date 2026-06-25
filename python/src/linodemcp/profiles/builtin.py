@@ -209,19 +209,27 @@ _MUTATING_CAPABILITIES: frozenset[Capability] = frozenset(
 def _resolve_allowed_tools(
     catalog: Sequence[ToolDescriptor],
     elevated_categories: frozenset[str],
+    *,
+    grants_admin: bool = False,
 ) -> tuple[str, ...]:
     """Pick the tools a profile permits given its elevated categories.
 
     Read and Meta tools are always included. Mutating tools (Write,
     Destroy) are included only if their category is in
-    ``elevated_categories``. Admin is excluded from every built-in per
-    spec; if a future tool carries ``Capability.Admin`` it falls through
-    to the catch-all and is not selected.
+    ``elevated_categories``. Admin tools (account/child_account-scope
+    operations: account administration, profile token/TFA/security/phone
+    self-service, the Managed surface) are included only when
+    ``grants_admin`` is set, which is true for the full-access and
+    emergency profiles alone. No category-specific admin profile grants them.
     """
     selected: list[str] = []
     for tool in catalog:
         if tool.capability in (Capability.Read, Capability.Meta):
             selected.append(tool.name)
+            continue
+        if tool.capability is Capability.Admin:
+            if grants_admin:
+                selected.append(tool.name)
             continue
         if tool.capability in _MUTATING_CAPABILITIES:
             category = _categorize(tool.name)
@@ -246,6 +254,7 @@ class _ProfileBlueprint:
     required_token_scopes: tuple[str, ...]
     allow_yolo: bool
     disabled: bool
+    grants_admin: bool = False
 
 
 _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
@@ -346,6 +355,7 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
         required_token_scopes=("*:read_write",),
         allow_yolo=False,
         disabled=True,
+        grants_admin=True,
     ),
     "emergency": _ProfileBlueprint(
         description=(
@@ -371,6 +381,7 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
         required_token_scopes=("*:read_write",),
         allow_yolo=True,
         disabled=True,
+        grants_admin=True,
     ),
 }
 
@@ -409,7 +420,11 @@ def builtin_profiles(catalog: Sequence[ToolDescriptor]) -> dict[str, Profile]:
     """
     profiles: dict[str, Profile] = {}
     for name, blueprint in _PROFILE_BLUEPRINTS.items():
-        allowed = _resolve_allowed_tools(catalog, blueprint.elevated_categories)
+        allowed = _resolve_allowed_tools(
+            catalog,
+            blueprint.elevated_categories,
+            grants_admin=blueprint.grants_admin,
+        )
         profiles[name] = Profile(
             name=name,
             description=blueprint.description,

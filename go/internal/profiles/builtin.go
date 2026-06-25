@@ -229,15 +229,21 @@ func isElevated(toolCats []string, elevated map[string]struct{}) bool {
 }
 
 // selectAllowed resolves the AllowedTools list for a profile from the given
-// catalog and elevated-category set. Rule per spec:
+// catalog and elevated-category set. Rule:
 //
-//	(Read | Meta) ∪ ((Write | Destroy) ∩ elevated)
+//	(Read | Meta) ∪ ((Write | Destroy) ∩ elevated) ∪ (Admin ∩ wildcard)
 //
-// Admin capability is excluded from every built-in (no tool carries it
-// today). CapUnknown is excluded so a forgotten capability tag cannot leak
-// the tool into a profile by accident.
+// Admin tools are the operations the Linode API gates on the account or
+// child_account superscope (account administration, profile token/TFA/
+// security/phone self-service, the Managed surface). They are included only
+// in the wildcard profiles (full-access and emergency), which carry the
+// allEnvironments "*" elevated entry; no category-specific admin profile
+// grants them. CapUnknown is excluded so a forgotten capability tag cannot
+// leak the tool into a profile by accident.
 func selectAllowed(catalog []ToolDescriptor, elevated map[string]struct{}) []string {
 	allowed := make([]string, 0, len(catalog))
+
+	_, wildcard := elevated[allEnvironments]
 
 	for _, descriptor := range catalog {
 		switch descriptor.Capability {
@@ -247,8 +253,12 @@ func selectAllowed(catalog []ToolDescriptor, elevated map[string]struct{}) []str
 			if isElevated(Categories(descriptor.Name), elevated) {
 				allowed = append(allowed, descriptor.Name)
 			}
-		case CapAdmin, CapUnknown:
-			// excluded from every built-in
+		case CapAdmin:
+			if wildcard {
+				allowed = append(allowed, descriptor.Name)
+			}
+		case CapUnknown:
+			// excluded so a forgotten capability tag cannot leak the tool
 		}
 	}
 

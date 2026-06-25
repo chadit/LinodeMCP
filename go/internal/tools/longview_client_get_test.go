@@ -88,7 +88,7 @@ func TestLinodeLongviewClientGetToolSuccessRedactsSecretFields(t *testing.T) {
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeLongviewClientGetTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyLongviewClientID: "789"})
+	req := createRequestWithArgs(t, map[string]any{keyLongviewClientID: float64(789)})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestLinodeLongviewClientGetToolApiError(t *testing.T) {
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeLongviewClientGetTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyLongviewClientID: "789"})
+	req := createRequestWithArgs(t, map[string]any{keyLongviewClientID: float64(789)})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -180,14 +180,9 @@ func TestLinodeLongviewClientGetToolInvalidLongviewClientIdRejectsBeforeClient(t
 		args map[string]any
 		want string
 	}{
-		{name: caseMissing, args: map[string]any{}, want: "longview_client_id is required"},
-		{name: caseEmpty, args: map[string]any{keyLongviewClientID: ""}, want: "longview_client_id must be a non-empty string"},
-		{name: caseNumeric, args: map[string]any{keyLongviewClientID: 789}, want: "longview_client_id must be a non-empty string"},
-		{name: caseSlash, args: map[string]any{keyLongviewClientID: longviewClientSlashID}, want: errLongviewClientIDNoSeparators},
-		{name: caseQuery, args: map[string]any{keyLongviewClientID: "789?query"}, want: errLongviewClientIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyLongviewClientID: pathTraversalValue}, want: errLongviewClientIDNoSeparators},
-		{name: stageAlpha, args: map[string]any{keyLongviewClientID: idAbc123}, want: "longview_client_id must be a positive integer"},
-		{name: caseZero, args: map[string]any{keyLongviewClientID: "0"}, want: "longview_client_id must be a positive integer"},
+		{name: caseMissing, args: map[string]any{}, want: "client_id is required"},
+		{name: caseString, args: map[string]any{keyLongviewClientID: idAbc123}, want: "client_id must be an integer"},
+		{name: caseZero, args: map[string]any{keyLongviewClientID: float64(0)}, want: "client_id must be an integer"},
 	}
 
 	for _, testCase := range cases {

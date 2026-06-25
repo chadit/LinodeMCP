@@ -580,7 +580,7 @@ def test_create_linode_account_payment_method_delete_tool() -> None:
     tool, capability = create_linode_account_payment_method_delete_tool()
 
     assert tool.name == "linode_account_payment_method_delete"
-    assert capability == Capability.Destroy
+    assert capability == Capability.Admin
     assert tool.inputSchema["required"] == ["payment_method_id", "confirm"]
     assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -1578,7 +1578,7 @@ async def test_create_linode_account_beta_enroll_tool() -> None:
     tool, capability = create_linode_account_beta_enroll_tool()
 
     assert tool.name == "linode_account_beta_enroll"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["id"]["type"] == "string"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "id" in tool.inputSchema.get("required", [])
@@ -1680,7 +1680,7 @@ async def test_create_linode_account_agreements_acknowledge_tool() -> None:
     tool, capability = create_linode_account_agreement_acknowledge_tool()
 
     assert tool.name == "linode_account_agreement_acknowledge"
-    assert capability.name == "Write"
+    assert capability.name == "Admin"
     assert "eu_model" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "confirm" in tool.inputSchema.get("required", [])
@@ -1787,7 +1787,7 @@ async def test_create_linode_account_update_tool() -> None:
     tool, capability = create_linode_account_update_tool()
 
     assert tool.name == "linode_account_update"
-    assert capability.name == "Write"
+    assert capability.name == "Admin"
     assert "email" in tool.inputSchema["properties"]
     assert "confirm" in tool.inputSchema["required"]
 
@@ -2074,7 +2074,7 @@ async def test_create_linode_managed_service_disable_tool() -> None:
     tool, capability = create_linode_managed_service_disable_tool()
 
     assert tool.name == "linode_managed_service_disable"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["service_id", "confirm"]
     assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
@@ -2148,7 +2148,7 @@ async def test_create_linode_managed_contact_delete_tool() -> None:
     tool, capability = create_linode_managed_contact_delete_tool()
 
     assert tool.name == "linode_managed_contact_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["contact_id", "confirm"]
     assert tool.inputSchema["properties"]["contact_id"]["minimum"] == 1
@@ -2231,7 +2231,7 @@ async def test_create_linode_managed_credential_get_tool() -> None:
     tool, capability = create_linode_managed_credential_get_tool()
 
     assert tool.name == "linode_managed_credential_get"
-    assert capability == Capability.Read
+    assert capability == Capability.Admin
     assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
     assert tool.inputSchema["required"] == ["credential_id"]
@@ -2274,7 +2274,7 @@ async def test_create_linode_managed_credential_username_password_update_tool() 
     """Test username/password credential update tool schema."""
     tool, capability = create_linode_managed_credential_username_password_update_tool()
     assert tool.name == "linode_managed_credential_username_password_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert set(tool.inputSchema["required"]) == {
         "credential_id",
         "password",
@@ -2317,7 +2317,7 @@ async def test_create_linode_managed_credential_revoke_tool() -> None:
     tool, capability = create_linode_managed_credential_revoke_tool()
 
     assert tool.name == "linode_managed_credential_revoke"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert set(tool.inputSchema["required"]) == {"credential_id", "confirm"}
     assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -2468,7 +2468,7 @@ async def test_create_linode_managed_credential_update_tool() -> None:
     tool, capability = create_linode_managed_credential_update_tool()
 
     assert tool.name == "linode_managed_credential_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert set(tool.inputSchema["required"]) == {"credential_id", "label", "confirm"}
     assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["label"]["type"] == "string"
@@ -12066,7 +12066,7 @@ async def test_handle_linode_object_storage_buckets_region_list(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_object_storage_bucket_by_region_list(
-            {"region_id": "us-ord"}, sample_config
+            {"region": "us-ord"}, sample_config
         )
 
         assert len(result) == 1
@@ -12084,21 +12084,21 @@ async def test_handle_linode_object_storage_buckets_region_list_missing_region_i
     result = await handle_linode_object_storage_bucket_by_region_list({}, sample_config)
 
     assert len(result) == 1
-    assert "region_id is required" in result[0].text
+    assert "region is required" in result[0].text
 
 
 async def test_handle_linode_object_storage_buckets_region_list_rejects_bad_region_id(
     sample_config: Config,
 ) -> None:
     """Test region-scoped bucket list rejects malformed path values."""
-    for region_id in ("us/ord", "us?ord", ".."):
+    for region in ("us/ord", "us?ord", ".."):
         with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
             result = await handle_linode_object_storage_bucket_by_region_list(
-                {"region_id": region_id}, sample_config
+                {"region": region}, sample_config
             )
 
             assert len(result) == 1
-            assert "region_id must be a valid region or cluster ID" in result[0].text
+            assert "region must be a valid region or cluster ID" in result[0].text
             mock_client_class.assert_not_called()
 
 
@@ -12116,7 +12116,7 @@ async def test_handle_linode_object_storage_buckets_region_list_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_object_storage_bucket_by_region_list(
-            {"region_id": "us-ord"}, sample_config
+            {"region": "us-ord"}, sample_config
         )
 
         assert len(result) == 1
@@ -15382,7 +15382,7 @@ async def test_lke_version_get(sample_config: Config) -> None:
         mock_cls.return_value = mock_client
 
         result = list(
-            await handle_linode_lke_version_get({"version_id": "1.29"}, sample_config)
+            await handle_linode_lke_version_get({"version": "1.29"}, sample_config)
         )
 
         assert len(result) == 1
@@ -15390,11 +15390,11 @@ async def test_lke_version_get(sample_config: Config) -> None:
 
 
 async def test_lke_version_get_missing_id(sample_config: Config) -> None:
-    """LKE version get should fail without version_id."""
+    """LKE version get should fail without version."""
     result = list(await handle_linode_lke_version_get({}, sample_config))
 
     assert len(result) == 1
-    assert "version_id" in result[0].text.lower()
+    assert "version" in result[0].text.lower()
 
 
 async def test_lke_types_list(sample_config: Config) -> None:
@@ -16714,56 +16714,56 @@ async def test_vpc_subnet_update_dry_run_still_validates_label(
 
 
 async def test_instance_backups_list_tool_definition() -> None:
-    """Backups list tool should require instance_id."""
+    """Backups list tool should require linode_id."""
     tool, _ = create_linode_instance_backup_list_tool()
     assert tool.name == "linode_instance_backup_list"
-    assert "instance_id" in (tool.inputSchema.get("required") or [])
+    assert "linode_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_instance_backup_get_tool_definition() -> None:
-    """Backup get tool should require instance_id and backup_id."""
+    """Backup get tool should require linode_id and backup_id."""
     tool, _ = create_linode_instance_backup_get_tool()
     assert tool.name == "linode_instance_backup_get"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "backup_id" in required
 
 
 async def test_instance_backup_create_tool_def() -> None:
-    """Backup create tool should require instance_id and confirm."""
+    """Backup create tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_backup_create_tool()
     assert tool.name == "linode_instance_backup_create"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "confirm" in required
 
 
 async def test_instance_backup_restore_tool_def() -> None:
-    """Backup restore should require instance_id, backup_id, linode_id, confirm."""
+    """Backup restore should require linode_id, backup_id, linode_id, confirm."""
     tool, _ = create_linode_instance_backup_restore_tool()
     assert tool.name == "linode_instance_backup_restore"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "backup_id" in required
     assert "linode_id" in required
     assert "confirm" in required
 
 
 async def test_instance_backups_enable_tool_def() -> None:
-    """Backups enable tool should require instance_id and confirm."""
+    """Backups enable tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_backups_enable_tool()
     assert tool.name == "linode_instance_backups_enable"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "confirm" in required
 
 
 async def test_instance_backups_cancel_tool_def() -> None:
-    """Backups cancel tool should require instance_id and confirm."""
+    """Backups cancel tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_backups_cancel_tool()
     assert tool.name == "linode_instance_backups_cancel"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "confirm" in required
 
 
@@ -16773,10 +16773,10 @@ async def test_instance_backups_cancel_tool_def() -> None:
 async def test_instance_backups_list_missing_id(
     sample_config: Config,
 ) -> None:
-    """Backups list should fail without instance_id."""
+    """Backups list should fail without linode_id."""
     result = list(await handle_linode_instance_backup_list({}, sample_config))
     assert len(result) == 1
-    assert "instance_id" in result[0].text.lower()
+    assert "linode_id" in result[0].text.lower()
 
 
 async def test_instance_backups_list_success(
@@ -16797,9 +16797,7 @@ async def test_instance_backups_list_success(
         mc.return_value = mock_client
 
         result = list(
-            await handle_linode_instance_backup_list(
-                {"instance_id": 123}, sample_config
-            )
+            await handle_linode_instance_backup_list({"linode_id": 123}, sample_config)
         )
         assert len(result) == 1
         assert "automatic" in result[0].text
@@ -16810,7 +16808,7 @@ async def test_instance_backup_create_no_confirm(
 ) -> None:
     """Backup create should require confirm=true."""
     result = list(
-        await handle_linode_instance_backup_create({"instance_id": 123}, sample_config)
+        await handle_linode_instance_backup_create({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -16834,7 +16832,7 @@ async def test_instance_backup_create_success(
         result = list(
             await handle_linode_instance_backup_create(
                 {
-                    "instance_id": 123,
+                    "linode_id": 123,
                     "label": "my-snap",
                     "confirm": True,
                 },
@@ -16850,7 +16848,7 @@ async def test_instance_backups_enable_no_confirm(
 ) -> None:
     """Backups enable should require confirm=true."""
     result = list(
-        await handle_linode_instance_backups_enable({"instance_id": 123}, sample_config)
+        await handle_linode_instance_backups_enable({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -16861,7 +16859,7 @@ async def test_instance_backups_cancel_no_confirm(
 ) -> None:
     """Backups cancel should require confirm=true."""
     result = list(
-        await handle_linode_instance_backups_cancel({"instance_id": 123}, sample_config)
+        await handle_linode_instance_backups_cancel({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -16874,9 +16872,9 @@ async def test_instance_backup_restore_no_confirm(
     result = list(
         await handle_linode_instance_backup_restore(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "backup_id": 456,
-                "linode_id": 789,
+                "target_linode_id": 789,
             },
             sample_config,
         )
@@ -16890,7 +16888,7 @@ async def test_instance_backup_get_missing_ids(
 ) -> None:
     """Backup get should fail without backup_id."""
     result = list(
-        await handle_linode_instance_backup_get({"instance_id": 123}, sample_config)
+        await handle_linode_instance_backup_get({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "backup_id" in result[0].text.lower()
@@ -16900,68 +16898,68 @@ async def test_instance_backup_get_missing_ids(
 
 
 async def test_instance_disks_list_tool_def() -> None:
-    """Disks list tool should require instance_id."""
+    """Disks list tool should require linode_id."""
     tool, _ = create_linode_instance_disk_list_tool()
     assert tool.name == "linode_instance_disk_list"
-    assert "instance_id" in (tool.inputSchema.get("required") or [])
+    assert "linode_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_instance_disk_get_tool_def() -> None:
-    """Disk get tool should require instance_id and disk_id."""
+    """Disk get tool should require linode_id and disk_id."""
     tool, _ = create_linode_instance_disk_get_tool()
     assert tool.name == "linode_instance_disk_get"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "disk_id" in required
 
 
 async def test_instance_disk_create_tool_def() -> None:
-    """Disk create should require instance_id, label, size, confirm."""
+    """Disk create should require linode_id, label, size, confirm."""
     tool, _ = create_linode_instance_disk_create_tool()
     assert tool.name == "linode_instance_disk_create"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "label" in required
     assert "size" in required
     assert "confirm" in required
 
 
 async def test_instance_disk_update_tool_def() -> None:
-    """Disk update should require instance_id, disk_id, confirm."""
+    """Disk update should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_update_tool()
     assert tool.name == "linode_instance_disk_update"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "disk_id" in required
     assert "confirm" in required
 
 
 async def test_instance_disk_delete_tool_def() -> None:
-    """Disk delete should require instance_id, disk_id, confirm."""
+    """Disk delete should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_delete_tool()
     assert tool.name == "linode_instance_disk_delete"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "disk_id" in required
     assert "confirm" in required
 
 
 async def test_instance_disk_clone_tool_def() -> None:
-    """Disk clone should require instance_id, disk_id, confirm."""
+    """Disk clone should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_clone_tool()
     assert tool.name == "linode_instance_disk_clone"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "disk_id" in required
     assert "confirm" in required
 
 
 async def test_instance_disk_resize_tool_def() -> None:
-    """Disk resize should require instance_id, disk_id, size, confirm."""
+    """Disk resize should require linode_id, disk_id, size, confirm."""
     tool, _ = create_linode_instance_disk_resize_tool()
     assert tool.name == "linode_instance_disk_resize"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "disk_id" in required
     assert "size" in required
     assert "confirm" in required
@@ -16984,7 +16982,7 @@ async def test_instance_disks_list_success(
         mc.return_value = mock_client
 
         result = list(
-            await handle_linode_instance_disk_list({"instance_id": 123}, sample_config)
+            await handle_linode_instance_disk_list({"linode_id": 123}, sample_config)
         )
         assert len(result) == 1
         assert "boot" in result[0].text
@@ -16997,7 +16995,7 @@ async def test_instance_disk_create_no_confirm(
     result = list(
         await handle_linode_instance_disk_create(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "label": "data",
                 "size": 5000,
             },
@@ -17014,7 +17012,7 @@ async def test_instance_disk_delete_no_confirm(
     """Disk delete should require confirm=true."""
     result = list(
         await handle_linode_instance_disk_delete(
-            {"instance_id": 123, "disk_id": 1},
+            {"linode_id": 123, "disk_id": 1},
             sample_config,
         )
     )
@@ -17027,7 +17025,7 @@ async def test_instance_disk_get_missing_disk_id(
 ) -> None:
     """Disk get should fail without disk_id."""
     result = list(
-        await handle_linode_instance_disk_get({"instance_id": 123}, sample_config)
+        await handle_linode_instance_disk_get({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "disk_id" in result[0].text.lower()
@@ -17039,7 +17037,7 @@ async def test_instance_disk_update_no_confirm(
     """Disk update should require confirm=true."""
     result = list(
         await handle_linode_instance_disk_update(
-            {"instance_id": 123, "disk_id": 1},
+            {"linode_id": 123, "disk_id": 1},
             sample_config,
         )
     )
@@ -17053,7 +17051,7 @@ async def test_instance_disk_clone_no_confirm(
     """Disk clone should require confirm=true."""
     result = list(
         await handle_linode_instance_disk_clone(
-            {"instance_id": 123, "disk_id": 1},
+            {"linode_id": 123, "disk_id": 1},
             sample_config,
         )
     )
@@ -17068,7 +17066,7 @@ async def test_instance_disk_resize_no_confirm(
     result = list(
         await handle_linode_instance_disk_resize(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "disk_id": 1,
                 "size": 30000,
             },
@@ -17083,48 +17081,48 @@ async def test_instance_disk_resize_no_confirm(
 
 
 async def test_instance_ips_list_tool_def() -> None:
-    """IPs list tool should require instance_id."""
+    """IPs list tool should require linode_id."""
     tool, _ = create_linode_instance_ip_list_tool()
     assert tool.name == "linode_instance_ip_list"
-    assert "instance_id" in (tool.inputSchema.get("required") or [])
+    assert "linode_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_instance_ip_get_tool_def() -> None:
-    """IP get tool should require instance_id and address."""
+    """IP get tool should require linode_id and address."""
     tool, _ = create_linode_instance_ip_get_tool()
     assert tool.name == "linode_instance_ip_get"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "address" in required
 
 
 async def test_instance_ip_allocate_tool_def() -> None:
-    """IP allocate should require instance_id, type, confirm."""
+    """IP allocate should require linode_id, type, confirm."""
     tool, _ = create_linode_instance_ip_allocate_tool()
     assert tool.name == "linode_instance_ip_allocate"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "type" in required
     assert "confirm" in required
 
 
 async def test_instance_ip_update_tool_def() -> None:
-    """IP update should require instance_id, address, rdns, confirm."""
+    """IP update should require linode_id, address, rdns, confirm."""
     tool, _ = create_linode_instance_ip_update_tool()
     assert tool.name == "linode_instance_ip_update"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "address" in required
     assert "rdns" in required
     assert "confirm" in required
 
 
 async def test_instance_ip_delete_tool_def() -> None:
-    """IP delete should require instance_id, address, confirm."""
+    """IP delete should require linode_id, address, confirm."""
     tool, _ = create_linode_instance_ip_delete_tool()
     assert tool.name == "linode_instance_ip_delete"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "address" in required
     assert "confirm" in required
 
@@ -17151,7 +17149,7 @@ async def test_instance_ips_list_success(
         mc.return_value = mock_client
 
         result = list(
-            await handle_linode_instance_ip_list({"instance_id": 123}, sample_config)
+            await handle_linode_instance_ip_list({"linode_id": 123}, sample_config)
         )
         assert len(result) == 1
         assert "192.0.2.1" in result[0].text
@@ -17162,7 +17160,7 @@ async def test_instance_ip_get_missing_address(
 ) -> None:
     """IP get should fail without address."""
     result = list(
-        await handle_linode_instance_ip_get({"instance_id": 123}, sample_config)
+        await handle_linode_instance_ip_get({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "address" in result[0].text.lower()
@@ -17174,7 +17172,7 @@ async def test_instance_ip_allocate_no_confirm(
     """IP allocate should require confirm=true."""
     result = list(
         await handle_linode_instance_ip_allocate(
-            {"instance_id": 123, "type": "ipv4"},
+            {"linode_id": 123, "type": "ipv4"},
             sample_config,
         )
     )
@@ -17188,7 +17186,7 @@ async def test_instance_ip_allocate_dry_run_returns_preview(
     """dry_run=true previews the allocate with no resource state and no call."""
     result = list(
         await handle_linode_instance_ip_allocate(
-            {"instance_id": 123, "type": "ipv4", "dry_run": True},
+            {"linode_id": 123, "type": "ipv4", "dry_run": True},
             sample_config,
         )
     )
@@ -17208,7 +17206,7 @@ async def test_instance_ip_allocate_dry_run_still_validates_type(
     """Missing type must error out regardless of dry_run."""
     result = list(
         await handle_linode_instance_ip_allocate(
-            {"instance_id": 123, "dry_run": True},
+            {"linode_id": 123, "dry_run": True},
             sample_config,
         )
     )
@@ -17224,7 +17222,7 @@ async def test_instance_ip_update_no_confirm(
     result = list(
         await handle_linode_instance_ip_update(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "address": "192.0.2.1",
                 "rdns": "host.example.com",
             },
@@ -17242,7 +17240,7 @@ async def test_instance_ip_update_missing_rdns(
     result = list(
         await handle_linode_instance_ip_update(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "address": "192.0.2.1",
                 "confirm": True,
             },
@@ -17260,7 +17258,7 @@ async def test_instance_ip_delete_no_confirm(
     result = list(
         await handle_linode_instance_ip_delete(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "address": "192.0.2.1",
             },
             sample_config,
@@ -17274,49 +17272,49 @@ async def test_instance_ip_delete_no_confirm(
 
 
 async def test_instance_clone_tool_def() -> None:
-    """Clone tool should require instance_id and confirm."""
+    """Clone tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_clone_tool()
     assert tool.name == "linode_instance_clone"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "confirm" in required
 
 
 async def test_instance_migrate_tool_def() -> None:
-    """Migrate tool should require instance_id and confirm."""
+    """Migrate tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_migrate_tool()
     assert tool.name == "linode_instance_migrate"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "confirm" in required
 
 
 async def test_instance_rebuild_tool_def() -> None:
-    """Rebuild should require instance_id, image, root_pass, confirm."""
+    """Rebuild should require linode_id, image, root_pass, confirm."""
     tool, _ = create_linode_instance_rebuild_tool()
     assert tool.name == "linode_instance_rebuild"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "image" in required
     assert "root_pass" in required
     assert "confirm" in required
 
 
 async def test_instance_rescue_tool_def() -> None:
-    """Rescue tool should require instance_id and confirm."""
+    """Rescue tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_rescue_tool()
     assert tool.name == "linode_instance_rescue"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "confirm" in required
 
 
 async def test_instance_password_reset_tool_def() -> None:
-    """Password reset should require instance_id, root_pass, confirm."""
+    """Password reset should require linode_id, root_pass, confirm."""
     tool, _ = create_linode_instance_password_reset_tool()
     assert tool.name == "linode_instance_password_reset"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "root_pass" in required
     assert "confirm" in required
 
@@ -17328,9 +17326,7 @@ async def test_instance_clone_no_confirm(
     sample_config: Config,
 ) -> None:
     """Clone should require confirm=true."""
-    result = list(
-        await handle_linode_instance_clone({"instance_id": 123}, sample_config)
-    )
+    result = list(await handle_linode_instance_clone({"linode_id": 123}, sample_config))
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
 
@@ -17352,7 +17348,7 @@ async def test_instance_clone_success(
 
         result = list(
             await handle_linode_instance_clone(
-                {"instance_id": 123, "confirm": True},
+                {"linode_id": 123, "confirm": True},
                 sample_config,
             )
         )
@@ -17365,7 +17361,7 @@ async def test_instance_migrate_no_confirm(
 ) -> None:
     """Migrate should require confirm=true."""
     result = list(
-        await handle_linode_instance_migrate({"instance_id": 123}, sample_config)
+        await handle_linode_instance_migrate({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -17378,7 +17374,7 @@ async def test_instance_rebuild_no_confirm(
     result = list(
         await handle_linode_instance_rebuild(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "image": "linode/ubuntu22.04",
                 "root_pass": "S3cure!Pass123",
             },
@@ -17396,7 +17392,7 @@ async def test_instance_rebuild_missing_image(
     result = list(
         await handle_linode_instance_rebuild(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "root_pass": "S3cure!Pass123",
                 "confirm": True,
             },
@@ -17412,7 +17408,7 @@ async def test_instance_rescue_no_confirm(
 ) -> None:
     """Rescue should require confirm=true."""
     result = list(
-        await handle_linode_instance_rescue({"instance_id": 123}, sample_config)
+        await handle_linode_instance_rescue({"linode_id": 123}, sample_config)
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -17425,7 +17421,7 @@ async def test_instance_password_reset_no_confirm(
     result = list(
         await handle_linode_instance_password_reset(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "root_pass": "NewPass123!",
             },
             sample_config,
@@ -17441,7 +17437,7 @@ async def test_instance_password_reset_missing_pass(
     """Password reset should fail without root_pass."""
     result = list(
         await handle_linode_instance_password_reset(
-            {"instance_id": 123, "confirm": True},
+            {"linode_id": 123, "confirm": True},
             sample_config,
         )
     )
@@ -17724,7 +17720,7 @@ async def test_handle_linode_instance_backup_get_success(
         "type": "auto",
     }
     result = await handle_linode_instance_backup_get(
-        {"instance_id": 123, "backup_id": 100}, sample_config
+        {"linode_id": 123, "backup_id": 100}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
@@ -17740,9 +17736,9 @@ async def test_handle_linode_instance_backup_restore_success(
     mock_linode_client.restore_instance_backup.return_value = None
     result = await handle_linode_instance_backup_restore(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "backup_id": 100,
-            "linode_id": 456,
+            "target_linode_id": 456,
             "confirm": True,
         },
         sample_config,
@@ -17750,7 +17746,7 @@ async def test_handle_linode_instance_backup_restore_success(
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Backup 100 restored to instance 456"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     assert data["backup_id"] == 100
     mock_linode_client.restore_instance_backup.assert_called_once_with(
         123, 100, 456, overwrite=False
@@ -17763,12 +17759,12 @@ async def test_handle_linode_instance_backups_enable_success(
     """Backups enable should succeed with confirm=true."""
     mock_linode_client.enable_instance_backups.return_value = None
     result = await handle_linode_instance_backups_enable(
-        {"instance_id": 123, "confirm": True}, sample_config
+        {"linode_id": 123, "confirm": True}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Backups enabled for instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     mock_linode_client.enable_instance_backups.assert_called_once_with(123)
 
 
@@ -17778,12 +17774,12 @@ async def test_handle_linode_instance_backups_cancel_success(
     """Backups cancel should succeed with confirm=true."""
     mock_linode_client.cancel_instance_backups.return_value = None
     result = await handle_linode_instance_backups_cancel(
-        {"instance_id": 123, "confirm": True}, sample_config
+        {"linode_id": 123, "confirm": True}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Backups cancelled for instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     mock_linode_client.cancel_instance_backups.assert_called_once_with(123)
 
 
@@ -17797,7 +17793,7 @@ async def test_instance_backups_cancel_dry_run_returns_preview(
         "status": "running",
     }
     result = await handle_linode_instance_backups_cancel(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
@@ -17811,11 +17807,11 @@ async def test_instance_backups_cancel_dry_run_returns_preview(
 async def test_instance_backups_cancel_dry_run_still_validates_instance_id(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
-    """Missing instance_id must error regardless of dry_run."""
+    """Missing linode_id must error regardless of dry_run."""
     result = await handle_linode_instance_backups_cancel(
         {"dry_run": True}, sample_config
     )
-    assert "instance_id" in result[0].text.lower()
+    assert "linode_id" in result[0].text.lower()
     mock_linode_client.cancel_instance_backups.assert_not_called()
 
 
@@ -17831,7 +17827,7 @@ async def test_handle_linode_instance_disk_get_success(
         "status": "ready",
     }
     result = await handle_linode_instance_disk_get(
-        {"instance_id": 123, "disk_id": 10}, sample_config
+        {"linode_id": 123, "disk_id": 10}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
@@ -17852,7 +17848,7 @@ async def test_handle_linode_instance_disk_create_success(
         "status": "ready",
     }
     result = await handle_linode_instance_disk_create(
-        {"instance_id": 123, "label": "my-disk", "size": 1024, "confirm": True},
+        {"linode_id": 123, "label": "my-disk", "size": 1024, "confirm": True},
         sample_config,
     )
     assert len(result) == 1
@@ -17875,7 +17871,7 @@ async def test_handle_linode_instance_disk_update_success(
     }
     result = await handle_linode_instance_disk_update(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "disk_id": 10,
             "label": "renamed-disk",
             "confirm": True,
@@ -17897,12 +17893,12 @@ async def test_handle_linode_instance_disk_delete_success(
     """Disk delete should succeed with valid args and confirm=true."""
     mock_linode_client.delete_instance_disk.return_value = None
     result = await handle_linode_instance_disk_delete(
-        {"instance_id": 123, "disk_id": 10, "confirm": True}, sample_config
+        {"linode_id": 123, "disk_id": 10, "confirm": True}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Disk 10 deleted from instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     assert data["disk_id"] == 10
     mock_linode_client.delete_instance_disk.assert_called_once_with(123, 10)
 
@@ -17917,7 +17913,7 @@ async def test_instance_disk_delete_dry_run_returns_preview(
         "size": 25600,
     }
     result = await handle_linode_instance_disk_delete(
-        {"instance_id": 123, "disk_id": 10, "dry_run": True}, sample_config
+        {"linode_id": 123, "disk_id": 10, "dry_run": True}, sample_config
     )
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
@@ -17933,7 +17929,7 @@ async def test_instance_disk_delete_dry_run_still_validates_disk_id(
 ) -> None:
     """Missing disk_id must error regardless of dry_run."""
     result = await handle_linode_instance_disk_delete(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
     assert "disk_id" in result[0].text.lower()
     mock_linode_client.delete_instance_disk.assert_not_called()
@@ -17946,7 +17942,7 @@ async def test_instance_backup_create_dry_run_returns_preview(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_backup_create(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
 
     body = json.loads(result[0].text)
@@ -17962,7 +17958,7 @@ async def test_instance_backup_restore_dry_run_returns_preview(
     mock_linode_client.get_instance_backup.return_value = {"id": 456}
 
     result = await handle_linode_instance_backup_restore(
-        {"instance_id": 123, "backup_id": 456, "linode_id": 999, "dry_run": True},
+        {"linode_id": 123, "backup_id": 456, "target_linode_id": 999, "dry_run": True},
         sample_config,
     )
 
@@ -17980,9 +17976,9 @@ async def test_instance_backup_restore_dry_run_overwrite_side_effects(
 
     result = await handle_linode_instance_backup_restore(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "backup_id": 456,
-            "linode_id": 999,
+            "target_linode_id": 999,
             "overwrite": True,
             "dry_run": True,
         },
@@ -18003,7 +17999,7 @@ async def test_instance_backups_enable_dry_run_returns_preview(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_backups_enable(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
 
     body = json.loads(result[0].text)
@@ -18019,7 +18015,7 @@ async def test_instance_disk_create_dry_run_returns_preview(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_disk_create(
-        {"instance_id": 123, "label": "data", "size": 10240, "dry_run": True},
+        {"linode_id": 123, "label": "data", "size": 10240, "dry_run": True},
         sample_config,
     )
 
@@ -18039,7 +18035,7 @@ async def test_instance_disk_update_dry_run_returns_preview(
     mock_linode_client.get_instance_disk.return_value = {"id": 789}
 
     result = await handle_linode_instance_disk_update(
-        {"instance_id": 123, "disk_id": 789, "label": "renamed", "dry_run": True},
+        {"linode_id": 123, "disk_id": 789, "label": "renamed", "dry_run": True},
         sample_config,
     )
 
@@ -18061,7 +18057,7 @@ async def test_instance_disk_clone_dry_run_returns_preview(
     }
 
     result = await handle_linode_instance_disk_clone(
-        {"instance_id": 123, "disk_id": 789, "dry_run": True}, sample_config
+        {"linode_id": 123, "disk_id": 789, "dry_run": True}, sample_config
     )
 
     body = json.loads(result[0].text)
@@ -18078,7 +18074,7 @@ async def test_instance_disk_resize_dry_run_returns_preview(
     mock_linode_client.get_instance_disk.return_value = {"id": 789, "size": 10240}
 
     result = await handle_linode_instance_disk_resize(
-        {"instance_id": 123, "disk_id": 789, "size": 20480, "dry_run": True},
+        {"linode_id": 123, "disk_id": 789, "size": 20480, "dry_run": True},
         sample_config,
     )
 
@@ -18102,7 +18098,7 @@ async def test_handle_linode_instance_disk_clone_success(
         "size": 51200,
     }
     result = await handle_linode_instance_disk_clone(
-        {"instance_id": 123, "disk_id": 10, "confirm": True}, sample_config
+        {"linode_id": 123, "disk_id": 10, "confirm": True}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
@@ -18117,13 +18113,13 @@ async def test_handle_linode_instance_disk_resize_success(
     """Disk resize should succeed with valid args and confirm=true."""
     mock_linode_client.resize_instance_disk.return_value = None
     result = await handle_linode_instance_disk_resize(
-        {"instance_id": 123, "disk_id": 10, "size": 65536, "confirm": True},
+        {"linode_id": 123, "disk_id": 10, "size": 65536, "confirm": True},
         sample_config,
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Disk 10 resized to 65536 MB"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     assert data["disk_id"] == 10
     assert data["size"] == 65536
     mock_linode_client.resize_instance_disk.assert_called_once_with(123, 10, 65536)
@@ -18132,7 +18128,7 @@ async def test_handle_linode_instance_disk_resize_success(
 async def test_handle_linode_instance_ip_get_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
-    """IP get should return IP data when instance_id and address are valid."""
+    """IP get should return IP data when linode_id and address are valid."""
     mock_linode_client.get_instance_ip.return_value = {
         "address": "203.0.113.1",
         "type": "ipv4",
@@ -18140,7 +18136,7 @@ async def test_handle_linode_instance_ip_get_success(
         "region": "us-east",
     }
     result = await handle_linode_instance_ip_get(
-        {"instance_id": 123, "address": "203.0.113.1"}, sample_config
+        {"linode_id": 123, "address": "203.0.113.1"}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
@@ -18159,7 +18155,7 @@ async def test_handle_linode_instance_ip_allocate_success(
         "public": True,
     }
     result = await handle_linode_instance_ip_allocate(
-        {"instance_id": 123, "type": "ipv4", "public": True, "confirm": True},
+        {"linode_id": 123, "type": "ipv4", "public": True, "confirm": True},
         sample_config,
     )
     assert len(result) == 1
@@ -18180,7 +18176,7 @@ async def test_handle_linode_instance_ip_update_success(
     }
     result = await handle_linode_instance_ip_update(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "address": "203.0.113.1",
             "rdns": "host.example.com",
             "confirm": True,
@@ -18208,7 +18204,7 @@ async def test_handle_linode_instance_ip_update_null_rdns_success(
     }
     result = await handle_linode_instance_ip_update(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "address": "203.0.113.1",
             "rdns": None,
             "confirm": True,
@@ -18231,13 +18227,13 @@ async def test_handle_linode_instance_ip_delete_success(
     """IP delete should succeed with confirm=true."""
     mock_linode_client.delete_instance_ip.return_value = None
     result = await handle_linode_instance_ip_delete(
-        {"instance_id": 123, "address": "203.0.113.1", "confirm": True},
+        {"linode_id": 123, "address": "203.0.113.1", "confirm": True},
         sample_config,
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "IP 203.0.113.1 deleted from instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     assert data["address"] == "203.0.113.1"
     mock_linode_client.delete_instance_ip.assert_called_once_with(123, "203.0.113.1")
 
@@ -18252,7 +18248,7 @@ async def test_instance_ip_delete_dry_run_returns_preview(
         "public": True,
     }
     result = await handle_linode_instance_ip_delete(
-        {"instance_id": 123, "address": "203.0.113.1", "dry_run": True},
+        {"linode_id": 123, "address": "203.0.113.1", "dry_run": True},
         sample_config,
     )
     body = json.loads(result[0].text)
@@ -18269,7 +18265,7 @@ async def test_instance_ip_delete_dry_run_still_validates_address(
 ) -> None:
     """Missing address must error regardless of dry_run."""
     result = await handle_linode_instance_ip_delete(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
     assert "address" in result[0].text.lower()
     mock_linode_client.delete_instance_ip.assert_not_called()
@@ -18281,13 +18277,13 @@ async def test_handle_linode_instance_migrate_success(
     """Migrate should succeed with confirm=true."""
     mock_linode_client.migrate_instance.return_value = None
     result = await handle_linode_instance_migrate(
-        {"instance_id": 123, "region": "eu-west", "confirm": True},
+        {"linode_id": 123, "region": "eu-west", "confirm": True},
         sample_config,
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Migration initiated for instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     mock_linode_client.migrate_instance.assert_called_once_with(123, region="eu-west")
 
 
@@ -18302,7 +18298,7 @@ async def test_handle_linode_instance_rebuild_success(
     }
     result = await handle_linode_instance_rebuild(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "image": "linode/ubuntu24.04",
             "root_pass": "Str0ngP@ssw0rd!",
             "confirm": True,
@@ -18333,7 +18329,7 @@ async def test_instance_rebuild_dry_run_returns_preview(
     }
     result = await handle_linode_instance_rebuild(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "image": "linode/ubuntu24.04",
             "root_pass": "Str0ngP@ssw0rd!",
             "dry_run": True,
@@ -18354,7 +18350,7 @@ async def test_instance_rebuild_dry_run_still_validates_root_pass(
 ) -> None:
     """Missing root_pass must error regardless of dry_run."""
     result = await handle_linode_instance_rebuild(
-        {"instance_id": 123, "image": "linode/ubuntu24.04", "dry_run": True},
+        {"linode_id": 123, "image": "linode/ubuntu24.04", "dry_run": True},
         sample_config,
     )
     assert "root_pass is required" in result[0].text
@@ -18482,7 +18478,7 @@ async def test_instance_clone_dry_run_returns_preview_without_mutating(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_clone(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
 
     body = json.loads(result[0].text)
@@ -18498,7 +18494,7 @@ async def test_instance_migrate_dry_run_returns_preview_without_mutating(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_migrate(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
 
     body = json.loads(result[0].text)
@@ -18554,7 +18550,7 @@ async def test_instance_migrate_dry_run_surfaces_region_change(
         mock_cls.return_value = mock_client
 
         result = await handle_linode_instance_migrate(
-            {"instance_id": 123, "region": "us-west", "dry_run": True},
+            {"linode_id": 123, "region": "us-west", "dry_run": True},
             sample_config,
         )
 
@@ -18572,7 +18568,7 @@ async def test_instance_rescue_dry_run_returns_preview_without_mutating(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_rescue(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
 
     body = json.loads(result[0].text)
@@ -18587,12 +18583,12 @@ async def test_handle_linode_instance_rescue_success(
     """Rescue should succeed with confirm=true."""
     mock_linode_client.rescue_instance.return_value = None
     result = await handle_linode_instance_rescue(
-        {"instance_id": 123, "confirm": True}, sample_config
+        {"linode_id": 123, "confirm": True}, sample_config
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Rescue mode initiated for instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     mock_linode_client.rescue_instance.assert_called_once_with(123, devices=None)
 
 
@@ -18602,13 +18598,13 @@ async def test_handle_linode_instance_password_reset_success(
     """Password reset should succeed with confirm=true and root_pass."""
     mock_linode_client.reset_instance_password.return_value = None
     result = await handle_linode_instance_password_reset(
-        {"instance_id": 123, "root_pass": "NewStr0ngP@ss!", "confirm": True},
+        {"linode_id": 123, "root_pass": "NewStr0ngP@ss!", "confirm": True},
         sample_config,
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Password reset for instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     mock_linode_client.reset_instance_password.assert_called_once_with(
         123, "NewStr0ngP@ss!"
     )
@@ -18624,7 +18620,7 @@ async def test_instance_password_reset_dry_run_returns_preview(
         "status": "offline",
     }
     result = await handle_linode_instance_password_reset(
-        {"instance_id": 123, "root_pass": "NewStr0ngP@ss!", "dry_run": True},
+        {"linode_id": 123, "root_pass": "NewStr0ngP@ss!", "dry_run": True},
         sample_config,
     )
     body = json.loads(result[0].text)
@@ -18641,7 +18637,7 @@ async def test_instance_password_reset_dry_run_still_validates_root_pass(
 ) -> None:
     """Missing root_pass must error regardless of dry_run."""
     result = await handle_linode_instance_password_reset(
-        {"instance_id": 123, "dry_run": True}, sample_config
+        {"linode_id": 123, "dry_run": True}, sample_config
     )
     assert "root_pass is required" in result[0].text
     mock_linode_client.reset_instance_password.assert_not_called()
@@ -18677,7 +18673,7 @@ async def test_instance_rebuild_dry_run_surfaces_disk_side_effects(
 
         result = await handle_linode_instance_rebuild(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "image": "linode/ubuntu24.04",
                 "root_pass": "Str0ngP@ssw0rd!",
                 "dry_run": True,
@@ -18703,7 +18699,7 @@ async def test_instance_rescue_dry_run_surfaces_side_effects(
         mock_cls.return_value = mock_client
 
         result = await handle_linode_instance_rescue(
-            {"instance_id": 123, "dry_run": True}, sample_config
+            {"linode_id": 123, "dry_run": True}, sample_config
         )
 
         body = json.loads(result[0].text)
@@ -18724,7 +18720,7 @@ async def test_instance_password_reset_dry_run_surfaces_side_effects(
         mock_cls.return_value = mock_client
 
         result = await handle_linode_instance_password_reset(
-            {"instance_id": 123, "root_pass": "Str0ngP@ssw0rd!", "dry_run": True},
+            {"linode_id": 123, "root_pass": "Str0ngP@ssw0rd!", "dry_run": True},
             sample_config,
         )
 
@@ -18740,7 +18736,7 @@ async def test_handle_linode_instance_backup_get_error(
     """Backup get should return error text when the API call fails."""
     mock_linode_client.get_instance_backup.side_effect = Exception("API error")
     result = await handle_linode_instance_backup_get(
-        {"instance_id": 123, "backup_id": 100}, sample_config
+        {"linode_id": 123, "backup_id": 100}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text
@@ -18753,7 +18749,7 @@ async def test_handle_linode_instance_disk_get_error(
     """Disk get should return error text when the API call fails."""
     mock_linode_client.get_instance_disk.side_effect = Exception("API error")
     result = await handle_linode_instance_disk_get(
-        {"instance_id": 123, "disk_id": 10}, sample_config
+        {"linode_id": 123, "disk_id": 10}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text
@@ -18766,7 +18762,7 @@ async def test_handle_linode_instance_ip_get_error(
     """IP get should return error text when the API call fails."""
     mock_linode_client.get_instance_ip.side_effect = Exception("API error")
     result = await handle_linode_instance_ip_get(
-        {"instance_id": 123, "address": "203.0.113.1"}, sample_config
+        {"linode_id": 123, "address": "203.0.113.1"}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text
@@ -18780,7 +18776,7 @@ async def test_handle_linode_instance_ip_update_error(
     mock_linode_client.update_instance_ip.side_effect = Exception("API error")
     result = await handle_linode_instance_ip_update(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "address": "203.0.113.1",
             "rdns": "host.example.com",
             "confirm": True,
@@ -18798,7 +18794,7 @@ async def test_handle_linode_instance_migrate_error(
     """Migrate should return error text when the API call fails."""
     mock_linode_client.migrate_instance.side_effect = Exception("API error")
     result = await handle_linode_instance_migrate(
-        {"instance_id": 123, "confirm": True}, sample_config
+        {"linode_id": 123, "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text
@@ -19071,7 +19067,7 @@ def test_create_linode_profile_tfa_enable_tool() -> None:
     tool, capability = create_linode_profile_tfa_enable_tool()
 
     assert tool.name == "linode_profile_tfa_enable"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["confirm"]
     assert "environment" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -19146,7 +19142,7 @@ def test_create_linode_profile_tfa_disable_tool() -> None:
     tool, capability = create_linode_profile_tfa_disable_tool()
 
     assert tool.name == "linode_profile_tfa_disable"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["confirm"]
     assert "environment" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -19211,7 +19207,7 @@ def test_create_linode_profile_tfa_enable_confirm_tool() -> None:
     tool, capability = create_linode_profile_tfa_enable_confirm_tool()
 
     assert tool.name == "linode_profile_tfa_enable_confirm"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["tfa_code", "confirm"]
     assert "environment" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["tfa_code"]["minLength"] == 1
@@ -19298,7 +19294,7 @@ def test_create_linode_profile_phone_number_send_tool() -> None:
     tool, capability = create_linode_profile_phone_number_send_tool()
 
     assert tool.name == "linode_profile_phone_number_send"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["iso_code", "phone_number", "confirm"]
     assert "environment" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["iso_code"]["minLength"] == 1
@@ -19433,7 +19429,7 @@ def test_create_linode_profile_phone_number_delete_tool() -> None:
     tool, capability = create_linode_profile_phone_number_delete_tool()
 
     assert tool.name == "linode_profile_phone_number_delete"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["confirm"]
     assert "environment" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -19507,7 +19503,7 @@ def test_create_linode_profile_phone_number_verify_tool() -> None:
     tool, capability = create_linode_profile_phone_number_verify_tool()
 
     assert tool.name == "linode_profile_phone_number_verify"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["otp_code", "confirm"]
     assert "environment" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["otp_code"]["minLength"] == 1
@@ -19636,7 +19632,7 @@ def test_create_linode_profile_security_questions_answer_tool() -> None:
     tool, capability = create_linode_profile_security_question_answer_tool()
 
     assert tool.name == "linode_profile_security_question_answer"
-    assert capability == Capability.Write
+    assert capability == Capability.Admin
     assert "security_questions" in tool.inputSchema["required"]
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -19761,7 +19757,7 @@ def test_create_linode_profile_token_create_tool() -> None:
     tool, capability = create_linode_profile_token_create_tool()
 
     assert tool.name == "linode_profile_token_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["confirm"]
     assert tool.inputSchema["properties"]["label"]["maxLength"] == 100
     assert "expiry" in tool.inputSchema["properties"]
@@ -20167,7 +20163,7 @@ def test_create_linode_profile_token_revoke_tool() -> None:
     tool, capability = create_linode_profile_token_delete_tool()
 
     assert tool.name == "linode_profile_token_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["token_id", "confirm"]
     assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
 
@@ -20233,7 +20229,7 @@ def test_create_linode_profile_token_update_tool() -> None:
     tool, capability = create_linode_profile_token_update_tool()
 
     assert tool.name == "linode_profile_token_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["token_id", "label", "confirm"]
     assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["label"]["maxLength"] == 100
@@ -20531,7 +20527,7 @@ def test_create_linode_profile_app_revoke_tool() -> None:
     tool, capability = create_linode_profile_app_delete_tool()
 
     assert tool.name == "linode_profile_app_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["app_id", "confirm"]
     assert tool.inputSchema["properties"]["app_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -20544,7 +20540,7 @@ def test_linode_profile_app_revoke_tool_is_exported_and_registered() -> None:
     assert "create_linode_profile_app_delete_tool" in tools_mod.__all__
     assert "handle_linode_profile_app_delete" in tools_mod.__all__
     registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_profile_app_delete"].capability is Capability.Destroy
+    assert registry["linode_profile_app_delete"].capability is Capability.Admin
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -20681,7 +20677,7 @@ def test_create_linode_profile_device_revoke_tool() -> None:
     tool, capability = create_linode_profile_device_revoke_tool()
 
     assert tool.name == "linode_profile_device_revoke"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["device_id", "confirm"]
     assert tool.inputSchema["properties"]["device_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -22911,7 +22907,7 @@ async def test_instance_ip_update_dry_run_returns_preview(
 
         result = await handle_linode_instance_ip_update(
             {
-                "instance_id": 123,
+                "linode_id": 123,
                 "address": "192.0.2.10",
                 "rdns": "host.example.com",
                 "dry_run": True,
@@ -22934,7 +22930,7 @@ async def test_instance_ip_update_dry_run_still_validates_address(
 ) -> None:
     """A missing address errors out under dry_run."""
     result = await handle_linode_instance_ip_update(
-        {"instance_id": 123, "rdns": "host.example.com", "dry_run": True},
+        {"linode_id": 123, "rdns": "host.example.com", "dry_run": True},
         sample_config,
     )
     assert len(result) == 1
@@ -24182,13 +24178,13 @@ def test_create_linode_instance_config_create_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_create"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["type"] == "string"
+    assert tool.inputSchema["properties"]["linode_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["label"]["type"] == "string"
     assert tool.inputSchema["properties"]["devices"]["type"] == "object"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert set(tool.inputSchema["required"]) == {
-        "instance_id",
+        "linode_id",
         "label",
         "devices",
         "confirm",
@@ -24213,7 +24209,7 @@ async def test_handle_linode_instance_config_create_success(
 
         result = await handle_linode_instance_config_create(
             {
-                "instance_id": "456",
+                "linode_id": "456",
                 "label": "boot-config",
                 "devices": devices,
                 "confirm": True,
@@ -24244,7 +24240,7 @@ async def test_handle_linode_instance_config_create_dry_run_returns_preview(
 
         result = await handle_linode_instance_config_create(
             {
-                "instance_id": "456",
+                "linode_id": "456",
                 "label": "boot-config",
                 "devices": devices,
                 "dry_run": True,
@@ -24269,7 +24265,7 @@ async def test_handle_linode_instance_config_create_requires_boolean_confirm(
 ) -> None:
     """Missing, false, string, and numeric confirms fail before client calls."""
     arguments: dict[str, Any] = {
-        "instance_id": "456",
+        "linode_id": "456",
         "label": "boot-config",
         "devices": {"sda": {"disk_id": 123}},
     }
@@ -24283,16 +24279,16 @@ async def test_handle_linode_instance_config_create_requires_boolean_confirm(
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize("instance_id", ["12/34", "12?bad", ".."])
+@pytest.mark.parametrize("linode_id", ["12/34", "12?bad", ".."])
 async def test_handle_linode_instance_config_create_rejects_malformed_instance_id(
     sample_config: Config,
-    instance_id: str,
+    linode_id: str,
 ) -> None:
     """Malformed path parameters are rejected before the client call."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_instance_config_create(
             {
-                "instance_id": instance_id,
+                "linode_id": linode_id,
                 "label": "boot-config",
                 "devices": {"sda": {"disk_id": 123}},
                 "confirm": True,
@@ -24307,10 +24303,10 @@ async def test_handle_linode_instance_config_create_rejects_malformed_instance_i
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"instance_id": "456", "devices": {"sda": {}}, "confirm": True}, "label"),
+        ({"linode_id": "456", "devices": {"sda": {}}, "confirm": True}, "label"),
         (
             {
-                "instance_id": "456",
+                "linode_id": "456",
                 "label": {"not": "string"},
                 "devices": {"sda": {}},
                 "confirm": True,
@@ -24318,12 +24314,12 @@ async def test_handle_linode_instance_config_create_rejects_malformed_instance_i
             "label",
         ),
         (
-            {"instance_id": "456", "label": "boot-config", "confirm": True},
+            {"linode_id": "456", "label": "boot-config", "confirm": True},
             "devices",
         ),
         (
             {
-                "instance_id": "456",
+                "linode_id": "456",
                 "label": "boot-config",
                 "devices": {},
                 "confirm": True,
@@ -24332,7 +24328,7 @@ async def test_handle_linode_instance_config_create_rejects_malformed_instance_i
         ),
         (
             {
-                "instance_id": "456",
+                "linode_id": "456",
                 "label": "boot-config",
                 "devices": [],
                 "confirm": True,
@@ -24360,7 +24356,7 @@ async def test_instance_disk_password_reset_tool_def() -> None:
     assert tool.name == "linode_instance_disk_password_reset"
     assert capability is Capability.Write
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     assert "disk_id" in required
     assert "password" in required
     assert "confirm" in required
@@ -24376,7 +24372,7 @@ async def test_handle_linode_instance_disk_password_reset_success(
 
     result = await handle_linode_instance_disk_password_reset(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "disk_id": 10,
             "password": "NewStr0ngP@ss!",
             "confirm": True,
@@ -24387,7 +24383,7 @@ async def test_handle_linode_instance_disk_password_reset_success(
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert data["message"] == "Root password reset for disk 10 on instance 123"
-    assert data["instance_id"] == 123
+    assert data["linode_id"] == 123
     assert data["disk_id"] == 10
     mock_linode_client.reset_instance_disk_password.assert_called_once_with(
         123, 10, "NewStr0ngP@ss!"
@@ -24400,7 +24396,7 @@ async def test_instance_disk_password_reset_requires_boolean_confirm(
 ) -> None:
     """Missing, false, string, and numeric confirm values are rejected."""
     arguments: dict[str, Any] = {
-        "instance_id": 123,
+        "linode_id": 123,
         "disk_id": 10,
         "password": "NewStr0ngP@ss!",
     }
@@ -24414,14 +24410,14 @@ async def test_instance_disk_password_reset_requires_boolean_confirm(
     mock_linode_client.reset_instance_disk_password.assert_not_called()
 
 
-@pytest.mark.parametrize("field", ["instance_id", "disk_id"])
+@pytest.mark.parametrize("field", ["linode_id", "disk_id"])
 @pytest.mark.parametrize("value", ["1/2", "1?x=2", ".."])
 async def test_instance_disk_password_reset_rejects_malformed_path_params(
     mock_linode_client: AsyncMock, sample_config: Config, field: str, value: str
 ) -> None:
     """Malformed finite IDs are rejected before the client call."""
     arguments: dict[str, Any] = {
-        "instance_id": 123,
+        "linode_id": 123,
         "disk_id": 10,
         "password": "NewStr0ngP@ss!",
         "confirm": True,
@@ -24440,7 +24436,7 @@ async def test_instance_disk_password_reset_missing_password(
 ) -> None:
     """Missing password is rejected before confirm/client handling."""
     result = await handle_linode_instance_disk_password_reset(
-        {"instance_id": 123, "disk_id": 10, "confirm": True}, sample_config
+        {"linode_id": 123, "disk_id": 10, "confirm": True}, sample_config
     )
 
     assert len(result) == 1
@@ -24456,7 +24452,7 @@ async def test_instance_disk_password_reset_dry_run_returns_preview(
 
     result = await handle_linode_instance_disk_password_reset(
         {
-            "instance_id": 123,
+            "linode_id": 123,
             "disk_id": 10,
             "password": "NewStr0ngP@ss!",
             "dry_run": True,
@@ -24474,12 +24470,12 @@ async def test_instance_disk_password_reset_dry_run_returns_preview(
 
 
 async def test_instance_volumes_list_tool_def() -> None:
-    """Linode volumes list tool should require instance_id and expose pagination."""
+    """Linode volumes list tool should require linode_id and expose pagination."""
     tool, capability = create_linode_instance_volume_list_tool()
     assert tool.name == "linode_instance_volume_list"
     assert capability is Capability.Read
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     props = tool.inputSchema["properties"]
     assert props["page"]["minimum"] == 1
     assert props["page_size"]["minimum"] == 25
@@ -24500,7 +24496,7 @@ async def test_instance_volumes_list_success(sample_config: Config) -> None:
 
         result = list(
             await handle_linode_instance_volume_list(
-                {"instance_id": 42, "page": 1, "page_size": 25}, sample_config
+                {"linode_id": 42, "page": 1, "page_size": 25}, sample_config
             )
         )
 
@@ -24509,33 +24505,33 @@ async def test_instance_volumes_list_success(sample_config: Config) -> None:
     mock_client.list_instance_volumes.assert_awaited_once_with(42, page=1, page_size=25)
 
 
-@pytest.mark.parametrize("instance_id", ["bad/id", "bad?query", "..", True, 0, -1])
+@pytest.mark.parametrize("linode_id", ["bad/id", "bad?query", "..", True, 0, -1])
 async def test_instance_volumes_list_rejects_invalid_instance_id(
-    sample_config: Config, instance_id: object
+    sample_config: Config, linode_id: object
 ) -> None:
     """Linode volumes list handler rejects malformed instance IDs."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         result = list(
             await handle_linode_instance_volume_list(
-                {"instance_id": instance_id}, sample_config
+                {"linode_id": linode_id}, sample_config
             )
         )
 
     assert len(result) == 1
-    assert "instance_id" in result[0].text.lower()
+    assert "linode_id" in result[0].text.lower()
     mc.assert_not_called()
 
 
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"instance_id": 42, "page": "x"}, "page"),
-        ({"instance_id": 42, "page": True}, "page"),
-        ({"instance_id": 42, "page": 0}, "page"),
-        ({"instance_id": 42, "page_size": "x"}, "page_size"),
-        ({"instance_id": 42, "page_size": True}, "page_size"),
-        ({"instance_id": 42, "page_size": 24}, "page_size"),
-        ({"instance_id": 42, "page_size": 501}, "page_size"),
+        ({"linode_id": 42, "page": "x"}, "page"),
+        ({"linode_id": 42, "page": True}, "page"),
+        ({"linode_id": 42, "page": 0}, "page"),
+        ({"linode_id": 42, "page_size": "x"}, "page_size"),
+        ({"linode_id": 42, "page_size": True}, "page_size"),
+        ({"linode_id": 42, "page_size": 24}, "page_size"),
+        ({"linode_id": 42, "page_size": 501}, "page_size"),
     ],
 )
 async def test_instance_volumes_list_rejects_invalid_page(
@@ -24553,11 +24549,11 @@ async def test_instance_volumes_list_rejects_invalid_page(
 
 
 async def test_instance_firewalls_list_tool_def() -> None:
-    """Linode firewalls list tool should require instance_id and expose pagination."""
+    """Linode firewalls list tool should require linode_id and expose pagination."""
     tool, _ = create_linode_instance_firewall_list_tool()
     assert tool.name == "linode_instance_firewall_list"
     required: list[str] = tool.inputSchema.get("required") or []
-    assert "instance_id" in required
+    assert "linode_id" in required
     props = tool.inputSchema["properties"]
     assert props["page"]["minimum"] == 1
     assert props["page_size"]["minimum"] == 25
@@ -24578,7 +24574,7 @@ async def test_instance_firewalls_list_success(sample_config: Config) -> None:
 
         result = list(
             await handle_linode_instance_firewall_list(
-                {"instance_id": 42, "page": 1, "page_size": 25}, sample_config
+                {"linode_id": 42, "page": 1, "page_size": 25}, sample_config
             )
         )
 
@@ -24589,19 +24585,19 @@ async def test_instance_firewalls_list_success(sample_config: Config) -> None:
     )
 
 
-@pytest.mark.parametrize("instance_id", ["bad/id", "bad?query", "..", True, 0, -1])
+@pytest.mark.parametrize("linode_id", ["bad/id", "bad?query", "..", True, 0, -1])
 async def test_instance_firewalls_list_rejects_invalid_instance_id(
-    sample_config: Config, instance_id: object
+    sample_config: Config, linode_id: object
 ) -> None:
     """Linode firewalls list handler rejects malformed instance IDs."""
     result = list(
         await handle_linode_instance_firewall_list(
-            {"instance_id": instance_id}, sample_config
+            {"linode_id": linode_id}, sample_config
         )
     )
 
     assert len(result) == 1
-    assert "instance_id" in result[0].text.lower()
+    assert "linode_id" in result[0].text.lower()
 
 
 async def test_instance_interface_firewalls_list_tool_def() -> None:
@@ -24678,7 +24674,7 @@ async def test_instance_firewalls_list_rejects_invalid_page(
     """Linode firewalls list handler validates pagination before client call."""
     result = list(
         await handle_linode_instance_firewall_list(
-            {"instance_id": 42, "page_size": 24}, sample_config
+            {"linode_id": 42, "page_size": 24}, sample_config
         )
     )
 

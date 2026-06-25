@@ -121,8 +121,13 @@ func TestDeprecatedAccountEntityTransferDeleteToolRemoved(t *testing.T) {
 // tool's capability tag and its confirm parameter:
 //
 //   - CapRead tools must NOT declare confirm (reads never mutate state)
-//   - CapWrite, CapDestroy, CapAdmin tools MUST declare confirm (mutators
-//     always require explicit confirmation)
+//   - CapWrite, CapDestroy tools MUST declare confirm (mutators always
+//     require explicit confirmation)
+//   - CapAdmin is exempt: it is a privilege tier (account/child_account
+//     scope), orthogonal to mutation. An Admin tool may be a read
+//     (linode_managed_credential_get) with no confirm or a mutation
+//     (linode_account_update) that carries one. This check runs over the
+//     active read-only profile, which excludes Admin tools regardless.
 //   - CapMeta is exempt (some meta tools have confirm, some don't)
 //   - CapUnknown is exempt (still on the allowlist; gated by the first test)
 //
@@ -147,14 +152,16 @@ func TestCapabilityAndConfirmInvariants(t *testing.T) {
 			if hasConfirm {
 				t.Error("hasConfirm = true, want false")
 			}
-		case profiles.CapWrite, profiles.CapDestroy, profiles.CapAdmin:
+		case profiles.CapWrite, profiles.CapDestroy:
 			if !hasConfirm {
 				t.Error("hasConfirm = false, want true")
 			}
-		case profiles.CapMeta, profiles.CapUnknown:
+		case profiles.CapMeta, profiles.CapUnknown, profiles.CapAdmin:
 			// CapMeta tools may either have or omit confirm (some edit state,
-			// some are pure reads). CapUnknown is gated by the allowlist test
-			// above; this PR ships with every tool here.
+			// some are pure reads). CapAdmin is a privilege tier that spans
+			// reads and mutations, so confirm is not required here (and this
+			// check runs over the default profile, which excludes Admin
+			// anyway). CapUnknown is gated by the allowlist test above.
 		}
 	}
 }

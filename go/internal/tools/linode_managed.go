@@ -144,7 +144,7 @@ func NewLinodeManagedContactDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 		handleLinodeManagedContactDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedContactsTool creates a tool for listing Managed contacts.
@@ -227,7 +227,7 @@ func NewLinodeManagedServiceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 		handleLinodeManagedServiceDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServiceDisableTool creates a tool for disabling one Managed service monitor.

@@ -36,13 +36,15 @@ _ENV_PROP: dict[str, Any] = {
     "description": "Linode environment to use (optional, defaults to 'default')",
 }
 
-_INSTANCE_ID_PROP: dict[str, Any] = {
-    "type": "string",
+_LINODE_ID_PROP: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the Linode instance (required)",
 }
 
 _BACKUP_ID_PROP: dict[str, Any] = {
-    "type": "string",
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the backup (required)",
 }
 
@@ -55,20 +57,20 @@ _CONFIRM_PROP: dict[str, Any] = {
 def _parse_instance_id(
     arguments: dict[str, Any],
 ) -> int | list[TextContent]:
-    """Parse and validate instance_id from arguments."""
-    raw = arguments.get("instance_id", "")
+    """Parse and validate linode_id from arguments."""
+    raw = arguments.get("linode_id", "")
     if not raw:
-        return _error_response("instance_id is required")
+        return _error_response("linode_id is required")
     try:
         return int(raw)
     except (ValueError, TypeError):
-        return _error_response("instance_id must be a valid integer")
+        return _error_response("linode_id must be a valid integer")
 
 
 def _parse_instance_and_backup_ids(
     arguments: dict[str, Any],
 ) -> tuple[int, int] | list[TextContent]:
-    """Parse instance_id and backup_id from arguments."""
+    """Parse linode_id and backup_id from arguments."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -91,9 +93,9 @@ def create_linode_instance_backup_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
             },
-            "required": ["instance_id"],
+            "required": ["linode_id"],
         },
     ), Capability.Read
 
@@ -123,10 +125,10 @@ def create_linode_instance_backup_get_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "backup_id": _BACKUP_ID_PROP,
             },
-            "required": ["instance_id", "backup_id"],
+            "required": ["linode_id", "backup_id"],
         },
     ), Capability.Read
 
@@ -138,12 +140,12 @@ async def handle_linode_instance_backup_get(
     ids = _parse_instance_and_backup_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, backup_id = ids
+    linode_id, backup_id = ids
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.get_instance_backup(instance_id, backup_id)
+        return await client.get_instance_backup(linode_id, backup_id)
 
     return await execute_tool(cfg, arguments, "get instance backup", _call)
 
@@ -157,7 +159,7 @@ def create_linode_instance_backup_create_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "label": {
                     "type": "string",
                     "description": "Label for the snapshot",
@@ -165,7 +167,7 @@ def create_linode_instance_backup_create_tool() -> tuple[Tool, Capability]:
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["instance_id", "confirm"],
+            "required": ["linode_id", "confirm"],
         },
     ), Capability.Write
 
@@ -212,9 +214,9 @@ def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "backup_id": _BACKUP_ID_PROP,
-                "linode_id": {
+                "target_linode_id": {
                     "type": "integer",
                     "description": ("Target instance ID for restore"),
                 },
@@ -226,9 +228,9 @@ def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
-                "backup_id",
                 "linode_id",
+                "backup_id",
+                "target_linode_id",
                 "confirm",
             ],
         },
@@ -267,27 +269,28 @@ async def handle_linode_instance_backup_restore(
     ids = _parse_instance_and_backup_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, backup_id = ids
+    linode_id, backup_id = ids
 
-    linode_id = arguments.get("linode_id")
-    if not linode_id:
-        return _error_response("linode_id is required")
+    raw_target = arguments.get("target_linode_id")
+    if not raw_target:
+        return _error_response("target_linode_id is required")
+    target_linode_id = int(raw_target)
 
     if is_dry_run(arguments):
         overwrite = arguments.get("overwrite", False)
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance_backup(instance_id, backup_id)
+            return await client.get_instance_backup(linode_id, backup_id)
 
         async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
-            return _backup_restore_side_effects(int(linode_id), overwrite)
+            return _backup_restore_side_effects(target_linode_id, overwrite)
 
         return await execute_dry_run(
             cfg,
             arguments,
             "linode_instance_backup_restore",
             "POST",
-            f"/linode/instances/{instance_id}/backups/{backup_id}/restore",
+            f"/linode/instances/{linode_id}/backups/{backup_id}/restore",
             _fetch,
             _walk,
         )
@@ -301,14 +304,14 @@ async def handle_linode_instance_backup_restore(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.restore_instance_backup(
-            instance_id,
+            linode_id,
             backup_id,
-            int(linode_id),
+            target_linode_id,
             overwrite=overwrite,
         )
         return {
-            "message": (f"Backup {backup_id} restored to instance {linode_id}"),
-            "instance_id": instance_id,
+            "message": (f"Backup {backup_id} restored to instance {target_linode_id}"),
+            "linode_id": linode_id,
             "backup_id": backup_id,
         }
 
@@ -324,11 +327,11 @@ def create_linode_instance_backups_enable_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["instance_id", "confirm"],
+            "required": ["linode_id", "confirm"],
         },
     ), Capability.Write
 
@@ -364,7 +367,7 @@ async def handle_linode_instance_backups_enable(
         await client.enable_instance_backups(iid)
         return {
             "message": (f"Backups enabled for instance {iid}"),
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     return await execute_tool(cfg, arguments, "enable instance backups", _call)
@@ -384,7 +387,7 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "confirm": {
                     "type": "boolean",
                     "description": (
@@ -396,7 +399,7 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
                 PARAM_MODE: MODE_PROP,
                 PARAM_PLAN_ID: PLAN_ID_PROP,
             },
-            "required": ["instance_id", "confirm"],
+            "required": ["linode_id", "confirm"],
         },
     ), Capability.Destroy
 
@@ -415,7 +418,7 @@ async def _instance_backups_cancel_two_stage(
         await client.cancel_instance_backups(iid)
         return {
             "message": f"Backups cancelled for instance {iid}",
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     return await run_two_stage_destroy(
@@ -466,7 +469,7 @@ async def handle_linode_instance_backups_cancel(
         await client.cancel_instance_backups(iid)
         return {
             "message": (f"Backups cancelled for instance {iid}"),
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     return await execute_tool(cfg, arguments, "cancel instance backups", _call)

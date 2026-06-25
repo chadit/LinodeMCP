@@ -42,8 +42,8 @@ func TestLinodeManagedContactDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_managed_contact_delete")
 	}
 
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {

@@ -782,7 +782,7 @@ func twoStageSingleIDCases() []twoStageSingleIDCase {
 				return h
 			},
 			idKey:     keyPlacementGroupID,
-			idVal:     "123",
+			idVal:     float64(123),
 			baseState: map[string]any{keyLabel: "pg-rack", keyUpdated: "2025-04-01T00:00:00"},
 		},
 		{
@@ -1371,7 +1371,7 @@ func twoStageMultiArgCases() []twoStageMultiArgCase {
 
 				return h
 			},
-			args:      map[string]any{"ipv6_range": "2001:db8::/64"},
+			args:      map[string]any{"range": "2001:db8::/64"},
 			baseState: map[string]any{"range": "2001:db8::", keyRegion: placementGroupCreateRegion, "prefix": float64(64)},
 		},
 		{

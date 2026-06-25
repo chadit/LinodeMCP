@@ -112,7 +112,7 @@ _CASES = [
     ),
     pytest.param(
         handle_linode_instance_backups_cancel,
-        {"instance_id": 123},
+        {"linode_id": 123},
         "get_instance",
         {"id": 123, "status": "running", "updated": "2026-01-01T00:00:00"},
         "cancel_instance_backups",
@@ -121,7 +121,7 @@ _CASES = [
     ),
     pytest.param(
         handle_linode_instance_password_reset,
-        {"instance_id": 123, "root_pass": "Sup3rSecretPass99"},
+        {"linode_id": 123, "root_pass": "Sup3rSecretPass99"},
         "get_instance",
         {"id": 123, "status": "offline", "updated": "2026-01-01T00:00:00"},
         "reset_instance_password",
@@ -130,7 +130,7 @@ _CASES = [
     ),
     pytest.param(
         handle_linode_instance_ip_delete,
-        {"instance_id": 123, "address": "203.0.113.7"},
+        {"linode_id": 123, "address": "203.0.113.7"},
         "get_instance_ip",
         {"address": "203.0.113.7", "type": "ipv4", "public": True},
         "delete_instance_ip",

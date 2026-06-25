@@ -95,7 +95,7 @@ func NewLinodeSSHKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		"linode_sshkey_update",
 		"Updates the label for an SSH key in your Linode profile. Pass dry_run=true to preview without updating.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("sshkey_id", mcp.Required(), mcp.Description("The ID of the SSH key to update")),
+			mcp.WithNumber("ssh_key_id", mcp.Required(), mcp.Description("The ID of the SSH key to update")),
 			mcp.WithString("label", mcp.Required(), mcp.Description("The new label for the SSH key")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm SSH key update. Ignored when dry_run=true.")),
@@ -108,12 +108,12 @@ func NewLinodeSSHKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLinodeSSHKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	sshKeyID := request.GetInt("sshkey_id", 0)
+	sshKeyID := request.GetInt("ssh_key_id", 0)
 	label := request.GetString("label", "")
 
 	if IsDryRun(request) {
 		if sshKeyID <= 0 {
-			return mcp.NewToolResultError("sshkey_id must be a positive integer"), nil
+			return mcp.NewToolResultError("ssh_key_id must be a positive integer"), nil
 		}
 
 		if label == "" {
@@ -133,7 +133,7 @@ func handleLinodeSSHKeyUpdateRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	if sshKeyID <= 0 {
-		return mcp.NewToolResultError("sshkey_id must be a positive integer"), nil
+		return mcp.NewToolResultError("ssh_key_id must be a positive integer"), nil
 	}
 
 	if label == "" {
@@ -170,7 +170,7 @@ func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		"linode_sshkey_delete",
 		"Deletes an SSH key from your Linode profile. This will not affect any instances already using this key. Pass dry_run=true to preview without deleting."+twoStageNote,
 		[]mcp.ToolOption{
-			mcp.WithNumber("sshkey_id", mcp.Required(), mcp.Description("The ID of the SSH key to delete")),
+			mcp.WithNumber("ssh_key_id", mcp.Required(), mcp.Description("The ID of the SSH key to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm SSH key deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -186,7 +186,7 @@ func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
 		ToolName:       "linode_sshkey_delete",
-		IDParam:        "sshkey_id",
+		IDParam:        "ssh_key_id",
 		Method:         httpMethodDelete,
 		PathPattern:    "/profile/sshkeys/%d",
 		ConfirmMessage: "This removes an SSH key from your Linode profile. Set confirm=true to proceed.",

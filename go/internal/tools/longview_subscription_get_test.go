@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	keyLongviewSubscriptionID = "longview_subscription_id"
+	keyLongviewSubscriptionID = "subscription_id"
 	longviewSubscriptionID    = "longview-10"
 )
 
@@ -169,9 +169,9 @@ func TestLinodeLongviewSubscriptionGetToolInvalidSubscriptionIDRejectsBeforeClie
 		args map[string]any
 		want string
 	}{
-		{name: caseMissing, args: map[string]any{}, want: "longview_subscription_id is required"},
-		{name: caseEmpty, args: map[string]any{keyLongviewSubscriptionID: ""}, want: "longview_subscription_id must be a non-empty string"},
-		{name: caseNumeric, args: map[string]any{keyLongviewSubscriptionID: 123}, want: "longview_subscription_id must be a non-empty string"},
+		{name: caseMissing, args: map[string]any{}, want: "subscription_id is required"},
+		{name: caseEmpty, args: map[string]any{keyLongviewSubscriptionID: ""}, want: "subscription_id must be a non-empty string"},
+		{name: caseNumeric, args: map[string]any{keyLongviewSubscriptionID: 123}, want: "subscription_id must be a non-empty string"},
 		{name: caseSlash, args: map[string]any{keyLongviewSubscriptionID: "longview/10"}, want: errLongviewSubscriptionIDNoSeparators},
 		{name: caseQuery, args: map[string]any{keyLongviewSubscriptionID: "longview-10?query"}, want: errLongviewSubscriptionIDNoSeparators},
 		{name: "fragment separator", args: map[string]any{keyLongviewSubscriptionID: "longview-10#fragment"}, want: errLongviewSubscriptionIDNoSeparators},

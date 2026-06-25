@@ -242,7 +242,7 @@ async def test_apply_ignores_cosmetic_drift(
 _TWO_ID_CASES = [
     pytest.param(
         handle_linode_instance_disk_delete,
-        "instance_id",
+        "linode_id",
         "disk_id",
         "get_instance_disk",
         "delete_instance_disk",

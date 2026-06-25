@@ -3683,8 +3683,8 @@ func TestLinodeProfilePhoneNumberSendToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_phone_number_send")
 	}
 
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if tool.Description == "" {
@@ -4020,8 +4020,8 @@ func TestLinodeProfilePhoneNumberDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_phone_number_delete")
 	}
 
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if tool.Description == "" {
@@ -4240,8 +4240,8 @@ func TestLinodeProfilePhoneNumberVerifyToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_phone_number_verify")
 	}
 
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if tool.Description == "" {
@@ -6437,8 +6437,8 @@ func TestLinodeProfileAppDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_app_delete")
 	}
 
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if tool.Description == "" {
@@ -6921,8 +6921,8 @@ func TestLinodeProfileDeviceRevokeToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_device_revoke")
 	}
 
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if handler == nil {
@@ -9619,13 +9619,8 @@ func TestLinodeAccountPaymentMethodGetToolInvalidPaymentMethodIdRejectsBeforeCli
 		want string
 	}{
 		{name: caseMissing, args: map[string]any{}, want: errPaymentMethodIDRequired},
-		{name: caseEmpty, args: map[string]any{keyPaymentMethodID: ""}, want: errPaymentMethodIDNonEmpty},
-		{name: caseNumeric, args: map[string]any{keyPaymentMethodID: 123}, want: errPaymentMethodIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyPaymentMethodID: paymentMethodIDSlash}, want: errPaymentMethodIDNoSeparators},
-		{name: caseQuery, args: map[string]any{keyPaymentMethodID: paymentMethodIDQuery}, want: errPaymentMethodIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyPaymentMethodID: pathTraversalValue}, want: errPaymentMethodIDNoSeparators},
-		{name: stageAlpha, args: map[string]any{keyPaymentMethodID: idAbc123}, want: errPaymentMethodIDPositive},
-		{name: caseZero, args: map[string]any{keyPaymentMethodID: "0"}, want: errPaymentMethodIDPositive},
+		{name: caseString, args: map[string]any{keyPaymentMethodID: idAbc123}, want: errPaymentMethodIDInteger},
+		{name: caseZero, args: map[string]any{keyPaymentMethodID: float64(0)}, want: errPaymentMethodIDInteger},
 	}
 
 	for _, testCase := range cases {
@@ -10107,13 +10102,8 @@ func TestLinodeAccountPaymentMethodDeleteToolInvalidPaymentMethodIdRejectsBefore
 		want string
 	}{
 		{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDRequired},
-		{name: caseEmpty, args: map[string]any{keyPaymentMethodID: "", keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNonEmpty},
-		{name: caseNumeric, args: map[string]any{keyPaymentMethodID: 123, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyPaymentMethodID: paymentMethodIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNoSeparators},
-		{name: caseQuery, args: map[string]any{keyPaymentMethodID: paymentMethodIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyPaymentMethodID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDNoSeparators},
-		{name: "alpha", args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDPositive},
-		{name: "zero", args: map[string]any{keyPaymentMethodID: "0", keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDPositive},
+		{name: caseString, args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDInteger},
+		{name: caseZero, args: map[string]any{keyPaymentMethodID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDInteger},
 	}
 
 	for _, testCase := range cases {
@@ -10334,13 +10324,8 @@ func TestLinodeAccountPaymentMethodMakeDefaultToolInvalidPaymentMethodIdRejectsB
 		want string
 	}{
 		{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errPaymentMethodIDRequired},
-		{name: caseEmpty, args: map[string]any{keyPaymentMethodID: "", keyConfirm: true}, want: errPaymentMethodIDNonEmpty},
-		{name: caseNumeric, args: map[string]any{keyPaymentMethodID: 123, keyConfirm: true}, want: errPaymentMethodIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyPaymentMethodID: paymentMethodIDSlash, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-		{name: caseQuery, args: map[string]any{keyPaymentMethodID: paymentMethodIDQuery, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyPaymentMethodID: pathTraversalValue, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-		{name: "alpha", args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true}, want: errPaymentMethodIDPositive},
-		{name: "zero", args: map[string]any{keyPaymentMethodID: "0", keyConfirm: true}, want: errPaymentMethodIDPositive},
+		{name: caseString, args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true}, want: errPaymentMethodIDInteger},
+		{name: caseZero, args: map[string]any{keyPaymentMethodID: float64(0), keyConfirm: true}, want: errPaymentMethodIDInteger},
 	}
 
 	for _, testCase := range cases {
@@ -11453,8 +11438,8 @@ func TestLinodeAccountEventSeenToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_event_seen")
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if tool.Description == "" {
@@ -12445,8 +12430,8 @@ func TestLinodeAccountServiceTransferDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_delete")
 	}
 
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
+	if capability != profiles.CapAdmin {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
 	if tool.Description == "" {

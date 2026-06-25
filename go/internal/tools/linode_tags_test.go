@@ -623,8 +623,8 @@ func TestLinodeTagCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.InputSchema.Required does not contain %v", keyLabel)
 	}
 
-	if slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required should not contain %v", keyConfirm)
+	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
+		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
 	}
 }
 

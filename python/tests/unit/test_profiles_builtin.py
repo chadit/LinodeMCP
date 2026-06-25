@@ -582,8 +582,9 @@ def test_profile_phone_number_verify_is_account_category() -> None:
     assert categories("linode_profile_phone_number_verify") == ["account"]
 
 
-def test_full_access_includes_every_mutator_except_admin() -> None:
-    """Full access spans every category but skips ``Capability.Admin``."""
+def test_full_access_includes_every_mutator_and_admin() -> None:
+    """Full access spans every category and grants Admin (account/child_account
+    scope) tools. Only Unknown-capability tools stay excluded."""
     catalog = _synthetic_catalog()
     profiles = builtin_profiles(catalog)
 
@@ -591,10 +592,10 @@ def test_full_access_includes_every_mutator_except_admin() -> None:
     mutators = {
         tool.name
         for tool in catalog
-        if tool.capability in (Capability.Write, Capability.Destroy)
+        if tool.capability in (Capability.Write, Capability.Destroy, Capability.Admin)
     }
     assert mutators.issubset(full_tools)
-    assert "linode_admin_synthetic" not in full_tools
+    assert "linode_admin_synthetic" in full_tools
     assert "linode_undiscovered_thing" not in full_tools
 
 

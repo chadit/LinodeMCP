@@ -37,12 +37,14 @@ _ENV_PROP: dict[str, Any] = {
 }
 
 _VPC_ID_PROP: dict[str, Any] = {
-    "type": "string",
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the VPC (required)",
 }
 
 _SUBNET_ID_PROP: dict[str, Any] = {
-    "type": "string",
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the subnet (required)",
 }
 

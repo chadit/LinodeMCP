@@ -847,6 +847,9 @@ class InstanceInterface:
     default_route: InterfaceDefaultRoute | None = None
     firewall_id: int | None = None
     mac_address: str = ""
+    created: str = ""
+    updated: str = ""
+    version: int = 0
 
 
 @dataclass
@@ -1450,23 +1453,253 @@ def _parse_default_route(data: dict[str, Any] | None) -> InterfaceDefaultRoute |
     )
 
 
-def _parse_instance_interface(data: dict[str, Any]) -> InstanceInterface:
-    """Parse a single interface object from the API response. Only top-level
-    fields and the default_route subobject are extracted; deeper sub-config
-    parsing (public.ipv4.addresses, vpc.ipv4.addresses, etc.) is deferred to
-    the live-response capture follow-up tracked in the spec's sticky issue.
-    """
-    public: InterfacePublicConfig | None = None
-    if "public" in data and data["public"] is not None:
-        public = InterfacePublicConfig()
+def _parse_interface_ipv4_address(data: dict[str, Any]) -> InterfaceIPv4Address:
+    """Parse a single IPv4 address entry on an interface."""
+    return InterfaceIPv4Address(
+        address=data.get("address", ""),
+        primary=bool(data.get("primary", False)),
+    )
 
+
+def _parse_interface_public(
+    data: dict[str, Any] | None,
+) -> InterfacePublicConfig | None:
+    """Parse a public-interface subobject, including the ipv4 addresses and
+    ipv6 ranges. A present-but-empty object yields a non-None config with no
+    sub-config, matching the Go pointer that round-trips as ``{}``.
+    """
+    if data is None:
+        return None
+
+    ipv4: InterfacePublicIPv4 | None = None
+    if (ipv4_data := data.get("ipv4")) is not None:
+        ipv4 = InterfacePublicIPv4(
+            addresses=[
+                _parse_interface_ipv4_address(addr)
+                for addr in ipv4_data.get("addresses", [])
+            ]
+        )
+
+    ipv6: InterfacePublicIPv6 | None = None
+    if (ipv6_data := data.get("ipv6")) is not None:
+        ipv6 = InterfacePublicIPv6(
+            ranges=[
+                InterfaceIPv6Range(range=item.get("range", ""))
+                for item in ipv6_data.get("ranges", [])
+            ]
+        )
+
+    return InterfacePublicConfig(ipv4=ipv4, ipv6=ipv6)
+
+
+def _parse_interface_vpc(data: dict[str, Any] | None) -> InterfaceVPCConfig | None:
+    """Parse a vpc-interface subobject, including the ipv4 addresses."""
+    if data is None:
+        return None
+
+    ipv4: InterfaceVPCIPv4 | None = None
+    if (ipv4_data := data.get("ipv4")) is not None:
+        ipv4 = InterfaceVPCIPv4(
+            addresses=[
+                _parse_interface_ipv4_address(addr)
+                for addr in ipv4_data.get("addresses", [])
+            ]
+        )
+
+    return InterfaceVPCConfig(subnet_id=data.get("subnet_id", 0), ipv4=ipv4)
+
+
+def _parse_interface_vlan(data: dict[str, Any] | None) -> InterfaceVLANConfig | None:
+    """Parse a vlan-interface subobject."""
+    if data is None:
+        return None
+
+    return InterfaceVLANConfig(
+        vlan_label=data.get("vlan_label", ""),
+        ipam_address=data.get("ipam_address", ""),
+    )
+
+
+def _parse_instance_interface(data: dict[str, Any]) -> InstanceInterface:
+    """Parse a single interface object from the API response, including the
+    public, vpc, and vlan sub-configs. Mirrors the Go client's struct-tag
+    deserialization of Instance.Interfaces so a read returns the same shape
+    in both implementations.
+    """
     return InstanceInterface(
         id=data.get("id", 0),
-        public=public,
+        public=_parse_interface_public(data.get("public")),
+        vpc=_parse_interface_vpc(data.get("vpc")),
+        vlan=_parse_interface_vlan(data.get("vlan")),
         default_route=_parse_default_route(data.get("default_route")),
         firewall_id=data.get("firewall_id"),
         mac_address=data.get("mac_address", ""),
+        created=data.get("created", ""),
+        updated=data.get("updated", ""),
+        version=data.get("version", 0),
     )
+
+
+def _serialize_interface_ipv4_address(addr: InterfaceIPv4Address) -> dict[str, Any]:
+    """Serialize an IPv4 address with Go's omitempty on ``primary``."""
+    body: dict[str, Any] = {"address": addr.address}
+    if addr.primary:
+        body["primary"] = addr.primary
+    return body
+
+
+def _serialize_interface_public(public: InterfacePublicConfig) -> dict[str, Any]:
+    """Serialize a public config, omitting empty sub-objects like Go does."""
+    body: dict[str, Any] = {}
+    if public.ipv4 is not None:
+        ipv4: dict[str, Any] = {}
+        if public.ipv4.addresses:
+            ipv4["addresses"] = [
+                _serialize_interface_ipv4_address(addr)
+                for addr in public.ipv4.addresses
+            ]
+        body["ipv4"] = ipv4
+    if public.ipv6 is not None:
+        ipv6: dict[str, Any] = {}
+        if public.ipv6.ranges:
+            ipv6["ranges"] = [{"range": item.range} for item in public.ipv6.ranges]
+        body["ipv6"] = ipv6
+    return body
+
+
+def _serialize_interface_vpc(vpc: InterfaceVPCConfig) -> dict[str, Any]:
+    """Serialize a vpc config; ``subnet_id`` is always present like Go."""
+    body: dict[str, Any] = {"subnet_id": vpc.subnet_id}
+    if vpc.ipv4 is not None:
+        ipv4: dict[str, Any] = {}
+        if vpc.ipv4.addresses:
+            ipv4["addresses"] = [
+                _serialize_interface_ipv4_address(addr) for addr in vpc.ipv4.addresses
+            ]
+        body["ipv4"] = ipv4
+    return body
+
+
+def _serialize_interface_vlan(vlan: InterfaceVLANConfig) -> dict[str, Any]:
+    """Serialize a vlan config with Go's omitempty on ``ipam_address``."""
+    body: dict[str, Any] = {"vlan_label": vlan.vlan_label}
+    if vlan.ipam_address:
+        body["ipam_address"] = vlan.ipam_address
+    return body
+
+
+def _serialize_default_route(route: InterfaceDefaultRoute) -> dict[str, Any]:
+    """Serialize a default_route, omitting a family when False like Go does."""
+    body: dict[str, Any] = {}
+    if route.ipv4:
+        body["ipv4"] = route.ipv4
+    if route.ipv6:
+        body["ipv6"] = route.ipv6
+    return body
+
+
+def _serialize_instance_interface(iface: InstanceInterface) -> dict[str, Any]:
+    """Serialize one interface to the same object the Go client emits, in
+    struct-field order, with Go's omitempty applied to every field.
+    """
+    body: dict[str, Any] = {}
+    if iface.id:
+        body["id"] = iface.id
+    if iface.public is not None:
+        body["public"] = _serialize_interface_public(iface.public)
+    if iface.vpc is not None:
+        body["vpc"] = _serialize_interface_vpc(iface.vpc)
+    if iface.vlan is not None:
+        body["vlan"] = _serialize_interface_vlan(iface.vlan)
+    if iface.default_route is not None:
+        body["default_route"] = _serialize_default_route(iface.default_route)
+    if iface.firewall_id is not None:
+        body["firewall_id"] = iface.firewall_id
+    if iface.mac_address:
+        body["mac_address"] = iface.mac_address
+    if iface.created:
+        body["created"] = iface.created
+    if iface.updated:
+        body["updated"] = iface.updated
+    if iface.version:
+        body["version"] = iface.version
+    return body
+
+
+def _serialize_backups(backups: Backups) -> dict[str, Any]:
+    """Serialize backup settings in Go struct-field order: schedule,
+    last_successful (null when absent), enabled, available.
+    """
+    last: dict[str, Any] | None = None
+    if backups.last_successful is not None:
+        snap = backups.last_successful
+        last = {
+            "id": snap.id,
+            "label": snap.label,
+            "status": snap.status,
+            "type": snap.type,
+            "region": snap.region,
+            "created": snap.created,
+            "updated": snap.updated,
+            "finished": snap.finished,
+        }
+    return {
+        "schedule": {
+            "day": backups.schedule.day,
+            "window": backups.schedule.window,
+        },
+        "last_successful": last,
+        "enabled": backups.enabled,
+        "available": backups.available,
+    }
+
+
+def instance_to_response_dict(instance: Instance) -> dict[str, Any]:
+    """Serialize an Instance to the JSON object the Go client emits from
+    MarshalToolResponse(instance): every struct field in declaration order,
+    with interface_generation and interfaces omitted when empty and the
+    interface subtree following Go's omitempty tags. Keeps the
+    linode_instance_get and linode_instance_list output identical across the
+    Go and Python implementations.
+    """
+    body: dict[str, Any] = {
+        "id": instance.id,
+        "label": instance.label,
+        "status": instance.status,
+        "type": instance.type,
+        "region": instance.region,
+        "image": instance.image,
+        "ipv4": instance.ipv4,
+        "ipv6": instance.ipv6,
+        "hypervisor": instance.hypervisor,
+        "specs": {
+            "disk": instance.specs.disk,
+            "memory": instance.specs.memory,
+            "vcpus": instance.specs.vcpus,
+            "gpus": instance.specs.gpus,
+            "transfer": instance.specs.transfer,
+        },
+        "alerts": {
+            "cpu": instance.alerts.cpu,
+            "network_in": instance.alerts.network_in,
+            "network_out": instance.alerts.network_out,
+            "transfer_quota": instance.alerts.transfer_quota,
+            "io": instance.alerts.io,
+        },
+        "backups": _serialize_backups(instance.backups),
+        "created": instance.created,
+        "updated": instance.updated,
+        "group": instance.group,
+        "tags": instance.tags,
+        "watchdog_enabled": instance.watchdog_enabled,
+    }
+    if instance.interface_generation:
+        body["interface_generation"] = instance.interface_generation
+    if instance.interfaces:
+        body["interfaces"] = [
+            _serialize_instance_interface(iface) for iface in instance.interfaces
+        ]
+    return body
 
 
 def _build_monitor_service_alert_definition_body(
@@ -6657,12 +6890,10 @@ class Client:
             logger.exception("HTTP error getting profile trusted device: %s", e)
             raise NetworkError("GetProfileDevice", e) from e
 
-    async def get_longview_subscription(self, subscription_id: int) -> dict[str, Any]:
+    async def get_longview_subscription(self, subscription_id: str) -> dict[str, Any]:
         """Get a Longview subscription."""
-        valid_subscription_id = _validate_positive_path_int(
-            subscription_id, "subscription_id"
-        )
-        encoded_subscription_id = quote(str(valid_subscription_id), safe="")
+        # Longview subscription IDs are opaque strings (for example "longview-10").
+        encoded_subscription_id = quote(subscription_id, safe="")
         endpoint = f"/longview/subscriptions/{encoded_subscription_id}"
         try:
             response = await self.make_request("GET", endpoint)
@@ -13011,7 +13242,7 @@ class RetryableClient:
         )
         return result
 
-    async def get_longview_subscription(self, subscription_id: int) -> dict[str, Any]:
+    async def get_longview_subscription(self, subscription_id: str) -> dict[str, Any]:
         """Get a Longview subscription with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_longview_subscription, subscription_id

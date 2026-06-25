@@ -10,6 +10,7 @@ from linodemcp.linode import (
     LINODE_STATS_MAX_MONTH,
     LINODE_STATS_MAX_YEAR,
     LINODE_STATS_MIN_YEAR,
+    instance_to_response_dict,
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -1491,30 +1492,12 @@ async def handle_linode_instance_list(
                 if inst.status.lower() == status_filter.lower()
             ]
 
-        instances_data = [
-            {
-                "id": inst.id,
-                "label": inst.label,
-                "status": inst.status,
-                "type": inst.type,
-                "region": inst.region,
-                "image": inst.image,
-                "ipv4": inst.ipv4,
-                "ipv6": inst.ipv6,
-                "created": inst.created,
-                "updated": inst.updated,
-                "tags": inst.tags,
-            }
-            for inst in instances
-        ]
+        instances_data = [instance_to_response_dict(inst) for inst in instances]
 
-        response: dict[str, Any] = {
-            "count": len(instances),
-            "instances": instances_data,
-        }
-
+        response: dict[str, Any] = {"count": len(instances)}
         if status_filter:
             response["filter"] = f"status={status_filter}"
+        response["instances"] = instances_data
 
         return response
 

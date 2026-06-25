@@ -83,14 +83,14 @@ def create_linode_object_storage_bucket_by_region_list_tool() -> tuple[
                         "Linode environment to use (optional, defaults to 'default')"
                     ),
                 },
-                "region_id": {
+                "region": {
                     "type": "string",
                     "description": (
                         "The region or legacy cluster ID to list buckets for"
                     ),
                 },
             },
-            "required": ["region_id"],
+            "required": ["region"],
         },
     ), Capability.Read
 
@@ -99,18 +99,18 @@ async def handle_linode_object_storage_bucket_by_region_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_bucket_by_region_list tool request."""
-    region_id = arguments.get("region_id", "")
+    region = arguments.get("region", "")
 
-    if not region_id:
-        return _error_response("region_id is required")
-    if not isinstance(region_id, str) or not _valid_cluster_id(region_id):
-        return _error_response("region_id must be a valid region or cluster ID")
+    if not region:
+        return _error_response("region is required")
+    if not isinstance(region, str) or not _valid_cluster_id(region):
+        return _error_response("region must be a valid region or cluster ID")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        buckets = await client.list_object_storage_buckets_for_region(region_id)
+        buckets = await client.list_object_storage_buckets_for_region(region)
         return {
             "count": len(buckets),
-            "region_id": region_id,
+            "region": region,
             "buckets": buckets,
         }
 

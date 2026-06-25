@@ -413,21 +413,6 @@ def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
                         "Managed Databases engine ID, for example mysql/8.0.26"
                     ),
                 },
-                # The OpenAPI contract lists page/page_size on this
-                # single-engine route even though the 200 response is one object.
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "Page of results to return when the API includes paginated data"
-                    ),
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
             },
             "required": ["engine_id"],
         },
@@ -991,16 +976,8 @@ async def handle_linode_database_engine_get(
     if error is not None or engine_id is None:
         return error_response(error or "engine_id is required")
 
-    try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_engine(
-            engine_id, page=page, page_size=page_size
-        )
+        return await client.get_database_engine(engine_id)
 
     return await execute_tool(
         cfg, arguments, f"retrieve Managed Databases engine {engine_id}", _call

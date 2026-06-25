@@ -38,8 +38,9 @@ _ENV_PROP: dict[str, Any] = {
     "description": "Linode environment to use (optional, defaults to 'default')",
 }
 
-_INSTANCE_ID_PROP: dict[str, Any] = {
-    "type": "string",
+_LINODE_ID_PROP: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the Linode instance (required)",
 }
 
@@ -52,14 +53,14 @@ _CONFIRM_PROP: dict[str, Any] = {
 def _parse_instance_id(
     arguments: dict[str, Any],
 ) -> int | list[TextContent]:
-    """Parse and validate instance_id from arguments."""
-    raw = arguments.get("instance_id", "")
+    """Parse and validate linode_id from arguments."""
+    raw = arguments.get("linode_id", "")
     if not raw:
-        return _error_response("instance_id is required")
+        return _error_response("linode_id is required")
     try:
         return int(raw)
     except (ValueError, TypeError):
-        return _error_response("instance_id must be a valid integer")
+        return _error_response("linode_id must be a valid integer")
 
 
 def create_linode_instance_ip_list_tool() -> tuple[Tool, Capability]:
@@ -71,9 +72,9 @@ def create_linode_instance_ip_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
             },
-            "required": ["instance_id"],
+            "required": ["linode_id"],
         },
     ), Capability.Read
 
@@ -103,13 +104,13 @@ def create_linode_instance_ip_get_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "address": {
                     "type": "string",
                     "description": ("The IP address to look up (required)"),
                 },
             },
-            "required": ["instance_id", "address"],
+            "required": ["linode_id", "address"],
         },
     ), Capability.Read
 
@@ -192,7 +193,7 @@ def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "type": {
                     "type": "string",
                     "description": ("IP type: ipv4 or ipv6 (required)"),
@@ -205,7 +206,7 @@ def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "type",
                 "confirm",
             ],
@@ -256,7 +257,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "address": {
                     "type": "string",
                     "description": ("The IP address to update (required)"),
@@ -269,7 +270,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "address",
                 "rdns",
                 "confirm",
@@ -281,7 +282,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
 def _parse_instance_ip_update(
     arguments: dict[str, Any],
 ) -> tuple[int, str, str | None] | list[TextContent]:
-    """Parse instance_id, address, and rdns; return the triple or an error."""
+    """Parse linode_id, address, and rdns; return the triple or an error."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -577,7 +578,7 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "address": {
                     "type": "string",
                     "description": ("The IP address to delete (required)"),
@@ -594,7 +595,7 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
                 PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "address",
                 "confirm",
             ],
@@ -616,7 +617,7 @@ async def _instance_ip_delete_two_stage(
         await client.delete_instance_ip(iid, address)
         return {
             "message": f"IP {address} deleted from instance {iid}",
-            "instance_id": iid,
+            "linode_id": iid,
             "address": address,
         }
 
@@ -672,7 +673,7 @@ async def handle_linode_instance_ip_delete(
         await client.delete_instance_ip(iid, address)
         return {
             "message": (f"IP {address} deleted from instance {iid}"),
-            "instance_id": iid,
+            "linode_id": iid,
             "address": address,
         }
 

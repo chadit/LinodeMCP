@@ -18,7 +18,7 @@ import (
 
 const (
 	keyPlacementGroupID         = "group_id"
-	placementGroupIDError       = "group_id must be a positive integer"
+	placementGroupIDError       = "group_id must be an integer"
 	placementGroupIDRequired    = "group_id is required"
 	placementGroupLabel         = "PG_Miami_failover"
 	placementGroupRegion        = "us-mia"
@@ -145,7 +145,7 @@ func TestLinodePlacementGroupGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodePlacementGroupGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528"})
+	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: float64(528)})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -221,10 +221,10 @@ func TestLinodePlacementGroupDeleteToolValidation(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseRequiresConfirm, args: map[string]any{keyPlacementGroupID: "528"}, wantContains: errConfirmEqualsTrue},
-		{name: caseFalseConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: caseStringConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: caseNumericConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
+		{name: caseRequiresConfirm, args: map[string]any{keyPlacementGroupID: float64(528)}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyPlacementGroupID: float64(528), keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyPlacementGroupID: float64(528), keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyPlacementGroupID: float64(528), keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingGroupID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDRequired},
 		{name: "non-numeric group id", args: map[string]any{keyPlacementGroupID: notANumber, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
 		{name: caseSlashGroupID, args: map[string]any{keyPlacementGroupID: placementGroupSlashValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: placementGroupIDError},
@@ -317,7 +317,7 @@ func TestLinodePlacementGroupDeleteToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: float64(528), keyConfirm: true, keyConfirmedDryRun: true}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestLinodePlacementGroupDeleteToolDryRunPreviewsWithoutDeleting(t *testing.
 	}
 	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: float64(528), keyDryRun: true}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestLinodePlacementGroupDeleteToolDryRunSurfacesMemberLinodesAsDetachedDepe
 	}
 	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: float64(528), keyDryRun: true}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestLinodePlacementGroupDeleteToolClientError(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyConfirm: true, keyConfirmedDryRun: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: float64(528), keyConfirm: true, keyConfirmedDryRun: true}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

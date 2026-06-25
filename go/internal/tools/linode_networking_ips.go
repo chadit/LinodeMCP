@@ -374,8 +374,8 @@ func NewLinodeNetworkingIPv4ShareTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the primary Linode that receives the shared IP addresses.")),
-			mcp.WithString(paramIPs, mcp.Required(),
-				mcp.Description("JSON array of IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
+			mcp.WithArray(paramIPs, mcp.Required(),
+				mcp.Description("IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm changing shared IP assignments. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -411,8 +411,8 @@ func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the primary Linode that receives the shared IP addresses.")),
-			mcp.WithString(paramIPs, mcp.Required(),
-				mcp.Description("JSON array of IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
+			mcp.WithArray(paramIPs, mcp.Required(),
+				mcp.Description("IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm changing shared IP assignments. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -476,14 +476,14 @@ func networkingIPShareRequestFromTool(args map[string]any) (linode.ShareNetworki
 		return linode.ShareNetworkingIPsRequest{}, "linode_id must be a positive integer"
 	}
 
-	ipsJSON, validationMessage := requiredStringArg(args, paramIPs)
-	if validationMessage != "" {
-		return linode.ShareNetworkingIPsRequest{}, validationMessage
+	ipsArg, ipsPresent := args[paramIPs]
+	if !ipsPresent {
+		return linode.ShareNetworkingIPsRequest{}, paramIPs + " is required"
 	}
 
-	var ips []string
-	if err := json.Unmarshal([]byte(ipsJSON), &ips); err != nil || ips == nil {
-		return linode.ShareNetworkingIPsRequest{}, "ips must be a JSON array of strings"
+	ips, validationMessage := stringSliceFromToolArg(ipsArg, paramIPs)
+	if validationMessage != "" {
+		return linode.ShareNetworkingIPsRequest{}, validationMessage
 	}
 
 	if slices.Contains(ips, "") {

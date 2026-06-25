@@ -267,7 +267,7 @@ func NewLinodeDatabaseInstanceCredentialsGetTool(cfg *config.Config) (mcp.Tool, 
 		return handleDatabaseInstanceCredentialsGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool creates a tool for getting PostgreSQL Managed Database credentials.
@@ -284,7 +284,7 @@ func NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool(cfg *config.Config) (
 		return handleDatabasePostgreSQLInstanceCredentialsGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeDatabaseInstanceCredentialsResetTool creates a tool for resetting MySQL Managed Database credentials.
@@ -302,7 +302,7 @@ func NewLinodeDatabaseInstanceCredentialsResetTool(cfg *config.Config) (mcp.Tool
 		return handleDatabaseInstanceCredentialsResetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool creates a tool for resetting PostgreSQL Managed Database credentials.
@@ -320,7 +320,7 @@ func NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg *config.Config)
 		return handleDatabasePostgreSQLInstanceCredentialsResetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeDatabaseInstanceCreateTool creates a tool for creating or restoring a MySQL Managed Database instance.

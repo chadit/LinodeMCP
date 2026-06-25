@@ -38,7 +38,7 @@ const (
 	caseBlankDescription        = "blank description"
 	caseNumericSummary          = "numeric summary"
 	supportTicketStatusOpen     = "open"
-	supportTicketSeverity       = "major"
+	supportTicketSeverity       = float64(2)
 )
 
 func TestLinodeAccountSupportTicketCreateRejectsInvalidOptionalFields(t *testing.T) {
@@ -111,8 +111,8 @@ func TestLinodeAccountSupportTicketCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, supportTicketCreateToolName)
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if handler == nil {
@@ -297,7 +297,7 @@ func TestLinodeAccountSupportTicketCreateToolSuccess(t *testing.T) {
 			keySupportTicketLinodeID:            float64(12345),
 			"lkecluster_id":                     float64(56789),
 			"longviewclient_id":                 float64(67890),
-			"managed_issue":                     tcManaged,
+			"managed_issue":                     true,
 			"nodebalancer_id":                   float64(78901),
 			keySupportTicketRegion:              placementGroupCreateRegion,
 			monitorAlertDefinitionSeverityParam: supportTicketSeverity,
@@ -331,7 +331,7 @@ func TestLinodeAccountSupportTicketCreateToolSuccess(t *testing.T) {
 		keySupportTicketLinodeID:            float64(12345),
 		"lkecluster_id":                     float64(56789),
 		"longviewclient_id":                 float64(67890),
-		"managed_issue":                     tcManaged,
+		"managed_issue":                     true,
 		"nodebalancer_id":                   float64(78901),
 		keySupportTicketRegion:              placementGroupCreateRegion,
 		monitorAlertDefinitionSeverityParam: supportTicketSeverity,

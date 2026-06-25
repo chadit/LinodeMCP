@@ -29,7 +29,7 @@ async def test_rebuild_plan_then_apply(
     mock_linode_client.list_instance_disks.return_value = []
 
     rebuild_args: dict[str, Any] = {
-        "instance_id": 123,
+        "linode_id": 123,
         "image": "linode/ubuntu24.04",
         "root_pass": "Abcdefgh1234",
     }

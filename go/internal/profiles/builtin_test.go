@@ -414,38 +414,39 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 	}
 }
 
-func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
+// TestCapAdminOnlyInWildcardBuiltins pins the Admin-tier wiring: Admin tools
+// (account/child_account-scope operations) appear only in the full-access and
+// emergency built-ins (the wildcard profiles) and in no other built-in. Every
+// Admin tool in the catalog is checked against every built-in.
+func TestCapAdminOnlyInWildcardBuiltins(t *testing.T) {
 	t.Parallel()
 
-	builtins := profiles.BuiltinProfiles(syntheticCatalog())
+	catalog := syntheticCatalog()
+	builtins := profiles.BuiltinProfiles(catalog)
 
-	for _, profile := range builtins {
-		if slices.Contains(profile.AllowedTools, "linode_account_update") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_update")
+	var adminTools []string
+
+	for _, descriptor := range catalog {
+		if descriptor.Capability == profiles.CapAdmin {
+			adminTools = append(adminTools, descriptor.Name)
 		}
+	}
 
-		if slices.Contains(profile.AllowedTools, "linode_account_settings_update") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_settings_update")
-		}
+	if len(adminTools) == 0 {
+		t.Fatal("synthetic catalog has no CapAdmin tools; test would be vacuous")
+	}
 
-		if slices.Contains(profile.AllowedTools, "linode_account_settings_managed_enable") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_settings_managed_enable")
-		}
+	grantsAdmin := map[string]bool{
+		profiles.BuiltinFullAccess: true,
+		profiles.BuiltinEmergency:  true,
+	}
 
-		if slices.Contains(profile.AllowedTools, "linode_profile_security_question_answer") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_profile_security_question_answer")
-		}
-
-		if slices.Contains(profile.AllowedTools, "linode_account_beta_enroll") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_beta_enroll")
-		}
-
-		if slices.Contains(profile.AllowedTools, "linode_account_cancel") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_cancel")
-		}
-
-		if slices.Contains(profile.AllowedTools, "linode_account_event_seen") {
-			t.Errorf("profile.AllowedTools should not contain %v", "linode_account_event_seen")
+	for name, profile := range builtins {
+		for _, adminTool := range adminTools {
+			got := slices.Contains(profile.AllowedTools, adminTool)
+			if want := grantsAdmin[name]; got != want {
+				t.Errorf("profile %q: admin tool %q present=%v, want %v", name, adminTool, got, want)
+			}
 		}
 	}
 }

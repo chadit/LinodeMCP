@@ -79,6 +79,18 @@ repos:
         language: system
         pass_filenames: false
 
+      # Cross-language tool-surface parity. Runs the Go dumper + Python registry
+      # and diffs capability/params/required against docs/tool-parity-baseline.txt.
+      # language: system because it needs both the Go toolchain and the Python
+      # venv. Fires when either implementation's source changes so a tool cannot
+      # drift in shape between Go and Python.
+      - id: tool-parity
+        name: tool parity (Go vs Python surface)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_tool_parity.py'
+        files: ^(go|python)/
+        language: system
+        pass_filenames: false
+
       # mypy - language: system because it needs project venv dependencies
       - id: mypy
         name: mypy

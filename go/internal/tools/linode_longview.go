@@ -157,7 +157,7 @@ func NewLinodeLongviewClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		handleLinodeLongviewClientCreateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeLongviewClientCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -232,7 +232,7 @@ func NewLinodeLongviewPlanUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleLinodeLongviewPlanUpdateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeLongviewPlanUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

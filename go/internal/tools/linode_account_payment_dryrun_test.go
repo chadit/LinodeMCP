@@ -155,7 +155,7 @@ func TestLinodeAccountPaymentMethodDeleteToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyPaymentMethodID: accountPaymentMethodTestID,
+			keyPaymentMethodID: float64(123),
 			keyDryRun:          true,
 		}))
 		if err != nil {
@@ -209,7 +209,7 @@ func TestLinodeAccountPaymentMethodMakeDefaultToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeAccountPaymentMethodMakeDefaultTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyPaymentMethodID: accountPaymentMethodTestID,
+			keyPaymentMethodID: float64(123),
 			keyDryRun:          true,
 		}))
 		if err != nil {

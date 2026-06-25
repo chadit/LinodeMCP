@@ -281,7 +281,7 @@ func NewLinodePlacementGroupUnassignTool(cfg *config.Config) (mcp.Tool, profiles
 		"linode_placement_group_unassign",
 		"Unassigns Linodes from a placement group.",
 		[]mcp.ToolOption{
-			mcp.WithString("group_id", mcp.Required(), mcp.Description("The ID of the placement group.")),
+			mcp.WithNumber("group_id", mcp.Required(), mcp.Description("The ID of the placement group.")),
 			mcp.WithArray(placementGroupLinodesParam, mcp.Required(), mcp.Description("Linode IDs to unassign from the placement group.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description("Preview placement group unassignment without changing it.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group unassignment. Ignored when dry_run=true.")),
@@ -293,9 +293,9 @@ func NewLinodePlacementGroupUnassignTool(cfg *config.Config) (mcp.Tool, profiles
 }
 
 func handleLinodePlacementGroupUnassignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	groupID, err := parsePlacementGroupID(request.GetString("group_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	groupID, validationMessage := placementGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	linodes, validationMessage := parsePlacementGroupLinodes(request)

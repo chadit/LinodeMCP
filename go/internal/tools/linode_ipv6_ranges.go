@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	paramIPv6Range           = "ipv6_range"
+	paramIPv6Range           = "range"
 	keyIPv6RangePrefixLength = "prefix_length"
 	keyIPv6RangeLinodeID     = "linode_id"
 	keyIPv6RangeRouteTarget  = "route_target"
@@ -80,7 +80,7 @@ func ipv6RangeFromTool(request *mcp.CallToolRequest) (string, string) {
 
 	prefix, err := netip.ParsePrefix(ipv6Range)
 	if err != nil || !prefix.Addr().Is6() || prefix != prefix.Masked() {
-		return "", "ipv6_range must be a valid IPv6 prefix"
+		return "", "range must be a valid IPv6 prefix"
 	}
 
 	return ipv6Range, ""

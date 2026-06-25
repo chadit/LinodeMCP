@@ -1275,7 +1275,7 @@ func TestLinodeObjectStorageKeyGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeObjectStorageKeyGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyKeyID: "42"})
+	req := createRequestWithArgs(t, map[string]any{keyKeyID: float64(42)})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -1360,8 +1360,8 @@ func TestLinodeObjectStorageKeyGetToolInvalidKeyId(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "key_id must be a valid integer") {
-		t.Errorf("textContent.Text does not contain %v", "key_id must be a valid integer")
+	if !strings.Contains(textContent.Text, "key_id must be an integer") {
+		t.Errorf("textContent.Text does not contain %v", "key_id must be an integer")
 	}
 }
 
@@ -2322,8 +2322,8 @@ func TestLinodeObjectStorageCancelToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if !strings.Contains(tool.Description, "WARNING") {

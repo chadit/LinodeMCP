@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import instance_to_response_dict
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
@@ -60,18 +61,6 @@ async def handle_linode_instance_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.get_instance(instance_id)
-        return {
-            "id": instance.id,
-            "label": instance.label,
-            "status": instance.status,
-            "type": instance.type,
-            "region": instance.region,
-            "image": instance.image,
-            "ipv4": instance.ipv4,
-            "ipv6": instance.ipv6,
-            "created": instance.created,
-            "updated": instance.updated,
-            "tags": instance.tags,
-        }
+        return instance_to_response_dict(instance)
 
     return await execute_tool(cfg, arguments, "retrieve Linode instance", _call)

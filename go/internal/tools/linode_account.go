@@ -71,7 +71,7 @@ const (
 	profileTFAEnableConfirmPath        = "/profile/tfa-enable-confirm"
 	accountEventsPath                  = "/account/events"
 	accountChildAccountsPath           = "/account/child-accounts"
-	longviewSubscriptionIDParam        = "longview_subscription_id"
+	longviewSubscriptionIDParam        = "subscription_id"
 	maxLongviewClientIDFromJSON        = 9007199254740991
 	errLongviewClientIDPositive        = "client_id must be a positive integer"
 	errLongviewClientLabelRequired     = "label is required"
@@ -610,7 +610,7 @@ func NewLinodeAccountUserDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		handleLinodeAccountUserDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUserCreateTool creates a tool for creating account users.
@@ -647,10 +647,10 @@ func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, prof
 			mcp.WithNumber(supportTicketLinodeIDParam, mcp.Description("Linode ID related to the ticket (optional).")),
 			mcp.WithNumber(supportTicketLKEClusterIDParam, mcp.Description("LKE cluster ID related to the ticket (optional).")),
 			mcp.WithNumber(supportTicketLongviewClientIDParam, mcp.Description("Longview client ID related to the ticket (optional).")),
-			mcp.WithString(supportTicketManagedIssueParam, mcp.Description("Managed issue identifier related to the ticket (optional).")),
+			mcp.WithBoolean(supportTicketManagedIssueParam, mcp.Description("Whether the ticket concerns a Managed service issue (optional).")),
 			mcp.WithNumber(supportTicketNodeBalancerIDParam, mcp.Description("NodeBalancer ID related to the ticket (optional).")),
 			mcp.WithString(supportTicketRegionParam, mcp.Description("Region related to the ticket (optional).")),
-			mcp.WithString(supportTicketSeverityParam, mcp.Description("Support ticket severity (optional).")),
+			mcp.WithNumber(supportTicketSeverityParam, mcp.Description("Support ticket severity level 1, 2, or 3 (optional).")),
 			mcp.WithString(supportTicketVLANParam, mcp.Description("VLAN related to the ticket (optional).")),
 			mcp.WithNumber(supportTicketVolumeIDParam, mcp.Description("Volume ID related to the ticket (optional).")),
 			mcp.WithNumber(supportTicketVPCIDParam, mcp.Description("VPC ID related to the ticket (optional).")),
@@ -660,7 +660,7 @@ func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, prof
 		handleLinodeAccountSupportTicketCreateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeAccountSupportTicketAttachmentCreateTool creates a tool for adding support ticket attachments.
@@ -678,7 +678,7 @@ func NewLinodeAccountSupportTicketAttachmentCreateTool(cfg *config.Config) (mcp.
 		handleLinodeAccountSupportTicketAttachmentCreateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeAccountSupportTicketReplyCreateTool creates a tool for adding support ticket replies.
@@ -696,7 +696,7 @@ func NewLinodeAccountSupportTicketReplyCreateTool(cfg *config.Config) (mcp.Tool,
 		handleLinodeAccountSupportTicketReplyCreateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeManagedContactCreateTool creates a tool for creating managed contacts.
@@ -904,7 +904,7 @@ func NewLinodeProfilePhoneNumberSendTool(cfg *config.Config) (mcp.Tool, profiles
 		handleLinodeProfilePhoneNumberSendRequest,
 	)
 
-	return tool, profiles.CapWrite, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfilePhoneNumberDeleteTool creates a tool for deleting a profile phone number.
@@ -921,7 +921,7 @@ func NewLinodeProfilePhoneNumberDeleteTool(cfg *config.Config) (mcp.Tool, profil
 		handleLinodeProfilePhoneNumberDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfilePhoneNumberVerifyTool creates a tool for verifying a profile phone number.
@@ -940,7 +940,7 @@ func NewLinodeProfilePhoneNumberVerifyTool(cfg *config.Config) (mcp.Tool, profil
 		handleLinodeProfilePhoneNumberVerifyRequest,
 	)
 
-	return tool, profiles.CapWrite, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileTFADisableTool creates a tool for disabling profile two-factor authentication.
@@ -1043,7 +1043,7 @@ func NewLinodeProfileAppDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		handleLinodeProfileAppDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileDeviceGetTool creates a tool for retrieving one profile trusted device.
@@ -1078,7 +1078,7 @@ func NewLinodeProfileDeviceRevokeTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		handleLinodeProfileDeviceRevokeRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientsTool creates a tool for listing OAuth clients registered on the account.
@@ -1147,7 +1147,7 @@ func NewLinodeLongviewClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		handleLinodeLongviewClientUpdateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeLongviewClientDeleteTool creates a tool for deleting one Longview client.
@@ -1176,7 +1176,7 @@ func NewLinodeLongviewClientGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		"linode_longview_client_get",
 		"Gets one Longview client. Secret-bearing Longview install fields are not included in the tool response.",
 		[]mcp.ToolOption{
-			mcp.WithString("longview_client_id", mcp.Required(),
+			mcp.WithNumber("client_id", mcp.Required(),
 				mcp.Description("Longview client ID.")),
 		},
 		handleLinodeLongviewClientGetRequest,
@@ -1224,7 +1224,7 @@ func NewLinodeAccountPaymentMethodGetTool(cfg *config.Config) (mcp.Tool, profile
 		"linode_account_payment_method_get",
 		"Gets one payment method for the authenticated account.",
 		[]mcp.ToolOption{
-			mcp.WithString("payment_method_id", mcp.Required(),
+			mcp.WithNumber("payment_method_id", mcp.Required(),
 				mcp.Description("Payment method ID.")),
 		},
 		handleLinodeAccountPaymentMethodGetRequest,
@@ -1259,7 +1259,7 @@ func NewLinodeAccountPaymentMethodDeleteTool(cfg *config.Config) (mcp.Tool, prof
 		"linode_account_payment_method_delete",
 		"Deletes a payment method from the authenticated account.",
 		[]mcp.ToolOption{
-			mcp.WithString("payment_method_id", mcp.Required(),
+			mcp.WithNumber("payment_method_id", mcp.Required(),
 				mcp.Description("Payment method ID.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method deletion. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1277,7 +1277,7 @@ func NewLinodeAccountPaymentMethodMakeDefaultTool(cfg *config.Config) (mcp.Tool,
 		"linode_account_payment_method_make_default",
 		"Sets a payment method as the authenticated account default.",
 		[]mcp.ToolOption{
-			mcp.WithString("payment_method_id", mcp.Required(),
+			mcp.WithNumber("payment_method_id", mcp.Required(),
 				mcp.Description("Payment method ID.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm changing the default payment method. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1492,7 +1492,7 @@ func NewLinodeAccountServiceTransferDeleteTool(cfg *config.Config) (mcp.Tool, pr
 		handleLinodeAccountServiceTransferDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountServiceTransferAcceptTool creates a tool for accepting one account service transfer.
@@ -1546,7 +1546,7 @@ func NewLinodeAccountEventSeenTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		handleLinodeAccountEventSeenRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeAccountChildAccountGetTool creates a tool for retrieving one child-level account.
@@ -2605,16 +2605,16 @@ func handleLinodeLongviewSubscriptionGetRequest(ctx context.Context, request *mc
 func longviewSubscriptionIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	raw, exists := request.GetArguments()[longviewSubscriptionIDParam]
 	if !exists {
-		return "", "longview_subscription_id is required"
+		return "", "subscription_id is required"
 	}
 
 	subscriptionID, ok := raw.(string)
 	if !ok || strings.TrimSpace(subscriptionID) == "" {
-		return "", "longview_subscription_id must be a non-empty string"
+		return "", "subscription_id must be a non-empty string"
 	}
 
 	if subscriptionID != strings.TrimSpace(subscriptionID) || strings.Contains(subscriptionID, "/") || strings.Contains(subscriptionID, "?") || strings.Contains(subscriptionID, "#") || strings.Contains(subscriptionID, "..") {
-		return "", "longview_subscription_id must not contain path separators, query separators, or traversal segments"
+		return "", "subscription_id must not contain path separators, query separators, or traversal segments"
 	}
 
 	return subscriptionID, ""
@@ -2640,26 +2640,16 @@ func handleLinodeLongviewClientGetRequest(ctx context.Context, request *mcp.Call
 }
 
 func longviewClientGetIDFromTool(request *mcp.CallToolRequest) (string, string) {
-	raw, exists := request.GetArguments()["longview_client_id"]
-	if !exists {
-		return "", "longview_client_id is required"
+	id, validationMessage := optionalPaginationInt(request.GetArguments(), "client_id", 1, 0)
+	if validationMessage != "" {
+		return "", validationMessage
 	}
 
-	clientID, ok := raw.(string)
-	if !ok || strings.TrimSpace(clientID) == "" {
-		return "", "longview_client_id must be a non-empty string"
+	if id == 0 {
+		return "", "client_id is required"
 	}
 
-	if clientID != strings.TrimSpace(clientID) || strings.Contains(clientID, "/") || strings.Contains(clientID, "?") || strings.Contains(clientID, "..") {
-		return "", "longview_client_id must not contain path separators, query separators, or traversal segments"
-	}
-
-	id, err := strconv.Atoi(clientID)
-	if err != nil || id <= 0 {
-		return "", "longview_client_id must be a positive integer"
-	}
-
-	return clientID, ""
+	return strconv.Itoa(id), ""
 }
 
 type longviewClientGetResponse struct {
@@ -2704,26 +2694,16 @@ func handleLinodeAccountPaymentMethodGetRequest(ctx context.Context, request *mc
 }
 
 func accountPaymentMethodIDFromTool(request *mcp.CallToolRequest) (string, string) {
-	raw, exists := request.GetArguments()["payment_method_id"]
-	if !exists {
+	id, validationMessage := optionalPaginationInt(request.GetArguments(), "payment_method_id", 1, 0)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if id == 0 {
 		return "", "payment_method_id is required"
 	}
 
-	paymentMethodID, ok := raw.(string)
-	if !ok || strings.TrimSpace(paymentMethodID) == "" {
-		return "", "payment_method_id must be a non-empty string"
-	}
-
-	if paymentMethodID != strings.TrimSpace(paymentMethodID) || strings.Contains(paymentMethodID, "/") || strings.Contains(paymentMethodID, "?") || strings.Contains(paymentMethodID, "..") {
-		return "", "payment_method_id must not contain path separators, query separators, or traversal segments"
-	}
-
-	id, err := strconv.Atoi(paymentMethodID)
-	if err != nil || id <= 0 {
-		return "", "payment_method_id must be a positive integer"
-	}
-
-	return paymentMethodID, ""
+	return strconv.Itoa(id), ""
 }
 
 func handleLinodeAccountPaymentMethodCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -3880,9 +3860,7 @@ func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 		set   func(string)
 	}{
 		{field: supportTicketBucketParam, set: func(value string) { req.Bucket = &value }},
-		{field: supportTicketManagedIssueParam, set: func(value string) { req.ManagedIssue = &value }},
 		{field: supportTicketRegionParam, set: func(value string) { req.Region = &value }},
-		{field: supportTicketSeverityParam, set: func(value string) { req.Severity = &value }},
 		{field: supportTicketVLANParam, set: func(value string) { req.VLAN = &value }},
 	}
 	for _, optional := range optionalStrings {
@@ -3907,6 +3885,7 @@ func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 		{field: supportTicketLKEClusterIDParam, set: func(value int) { req.LKEClusterID = &value }},
 		{field: supportTicketLongviewClientIDParam, set: func(value int) { req.LongviewClientID = &value }},
 		{field: supportTicketNodeBalancerIDParam, set: func(value int) { req.NodeBalancerID = &value }},
+		{field: supportTicketSeverityParam, set: func(value int) { req.Severity = &value }},
 		{field: supportTicketVolumeIDParam, set: func(value int) { req.VolumeID = &value }},
 		{field: supportTicketVPCIDParam, set: func(value int) { req.VPCID = &value }},
 	}
@@ -3919,6 +3898,15 @@ func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 		if value > 0 {
 			optional.set(value)
 		}
+	}
+
+	if raw, present := args[supportTicketManagedIssueParam]; present && raw != nil {
+		managed, ok := raw.(bool)
+		if !ok {
+			return nil, supportTicketManagedIssueParam + " must be a boolean"
+		}
+
+		req.ManagedIssue = &managed
 	}
 
 	return req, ""

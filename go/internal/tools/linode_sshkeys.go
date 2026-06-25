@@ -21,7 +21,7 @@ func NewLinodeSSHKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber(
-			"sshkey_id",
+			"ssh_key_id",
 			mcp.Required(),
 			mcp.Description("The ID of the SSH key to retrieve"),
 		),
@@ -35,10 +35,10 @@ func NewLinodeSSHKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 }
 
 func handleLinodeSSHKeyGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	sshKeyID := request.GetInt("sshkey_id", 0)
+	sshKeyID := request.GetInt("ssh_key_id", 0)
 
 	if sshKeyID <= 0 {
-		return mcp.NewToolResultError("sshkey_id must be a positive integer"), nil
+		return mcp.NewToolResultError("ssh_key_id must be a positive integer"), nil
 	}
 
 	client, err := prepareClient(request, cfg)

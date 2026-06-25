@@ -31,7 +31,7 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 	//
 	//   - key_id: an Object Storage access-key identifier, not the
 	//     secret key material. The ID is safe to log.
-	//   - sshkey_id: the numeric ID of an SSH key resource, not the
+	//   - ssh_key_id: the numeric ID of an SSH key resource, not the
 	//     key material. Safe to log.
 	//   - required_token_scopes: a profile-builder arg holding a list
 	//     of OAuth scope names (e.g. "linodes:read_write"), not a
@@ -43,7 +43,7 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 	knownSafe := map[string]struct{}{
 		"check_passive":         {}, // Health-check mode, not credential material.
 		"key_id":                {},
-		"sshkey_id":             {},
+		"ssh_key_id":            {},
 		"required_token_scopes": {},
 		"token_uuid":            {},
 		"token_id":              {},

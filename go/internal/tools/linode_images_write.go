@@ -25,7 +25,7 @@ func NewLinodeImageUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		mcp.WithString("region", mcp.Required(), mcp.Description("The region for the image upload.")),
 		mcp.WithString("description", mcp.Description("Detailed description for the image (optional).")),
 		mcp.WithBoolean("cloud_init", mcp.Description("Whether the image supports cloud-init.")),
-		mcp.WithString("tags", mcp.Description("JSON array of tag strings to apply to the image (optional).")),
+		mcp.WithArray("tags", mcp.Description("Tag strings to apply to the image (optional).")),
 		mcp.WithBoolean(paramConfirm, mcp.Required(),
 			mcp.Description("Must be true to confirm image upload creation. Ignored when dry_run=true.")),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -47,7 +47,7 @@ func NewLinodeImageReplicateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		"Replicates an image to one or more compute regions.",
 		[]mcp.ToolOption{
 			mcp.WithString("image_id", mcp.Required(), mcp.Description("Image ID, such as private/123.")),
-			mcp.WithString("regions", mcp.Required(), mcp.Description("JSON array of region slug strings to keep or replicate the image to.")),
+			mcp.WithArray("regions", mcp.Required(), mcp.Description("Region slug strings to keep or replicate the image to.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm image replication. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -69,7 +69,7 @@ func NewLinodeImageUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 			mcp.WithString("image_id", mcp.Required(), mcp.Description("The editable image ID, for example private/12345 or shared/123.")),
 			mcp.WithString("label", mcp.Description("New image label (optional).")),
 			mcp.WithString("description", mcp.Description("New image description (optional).")),
-			mcp.WithString("tags", mcp.Description("JSON array of tag strings to apply to the image (optional).")),
+			mcp.WithArray("tags", mcp.Description("Tag strings to apply to the image (optional).")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm image update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1032,7 +1032,7 @@ func NewLinodeImageShareGroupTokenCreateTool(cfg *config.Config) (mcp.Tool, prof
 		return handleLinodeImageShareGroupTokenCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeImageShareGroupTokenUpdateTool creates a tool for updating image share group membership token labels.
@@ -1051,7 +1051,7 @@ func NewLinodeImageShareGroupTokenUpdateTool(cfg *config.Config) (mcp.Tool, prof
 		handleLinodeImageShareGroupTokenUpdateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeImageShareGroupMemberUpdateTool creates a tool for updating image share group member token labels.
@@ -1335,20 +1335,46 @@ func handleLinodeImageReplicateRequest(ctx context.Context, request *mcp.CallToo
 	return result, nil
 }
 
+// stringSliceFromToolArg normalizes an array tool argument that may arrive as a
+// native array (the schema form) or as a JSON-encoded string (legacy form from a
+// non-compliant client) into a []string. Returns a validation message on failure.
+func stringSliceFromToolArg(raw any, name string) ([]string, string) {
+	switch value := raw.(type) {
+	case []any:
+		result := make([]string, 0, len(value))
+		for _, item := range value {
+			text, isString := item.(string)
+			if !isString {
+				return nil, name + " must be an array of strings"
+			}
+
+			result = append(result, text)
+		}
+
+		return result, ""
+	case []string:
+		return value, ""
+	case string:
+		var result []string
+		if err := json.Unmarshal([]byte(strings.TrimSpace(value)), &result); err != nil {
+			return nil, name + " must be an array of strings"
+		}
+
+		return result, ""
+	default:
+		return nil, name + " must be an array of strings"
+	}
+}
+
 func requiredImageReplicationRegionsFromTool(request *mcp.CallToolRequest) ([]string, string) {
 	regionsArg, regionsPresent := request.GetArguments()["regions"]
 	if !regionsPresent {
 		return nil, "regions is required"
 	}
 
-	regionsJSON, regionsIsString := regionsArg.(string)
-	if !regionsIsString {
-		return nil, "regions must be a JSON string array"
-	}
-
-	var regions []string
-	if err := json.Unmarshal([]byte(regionsJSON), &regions); err != nil {
-		return nil, "regions must be a JSON string array"
+	regions, validationMessage := stringSliceFromToolArg(regionsArg, "regions")
+	if validationMessage != "" {
+		return nil, validationMessage
 	}
 
 	if len(regions) == 0 {

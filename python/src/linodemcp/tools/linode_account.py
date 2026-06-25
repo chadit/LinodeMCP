@@ -312,7 +312,7 @@ def create_linode_account_user_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["username", "email", "restricted", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_user_create(
@@ -414,7 +414,7 @@ def create_linode_account_user_grants_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["username", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_user_grants_update(
@@ -605,7 +605,7 @@ def create_linode_account_settings_managed_enable_tool() -> tuple[Tool, Capabili
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_settings_managed_enable(
@@ -785,7 +785,7 @@ def create_linode_account_oauth_client_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["client_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
@@ -819,7 +819,7 @@ def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
             },
             "required": ["client_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _validate_oauth_client_id(value: Any) -> str | None:
@@ -1127,7 +1127,7 @@ def create_linode_account_payment_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["payment_method_id", "usd", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _account_payment_create_body(
@@ -1214,7 +1214,7 @@ def create_linode_account_service_transfer_create_tool() -> tuple[Tool, Capabili
             },
             "required": ["linode_ids", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _account_service_transfer_linode_ids(
@@ -1302,7 +1302,7 @@ def create_linode_account_payment_method_delete_tool() -> tuple[Tool, Capability
             },
             "required": ["payment_method_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_account_payment_method_delete(
@@ -1600,7 +1600,7 @@ def create_linode_account_agreement_acknowledge_tool() -> tuple[Tool, Capability
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_agreement_acknowledge(
@@ -1673,7 +1673,7 @@ def create_linode_account_beta_enroll_tool() -> tuple[Tool, Capability]:
             },
             "required": ["id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_beta_enroll(
@@ -1749,7 +1749,7 @@ def create_linode_account_oauth_client_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["label", "redirect_uri", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def create_linode_account_oauth_client_delete_tool() -> tuple[Tool, Capability]:
@@ -1778,7 +1778,7 @@ def create_linode_account_oauth_client_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["client_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 def _required_nonempty_string_argument(
@@ -1917,7 +1917,7 @@ def create_linode_account_payment_method_create_tool() -> tuple[Tool, Capability
             },
             "required": ["type", "data", "is_default", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _payment_method_create_body(
@@ -2016,7 +2016,7 @@ def create_linode_account_promo_credit_add_tool() -> tuple[Tool, Capability]:
             },
             "required": ["promo_code", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_promo_credit_add(
@@ -2080,7 +2080,7 @@ def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_account_cancel(
@@ -2264,7 +2264,7 @@ def create_linode_account_settings_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _account_settings_update_body_error(arguments: dict[str, Any]) -> str | None:
@@ -2367,7 +2367,7 @@ def create_linode_account_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_update(
@@ -2475,7 +2475,7 @@ def create_linode_account_user_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["current_username", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_user_update(
@@ -2663,7 +2663,7 @@ def create_linode_account_service_transfer_accept_tool() -> tuple[Tool, Capabili
             },
             "required": ["token", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_service_transfer_accept(
@@ -2761,7 +2761,7 @@ def create_linode_account_service_transfer_delete_tool() -> tuple[Tool, Capabili
             },
             "required": ["token", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_account_service_transfer_delete(
@@ -2863,7 +2863,7 @@ def create_linode_account_oauth_client_secret_reset_tool() -> tuple[Tool, Capabi
             },
             "required": ["client_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _validated_oauth_client_id(
@@ -3109,7 +3109,7 @@ def create_linode_account_payment_method_make_default_tool() -> tuple[Tool, Capa
             },
             "required": ["payment_method_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_account_payment_method_make_default(
@@ -3224,7 +3224,7 @@ def create_linode_account_user_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["username", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 def _validate_account_user_delete_username(
@@ -3665,7 +3665,7 @@ def create_linode_account_child_account_token_create_tool() -> tuple[Tool, Capab
             },
             "required": ["euuid", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _validate_child_account_euuid(value: Any) -> str | None:
@@ -4158,7 +4158,11 @@ def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_credential_get tool."""
     return Tool(
         name="linode_managed_credential_get",
-        description="Gets a Linode Managed credential by ID.",
+        description=(
+            "Gets a Linode Managed credential by ID. This account-level "
+            "managed credential metadata requires admin capability. Pass "
+            "dry_run=true to preview the request without retrieving it."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -4168,10 +4172,11 @@ def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
                     "minimum": 1,
                     "description": "Managed credential ID to retrieve",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["credential_id"],
         },
-    ), Capability.Read
+    ), Capability.Admin
 
 
 async def handle_linode_managed_credential_get(
@@ -4186,6 +4191,16 @@ async def handle_linode_managed_credential_get(
     ):
         return error_response("credential_id must be a positive integer")
     validated_credential_id = credential_id
+
+    if is_dry_run(arguments):
+        encoded_credential_id = quote(str(validated_credential_id), safe="")
+        return build_dry_run_response(
+            "linode_managed_credential_get",
+            arguments.get("environment", ""),
+            "GET",
+            f"/managed/credentials/{encoded_credential_id}",
+            None,
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_managed_credential(validated_credential_id)
@@ -4360,7 +4375,7 @@ def create_linode_managed_credential_username_password_update_tool() -> tuple[
             },
             "required": ["credential_id", "password", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_credential_username_password_update(
@@ -4432,7 +4447,7 @@ def create_linode_managed_credential_revoke_tool() -> tuple[Tool, Capability]:
             },
             "required": ["credential_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_managed_credential_revoke(
@@ -4589,7 +4604,7 @@ def create_linode_managed_linode_settings_update_tool() -> tuple[Tool, Capabilit
             },
             "required": ["linode_id", "ssh", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def create_linode_managed_sshkey_get_tool() -> tuple[Tool, Capability]:
@@ -4705,7 +4720,7 @@ def create_linode_managed_credential_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["label", "password", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_credential_create(
@@ -4802,7 +4817,7 @@ def create_linode_managed_credential_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["credential_id", "label", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_credential_update(
@@ -4939,7 +4954,7 @@ def create_linode_managed_service_create_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_service_create(
@@ -5008,7 +5023,7 @@ def create_linode_managed_service_enable_tool() -> tuple[Tool, Capability]:
             },
             "required": ["service_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_service_enable(
@@ -5070,7 +5085,7 @@ def create_linode_managed_service_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["service_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_managed_service_delete(
@@ -5176,7 +5191,7 @@ def create_linode_managed_service_disable_tool() -> tuple[Tool, Capability]:
             },
             "required": ["service_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_service_disable(
@@ -5240,7 +5255,7 @@ def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 async def handle_linode_managed_contact_create(
@@ -5304,7 +5319,7 @@ def create_linode_managed_contact_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["contact_id", "confirm"],
         },
-    ), Capability.Destroy
+    ), Capability.Admin
 
 
 async def handle_linode_managed_contact_delete(
@@ -5387,7 +5402,7 @@ def create_linode_managed_contact_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["contact_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _managed_contact_id(arguments: dict[str, Any]) -> int | list[TextContent]:
@@ -5591,7 +5606,7 @@ def create_linode_managed_service_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["service_id", "confirm"],
         },
-    ), Capability.Write
+    ), Capability.Admin
 
 
 def _managed_service_id(arguments: dict[str, Any]) -> int | list[TextContent]:

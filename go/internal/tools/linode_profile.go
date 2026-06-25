@@ -284,7 +284,7 @@ func NewLinodeProfileTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleLinodeProfileTokenDeleteRequest,
 	)
 
-	return tool, profiles.CapDestroy, handler
+	return tool, profiles.CapAdmin, handler
 }
 
 func handleLinodeProfileTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

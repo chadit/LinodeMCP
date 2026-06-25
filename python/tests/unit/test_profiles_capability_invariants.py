@@ -68,14 +68,20 @@ def test_capability_and_confirm_invariants() -> None:
     """Confirm parameter matches the tool's declared capability.
 
     - ``Read`` tools must not declare ``confirm`` (they don't mutate state).
-    - ``Write``, ``Destroy``, ``Admin`` tools must require ``confirm``
-      (declared as a boolean property AND listed in ``required[]``). Just
-      declaring it in properties is not enough: the safety gate has to be
-      enforceable, which means the client must be required to send it.
+    - ``Write`` and ``Destroy`` tools must require ``confirm`` (declared as a
+      boolean property AND listed in ``required[]``). Just declaring it in
+      properties is not enough: the safety gate has to be enforceable, which
+      means the client must be required to send it.
+    - ``Admin`` is exempt: it is a privilege tier (account/child_account
+      scope), orthogonal to mutation. An Admin tool may be a read
+      (``linode_managed_credential_get``) with no confirm or a mutation
+      (``linode_account_update``) that carries one. This matches the Go gate,
+      whose confirm check runs over the active (read-only) profile and so
+      never sees Admin tools.
     - ``Meta`` and ``Unknown`` are exempt (either shape is permitted).
     """
     registry = get_tool_registry()
-    mutators = {Capability.Write, Capability.Destroy, Capability.Admin}
+    mutators = {Capability.Write, Capability.Destroy}
 
     read_violations: list[str] = [
         entry.name
@@ -94,7 +100,7 @@ def test_capability_and_confirm_invariants() -> None:
         sorted(read_violations)
     )
     assert not mutator_violations, (
-        "Write/Destroy/Admin tools must require confirm in required[]: "
+        "Write/Destroy tools must require confirm in required[]: "
         + ", ".join(sorted(mutator_violations))
     )
 

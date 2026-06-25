@@ -34,7 +34,7 @@ def test_create_linode_managed_service_enable_tool() -> None:
     """Test linode_managed_service_enable tool schema."""
     tool, capability = create_linode_managed_service_enable_tool()
     assert tool.name == "linode_managed_service_enable"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["service_id", "confirm"]
     properties = tool.inputSchema["properties"]
     assert properties["service_id"]["minimum"] == 1

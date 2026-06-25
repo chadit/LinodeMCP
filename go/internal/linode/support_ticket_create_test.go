@@ -17,7 +17,7 @@ const (
 	supportTicketDescription    = "Instance is unreachable"
 	supportTicketStatusOpen     = "open"
 	temporarySupportTicketError = "temporary support ticket failure"
-	supportTicketSeverity       = "major"
+	supportTicketSeverity       = 2
 )
 
 func TestClientCreateSupportTicketSuccess(t *testing.T) {
@@ -67,8 +67,8 @@ func TestClientCreateSupportTicketSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", got["linode_id"], float64(12345))
 		}
 
-		if !reflect.DeepEqual(got["severity"], supportTicketSeverity) {
-			t.Errorf("got %v, want %v", got["severity"], supportTicketSeverity)
+		if !reflect.DeepEqual(got["severity"], float64(supportTicketSeverity)) {
+			t.Errorf("got %v, want %v", got["severity"], float64(supportTicketSeverity))
 		}
 
 		w.Header().Set("Content-Type", tcApplicationJSON)

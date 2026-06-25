@@ -275,7 +275,8 @@ def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
                     "description": ("The ID of the firewall (required)"),
                 },
                 "version": {
-                    "type": "string",
+                    "type": "integer",
+                    "minimum": 1,
                     "description": (
                         "The version identifier of the firewall rule (required)"
                     ),

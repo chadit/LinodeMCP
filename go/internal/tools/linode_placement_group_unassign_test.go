@@ -312,7 +312,7 @@ func TestLinodePlacementGroupUnassignToolSuccess(t *testing.T) {
 
 func placementGroupUnassignArgs() map[string]any {
 	return map[string]any{
-		keyPlacementGroupID: "789",
+		keyPlacementGroupID: float64(789),
 		"linodes":           []any{float64(123), float64(456)},
 		keyConfirm:          true,
 	}

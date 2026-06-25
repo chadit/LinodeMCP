@@ -38,8 +38,9 @@ _ENV_PROP: dict[str, Any] = {
     "description": "Linode environment to use (optional, defaults to 'default')",
 }
 
-_INSTANCE_ID_PROP: dict[str, Any] = {
-    "type": "string",
+_LINODE_ID_PROP: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the Linode instance (required)",
 }
 
@@ -52,14 +53,14 @@ _CONFIRM_PROP: dict[str, Any] = {
 def _parse_instance_id(
     arguments: dict[str, Any],
 ) -> int | list[TextContent]:
-    """Parse and validate instance_id from arguments."""
-    raw = arguments.get("instance_id", "")
+    """Parse and validate linode_id from arguments."""
+    raw = arguments.get("linode_id", "")
     if not raw:
-        return _error_response("instance_id is required")
+        return _error_response("linode_id is required")
     try:
         return int(raw)
     except (ValueError, TypeError):
-        return _error_response("instance_id must be a valid integer")
+        return _error_response("linode_id must be a valid integer")
 
 
 def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
@@ -71,7 +72,7 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "region": {
                     "type": "string",
                     "description": "Target region for clone",
@@ -97,7 +98,7 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["instance_id", "confirm"],
+            "required": ["linode_id", "confirm"],
         },
     ), Capability.Write
 
@@ -151,7 +152,7 @@ def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "region": {
                     "type": "string",
                     "description": ("Target region for migration"),
@@ -159,7 +160,7 @@ def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["instance_id", "confirm"],
+            "required": ["linode_id", "confirm"],
         },
     ), Capability.Write
 
@@ -220,7 +221,7 @@ async def handle_linode_instance_migrate(
         await client.migrate_instance(iid, region=arguments.get("region"))
         return {
             "message": (f"Migration initiated for instance {iid}"),
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     return await execute_tool(cfg, arguments, "migrate instance", _call)
@@ -239,7 +240,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "image": {
                     "type": "string",
                     "description": ("Image ID to rebuild with (required)"),
@@ -273,7 +274,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
                 PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "image",
                 "root_pass",
                 "confirm",
@@ -283,7 +284,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
 
 
 async def _instance_rebuild_side_effects_walk(
-    client: RetryableClient, instance_id: int, state: Any
+    client: RetryableClient, linode_id: int, state: Any
 ) -> DryRunDetails:
     """Phase 2 Tier A walk for instance rebuild. A rebuild erases every disk
     and recreates the boot disk from the new image, so each existing disk is a
@@ -292,7 +293,7 @@ async def _instance_rebuild_side_effects_walk(
     """
     warnings: list[str] = []
     try:
-        disks = await client.list_instance_disks(instance_id)
+        disks = await client.list_instance_disks(linode_id)
     except (APIError, NetworkError, httpx.HTTPError) as exc:
         warnings.append(f"Could not list instance disks: {exc}")
         disks = []
@@ -321,18 +322,18 @@ async def _instance_rebuild_side_effects_walk(
 
 
 async def _instance_rebuild_two_stage(
-    arguments: dict[str, Any], cfg: Config, instance_id: int, image: str, root_pass: str
+    arguments: dict[str, Any], cfg: Config, linode_id: int, image: str, root_pass: str
 ) -> list[TextContent] | None:
     """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
     if arguments.get("mode") not in ("plan", "apply"):
         return None
 
     async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_instance(instance_id)
+        return await client.get_instance(linode_id)
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         return await client.rebuild_instance(
-            instance_id,
+            linode_id,
             image=image,
             root_pass=root_pass,
             authorized_keys=arguments.get("authorized_keys"),
@@ -340,14 +341,14 @@ async def _instance_rebuild_two_stage(
         )
 
     async def _ts_walk(client: RetryableClient, state: Any) -> DryRunDetails:
-        return await _instance_rebuild_side_effects_walk(client, instance_id, state)
+        return await _instance_rebuild_side_effects_walk(client, linode_id, state)
 
     return await run_two_stage_destroy(
         cfg,
         arguments,
         tool_name="linode_instance_rebuild",
         method="POST",
-        path=f"/linode/instances/{instance_id}/rebuild",
+        path=f"/linode/instances/{linode_id}/rebuild",
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Instance"),
@@ -418,7 +419,7 @@ def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "devices": {
                     "type": "object",
                     "description": ("Device mappings for rescue mode"),
@@ -426,7 +427,7 @@ def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["instance_id", "confirm"],
+            "required": ["linode_id", "confirm"],
         },
     ), Capability.Write
 
@@ -486,7 +487,7 @@ async def handle_linode_instance_rescue(
         await client.rescue_instance(iid, devices=arguments.get("devices"))
         return {
             "message": (f"Rescue mode initiated for instance {iid}"),
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     return await execute_tool(cfg, arguments, "rescue instance", _call)
@@ -505,7 +506,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "root_pass": {
                     "type": "string",
                     "description": ("New root password (required)"),
@@ -516,7 +517,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
                 PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "root_pass",
                 "confirm",
             ],
@@ -556,7 +557,7 @@ async def _instance_password_reset_two_stage(
         await client.reset_instance_password(iid, root_pass)
         return {
             "message": f"Password reset for instance {iid}",
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
@@ -619,7 +620,7 @@ async def handle_linode_instance_password_reset(
         await client.reset_instance_password(iid, root_pass)
         return {
             "message": (f"Password reset for instance {iid}"),
-            "instance_id": iid,
+            "linode_id": iid,
         }
 
     return await execute_tool(cfg, arguments, "reset instance password", _call)

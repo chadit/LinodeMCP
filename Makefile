@@ -1,4 +1,4 @@
-.PHONY: help build test check lint clean install-hooks check-hooks \
+.PHONY: help build test check lint clean install-hooks check-hooks tool-parity \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
@@ -20,8 +20,15 @@ help:
 ## build: Build all language binaries (Go + Python) into each language's bin/
 build: go-build python-build
 
-## check: Run all linters and tests (go-check + python-check)
-check: go-check python-check
+## check: Run all linters and tests (go-check + python-check + tool-parity)
+check: go-check python-check tool-parity
+
+## tool-parity: Verify Go/Python tool-surface parity (capability, params, required)
+# Runs the Go dumper (go run) and imports the Python registry (needs the venv),
+# then diffs the two against docs/tool-parity-baseline.txt. Fails on any new
+# divergence or any baseline entry that is now fixed (the baseline only shrinks).
+tool-parity:
+	@python/.venv/bin/python scripts/verify_tool_parity.py
 
 ## lint: Run all linters (go-lint, python-lint, betterleaks, trivy, actionlint)
 lint: go-lint python-lint betterleaks trivy actionlint

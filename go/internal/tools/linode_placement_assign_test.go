@@ -17,7 +17,7 @@ import (
 
 const (
 	keyPlacementGroupLinodes   = "linodes"
-	placementGroupIDFixture    = "528"
+	placementGroupIDFixture    = float64(528)
 	placementGroupLinodeSingle = float64(123)
 	errConfirmTrue             = "confirm=true"
 	errLinodesRequired         = "linodes is required"

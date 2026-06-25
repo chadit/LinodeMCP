@@ -401,12 +401,12 @@ def create_linode_lke_version_get_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "version_id": {
+                "version": {
                     "type": "string",
-                    "description": "The version ID (e.g. '1.29') (required)",
+                    "description": "The Kubernetes version (e.g. '1.29') (required)",
                 },
             },
-            "required": ["version_id"],
+            "required": ["version"],
         },
     ), Capability.Read
 
@@ -415,12 +415,12 @@ async def handle_linode_lke_version_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_version_get tool request."""
-    version_id = arguments.get("version_id", "")
-    if not version_id:
-        return error_response("version_id is required")
+    version = arguments.get("version", "")
+    if not version:
+        return error_response("version is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_version(str(version_id))
+        return await client.get_lke_version(str(version))
 
     return await execute_tool(cfg, arguments, "get LKE version", _call)
 

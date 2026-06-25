@@ -36,13 +36,15 @@ _ENV_PROP: dict[str, Any] = {
     "description": "Linode environment to use (optional, defaults to 'default')",
 }
 
-_INSTANCE_ID_PROP: dict[str, Any] = {
-    "type": "string",
+_LINODE_ID_PROP: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the Linode instance (required)",
 }
 
 _DISK_ID_PROP: dict[str, Any] = {
-    "type": "string",
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the disk (required)",
 }
 
@@ -55,19 +57,19 @@ _CONFIRM_PROP: dict[str, Any] = {
 def _parse_instance_id(
     arguments: dict[str, Any],
 ) -> int | list[TextContent]:
-    """Parse and validate instance_id from arguments."""
-    raw = arguments.get("instance_id", "")
+    """Parse and validate linode_id from arguments."""
+    raw = arguments.get("linode_id", "")
     if raw is None or raw == "":
-        return _error_response("instance_id is required")
+        return _error_response("linode_id is required")
     if isinstance(raw, bool):
-        return _error_response("instance_id must be a positive integer")
+        return _error_response("linode_id must be a positive integer")
     try:
-        instance_id = int(raw)
+        linode_id = int(raw)
     except (ValueError, TypeError):
-        return _error_response("instance_id must be a valid integer")
-    if instance_id < 1:
-        return _error_response("instance_id must be a positive integer")
-    return instance_id
+        return _error_response("linode_id must be a valid integer")
+    if linode_id < 1:
+        return _error_response("linode_id must be a positive integer")
+    return linode_id
 
 
 def _parse_optional_page_args(
@@ -96,7 +98,7 @@ def _parse_optional_page_args(
 def _parse_instance_and_disk_ids(
     arguments: dict[str, Any],
 ) -> tuple[int, int] | list[TextContent]:
-    """Parse instance_id and disk_id from arguments."""
+    """Parse linode_id and disk_id from arguments."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -127,9 +129,9 @@ def create_linode_instance_disk_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
             },
-            "required": ["instance_id"],
+            "required": ["linode_id"],
         },
     ), Capability.Read
 
@@ -160,7 +162,7 @@ def create_linode_instance_volume_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "page": {
                     "type": "integer",
                     "minimum": 1,
@@ -173,7 +175,7 @@ def create_linode_instance_volume_list_tool() -> tuple[Tool, Capability]:
                     "description": "Number of results per page",
                 },
             },
-            "required": ["instance_id"],
+            "required": ["linode_id"],
         },
     ), Capability.Read
 
@@ -207,7 +209,7 @@ def create_linode_instance_firewall_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "page": {
                     "type": "integer",
                     "minimum": 1,
@@ -220,7 +222,7 @@ def create_linode_instance_firewall_list_tool() -> tuple[Tool, Capability]:
                     "description": "Number of results per page",
                 },
             },
-            "required": ["instance_id"],
+            "required": ["linode_id"],
         },
     ), Capability.Read
 
@@ -254,10 +256,10 @@ def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
             },
-            "required": ["instance_id", "disk_id"],
+            "required": ["linode_id", "disk_id"],
         },
     ), Capability.Read
 
@@ -269,12 +271,12 @@ async def handle_linode_instance_disk_get(
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, disk_id = ids
+    linode_id, disk_id = ids
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.get_instance_disk(instance_id, disk_id)
+        return await client.get_instance_disk(linode_id, disk_id)
 
     return await execute_tool(cfg, arguments, "get instance disk", _call)
 
@@ -288,7 +290,7 @@ def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "label": {
                     "type": "string",
                     "description": "Label for the configuration profile",
@@ -300,7 +302,7 @@ def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["instance_id", "label", "devices", "confirm"],
+            "required": ["linode_id", "label", "devices", "confirm"],
         },
     ), Capability.Write
 
@@ -367,7 +369,7 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "label": {
                     "type": "string",
                     "description": "Label for the disk",
@@ -392,7 +394,7 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "label",
                 "size",
                 "confirm",
@@ -466,7 +468,7 @@ def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
                 "label": {
                     "type": "string",
@@ -476,7 +478,7 @@ def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "disk_id",
                 "confirm",
             ],
@@ -491,19 +493,19 @@ async def handle_linode_instance_disk_update(
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, disk_id = ids
+    linode_id, disk_id = ids
 
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance_disk(instance_id, disk_id)
+            return await client.get_instance_disk(linode_id, disk_id)
 
         return await execute_dry_run(
             cfg,
             arguments,
             "linode_instance_disk_update",
             "PUT",
-            f"/linode/instances/{instance_id}/disks/{disk_id}",
+            f"/linode/instances/{linode_id}/disks/{disk_id}",
             _fetch,
         )
 
@@ -514,7 +516,7 @@ async def handle_linode_instance_disk_update(
         client: RetryableClient,
     ) -> dict[str, Any]:
         return await client.update_instance_disk(
-            instance_id,
+            linode_id,
             disk_id,
             label=arguments.get("label"),
         )
@@ -535,7 +537,7 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
                 "confirm": {
                     "type": "boolean",
@@ -549,7 +551,7 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
                 PARAM_PLAN_ID: PLAN_ID_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "disk_id",
                 "confirm",
             ],
@@ -558,20 +560,20 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
 
 
 async def _instance_disk_delete_two_stage(
-    arguments: dict[str, Any], cfg: Config, instance_id: int, disk_id: int
+    arguments: dict[str, Any], cfg: Config, linode_id: int, disk_id: int
 ) -> list[TextContent] | None:
     """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
     if arguments.get("mode") not in ("plan", "apply"):
         return None
 
     async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_instance_disk(instance_id, disk_id)
+        return await client.get_instance_disk(linode_id, disk_id)
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
-        await client.delete_instance_disk(instance_id, disk_id)
+        await client.delete_instance_disk(linode_id, disk_id)
         return {
-            "message": f"Disk {disk_id} deleted from instance {instance_id}",
-            "instance_id": instance_id,
+            "message": f"Disk {disk_id} deleted from instance {linode_id}",
+            "linode_id": linode_id,
             "disk_id": disk_id,
         }
 
@@ -580,7 +582,7 @@ async def _instance_disk_delete_two_stage(
         arguments,
         tool_name="linode_instance_disk_delete",
         method="DELETE",
-        path=f"/linode/instances/{instance_id}/disks/{disk_id}",
+        path=f"/linode/instances/{linode_id}/disks/{disk_id}",
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Disk"),
@@ -594,10 +596,10 @@ async def handle_linode_instance_disk_delete(
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, disk_id = ids
+    linode_id, disk_id = ids
 
     two_stage = await _instance_disk_delete_two_stage(
-        arguments, cfg, instance_id, disk_id
+        arguments, cfg, linode_id, disk_id
     )
     if two_stage is not None:
         return two_stage
@@ -605,14 +607,14 @@ async def handle_linode_instance_disk_delete(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance_disk(instance_id, disk_id)
+            return await client.get_instance_disk(linode_id, disk_id)
 
         return await execute_dry_run(
             cfg,
             arguments,
             "linode_instance_disk_delete",
             "DELETE",
-            f"/linode/instances/{instance_id}/disks/{disk_id}",
+            f"/linode/instances/{linode_id}/disks/{disk_id}",
             _fetch,
         )
 
@@ -623,10 +625,10 @@ async def handle_linode_instance_disk_delete(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        await client.delete_instance_disk(instance_id, disk_id)
+        await client.delete_instance_disk(linode_id, disk_id)
         return {
-            "message": (f"Disk {disk_id} deleted from instance {instance_id}"),
-            "instance_id": instance_id,
+            "message": (f"Disk {disk_id} deleted from instance {linode_id}"),
+            "linode_id": linode_id,
             "disk_id": disk_id,
         }
 
@@ -642,13 +644,13 @@ def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "disk_id",
                 "confirm",
             ],
@@ -685,12 +687,12 @@ async def handle_linode_instance_disk_clone(
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, disk_id = ids
+    linode_id, disk_id = ids
 
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance_disk(instance_id, disk_id)
+            return await client.get_instance_disk(linode_id, disk_id)
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
             return _instance_disk_clone_side_effects(state)
@@ -700,7 +702,7 @@ async def handle_linode_instance_disk_clone(
             arguments,
             "linode_instance_disk_clone",
             "POST",
-            f"/linode/instances/{instance_id}/disks/{disk_id}/clone",
+            f"/linode/instances/{linode_id}/disks/{disk_id}/clone",
             _fetch,
             _walk,
         )
@@ -711,7 +713,7 @@ async def handle_linode_instance_disk_clone(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.clone_instance_disk(instance_id, disk_id)
+        return await client.clone_instance_disk(linode_id, disk_id)
 
     return await execute_tool(cfg, arguments, "clone instance disk", _call)
 
@@ -725,7 +727,7 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
                 "size": {
                     "type": "integer",
@@ -735,7 +737,7 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "disk_id",
                 "size",
                 "confirm",
@@ -768,7 +770,7 @@ async def handle_linode_instance_disk_resize(
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, disk_id = ids
+    linode_id, disk_id = ids
 
     size = arguments.get("size")
     if not size:
@@ -777,7 +779,7 @@ async def handle_linode_instance_disk_resize(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance_disk(instance_id, disk_id)
+            return await client.get_instance_disk(linode_id, disk_id)
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
             return _instance_disk_resize_side_effects(state, int(size))
@@ -787,7 +789,7 @@ async def handle_linode_instance_disk_resize(
             arguments,
             "linode_instance_disk_resize",
             "POST",
-            f"/linode/instances/{instance_id}/disks/{disk_id}/resize",
+            f"/linode/instances/{linode_id}/disks/{disk_id}/resize",
             _fetch,
             _walk,
         )
@@ -798,10 +800,10 @@ async def handle_linode_instance_disk_resize(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        await client.resize_instance_disk(instance_id, disk_id, int(size))
+        await client.resize_instance_disk(linode_id, disk_id, int(size))
         return {
             "message": (f"Disk {disk_id} resized to {size} MB"),
-            "instance_id": instance_id,
+            "linode_id": linode_id,
             "disk_id": disk_id,
             "size": int(size),
         }
@@ -818,7 +820,7 @@ def create_linode_instance_disk_password_reset_tool() -> tuple[Tool, Capability]
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
-                "instance_id": _INSTANCE_ID_PROP,
+                "linode_id": _LINODE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
                 "password": {
                     "type": "string",
@@ -828,7 +830,7 @@ def create_linode_instance_disk_password_reset_tool() -> tuple[Tool, Capability]
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
-                "instance_id",
+                "linode_id",
                 "disk_id",
                 "password",
                 "confirm",
@@ -844,7 +846,7 @@ async def handle_linode_instance_disk_password_reset(
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
-    instance_id, disk_id = ids
+    linode_id, disk_id = ids
 
     password = arguments.get("password", "")
     if not isinstance(password, str) or not password:
@@ -853,13 +855,13 @@ async def handle_linode_instance_disk_password_reset(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance_disk(instance_id, disk_id)
+            return await client.get_instance_disk(linode_id, disk_id)
 
         async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
             return {
                 "side_effects": [
                     f"The root password for disk {disk_id} on instance "
-                    f"{instance_id} will be reset."
+                    f"{linode_id} will be reset."
                 ],
                 "warnings": ["Existing disk root password access will be replaced."],
             }
@@ -869,7 +871,7 @@ async def handle_linode_instance_disk_password_reset(
             arguments,
             "linode_instance_disk_password_reset",
             "POST",
-            f"/linode/instances/{instance_id}/disks/{disk_id}/password",
+            f"/linode/instances/{linode_id}/disks/{disk_id}/password",
             _fetch,
             _walk,
         )
@@ -881,12 +883,12 @@ async def handle_linode_instance_disk_password_reset(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        await client.reset_instance_disk_password(instance_id, disk_id, password)
+        await client.reset_instance_disk_password(linode_id, disk_id, password)
         return {
             "message": (
-                f"Root password reset for disk {disk_id} on instance {instance_id}"
+                f"Root password reset for disk {disk_id} on instance {linode_id}"
             ),
-            "instance_id": instance_id,
+            "linode_id": linode_id,
             "disk_id": disk_id,
         }
 

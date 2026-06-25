@@ -871,7 +871,7 @@ async def test_account_settings_update_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_settings_update_tool()
     assert tool.name == "linode_account_settings_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "confirm" in tool.inputSchema["required"]
     assert "dry_run" in tool.inputSchema["properties"]
@@ -1758,7 +1758,7 @@ async def test_account_user_delete_tool_is_exported_registered_and_schema(
 
     tool, capability = tools_mod.create_linode_account_user_delete_tool()
     assert tool.name == "linode_account_user_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["username", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
@@ -1927,7 +1927,7 @@ async def test_account_settings_managed_enable_tool_is_exported_and_registered(
     assert "handle_linode_account_settings_managed_enable" in tools_mod.__all__
 
     tool, capability = tools_mod.create_linode_account_settings_managed_enable_tool()
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
@@ -4846,7 +4846,7 @@ async def test_account_service_transfer_accept_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_service_transfer_accept_tool()
     assert tool.name == "linode_account_service_transfer_accept"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["token", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
@@ -5687,7 +5687,7 @@ async def test_account_payment_method_make_default_schema_requires_confirm_and_d
         if item.name == "linode_account_payment_method_make_default"
     )
 
-    assert entry.capability is Capability.Write
+    assert entry.capability is Capability.Admin
     assert entry.tool.inputSchema["required"] == ["payment_method_id", "confirm"]
     properties = entry.tool.inputSchema["properties"]
     assert properties["payment_method_id"]["type"] == "integer"
@@ -6056,7 +6056,7 @@ async def test_account_user_grants_update_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_user_grants_update_tool()
     assert tool.name == "linode_account_user_grants_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["username"]["pattern"] == (
         "^[A-Za-z0-9][A-Za-z0-9_-]*$"
     )
@@ -9461,7 +9461,7 @@ async def test_account_child_account_token_create_tool_is_exported_and_registere
 
     tool, capability = tools_mod.create_linode_account_child_account_token_create_tool()
     assert tool.name == "linode_account_child_account_token_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["euuid"]["minLength"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
@@ -9786,7 +9786,7 @@ async def test_managed_linode_settings_update_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_linode_settings_update_tool()
     assert tool.name == "linode_managed_linode_settings_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert set(tool.inputSchema["required"]) == {"linode_id", "ssh", "confirm"}
     assert "dry_run" in tool.inputSchema["properties"]
@@ -10117,7 +10117,7 @@ async def test_managed_credential_create_tool_is_exported_and_registered(
     assert "handle_linode_managed_credential_create" in tools_mod.__all__
 
     tool, capability = tools_mod.create_linode_managed_credential_create_tool()
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.name == "linode_managed_credential_create"
     assert set(tool.inputSchema["required"]) == {"label", "password", "confirm"}
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -10272,7 +10272,7 @@ async def test_managed_credential_update_tool_is_exported_and_registered(
     assert "handle_linode_managed_credential_update" in tools_mod.__all__
 
     tool, capability = tools_mod.create_linode_managed_credential_update_tool()
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.name == "linode_managed_credential_update"
     assert set(tool.inputSchema["required"]) == {"credential_id", "label", "confirm"}
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -10385,7 +10385,7 @@ async def test_credential_username_password_tool_is_registered(
     tool, capability = (
         tools_mod.create_linode_managed_credential_username_password_update_tool()
     )
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.name == "linode_managed_credential_username_password_update"
     assert set(tool.inputSchema["required"]) == {
         "credential_id",
@@ -10539,7 +10539,7 @@ async def test_managed_credential_revoke_tool_is_exported_and_registered(
     assert "handle_linode_managed_credential_revoke" in tools_mod.__all__
 
     tool, capability = tools_mod.create_linode_managed_credential_revoke_tool()
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.name == "linode_managed_credential_revoke"
     assert set(tool.inputSchema["required"]) == {"credential_id", "confirm"}
     assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
@@ -10729,7 +10729,7 @@ async def test_managed_service_create_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_service_create_tool()
     assert tool.name == "linode_managed_service_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["service_type"]["enum"] == ["url", "tcp"]
@@ -10938,7 +10938,7 @@ async def test_managed_service_delete_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_service_delete_tool()
     assert tool.name == "linode_managed_service_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert set(tool.inputSchema["required"]) == {"service_id", "confirm"}
     assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -11052,7 +11052,7 @@ async def test_managed_contact_create_tool_is_exported_and_registered(
     assert "handle_linode_managed_contact_create" in tools_mod.__all__
 
     tool, capability = tools_mod.create_linode_managed_contact_create_tool()
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
@@ -11196,7 +11196,7 @@ async def test_managed_service_disable_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_service_disable_tool()
     assert tool.name == "linode_managed_service_disable"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
@@ -11309,7 +11309,7 @@ async def test_managed_contact_delete_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_contact_delete_tool()
     assert tool.name == "linode_managed_contact_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["contact_id"]["minimum"] == 1
@@ -11423,7 +11423,7 @@ async def test_managed_contacts_update_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_contact_update_tool()
     assert tool.name == "linode_managed_contact_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_contact_update" in srv.registered_tool_names
@@ -11470,10 +11470,15 @@ async def test_managed_credential_get_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_managed_credential_get_tool()
     assert tool.name == "linode_managed_credential_get"
-    assert capability == Capability.Read
+    assert capability == Capability.Admin
 
+    # Admin tools (account/child_account scope) are excluded from the default
+    # read-only profile and exposed only by full-access/emergency.
     srv = Server(sample_config)
-    assert "linode_managed_credential_get" in srv.registered_tool_names
+    assert "linode_managed_credential_get" not in srv.registered_tool_names
+
+    admin_srv = Server(_full_access_config(sample_config))
+    assert "linode_managed_credential_get" in admin_srv.registered_tool_names
 
 
 async def test_managed_credential_get_dispatches_from_registry(
@@ -11489,7 +11494,7 @@ async def test_managed_credential_get_dispatches_from_registry(
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        srv = Server(sample_config)
+        srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_credential_get", {"credential_id": 123}
         )
@@ -11503,7 +11508,7 @@ async def test_managed_credential_get_rejects_invalid_id(
 ) -> None:
     """Managed credential get validates credential_id before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        srv = Server(sample_config)
+        srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_credential_get", {"credential_id": "1?"}
         )
@@ -12078,7 +12083,7 @@ async def test_account_user_create_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_user_create_tool()
     assert tool.name == "linode_account_user_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["username"]["minLength"] == 1
     assert tool.inputSchema["properties"]["email"]["minLength"] == 1
     assert tool.inputSchema["properties"]["restricted"]["type"] == "boolean"
@@ -12321,7 +12326,7 @@ async def test_account_oauth_client_create_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_oauth_client_create_tool()
     assert tool.name == "linode_account_oauth_client_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["label"]["minLength"] == 1
     assert tool.inputSchema["properties"]["redirect_uri"]["minLength"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -12343,7 +12348,7 @@ async def test_account_payment_create_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_payment_create_tool()
     assert tool.name == "linode_account_payment_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["payment_method_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["usd"]["type"] == "string"
@@ -12369,7 +12374,7 @@ async def test_account_service_transfer_create_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_service_transfer_create_tool()
     assert tool.name == "linode_account_service_transfer_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["linode_ids"]["type"] == "array"
     assert tool.inputSchema["properties"]["linode_ids"]["minItems"] == 1
     assert tool.inputSchema["properties"]["linode_ids"]["items"] == {
@@ -12396,7 +12401,7 @@ async def test_account_payment_method_create_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_payment_method_create_tool()
     assert tool.name == "linode_account_payment_method_create"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["type"]["enum"] == ["credit_card"]
     assert tool.inputSchema["properties"]["data"]["type"] == "object"
     assert tool.inputSchema["properties"]["is_default"]["type"] == "boolean"
@@ -12419,7 +12424,7 @@ async def test_account_promo_credit_add_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_promo_credit_add_tool()
     assert tool.name == "linode_account_promo_credit_add"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["promo_code"]["type"] == "string"
     assert tool.inputSchema["properties"]["promo_code"]["minLength"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -12441,7 +12446,7 @@ async def test_account_oauth_client_delete_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_oauth_client_delete_tool()
     assert tool.name == "linode_account_oauth_client_delete"
-    assert capability is Capability.Destroy
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["client_id"]["minLength"] == 1
     assert (
         tool.inputSchema["properties"]["client_id"]["pattern"]
@@ -13376,7 +13381,7 @@ async def test_account_oauth_client_reset_secret_tool_is_exported_and_registered
 
     tool, capability = tools_mod.create_linode_account_oauth_client_secret_reset_tool()
     assert tool.name == "linode_account_oauth_client_secret_reset"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
@@ -16695,11 +16700,11 @@ async def test_networking_ip_update_rejects_malformed_address_before_client(
 @pytest.mark.parametrize(
     ("tool_name", "arguments"),
     [
-        ("linode_instance_ip_get", {"instance_id": "123", "address": "../bad"}),
+        ("linode_instance_ip_get", {"linode_id": "123", "address": "../bad"}),
         (
             "linode_instance_ip_update",
             {
-                "instance_id": "123",
+                "linode_id": "123",
                 "address": "198.51.100.5/32",
                 "rdns": None,
                 "confirm": True,
@@ -16708,7 +16713,7 @@ async def test_networking_ip_update_rejects_malformed_address_before_client(
         (
             "linode_instance_ip_delete",
             {
-                "instance_id": "123",
+                "linode_id": "123",
                 "address": "198.51.100.5?x=1",
                 "confirm": True,
                 "confirmed_dry_run": True,
@@ -17159,7 +17164,7 @@ async def test_account_user_update_tool_is_exported_and_registered(
 
     tool, capability = tools_mod.create_linode_account_user_update_tool()
     assert tool.name == "linode_account_user_update"
-    assert capability is Capability.Write
+    assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "confirm" in tool.inputSchema["required"]
@@ -17482,9 +17487,10 @@ async def test_database_engine_get_tool_is_exported_and_registered(
     )
     assert entry.tool.inputSchema["required"] == ["engine_id"]
     assert entry.tool.inputSchema["properties"]["engine_id"]["type"] == "string"
-    assert entry.tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert entry.tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert entry.tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    # A single-object GET (/databases/engines/{engineId}) does not paginate, so
+    # the tool no longer advertises page/page_size (matches the Go side).
+    assert "page" not in entry.tool.inputSchema["properties"]
+    assert "page_size" not in entry.tool.inputSchema["properties"]
 
 
 async def test_database_engine_get_dispatches_from_registry(
@@ -17507,13 +17513,11 @@ async def test_database_engine_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch(
             "linode_database_engine_get",
-            {"engine_id": "mysql/8.0.26", "page": 2, "page_size": 25},
+            {"engine_id": "mysql/8.0.26"},
         )
 
     assert json.loads(result[0].text) == response_data
-    mock_client.get_database_engine.assert_awaited_once_with(
-        "mysql/8.0.26", page=2, page_size=25
-    )
+    mock_client.get_database_engine.assert_awaited_once_with("mysql/8.0.26")
 
 
 @pytest.mark.parametrize(
@@ -17534,26 +17538,6 @@ async def test_database_engine_get_dispatches_from_registry(
         ({"engine_id": "mysql//8.0.26"}, "engine_id must use the documented"),
         ({"engine_id": "mysql/8.0.26/extra"}, "engine_id must use the documented"),
         ({"engine_id": "mysql/8.0.26$"}, "engine_id must use the documented"),
-        (
-            {"engine_id": "mysql/8.0.26", "page": "2"},
-            "page must be an integer",
-        ),
-        (
-            {"engine_id": "mysql/8.0.26", "page": 0},
-            "page must be at least 1",
-        ),
-        (
-            {"engine_id": "mysql/8.0.26", "page_size": 24},
-            "page_size must be at least 25",
-        ),
-        (
-            {"engine_id": "mysql/8.0.26", "page_size": 501},
-            "page_size must be at most 500",
-        ),
-        (
-            {"engine_id": "mysql/8.0.26", "page_size": True},
-            "page_size must be an integer",
-        ),
     ],
 )
 async def test_database_engine_get_rejects_invalid_arguments(

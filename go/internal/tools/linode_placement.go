@@ -19,7 +19,7 @@ func NewLinodePlacementGroupAssignTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_placement_group_assign",
 		"Assigns one or more Linodes to a placement group.",
 		[]mcp.ToolOption{
-			mcp.WithString(
+			mcp.WithNumber(
 				"group_id",
 				mcp.Required(),
 				mcp.Description("The ID of the placement group to assign Linodes to."),
@@ -39,9 +39,9 @@ func NewLinodePlacementGroupAssignTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handlePlacementGroupAssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	groupID, err := parsePlacementGroupID(request.GetString("group_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	groupID, validationMessage := placementGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	linodes, validationMessage := parsePlacementGroupLinodes(request)
@@ -129,7 +129,7 @@ func NewLinodePlacementGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_placement_group_delete",
 		"Deletes a placement group by its ID. This destructive action requires confirm=true."+twoStageNote,
 		[]mcp.ToolOption{
-			mcp.WithString(
+			mcp.WithNumber(
 				"group_id",
 				mcp.Required(),
 				mcp.Description("The ID of the placement group to delete"),
@@ -152,7 +152,7 @@ func NewLinodePlacementGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		"linode_placement_group_get",
 		"Retrieves details of a single placement group by its ID",
 		[]mcp.ToolOption{
-			mcp.WithString(
+			mcp.WithNumber(
 				"group_id",
 				mcp.Required(),
 				mcp.Description("The ID of the placement group to retrieve"),
@@ -165,9 +165,9 @@ func NewLinodePlacementGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 }
 
 func handlePlacementGroupGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	groupID, err := parsePlacementGroupID(request.GetString("group_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	groupID, validationMessage := placementGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -184,9 +184,9 @@ func handlePlacementGroupGetRequest(ctx context.Context, request *mcp.CallToolRe
 }
 
 func handlePlacementGroupDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	groupID, err := parsePlacementGroupID(request.GetString("group_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	groupID, validationMessage := placementGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
@@ -205,17 +205,4 @@ func handlePlacementGroupDeleteRequest(ctx context.Context, request *mcp.CallToo
 			return map[string]any{responseKeyMessage: "Placement group " + strconv.Itoa(groupID) + " deleted successfully"}
 		},
 	})
-}
-
-func parsePlacementGroupID(raw string) (int, error) {
-	if raw == "" {
-		return 0, ErrPlacementGroupIDRequired
-	}
-
-	groupID, err := strconv.Atoi(raw)
-	if err != nil || groupID <= 0 {
-		return 0, ErrPlacementGroupIDPositive
-	}
-
-	return groupID, nil
 }

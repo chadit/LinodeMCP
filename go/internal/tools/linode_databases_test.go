@@ -2339,8 +2339,8 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if handler == nil {
@@ -2550,8 +2550,8 @@ func TestLinodeDatabaseInstanceCredentialsResetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if handler == nil {
@@ -2815,8 +2815,8 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolDefinition(t *testi
 		t.Error("tool.Description is empty")
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if handler == nil {

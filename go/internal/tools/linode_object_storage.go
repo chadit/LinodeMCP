@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -486,7 +485,7 @@ func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString(
+		mcp.WithNumber(
 			"key_id",
 			mcp.Required(),
 			mcp.Description("The ID of the access key to retrieve"),
@@ -501,15 +500,13 @@ func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 }
 
 func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	keyIDStr := request.GetString("key_id", "")
-
-	if keyIDStr == "" {
-		return mcp.NewToolResultError("key_id is required"), nil
+	keyID, validationMessage := optionalPaginationInt(request.GetArguments(), "key_id", 1, 0)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	keyID, err := strconv.Atoi(keyIDStr)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("key_id must be a valid integer: %v", err)), nil
+	if keyID == 0 {
+		return mcp.NewToolResultError("key_id is required"), nil
 	}
 
 	client, err := prepareClient(request, cfg)

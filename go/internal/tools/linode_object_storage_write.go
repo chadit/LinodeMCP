@@ -170,7 +170,7 @@ func NewLinodeObjectStorageCancelTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		handleObjectStorageCancelRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleObjectStorageCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

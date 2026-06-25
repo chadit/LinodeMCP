@@ -471,8 +471,8 @@ func TestLinodeSSHKeyDeleteToolMissingSshkeyId(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "sshkey_id is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "sshkey_id is required")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "ssh_key_id is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "ssh_key_id is required")
 	}
 }
 
@@ -5984,8 +5984,8 @@ func TestLinodeImageShareGroupTokenCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_token_create")
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if tool.Description == "" {

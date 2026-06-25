@@ -32,8 +32,8 @@ func TestLinodeAccountSupportTicketReplyCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, supportTicketReplyCreateToolName)
 	}
 
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
+	if capability != profiles.CapWrite {
+		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
 	if handler == nil {

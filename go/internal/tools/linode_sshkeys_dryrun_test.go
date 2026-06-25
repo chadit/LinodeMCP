@@ -190,7 +190,7 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 		}
 	})
 
-	t.Run("still validates sshkey_id", func(t *testing.T) {
+	t.Run("still validates ssh_key_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeSSHKeyUpdateTool(&config.Config{})
@@ -207,8 +207,8 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 
-		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "sshkey_id must be a positive integer") {
-			t.Errorf("error text %q does not contain %q", text.Text, "sshkey_id must be a positive integer")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "ssh_key_id must be a positive integer") {
+			t.Errorf("error text %q does not contain %q", text.Text, "ssh_key_id must be a positive integer")
 		}
 	})
 }
@@ -266,7 +266,7 @@ func TestLinodeSSHKeyDeleteToolDryRun(t *testing.T) {
 		}
 	})
 
-	t.Run("still validates sshkey_id", func(t *testing.T) {
+	t.Run("still validates ssh_key_id", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, handler := tools.NewLinodeSSHKeyDeleteTool(&config.Config{})
@@ -280,8 +280,8 @@ func TestLinodeSSHKeyDeleteToolDryRun(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 
-		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "sshkey_id is required") {
-			t.Errorf("error text %q does not contain %q", text.Text, "sshkey_id is required")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "ssh_key_id is required") {
+			t.Errorf("error text %q does not contain %q", text.Text, "ssh_key_id is required")
 		}
 	})
 }

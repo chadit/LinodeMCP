@@ -37,7 +37,8 @@ _ENV_PROP: dict[str, Any] = {
 }
 
 _CLUSTER_ID_PROP: dict[str, Any] = {
-    "type": "string",
+    "type": "integer",
+    "minimum": 1,
     "description": "The ID of the LKE cluster (required)",
 }
 
@@ -687,7 +688,8 @@ def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "pool_id": {
-                    "type": "string",
+                    "type": "integer",
+                    "minimum": 1,
                     "description": "The ID of the node pool (required)",
                 },
                 "count": {
@@ -792,7 +794,8 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "pool_id": {
-                    "type": "string",
+                    "type": "integer",
+                    "minimum": 1,
                     "description": "The ID of the node pool (required)",
                 },
                 "confirm": {
@@ -969,7 +972,8 @@ def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "pool_id": {
-                    "type": "string",
+                    "type": "integer",
+                    "minimum": 1,
                     "description": "The ID of the node pool (required)",
                 },
                 "confirm": _CONFIRM_PROP,

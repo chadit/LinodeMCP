@@ -867,7 +867,7 @@ func NewLinodeFirewallSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles
 		handleLinodeFirewallSettingsUpdateRequest,
 	)
 
-	return tool, profiles.CapAdmin, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeFirewallSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
