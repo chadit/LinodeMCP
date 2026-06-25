@@ -20,6 +20,8 @@ const (
 	keyUSD                       = "usd"
 	accountPaymentCreatedMessage = "Account payment created successfully"
 	errUSDPositive               = "usd must be a positive number"
+	errUSDNonEmptyString         = "usd must be a non-empty string"
+	paymentUSDString             = "25.5"
 )
 
 func TestLinodeAccountPaymentCreateToolDefinition(t *testing.T) {
@@ -99,8 +101,8 @@ func TestLinodeAccountPaymentCreateToolSuccess(t *testing.T) {
 			t.Errorf("value = %v, want %v", body[keyPaymentMethodID], float64(123))
 		}
 
-		if body[keyUSD] != float64(25.5) {
-			t.Errorf("value = %v, want %v", body[keyUSD], float64(25.5))
+		if body[keyUSD] != paymentUSDString {
+			t.Errorf("value = %v, want %v", body[keyUSD], paymentUSDString)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -114,7 +116,7 @@ func TestLinodeAccountPaymentCreateToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeAccountPaymentCreateTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: "123", keyUSD: 25.5, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: float64(123), keyUSD: paymentUSDString, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -170,8 +172,8 @@ func TestLinodeAccountPaymentCreateToolSuccessWithDefaultPaymentMethod(t *testin
 			t.Errorf("body has unexpected key %v", keyPaymentMethodID)
 		}
 
-		if body[keyUSD] != float64(25.5) {
-			t.Errorf("value = %v, want %v", body[keyUSD], float64(25.5))
+		if body[keyUSD] != paymentUSDString {
+			t.Errorf("value = %v, want %v", body[keyUSD], paymentUSDString)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -185,7 +187,7 @@ func TestLinodeAccountPaymentCreateToolSuccessWithDefaultPaymentMethod(t *testin
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeAccountPaymentCreateTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyUSD: 25.5, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyUSD: paymentUSDString, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -225,7 +227,7 @@ func TestLinodeAccountPaymentCreateToolApiError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeAccountPaymentCreateTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: "123", keyUSD: 25.5, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: float64(123), keyUSD: paymentUSDString, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -274,7 +276,7 @@ func TestLinodeAccountPaymentCreateToolConfirmRejectsBeforeClient(t *testing.T) 
 			cfg := &config.Config{}
 			_, _, handler := tools.NewLinodeAccountPaymentCreateTool(cfg)
 
-			args := map[string]any{keyPaymentMethodID: "123", keyUSD: 25.5}
+			args := map[string]any{keyPaymentMethodID: float64(123), keyUSD: paymentUSDString}
 			if testCase.name != caseMissing {
 				args[keyConfirm] = testCase.confirm
 			}
@@ -314,17 +316,15 @@ func TestLinodeAccountPaymentCreateToolInvalidInputsRejectBeforeClient(t *testin
 		args map[string]any
 		want string
 	}{
-		{name: "missing usd", args: map[string]any{keyPaymentMethodID: "123", keyConfirm: true}, want: "usd is required"},
-		{name: "empty payment method id", args: map[string]any{keyPaymentMethodID: "", keyUSD: 25.5, keyConfirm: true}, want: "payment_method_id must be a non-empty string"},
-		{name: "numeric payment method id", args: map[string]any{keyPaymentMethodID: 123, keyUSD: 25.5, keyConfirm: true}, want: "payment_method_id must be a non-empty string"},
-		{name: "slash payment method id", args: map[string]any{keyPaymentMethodID: "123/456", keyUSD: 25.5, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-		{name: "query payment method id", args: map[string]any{keyPaymentMethodID: "123?456", keyUSD: 25.5, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-		{name: "traversal payment method id", args: map[string]any{keyPaymentMethodID: pathTraversalValue, keyUSD: 25.5, keyConfirm: true}, want: errPaymentMethodIDNoSeparators},
-		{name: "alpha payment method id", args: map[string]any{keyPaymentMethodID: "abc", keyUSD: 25.5, keyConfirm: true}, want: "payment_method_id must be a positive integer"},
-		{name: "zero payment method id", args: map[string]any{keyPaymentMethodID: "0", keyUSD: 25.5, keyConfirm: true}, want: "payment_method_id must be a positive integer"},
-		{name: "zero usd", args: map[string]any{keyUSD: 0, keyConfirm: true}, want: errUSDPositive},
-		{name: "negative usd", args: map[string]any{keyUSD: -1, keyConfirm: true}, want: errUSDPositive},
-		{name: "string usd", args: map[string]any{keyUSD: "25.5", keyConfirm: true}, want: errUSDPositive},
+		{name: "missing usd", args: map[string]any{keyPaymentMethodID: float64(123), keyConfirm: true}, want: "usd is required"},
+		{name: "string payment method id", args: map[string]any{keyPaymentMethodID: "123", keyUSD: paymentUSDString, keyConfirm: true}, want: errPaymentMethodIDPositive},
+		{name: "zero payment method id", args: map[string]any{keyPaymentMethodID: float64(0), keyUSD: paymentUSDString, keyConfirm: true}, want: errPaymentMethodIDPositive},
+		{name: "negative payment method id", args: map[string]any{keyPaymentMethodID: float64(-1), keyUSD: paymentUSDString, keyConfirm: true}, want: errPaymentMethodIDPositive},
+		{name: "empty usd", args: map[string]any{keyUSD: "", keyConfirm: true}, want: errUSDNonEmptyString},
+		{name: "numeric usd type", args: map[string]any{keyUSD: float64(25.5), keyConfirm: true}, want: errUSDNonEmptyString},
+		{name: "alpha usd", args: map[string]any{keyUSD: "abc", keyConfirm: true}, want: errUSDPositive},
+		{name: "zero usd", args: map[string]any{keyUSD: "0", keyConfirm: true}, want: errUSDPositive},
+		{name: "negative usd", args: map[string]any{keyUSD: "-1", keyConfirm: true}, want: errUSDPositive},
 	}
 
 	for _, testCase := range cases {

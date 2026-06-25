@@ -12665,7 +12665,7 @@ def test_linode_object_storage_quota_usage_tool_schema() -> None:
     assert capability is Capability.Read
     assert tool.name == "linode_object_storage_quota_usage_get"
     assert tool.inputSchema["required"] == ["obj_quota_id"]
-    assert tool.inputSchema["properties"]["obj_quota_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["obj_quota_id"]["type"] == "string"
 
 
 async def test_handle_linode_object_storage_quota_usage(
@@ -12682,13 +12682,15 @@ async def test_handle_linode_object_storage_quota_usage(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_object_storage_quota_usage_get(
-            {"obj_quota_id": 123}, sample_config
+            {"obj_quota_id": "obj-bucket-us-ord-1"}, sample_config
         )
 
         assert len(result) == 1
         assert "quota_id" in result[0].text
         assert "123" in result[0].text
-        mock_client.get_object_storage_quota_usage.assert_called_once_with(123)
+        mock_client.get_object_storage_quota_usage.assert_called_once_with(
+            "obj-bucket-us-ord-1"
+        )
 
 
 async def test_handle_linode_object_storage_quota_usage_requires_id(
@@ -12699,7 +12701,7 @@ async def test_handle_linode_object_storage_quota_usage_requires_id(
         result = await handle_linode_object_storage_quota_usage_get({}, sample_config)
 
     assert len(result) == 1
-    assert "obj_quota_id must be a positive integer" in result[0].text
+    assert "obj_quota_id must be a valid Object Storage quota ID" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -12714,7 +12716,7 @@ async def test_handle_linode_object_storage_quota_usage_rejects_bad_id(
         )
 
     assert len(result) == 1
-    assert "obj_quota_id must be a positive integer" in result[0].text
+    assert "obj_quota_id must be a valid Object Storage quota ID" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -12730,7 +12732,7 @@ async def test_handle_linode_object_storage_quota_usage_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_object_storage_quota_usage_get(
-            {"obj_quota_id": 123}, sample_config
+            {"obj_quota_id": "obj-bucket-us-ord-1"}, sample_config
         )
 
         assert len(result) == 1

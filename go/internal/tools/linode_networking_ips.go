@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -245,8 +244,8 @@ func NewLinodeNetworkingIPAssignTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		[]mcp.ToolOption{
 			mcp.WithString("region", mcp.Required(),
 				mcp.Description("The region for the IP assignments.")),
-			mcp.WithString("assignments", mcp.Required(),
-				mcp.Description("JSON array of assignments, each with address and linode_id.")),
+			mcp.WithArray("assignments", mcp.Required(),
+				mcp.Description("Array of assignment objects, each with address and linode_id.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm IP reassignment. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -339,8 +338,8 @@ func NewLinodeNetworkingIPv4AssignTool(cfg *config.Config) (mcp.Tool, profiles.C
 		[]mcp.ToolOption{
 			mcp.WithString("region", mcp.Required(),
 				mcp.Description("The region for the IPv4 assignments.")),
-			mcp.WithString("assignments", mcp.Required(),
-				mcp.Description("JSON array of assignments, each with address and linode_id.")),
+			mcp.WithArray("assignments", mcp.Required(),
+				mcp.Description("Array of assignment objects, each with address and linode_id.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm IPv4 reassignment. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -443,14 +442,14 @@ func networkingIPAssignRequestFromTool(args map[string]any) (linode.AssignNetwor
 		return linode.AssignNetworkingIPsRequest{}, validationMessage
 	}
 
-	assignmentsJSON, validationMessage := requiredStringArg(args, "assignments")
-	if validationMessage != "" {
-		return linode.AssignNetworkingIPsRequest{}, validationMessage
+	rawAssignments, present := args["assignments"]
+	if !present {
+		return linode.AssignNetworkingIPsRequest{}, "assignments is required"
 	}
 
-	var assignments []linode.IPAssignment
-	if err := json.Unmarshal([]byte(assignmentsJSON), &assignments); err != nil {
-		return linode.AssignNetworkingIPsRequest{}, "assignments must be a JSON array of objects with address and linode_id"
+	assignments, validationMessage := objectSliceFromToolArg[linode.IPAssignment](rawAssignments, "assignments")
+	if validationMessage != "" {
+		return linode.AssignNetworkingIPsRequest{}, validationMessage
 	}
 
 	if len(assignments) == 0 {

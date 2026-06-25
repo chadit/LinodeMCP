@@ -77,10 +77,10 @@ const (
 	databasePrivateNetworkParam               = "private_network"
 	databaseUpdatesParam                      = "updates"
 	databaseVersionParam                      = "version"
-	databaseInvalidAllowListJSON              = "invalid allow_list JSON"
-	databaseInvalidEngineConfigJSON           = "invalid engine_config JSON"
-	databaseInvalidPrivateNetworkJSON         = "invalid private_network JSON"
-	databaseInvalidUpdatesJSON                = "invalid updates JSON"
+	databaseAllowListNotArray                 = "allow_list must be an array of strings"
+	databaseEngineConfigNotObject             = "engine_config must be an object"
+	databasePrivateNetworkNotObject           = "private_network must be an object"
+	databaseUpdatesNotObject                  = "updates must be an object"
 	databasePostgreSQLConfigNamespace         = "pg"
 	databaseJSONNull                          = "null"
 	databaseJSONArray                         = "[]"
@@ -3250,10 +3250,10 @@ func TestLinodeDatabaseInstanceCreateToolRequiredFieldValidation(t *testing.T) {
 		{name: caseMissingType, args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
 		{name: "missing engine", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "engine must be a non-empty string"},
 		{name: "missing region", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyConfirm: true}, wantMessage: "region must be a non-empty string"},
-		{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
+		{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
 		{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
-		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
-		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "invalid fork JSON"},
+		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
+		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
 		{name: "invalid private network bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databasePrivateNetworkParam: boolStringTrue, keyConfirm: true}, wantMessage: "private_network must be a boolean"},
 		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
 	}
@@ -3514,10 +3514,10 @@ func TestLinodeDatabasePostgreSQLInstanceCreateToolRequiredFieldValidation(t *te
 		{name: caseMissingType, args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
 		{name: "missing engine", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "engine must be a non-empty string"},
 		{name: "missing region", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyConfirm: true}, wantMessage: "region must be a non-empty string"},
-		{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
+		{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
 		{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
-		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
-		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "invalid fork JSON"},
+		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
+		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
 		{name: "invalid private network bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databasePrivateNetworkParam: boolStringTrue, keyConfirm: true}, wantMessage: "private_network must be a boolean"},
 		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
 	}
@@ -3798,19 +3798,19 @@ func TestLinodeDatabaseInstanceUpdateToolInputValidation(t *testing.T) {
 		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 		{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
 		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
-		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
-		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
-		{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidPrivateNetworkJSON},
-		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidUpdatesJSON},
+		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
+		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
+		{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
+		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
 		{name: "numeric version", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseVersionParam: 8, keyConfirm: true}, wantMessage: "version must be a non-empty string"},
-		{name: "null allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: databaseJSONNull, keyConfirm: true}, wantMessage: "allow_list must be a JSON array"},
-		{name: "object allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: jsonObjectEmpty, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
-		{name: "null engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONNull, keyConfirm: true}, wantMessage: "engine_config must be a JSON object"},
-		{name: "array engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
-		{name: "null private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONNull, keyConfirm: true}, wantMessage: "private_network must be a JSON object"},
-		{name: "array private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseInvalidPrivateNetworkJSON},
-		{name: "null updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONNull, keyConfirm: true}, wantMessage: "updates must be a JSON object"},
-		{name: "array updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseInvalidUpdatesJSON},
+		{name: "non-string allow list entry", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: []any{1}, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
+		{name: "object allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: jsonObjectEmpty, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
+		{name: "null engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONNull, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
+		{name: "array engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
+		{name: "null private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONNull, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
+		{name: "array private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONArray, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
+		{name: "null updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONNull, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
+		{name: "array updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
 	}
 
 	for _, testCase := range cases {
@@ -4098,10 +4098,10 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolInputValidation(t *testing.T)
 		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 		{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
 		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
-		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
-		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
-		{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidPrivateNetworkJSON},
-		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidUpdatesJSON},
+		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
+		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
+		{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
+		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
 	}
 
 	for _, testCase := range cases {

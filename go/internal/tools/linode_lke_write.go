@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -77,13 +76,13 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 				mcp.Description("Region for the cluster (e.g. us-east)")),
 			mcp.WithString("k8s_version", mcp.Required(),
 				mcp.Description("Kubernetes version (e.g. 1.29). Use linode_lke_version_list to find valid values.")),
-			mcp.WithString("node_pools", mcp.Required(),
-				mcp.Description("JSON array of node pools: [{\"type\": \"g6-standard-2\", \"count\": 3}]. "+
+			mcp.WithArray("node_pools", mcp.Required(),
+				mcp.Description("Array of node pool objects: [{\"type\": \"g6-standard-2\", \"count\": 3}]. "+
 					"Optional per-pool fields: autoscaler ({\"enabled\": true, \"min\": 1, \"max\": 5}), tags.")),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated tags for the cluster (optional)")),
-			mcp.WithBoolean("high_availability",
-				mcp.Description("Enable high availability control plane (optional, incurs additional cost)")),
+			mcp.WithArray("tags",
+				mcp.Description("Tags to apply to the cluster (optional)")),
+			mcp.WithObject("control_plane",
+				mcp.Description("Control plane settings, e.g. {\"high_availability\": true} (optional, HA incurs additional cost)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm cluster creation. This creates billable resources. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -112,14 +111,14 @@ func validateLKEClusterCreateArgs(request *mcp.CallToolRequest) (*linode.CreateL
 		return nil, mcp.NewToolResultError("k8s_version is required")
 	}
 
-	nodePoolsJSON := request.GetString("node_pools", "")
-	if nodePoolsJSON == "" {
-		return nil, mcp.NewToolResultError("node_pools is required (JSON array of node pool definitions)")
+	rawNodePools, present := request.GetArguments()["node_pools"]
+	if !present {
+		return nil, mcp.NewToolResultError("node_pools is required (array of node pool definitions)")
 	}
 
-	var nodePools []linode.CreateLKEClusterNodePool
-	if err := json.Unmarshal([]byte(nodePoolsJSON), &nodePools); err != nil {
-		return nil, mcp.NewToolResultError(fmt.Sprintf("invalid node_pools JSON: %v", err))
+	nodePools, validationMessage := objectSliceFromToolArg[linode.CreateLKEClusterNodePool](rawNodePools, "node_pools")
+	if validationMessage != "" {
+		return nil, mcp.NewToolResultError(validationMessage)
 	}
 
 	if len(nodePools) == 0 {
@@ -133,13 +132,18 @@ func validateLKEClusterCreateArgs(request *mcp.CallToolRequest) (*linode.CreateL
 		NodePools:  nodePools,
 	}
 
-	if tagsStr := request.GetString("tags", ""); tagsStr != "" {
-		req.Tags = splitTags(tagsStr)
+	if result := applyOptionalTags(request, &req.Tags); result != nil {
+		return nil, result
 	}
 
-	if _, ok := request.GetArguments()["high_availability"]; ok {
-		ha := request.GetBool("high_availability", false)
-		req.ControlPlane = &linode.LKEControlPlane{HighAvailability: ha}
+	if raw, ok := request.GetArguments()["control_plane"]; ok {
+		controlPlane, isObject := raw.(map[string]any)
+		if !isObject {
+			return nil, mcp.NewToolResultError("control_plane must be an object")
+		}
+
+		highAvailability, _ := controlPlane["high_availability"].(bool)
+		req.ControlPlane = &linode.LKEControlPlane{HighAvailability: highAvailability}
 	}
 
 	return req, nil
@@ -200,10 +204,10 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 				mcp.Description("New label for the cluster (optional)")),
 			mcp.WithString("k8s_version",
 				mcp.Description("New Kubernetes version (optional). Use linode_lke_version_list to find valid values.")),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated tags for the cluster (optional, replaces existing tags)")),
-			mcp.WithBoolean("high_availability",
-				mcp.Description("Enable or disable high availability control plane (optional)")),
+			mcp.WithArray("tags",
+				mcp.Description("Tags to apply to the cluster (optional, replaces existing tags)")),
+			mcp.WithObject("control_plane",
+				mcp.Description("Control plane settings, e.g. {\"high_availability\": true} (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm cluster update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -246,13 +250,18 @@ func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 		req.K8sVersion = k8sVersion
 	}
 
-	if tagsStr := request.GetString("tags", ""); tagsStr != "" {
-		req.Tags = splitTags(tagsStr)
+	if result := applyOptionalTags(request, &req.Tags); result != nil {
+		return result, nil
 	}
 
-	if _, ok := request.GetArguments()["high_availability"]; ok {
-		ha := request.GetBool("high_availability", false)
-		req.ControlPlane = &linode.LKEControlPlane{HighAvailability: ha}
+	if raw, ok := request.GetArguments()["control_plane"]; ok {
+		controlPlane, isObject := raw.(map[string]any)
+		if !isObject {
+			return mcp.NewToolResultError("control_plane must be an object"), nil
+		}
+
+		highAvailability, _ := controlPlane["high_availability"].(bool)
+		req.ControlPlane = &linode.LKEControlPlane{HighAvailability: highAvailability}
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -444,14 +453,10 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 				mcp.Description("Linode type for pool nodes (e.g. g6-standard-2). Use linode_lke_type_list to find valid types.")),
 			mcp.WithNumber("count", mcp.Required(),
 				mcp.Description("Number of nodes in the pool (minimum 1)")),
-			mcp.WithBoolean("autoscaler_enabled",
-				mcp.Description("Enable the node pool autoscaler (optional)")),
-			mcp.WithNumber("autoscaler_min",
-				mcp.Description("Minimum number of nodes for the autoscaler (optional)")),
-			mcp.WithNumber("autoscaler_max",
-				mcp.Description("Maximum number of nodes for the autoscaler (optional)")),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated tags for the node pool (optional)")),
+			mcp.WithObject("autoscaler",
+				mcp.Description("Autoscaler settings, e.g. {\"enabled\": true, \"min\": 1, \"max\": 5} (optional)")),
+			mcp.WithArray("tags",
+				mcp.Description("Tags to apply to the node pool (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm pool creation. This creates billable resources. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -495,17 +500,20 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 		Count: count,
 	}
 
-	if _, ok := request.GetArguments()["autoscaler_enabled"]; ok {
-		autoscaler := &linode.LKENodePoolAutoscaler{
-			Enabled: request.GetBool("autoscaler_enabled", false),
-			Min:     request.GetInt("autoscaler_min", 0),
-			Max:     request.GetInt("autoscaler_max", 0),
+	if raw, ok := request.GetArguments()["autoscaler"]; ok {
+		autoscalerObj, isObject := raw.(map[string]any)
+		if !isObject {
+			return mcp.NewToolResultError("autoscaler must be an object"), nil
 		}
-		req.Autoscaler = autoscaler
+
+		enabled, _ := autoscalerObj["enabled"].(bool)
+		minNodes, _ := numberArgToInt(autoscalerObj["min"])
+		maxNodes, _ := numberArgToInt(autoscalerObj["max"])
+		req.Autoscaler = &linode.LKENodePoolAutoscaler{Enabled: enabled, Min: minNodes, Max: maxNodes}
 	}
 
-	if tagsStr := request.GetString("tags", ""); tagsStr != "" {
-		req.Tags = splitTags(tagsStr)
+	if result := applyOptionalTags(request, &req.Tags); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -543,14 +551,10 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 				mcp.Description("The ID of the node pool to update")),
 			mcp.WithNumber("count",
 				mcp.Description("New number of nodes in the pool (optional)")),
-			mcp.WithBoolean("autoscaler_enabled",
-				mcp.Description("Enable or disable the node pool autoscaler (optional)")),
-			mcp.WithNumber("autoscaler_min",
-				mcp.Description("Minimum number of nodes for the autoscaler (optional)")),
-			mcp.WithNumber("autoscaler_max",
-				mcp.Description("Maximum number of nodes for the autoscaler (optional)")),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated tags for the node pool (optional, replaces existing tags)")),
+			mcp.WithObject("autoscaler",
+				mcp.Description("Autoscaler settings, e.g. {\"enabled\": true, \"min\": 1, \"max\": 5} (optional)")),
+			mcp.WithArray("tags",
+				mcp.Description("Tags to apply to the node pool (optional, replaces existing tags)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm pool update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -574,7 +578,7 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 
 	if IsDryRun(request) {
 		_, countProvided := request.GetArguments()["count"]
-		_, autoscalerProvided := request.GetArguments()["autoscaler_enabled"]
+		_, autoscalerProvided := request.GetArguments()["autoscaler"]
 
 		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_lke_pool_update", "PUT",
 			fmt.Sprintf(lkeClustersPath+"/%d/pools/%d", clusterID, poolID),
@@ -598,17 +602,20 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 		req.Count = &count
 	}
 
-	if _, ok := request.GetArguments()["autoscaler_enabled"]; ok {
-		autoscaler := &linode.LKENodePoolAutoscaler{
-			Enabled: request.GetBool("autoscaler_enabled", false),
-			Min:     request.GetInt("autoscaler_min", 0),
-			Max:     request.GetInt("autoscaler_max", 0),
+	if raw, ok := request.GetArguments()["autoscaler"]; ok {
+		autoscalerObj, isObject := raw.(map[string]any)
+		if !isObject {
+			return mcp.NewToolResultError("autoscaler must be an object"), nil
 		}
-		req.Autoscaler = autoscaler
+
+		enabled, _ := autoscalerObj["enabled"].(bool)
+		minNodes, _ := numberArgToInt(autoscalerObj["min"])
+		maxNodes, _ := numberArgToInt(autoscalerObj["max"])
+		req.Autoscaler = &linode.LKENodePoolAutoscaler{Enabled: enabled, Min: minNodes, Max: maxNodes}
 	}
 
-	if tagsStr := request.GetString("tags", ""); tagsStr != "" {
-		req.Tags = splitTags(tagsStr)
+	if result := applyOptionalTags(request, &req.Tags); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -947,12 +954,8 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
-			mcp.WithBoolean("enabled", mcp.Required(),
-				mcp.Description("Whether to enable the control plane ACL")),
-			mcp.WithString("ipv4",
-				mcp.Description("Comma-separated list of IPv4 addresses/CIDRs to allow (optional)")),
-			mcp.WithString("ipv6",
-				mcp.Description("Comma-separated list of IPv6 addresses/CIDRs to allow (optional)")),
+			mcp.WithObject("acl", mcp.Required(),
+				mcp.Description("Control plane ACL object: {\"enabled\": true, \"addresses\": {\"ipv4\": [\"10.0.0.1/32\"], \"ipv6\": [\"...\"]}}")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm ACL update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -963,20 +966,56 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapWrite, handler
 }
 
+// lkeControlPlaneACLFromObject builds the control plane ACL from the native acl
+// object argument, reading enabled and the optional addresses.ipv4/ipv6 arrays.
+func lkeControlPlaneACLFromObject(aclObj map[string]any) (linode.LKEControlPlaneACL, string) {
+	enabled, _ := aclObj["enabled"].(bool)
+	acl := linode.LKEControlPlaneACL{Enabled: enabled}
+
+	addresses, ok := aclObj["addresses"].(map[string]any)
+	if !ok {
+		return acl, ""
+	}
+
+	if rawV4, present := addresses["ipv4"]; present {
+		ipv4, validationMessage := stringSliceFromToolArg(rawV4, "acl.addresses.ipv4")
+		if validationMessage != "" {
+			return linode.LKEControlPlaneACL{}, validationMessage
+		}
+
+		acl.Addresses.IPv4 = ipv4
+	}
+
+	if rawV6, present := addresses["ipv6"]; present {
+		ipv6, validationMessage := stringSliceFromToolArg(rawV6, "acl.addresses.ipv6")
+		if validationMessage != "" {
+			return linode.LKEControlPlaneACL{}, validationMessage
+		}
+
+		acl.Addresses.IPv6 = ipv6
+	}
+
+	return acl, ""
+}
+
 func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
 
+	aclObj, _ := request.GetArguments()["acl"].(map[string]any)
+
 	if IsDryRun(request) {
+		enabledForPreview, _ := aclObj["enabled"].(bool)
+
 		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_lke_acl_update", "PUT",
 			fmt.Sprintf(lkeClustersPath+"/%d/control_plane_acl", clusterID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetLKEControlPlaneACL(ctx, clusterID)
 			},
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
-				return lkeACLUpdateSideEffects(ctx, request.GetBool("enabled", false))
+				return lkeACLUpdateSideEffects(ctx, enabledForPreview)
 			})
 	}
 
@@ -984,18 +1023,13 @@ func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest
 		return result, nil
 	}
 
-	enabled := request.GetBool("enabled", false)
-
-	acl := linode.LKEControlPlaneACL{
-		Enabled: enabled,
+	if aclObj == nil {
+		return mcp.NewToolResultError("acl is required and must be an object"), nil
 	}
 
-	if ipv4Str := request.GetString("ipv4", ""); ipv4Str != "" {
-		acl.Addresses.IPv4 = splitCommaSeparated(ipv4Str)
-	}
-
-	if ipv6Str := request.GetString("ipv6", ""); ipv6Str != "" {
-		acl.Addresses.IPv6 = splitCommaSeparated(ipv6Str)
+	acl, validationMessage := lkeControlPlaneACLFromObject(aclObj)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	req := linode.UpdateLKEControlPlaneACLRequest{
@@ -1079,11 +1113,6 @@ func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest
 	}
 
 	return MarshalToolResponse(response)
-}
-
-// splitTags splits a comma-separated tags string into a trimmed slice.
-func splitTags(s string) []string {
-	return splitCommaSeparated(s)
 }
 
 // splitCommaSeparated splits a comma-separated string into trimmed, non-empty parts.

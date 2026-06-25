@@ -931,7 +931,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		acl := linode.LKEControlPlaneACL{
 			Enabled: true,
 			Addresses: linode.LKEControlPlaneACLAddresses{
-				IPv4: []string{"10.0.0.1/32"},
+				IPv4: []string{cidrV4},
 				IPv6: []string{cidrV6},
 			},
 		}
@@ -976,8 +976,8 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 			t.Error("ok = false, want true")
 		}
 
-		if !strings.Contains(textContent.Text, "10.0.0.1/32") {
-			t.Errorf("textContent.Text does not contain %v", "10.0.0.1/32")
+		if !strings.Contains(textContent.Text, cidrV4) {
+			t.Errorf("textContent.Text does not contain %v", cidrV4)
 		}
 
 		if !strings.Contains(textContent.Text, cidrV6) {
@@ -1500,9 +1500,9 @@ func TestLinodeLKEClusterCreateToolValidation(t *testing.T) {
 			wantContains: errRegionRequired,
 		},
 		{
-			name:         "invalid node pools JSON",
+			name:         "invalid node pools type",
 			args:         map[string]any{keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129, keyNodePools: "not-valid-json", keyConfirm: true},
-			wantContains: "invalid node_pools JSON",
+			wantContains: "node_pools must be an array of objects",
 		},
 	}
 	for _, tt := range validationTests {
@@ -2990,16 +2990,8 @@ func TestLinodeLKEACLUpdateToolDefinition(t *testing.T) {
 		t.Errorf("props missing key %v", "cluster_id")
 	}
 
-	if _, ok := props[statusEnabled]; !ok {
-		t.Errorf("props missing key %v", statusEnabled)
-	}
-
-	if _, ok := props[keyIPv4]; !ok {
-		t.Errorf("props missing key %v", keyIPv4)
-	}
-
-	if _, ok := props[tcIpv6]; !ok {
-		t.Errorf("props missing key %v", tcIpv6)
+	if _, ok := props["acl"]; !ok {
+		t.Errorf("props missing key %v", "acl")
 	}
 
 	if _, ok := props["confirm"]; !ok {
@@ -3079,7 +3071,7 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 	acl := linode.LKEControlPlaneACL{
 		Enabled: true,
 		Addresses: linode.LKEControlPlaneACLAddresses{
-			IPv4: []string{"10.0.0.1/32", "192.168.1.0/24"},
+			IPv4: []string{cidrV4, "192.168.1.0/24"},
 			IPv6: []string{cidrV6},
 		},
 	}
@@ -3118,8 +3110,15 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyClusterID: float64(123), statusEnabled: true,
-		keyIPv4: "10.0.0.1/32, 192.168.1.0/24", tcIpv6: cidrV6, keyConfirm: true,
+		keyClusterID: float64(123),
+		"acl": map[string]any{
+			statusEnabled: true,
+			"addresses": map[string]any{
+				keyIPv4: []any{cidrV4, "192.168.1.0/24"},
+				tcIpv6:  []any{cidrV6},
+			},
+		},
+		keyConfirm: true,
 	})
 
 	result, err := srvHandler(t.Context(), req)

@@ -518,9 +518,9 @@ type CreateInstanceRequest struct {
 
 // ResizeInstanceRequest represents the request body for resizing a Linode instance.
 type ResizeInstanceRequest struct {
-	Type          string `json:"type"`
-	MigrationType string `json:"migration_type,omitempty"`
-	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"`
+	Type                string `json:"type"`
+	MigrationType       string `json:"migration_type,omitempty"`
+	AllowAutoDiskResize bool   `json:"allow_auto_disk_resize,omitempty"`
 }
 
 // UpdateInstanceRequest represents the request body for updating a Linode

@@ -33,10 +33,10 @@ func NewLinodeStackScriptCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.Required(),
 			mcp.Description("The script content (bash, compatible with the selected images)"),
 		),
-		mcp.WithString(
+		mcp.WithArray(
 			"images",
 			mcp.Required(),
-			mcp.Description("Comma-separated list of Image IDs that the StackScript supports (e.g., \"linode/debian12,linode/ubuntu24.04\")"),
+			mcp.Description("Image IDs that the StackScript supports (e.g., [\"linode/debian12\", \"linode/ubuntu24.04\"])"),
 		),
 		mcp.WithString(
 			"description",
@@ -110,7 +110,6 @@ func handleLinodeStackScriptCreateRequest(ctx context.Context, request *mcp.Call
 func stackScriptCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateStackScriptRequest, string) {
 	label := strings.TrimSpace(request.GetString("label", ""))
 	script := request.GetString("script", "")
-	imagesRaw := request.GetString("images", "")
 
 	if label == "" {
 		return linode.CreateStackScriptRequest{}, errLabelRequired
@@ -120,11 +119,11 @@ func stackScriptCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Crea
 		return linode.CreateStackScriptRequest{}, "script is required"
 	}
 
-	if imagesRaw == "" {
-		return linode.CreateStackScriptRequest{}, "images is required and must contain at least one image ID"
+	images, validationMessage := stackScriptImagesFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return linode.CreateStackScriptRequest{}, validationMessage
 	}
 
-	images := splitStackScriptImages(imagesRaw)
 	if len(images) == 0 {
 		return linode.CreateStackScriptRequest{}, "images is required and must contain at least one image ID"
 	}
@@ -205,9 +204,9 @@ func NewLinodeStackScriptUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			"script",
 			mcp.Description("Updated script content."),
 		),
-		mcp.WithString(
+		mcp.WithArray(
 			"images",
-			mcp.Description("Comma-separated list of Image IDs that the StackScript supports."),
+			mcp.Description("Image IDs that the StackScript supports."),
 		),
 		mcp.WithString(
 			"description",
@@ -344,13 +343,12 @@ func stackScriptUpdateFromTool(args map[string]any) (*linode.UpdateStackScriptRe
 		hasUpdate = true
 	}
 
-	imagesRaw, hasImages, validationMessage := optionalStringField(args, "images")
-	if validationMessage != "" {
-		return nil, validationMessage
-	}
+	if _, hasImages := args["images"]; hasImages {
+		images, validationMessage := stackScriptImagesFromTool(args)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
 
-	if hasImages {
-		images := splitStackScriptImages(imagesRaw)
 		if len(images) == 0 {
 			return nil, "images must contain at least one image ID"
 		}
@@ -380,16 +378,29 @@ func stackScriptUpdateFromTool(args map[string]any) (*linode.UpdateStackScriptRe
 	return req, ""
 }
 
-func splitStackScriptImages(imagesRaw string) []string {
-	var images []string
+// stackScriptImagesFromTool reads the native "images" array argument, trims each
+// entry, and drops blanks. An absent argument returns an empty slice; malformed
+// input returns a validation message.
+func stackScriptImagesFromTool(args map[string]any) ([]string, string) {
+	raw, present := args["images"]
+	if !present {
+		return nil, ""
+	}
 
-	for img := range strings.SplitSeq(imagesRaw, ",") {
+	values, validationMessage := stringSliceFromToolArg(raw, "images")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	images := make([]string, 0, len(values))
+
+	for _, img := range values {
 		if trimmed := strings.TrimSpace(img); trimmed != "" {
 			images = append(images, trimmed)
 		}
 	}
 
-	return images
+	return images, ""
 }
 
 func invalidStackScriptImageID(imageID string) bool {

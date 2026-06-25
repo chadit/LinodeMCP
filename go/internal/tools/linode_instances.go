@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -234,8 +235,8 @@ func NewLinodeInstanceInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.C
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("interface", mcp.Required(),
-				mcp.Description("JSON object defining exactly one interface type: public, vpc, or vlan.")),
+			mcp.WithObject("interface", mcp.Required(),
+				mcp.Description("Object defining exactly one interface type: public, vpc, or vlan.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm interface creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -295,9 +296,25 @@ func handleInstanceInterfaceAddRequest(ctx context.Context, request *mcp.CallToo
 }
 
 func instanceInterfaceAddRequestFromTool(request *mcp.CallToolRequest) (*linode.AddInstanceInterfaceRequest, string) {
-	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
-	if validationMessage != "" {
-		return nil, validationMessage
+	raw, present := request.GetArguments()["interface"]
+	if !present {
+		return nil, "interface is required"
+	}
+
+	var interfaceJSON string
+
+	switch value := raw.(type) {
+	case string:
+		interfaceJSON = value
+	case map[string]any:
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, interfaceJSONObjRequired
+		}
+
+		interfaceJSON = string(encoded)
+	default:
+		return nil, interfaceJSONObjRequired
 	}
 
 	var interfaceReq *linode.AddInstanceInterfaceRequest

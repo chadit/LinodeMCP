@@ -601,9 +601,9 @@ func TestLinodeLKEACLUpdateToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeLKEACLUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyClusterID:  float64(123),
-			statusEnabled: true,
-			keyDryRun:     true,
+			keyClusterID: float64(123),
+			"acl":        map[string]any{statusEnabled: true},
+			keyDryRun:    true,
 		}))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)

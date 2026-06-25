@@ -8,8 +8,6 @@ linode_account_oauth_client_thumbnail_update: required Go=['client_id', 'confirm
 linode_account_oauth_client_update: param 'secret' in Python but not Go
 linode_account_oauth_client_update: param 'status' in Python but not Go
 linode_account_oauth_client_update: param 'thumbnail_url' in Python but not Go
-linode_account_payment_create: param 'payment_method_id' type Go=string Python=number
-linode_account_payment_create: param 'usd' type Go=number Python=string
 linode_account_payment_create: required Go=['confirm', 'usd'] Python=['confirm', 'payment_method_id', 'usd']
 linode_account_user_create: param 'restricted' in Python but not Go
 linode_account_user_create: required Go=['confirm', 'email', 'username'] Python=['confirm', 'email', 'restricted', 'username']
@@ -17,22 +15,10 @@ linode_account_user_grants_update: param 'lkecluster' in Go but not Python
 linode_account_user_update: param 'current_username' in Python but not Go
 linode_account_user_update: param 'new_username' in Go but not Python
 linode_account_user_update: required Go=['confirm', 'username'] Python=['confirm', 'current_username']
-linode_database_mysql_instance_create: param 'allow_list' type Go=string Python=array
-linode_database_mysql_instance_create: param 'engine_config' type Go=string Python=object
-linode_database_mysql_instance_create: param 'fork' type Go=string Python=object
 linode_database_mysql_instance_create: param 'private_network' type Go=boolean Python=string
-linode_database_mysql_instance_update: param 'allow_list' type Go=string Python=array
-linode_database_mysql_instance_update: param 'engine_config' type Go=string Python=object
 linode_database_mysql_instance_update: param 'private_network' type Go=string Python=?
-linode_database_mysql_instance_update: param 'updates' type Go=string Python=object
-linode_database_postgresql_instance_create: param 'allow_list' type Go=string Python=array
-linode_database_postgresql_instance_create: param 'engine_config' type Go=string Python=object
-linode_database_postgresql_instance_create: param 'fork' type Go=string Python=object
 linode_database_postgresql_instance_create: param 'private_network' type Go=boolean Python=string
-linode_database_postgresql_instance_update: param 'allow_list' type Go=string Python=array
-linode_database_postgresql_instance_update: param 'engine_config' type Go=string Python=object
 linode_database_postgresql_instance_update: param 'private_network' type Go=string Python=?
-linode_database_postgresql_instance_update: param 'updates' type Go=string Python=object
 linode_domain_create: param 'ttl_sec' in Go but not Python
 linode_domain_record_create: param 'protocol' in Go but not Python
 linode_domain_record_create: param 'service' in Go but not Python
@@ -40,13 +26,8 @@ linode_domain_record_create: param 'tag' in Go but not Python
 linode_domain_update: param 'domain' in Python but not Go
 linode_domain_update: param 'status' in Go but not Python
 linode_domain_update: param 'ttl_sec' in Go but not Python
-linode_firewall_rules_update: param 'inbound' type Go=string Python=array
-linode_firewall_rules_update: param 'outbound' type Go=string Python=array
-linode_image_create: param 'tags' type Go=string Python=array
 linode_image_sharegroup_by_image_list: param 'page' in Go but not Python
 linode_image_sharegroup_by_image_list: param 'page_size' in Go but not Python
-linode_image_sharegroup_create: param 'images' type Go=string Python=array
-linode_image_sharegroup_image_add: param 'images' type Go=string Python=array
 linode_image_sharegroup_image_list: param 'page' in Go but not Python
 linode_image_sharegroup_image_list: param 'page_size' in Go but not Python
 linode_image_sharegroup_member_list: param 'page' in Go but not Python
@@ -60,7 +41,6 @@ linode_instance_clone: param 'backups_enabled' in Go but not Python
 linode_instance_clone: param 'configs' in Python but not Go
 linode_instance_clone: param 'disks' in Python but not Go
 linode_instance_config_create: param 'comments' in Go but not Python
-linode_instance_config_create: param 'devices' type Go=string Python=object
 linode_instance_config_create: param 'helpers' in Go but not Python
 linode_instance_config_create: param 'interfaces' in Go but not Python
 linode_instance_config_create: param 'kernel' in Go but not Python
@@ -83,14 +63,10 @@ linode_instance_config_interface_update: param 'ip_ranges' in Python but not Go
 linode_instance_config_interface_update: param 'ipv4' in Python but not Go
 linode_instance_config_interface_update: param 'primary' in Python but not Go
 linode_instance_config_interface_update: required Go=['config_id', 'confirm', 'interface', 'interface_id', 'linode_id'] Python=['config_id', 'confirm', 'interface_id', 'linode_id']
-linode_instance_config_update: param 'devices' type Go=string Python=object
-linode_instance_config_update: param 'helpers' type Go=string Python=object
-linode_instance_config_update: param 'interfaces' type Go=string Python=array
 linode_instance_create: param 'authorized_keys' in Python but not Go
 linode_instance_create: param 'booted' in Python but not Go
 linode_instance_disk_create: param 'authorized_keys' in Go but not Python
 linode_instance_disk_create: param 'authorized_users' in Go but not Python
-linode_instance_interface_add: param 'interface' type Go=string Python=object
 linode_instance_interface_history_list: param 'page' in Go but not Python
 linode_instance_interface_history_list: param 'page_size' in Go but not Python
 linode_instance_interface_settings_update: param 'default_route' in Python but not Go
@@ -106,38 +82,13 @@ linode_instance_interface_update: required Go=['confirm', 'interface', 'interfac
 linode_instance_interface_upgrade: param 'api_dry_run' in Python but not Go
 linode_instance_ip_update: param 'rdns' type Go=string Python=?
 linode_instance_rebuild: param 'booted' in Go but not Python
-linode_instance_rescue: param 'devices' type Go=string Python=object
-linode_instance_resize: param 'allow_auto_disk' in Go but not Python
-linode_instance_resize: param 'allow_auto_disk_resize' in Python but not Go
 linode_ipv6_pool_list: param 'page' in Go but not Python
 linode_ipv6_pool_list: param 'page_size' in Go but not Python
 linode_ipv6_range_list: param 'page' in Go but not Python
 linode_ipv6_range_list: param 'page_size' in Go but not Python
 linode_kernel_get: param 'environment' type Go=string Python=?
 linode_kernel_list: param 'environment' type Go=string Python=?
-linode_lke_acl_update: param 'acl' in Python but not Go
-linode_lke_acl_update: param 'enabled' in Go but not Python
-linode_lke_acl_update: param 'ipv4' in Go but not Python
-linode_lke_acl_update: param 'ipv6' in Go but not Python
-linode_lke_acl_update: required Go=['cluster_id', 'confirm', 'enabled'] Python=['acl', 'cluster_id', 'confirm']
-linode_lke_cluster_create: param 'control_plane' in Python but not Go
-linode_lke_cluster_create: param 'high_availability' in Go but not Python
-linode_lke_cluster_create: param 'node_pools' type Go=string Python=array
-linode_lke_cluster_create: param 'tags' type Go=string Python=array
 linode_lke_cluster_list: param 'label' in Go but not Python
-linode_lke_cluster_update: param 'control_plane' in Python but not Go
-linode_lke_cluster_update: param 'high_availability' in Go but not Python
-linode_lke_cluster_update: param 'tags' type Go=string Python=array
-linode_lke_pool_create: param 'autoscaler' in Python but not Go
-linode_lke_pool_create: param 'autoscaler_enabled' in Go but not Python
-linode_lke_pool_create: param 'autoscaler_max' in Go but not Python
-linode_lke_pool_create: param 'autoscaler_min' in Go but not Python
-linode_lke_pool_create: param 'tags' type Go=string Python=array
-linode_lke_pool_update: param 'autoscaler' in Python but not Go
-linode_lke_pool_update: param 'autoscaler_enabled' in Go but not Python
-linode_lke_pool_update: param 'autoscaler_max' in Go but not Python
-linode_lke_pool_update: param 'autoscaler_min' in Go but not Python
-linode_lke_pool_update: param 'tags' type Go=string Python=array
 linode_maintenance_policy_list: param 'page' in Go but not Python
 linode_maintenance_policy_list: param 'page_size' in Go but not Python
 linode_managed_contact_create: param 'contact_email' in Go but not Python
@@ -168,9 +119,7 @@ linode_monitor_alert_definition_list: param 'page' in Go but not Python
 linode_monitor_alert_definition_list: param 'page_size' in Go but not Python
 linode_monitor_dashboard_list: param 'page' in Go but not Python
 linode_monitor_dashboard_list: param 'page_size' in Go but not Python
-linode_networking_ip_assign: param 'assignments' type Go=string Python=array
 linode_networking_ip_update: param 'rdns' type Go=string Python=?
-linode_networking_ipv4_assign: param 'assignments' type Go=string Python=array
 linode_nodebalancer_config_create: param 'cipher_suite' in Go but not Python
 linode_nodebalancer_config_create: param 'label' in Python but not Go
 linode_nodebalancer_config_create: param 'nodes' in Python but not Go
@@ -186,9 +135,6 @@ linode_nodebalancer_config_update: param 'proxy_protocol' in Python but not Go
 linode_nodebalancer_config_update: param 'udp_check_port' in Python but not Go
 linode_nodebalancer_firewall_list: param 'page' in Python but not Go
 linode_nodebalancer_firewall_list: param 'page_size' in Python but not Go
-linode_object_storage_quota_usage_get: param 'obj_quota_id' in Python but not Go
-linode_object_storage_quota_usage_get: param 'quota_id' in Go but not Python
-linode_object_storage_quota_usage_get: required Go=['quota_id'] Python=['obj_quota_id']
 linode_profile_device_list: param 'page' in Go but not Python
 linode_profile_device_list: param 'page_size' in Go but not Python
 linode_profile_login_list: param 'page' in Go but not Python
@@ -199,12 +145,7 @@ linode_profile_token_list: param 'page' in Go but not Python
 linode_profile_token_list: param 'page_size' in Go but not Python
 linode_profile_token_update: param 'expiry' in Go but not Python
 linode_profile_token_update: param 'scopes' in Go but not Python
-linode_stackscript_create: param 'images' type Go=string Python=array
-linode_stackscript_update: param 'images' type Go=string Python=array
 linode_vlan_list: param 'page' in Go but not Python
 linode_vlan_list: param 'page_size' in Go but not Python
-linode_volume_attach: param 'persist_across_boots' in Python but not Go
-linode_volume_update: param 'tags' type Go=string Python=array
-linode_vpc_create: param 'subnets' type Go=string Python=array
 linode_vpc_list: param 'label' in Go but not Python
 linode_vpc_list: param 'region' in Go but not Python

@@ -506,7 +506,7 @@ func labelChangeSideEffect(details *DryRunDetails, fromLabel, newLabel string) {
 // volumeUpdateSideEffects is the Tier B walk for linode_volume_update. It
 // reports the label change (against the fetched state) and notes when the tag
 // set is replaced.
-func volumeUpdateSideEffects(ctx context.Context, state any, newLabel, newTags string) (DryRunDetails, error) {
+func volumeUpdateSideEffects(ctx context.Context, state any, newLabel string, hasTags bool) (DryRunDetails, error) {
 	var details DryRunDetails
 
 	if err := ctx.Err(); err != nil {
@@ -520,7 +520,7 @@ func volumeUpdateSideEffects(ctx context.Context, state any, newLabel, newTags s
 
 	labelChangeSideEffect(&details, fromLabel, newLabel)
 
-	if newTags != "" {
+	if hasTags {
 		details.SideEffects = append(details.SideEffects,
 			"The volume's tag set is replaced with the provided tags.")
 	}

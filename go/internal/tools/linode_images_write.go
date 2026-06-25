@@ -286,7 +286,7 @@ func imageUpdateFromTool(args map[string]any) (*linode.UpdateImageRequest, strin
 		hasUpdate = true
 	}
 
-	tags, hasTags, validationMessage := optionalTagsField(args, "tags")
+	tags, hasTags, validationMessage := optionalTagsField(args)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -303,8 +303,8 @@ func imageUpdateFromTool(args map[string]any) (*linode.UpdateImageRequest, strin
 	return req, ""
 }
 
-func optionalTagsField(args map[string]any, name string) ([]string, bool, string) {
-	rawTags, tagsPresent := args[name]
+func optionalTagsField(args map[string]any) ([]string, bool, string) {
+	rawTags, tagsPresent := args["tags"]
 	if !tagsPresent {
 		return nil, false, ""
 	}
@@ -315,6 +315,22 @@ func optionalTagsField(args map[string]any, name string) ([]string, bool, string
 	}
 
 	return values, true, ""
+}
+
+// applyOptionalTags reads the optional native "tags" array into dst. It returns
+// an error result to propagate when the array is malformed, or nil when the tags
+// are absent or applied cleanly.
+func applyOptionalTags(request *mcp.CallToolRequest, dst *[]string) *mcp.CallToolResult {
+	tags, hasTags, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage)
+	}
+
+	if hasTags {
+		*dst = tags
+	}
+
+	return nil
 }
 
 func tagsValueFromToolArg(rawTags any) ([]string, string) {
@@ -376,7 +392,7 @@ func NewLinodeImageShareGroupCreateTool(cfg *config.Config) (mcp.Tool, profiles.
 		[]mcp.ToolOption{
 			mcp.WithString("label", mcp.Required(), mcp.Description("The share group's descriptive name.")),
 			mcp.WithString("description", mcp.Description("Detailed description for the share group (optional).")),
-			mcp.WithString("images", mcp.Description("JSON array of images to include, each with required id and optional label/description.")),
+			mcp.WithArray("images", mcp.Description("Array of images to include, each an object with required id and optional label/description.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm image share group creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -395,18 +411,7 @@ func shareGroupCreateArgs(request *mcp.CallToolRequest) ([]linode.ImageShareGrou
 		return nil, errLabelRequired
 	}
 
-	var imagesJSON string
-
-	if imagesArg, ok := request.GetArguments()["images"]; ok {
-		imagesText, imagesOK := imagesArg.(string)
-		if !imagesOK {
-			return nil, "images must be a JSON string"
-		}
-
-		imagesJSON = imagesText
-	}
-
-	images, err := imageShareGroupImagesFromTool(imagesJSON)
+	images, err := imageShareGroupImagesFromTool(request.GetArguments()["images"])
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -475,7 +480,7 @@ func NewLinodeImageShareGroupImagesAddTool(cfg *config.Config) (mcp.Tool, profil
 		"Adds one or more private images to an image share group.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add images to.")),
-			mcp.WithString("images", mcp.Required(), mcp.Description("JSON array of images to add, each with required id and optional label/description.")),
+			mcp.WithArray("images", mcp.Required(), mcp.Description("Array of images to add, each an object with required id and optional label/description.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm adding images to the share group. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -555,12 +560,7 @@ func requiredImageShareGroupImagesFromTool(request *mcp.CallToolRequest) ([]lino
 		return nil, "images is required"
 	}
 
-	imagesJSON, imagesIsString := imagesArg.(string)
-	if !imagesIsString {
-		return nil, "images must be a JSON string"
-	}
-
-	images, err := imageShareGroupImagesFromTool(imagesJSON)
+	images, err := imageShareGroupImagesFromTool(imagesArg)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -839,14 +839,35 @@ func formatImageShareGroupMembersAddError(err error) string {
 	return "Failed to add members to image share group: " + err.Error()
 }
 
-func imageShareGroupImagesFromTool(imagesJSON string) ([]linode.ImageShareGroupImage, error) {
-	if strings.TrimSpace(imagesJSON) == "" {
-		return nil, nil
-	}
-
+// imageShareGroupImagesFromTool reads the "images" argument as a native array of
+// objects (the schema form). It still accepts a JSON-encoded string from a
+// non-compliant client. An absent or empty value yields no images.
+func imageShareGroupImagesFromTool(raw any) ([]linode.ImageShareGroupImage, error) {
 	var images []linode.ImageShareGroupImage
-	if err := json.Unmarshal([]byte(imagesJSON), &images); err != nil {
-		return nil, fmt.Errorf("invalid images JSON: %w", err)
+
+	switch value := raw.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, nil
+		}
+
+		if err := json.Unmarshal([]byte(trimmed), &images); err != nil {
+			return nil, fmt.Errorf("invalid images JSON: %w", err)
+		}
+	case []any:
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid images: %w", err)
+		}
+
+		if err := json.Unmarshal(encoded, &images); err != nil {
+			return nil, fmt.Errorf("invalid images: %w", err)
+		}
+	default:
+		return nil, ErrImagesMustBeArray
 	}
 
 	for i := range images {
@@ -1002,7 +1023,7 @@ func NewLinodeImageCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		mcp.WithString("label", mcp.Description("Short label for the new image (optional).")),
 		mcp.WithString("description", mcp.Description("Detailed description for the new image (optional).")),
 		mcp.WithBoolean("cloud_init", mcp.Description("Whether the image supports cloud-init (optional).")),
-		mcp.WithString("tags", mcp.Description("Comma-separated tags for the image (optional).")),
+		mcp.WithArray("tags", mcp.Description("Tag strings to apply to the image (optional).")),
 		mcp.WithBoolean(paramConfirm, mcp.Required(),
 			mcp.Description("Must be true to confirm private image creation. Ignored when dry_run=true.")),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1421,21 +1442,9 @@ func handleLinodeImageCreateRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
 	}
 
-	tagsRaw := request.GetString("tags", "")
-
-	var tags []string
-
-	for {
-		tag, rest, found := strings.Cut(tagsRaw, ",")
-		if trimmed := strings.TrimSpace(tag); trimmed != "" {
-			tags = append(tags, trimmed)
-		}
-
-		if !found {
-			break
-		}
-
-		tagsRaw = rest
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	environment := request.GetString(paramEnvironment, "")

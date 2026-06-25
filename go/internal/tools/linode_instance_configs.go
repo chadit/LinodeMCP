@@ -304,8 +304,8 @@ func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("Label for the configuration profile")),
-			mcp.WithString("devices", mcp.Required(),
-				mcp.Description("JSON object mapping device slots to disk/volume IDs, e.g. {\"sda\":{\"disk_id\":123}}")),
+			mcp.WithObject("devices", mcp.Required(),
+				mcp.Description("Object mapping device slots to disk/volume IDs, e.g. {\"sda\":{\"disk_id\":123}}")),
 			mcp.WithString("kernel",
 				mcp.Description("Kernel ID to boot, e.g. linode/latest-64bit")),
 			mcp.WithString("comments",
@@ -865,8 +865,8 @@ func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 				mcp.Description("The ID of the configuration profile")),
 			mcp.WithString("label",
 				mcp.Description("Updated label for the configuration profile")),
-			mcp.WithString("devices",
-				mcp.Description("JSON object mapping device slots to disk/volume IDs")),
+			mcp.WithObject("devices",
+				mcp.Description("Object mapping device slots to disk/volume IDs")),
 			mcp.WithString("kernel",
 				mcp.Description("Kernel ID to boot, e.g. linode/latest-64bit")),
 			mcp.WithString("comments",
@@ -879,10 +879,10 @@ func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 				mcp.Description("Run level: default, single, or binbash")),
 			mcp.WithString("virt_mode",
 				mcp.Description("Virtualization mode: paravirt or fullvirt")),
-			mcp.WithString("helpers",
-				mcp.Description("Optional helpers JSON object")),
-			mcp.WithString("interfaces",
-				mcp.Description("Optional interfaces JSON array")),
+			mcp.WithObject("helpers",
+				mcp.Description("Optional helpers object")),
+			mcp.WithArray("interfaces",
+				mcp.Description("Optional array of interface objects")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm configuration profile update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1078,13 +1078,8 @@ func applyUpdateConfigEnum(request *mcp.CallToolRequest, name string, allowed []
 }
 
 func applyUpdateConfigJSONOptions(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
-	devicesJSON, validationMessage := stringArgument(request, "devices", false)
-	if validationMessage != "" {
-		return validationMessage
-	}
-
-	if _, exists := request.GetArguments()["devices"]; exists {
-		devices, errText := parseConfigDevices(devicesJSON)
+	if rawDevices, exists := request.GetArguments()["devices"]; exists {
+		devices, errText := parseConfigDevices(rawDevices)
 		if errText != "" {
 			return errText
 		}
@@ -1093,12 +1088,12 @@ func applyUpdateConfigJSONOptions(request *mcp.CallToolRequest, req *linode.Upda
 		*fields++
 	}
 
-	helpersJSON, validationMessage := stringArgument(request, "helpers", false)
-	if validationMessage != "" {
-		return validationMessage
-	}
+	if rawHelpers, exists := request.GetArguments()["helpers"]; exists {
+		helpersJSON, validationMessage := objectJSONFromToolArg(rawHelpers, "helpers")
+		if validationMessage != "" {
+			return validationMessage
+		}
 
-	if _, exists := request.GetArguments()["helpers"]; exists {
 		var helpers *linode.ConfigHelpers
 		if err := strictDecodeJSON(helpersJSON, &helpers); err != nil {
 			return fmt.Sprintf("invalid helpers JSON: %v", err)
@@ -1112,13 +1107,8 @@ func applyUpdateConfigJSONOptions(request *mcp.CallToolRequest, req *linode.Upda
 		*fields++
 	}
 
-	interfacesJSON, validationMessage := stringArgument(request, "interfaces", false)
-	if validationMessage != "" {
-		return validationMessage
-	}
-
-	if _, exists := request.GetArguments()["interfaces"]; exists {
-		interfaces, errText := parseConfigInterfaces(interfacesJSON)
+	if rawInterfaces, exists := request.GetArguments()["interfaces"]; exists {
+		interfaces, errText := parseConfigInterfaces(rawInterfaces)
 		if errText != "" {
 			return errText
 		}
@@ -1172,12 +1162,7 @@ func buildCreateConfigRequest(request *mcp.CallToolRequest) (linode.CreateConfig
 		return linode.CreateConfigRequest{}, "label is required"
 	}
 
-	devicesJSON, errText := stringArgument(request, "devices", true)
-	if errText != "" {
-		return linode.CreateConfigRequest{}, errText
-	}
-
-	devices, errText := parseConfigDevices(devicesJSON)
+	devices, errText := parseConfigDevices(request.GetArguments()["devices"])
 	if errText != "" {
 		return linode.CreateConfigRequest{}, errText
 	}
@@ -1214,7 +1199,15 @@ func stringArgument(request *mcp.CallToolRequest, name string, required bool) (s
 	return value, ""
 }
 
-func parseConfigDevices(devicesJSON string) (map[string]*linode.ConfigDevice, string) {
+// parseConfigDevices accepts the devices argument as a native object (the schema
+// form) or a JSON-encoded object string (legacy form), decoding it strictly so
+// unknown fields are rejected.
+func parseConfigDevices(raw any) (map[string]*linode.ConfigDevice, string) {
+	devicesJSON, validationMessage := objectJSONFromToolArg(raw, "devices")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
 	if devicesJSON == "" {
 		return nil, "devices is required"
 	}
@@ -1394,14 +1387,35 @@ func strictDecodeJSON(input string, target any) error {
 	return nil
 }
 
-func parseConfigInterfaces(interfacesJSON string) ([]linode.ConfigInterface, string) {
+const errInterfacesNotArray = "interfaces must be an array of objects"
+
+// parseConfigInterfaces accepts the interfaces argument as a native array of
+// objects (the schema form) or a JSON-encoded string (legacy form), decoding it
+// strictly so unknown or read-only fields are rejected.
+func parseConfigInterfaces(raw any) ([]linode.ConfigInterface, string) {
+	var encoded string
+
+	switch value := raw.(type) {
+	case string:
+		encoded = value
+	case []any:
+		marshaled, err := json.Marshal(value)
+		if err != nil {
+			return nil, errInterfacesNotArray
+		}
+
+		encoded = string(marshaled)
+	default:
+		return nil, errInterfacesNotArray
+	}
+
 	var interfaces *[]linode.ConfigInterface
-	if err := strictDecodeJSON(interfacesJSON, &interfaces); err != nil {
+	if err := strictDecodeJSON(encoded, &interfaces); err != nil {
 		return nil, fmt.Sprintf("invalid interfaces JSON: %v", err)
 	}
 
 	if interfaces == nil {
-		return nil, "interfaces must be a JSON array"
+		return nil, errInterfacesNotArray
 	}
 
 	for index, iface := range *interfaces {

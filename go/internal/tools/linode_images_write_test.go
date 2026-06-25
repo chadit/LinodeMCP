@@ -133,7 +133,7 @@ func TestLinodeImageShareGroupCreateToolSuccess(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyLabel:       imageShareGroupLabel,
 		keyDescription: description,
-		keyImages:      `[{"id":" private/7 ","label":"Linux Debian"}]`,
+		keyImages:      []any{map[string]any{keyBetaID: " private/7 ", "label": "Linux Debian"}},
 		keyConfirm:     true,
 	})
 
@@ -400,7 +400,7 @@ func TestLinodeImageShareGroupCreateToolValidationMalformedImagesJSON(t *testing
 	}
 }
 
-func TestLinodeImageShareGroupCreateToolValidationNonStringImagesRejectedBeforeClientCall(t *testing.T) {
+func TestLinodeImageShareGroupCreateToolValidationInvalidImagesTypeRejectedBeforeClientCall(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
@@ -476,7 +476,7 @@ func TestLinodeImageShareGroupCreateToolValidationNonStringImagesRejectedBeforeC
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLabel:   imageShareGroupLabel,
-		keyImages:  []any{map[string]any{keyBetaID: "private/7"}},
+		keyImages:  float64(42),
 		keyConfirm: true,
 	}))
 	if err != nil {
@@ -491,8 +491,8 @@ func TestLinodeImageShareGroupCreateToolValidationNonStringImagesRejectedBeforeC
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "images must be a JSON string") {
-		t.Errorf("error text %q does not contain %q", text.Text, "images must be a JSON string")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "images must be an array of objects") {
+		t.Errorf("error text %q does not contain %q", text.Text, "images must be an array of objects")
 	}
 
 	if calls.Load() != int32(0) {

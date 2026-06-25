@@ -365,10 +365,10 @@ func newDatabaseInstanceCreateTool(
 		mcp.WithString(paramDatabaseType, mcp.Required(), mcp.Description("Linode type for the database instance.")),
 		mcp.WithString(paramDatabaseEngine, mcp.Required(), mcp.Description(engineDescription)),
 		mcp.WithString(paramDatabaseRegion, mcp.Required(), mcp.Description("Region for the database instance.")),
-		mcp.WithString(paramDatabaseAllowList, mcp.Description("JSON array of CIDR strings allowed to connect (optional).")),
+		mcp.WithArray(paramDatabaseAllowList, mcp.Description("CIDR strings allowed to connect (optional).")),
 		mcp.WithNumber(paramDatabaseClusterSize, mcp.Description("Number of nodes in the cluster (optional).")),
-		mcp.WithString(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
-		mcp.WithString(paramDatabaseFork, mcp.Description("JSON object describing source database fork/restore settings (optional).")),
+		mcp.WithObject(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
+		mcp.WithObject(paramDatabaseFork, mcp.Description("Object describing source database fork/restore settings (optional).")),
 		mcp.WithBoolean(paramDatabasePrivateNetwork, mcp.Description("Whether to use private networking (optional).")),
 		mcp.WithBoolean(paramDatabaseSSLConnection, mcp.Description("Whether to require SSL connections (optional).")),
 		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database creation. This creates a billable resource. Ignored when dry_run=true.")),
@@ -425,12 +425,12 @@ func newDatabaseInstanceUpdateTool(
 		mcp.WithDescription(description+" Pass dry_run=true to preview without modifying."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description(instanceIDDescription)),
-		mcp.WithString(paramDatabaseAllowList, mcp.Description("JSON array of CIDR strings allowed to connect (optional).")),
-		mcp.WithString(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
+		mcp.WithArray(paramDatabaseAllowList, mcp.Description("CIDR strings allowed to connect (optional).")),
+		mcp.WithObject(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
 		mcp.WithString(paramDatabaseLabel, mcp.Description("New label for the database instance (optional).")),
 		mcp.WithString(paramDatabasePrivateNetwork, mcp.Description("JSON object of private network settings (optional).")),
 		mcp.WithString(paramDatabaseType, mcp.Description("New Linode type for the database instance (optional).")),
-		mcp.WithString(paramDatabaseUpdates, mcp.Description("JSON object of maintenance update settings (optional).")),
+		mcp.WithObject(paramDatabaseUpdates, mcp.Description("Object of maintenance update settings (optional).")),
 		mcp.WithString(paramDatabaseVersion, mcp.Description(versionDescription)),
 		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description(confirmDescription)),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1517,7 +1517,7 @@ func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linod
 
 	var changed bool
 
-	allowList, hasAllowList, validationMessage := optionalStringSliceJSONField(args, paramDatabaseAllowList, "allow_list")
+	allowList, hasAllowList, validationMessage := optionalAllowListFromTool(args)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -1527,7 +1527,7 @@ func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linod
 		changed = true
 	}
 
-	engineConfig, hasEngineConfig, validationMessage := optionalMapJSONField(args, paramDatabaseEngineConfig, "engine_config")
+	engineConfig, hasEngineConfig, validationMessage := optionalMapJSONField(args, paramDatabaseEngineConfig)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -1547,7 +1547,7 @@ func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linod
 		changed = true
 	}
 
-	privateNetwork, hasPrivateNetwork, validationMessage := optionalMapJSONField(args, paramDatabasePrivateNetwork, "private_network")
+	privateNetwork, hasPrivateNetwork, validationMessage := optionalMapJSONField(args, paramDatabasePrivateNetwork)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -1567,7 +1567,7 @@ func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linod
 		changed = true
 	}
 
-	updates, hasUpdates, validationMessage := optionalMapJSONField(args, paramDatabaseUpdates, "updates")
+	updates, hasUpdates, validationMessage := optionalMapJSONField(args, paramDatabaseUpdates)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -1619,12 +1619,12 @@ func databaseInstanceCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 
 	req := linode.CreateDatabaseInstanceRequest{Label: label, Type: databaseType, Engine: engine, Region: region}
 
-	if allowListJSON := request.GetString(paramDatabaseAllowList, ""); allowListJSON != "" {
-		var allowList []string
-		if err := json.Unmarshal([]byte(allowListJSON), &allowList); err != nil {
-			return linode.CreateDatabaseInstanceRequest{}, fmt.Sprintf("invalid allow_list JSON: %v", err)
-		}
+	allowList, hasAllowList, validationMessage := optionalAllowListFromTool(args)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
 
+	if hasAllowList {
 		req.AllowList = allowList
 	}
 
@@ -1637,21 +1637,21 @@ func databaseInstanceCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 		req.ClusterSize = clusterSize
 	}
 
-	if engineConfigJSON := request.GetString(paramDatabaseEngineConfig, ""); engineConfigJSON != "" {
-		var engineConfig map[string]any
-		if err := json.Unmarshal([]byte(engineConfigJSON), &engineConfig); err != nil {
-			return linode.CreateDatabaseInstanceRequest{}, fmt.Sprintf("invalid engine_config JSON: %v", err)
-		}
+	engineConfig, hasEngineConfig, validationMessage := optionalMapJSONField(args, paramDatabaseEngineConfig)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
 
+	if hasEngineConfig {
 		req.EngineConfig = engineConfig
 	}
 
-	if forkJSON := request.GetString(paramDatabaseFork, ""); forkJSON != "" {
-		var fork map[string]any
-		if err := json.Unmarshal([]byte(forkJSON), &fork); err != nil {
-			return linode.CreateDatabaseInstanceRequest{}, fmt.Sprintf("invalid fork JSON: %v", err)
-		}
+	fork, hasFork, validationMessage := optionalMapJSONField(args, paramDatabaseFork)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
 
+	if hasFork {
 		req.Fork = fork
 	}
 
@@ -1702,40 +1702,55 @@ func numberArgToInt(value any) (int, bool) {
 	}
 }
 
-func optionalStringSliceJSONField(args map[string]any, key, label string) ([]string, bool, string) {
-	jsonValue, hasValue, validationMessage := optionalStringField(args, key)
-	if validationMessage != "" || !hasValue {
-		return nil, hasValue, validationMessage
+// optionalAllowListFromTool reads the optional native "allow_list" array. It also
+// accepts a JSON-encoded string from a non-compliant client.
+func optionalAllowListFromTool(args map[string]any) ([]string, bool, string) {
+	raw, present := args[paramDatabaseAllowList]
+	if !present {
+		return nil, false, ""
 	}
 
-	var values []string
-	if err := json.Unmarshal([]byte(jsonValue), &values); err != nil {
-		return nil, false, fmt.Sprintf("invalid %s JSON: %v", label, err)
-	}
-
-	if values == nil {
-		return nil, false, label + " must be a JSON array"
+	values, validationMessage := stringSliceFromToolArg(raw, paramDatabaseAllowList)
+	if validationMessage != "" {
+		return nil, false, validationMessage
 	}
 
 	return values, true, ""
 }
 
-func optionalMapJSONField(args map[string]any, key, label string) (map[string]any, bool, string) {
-	jsonValue, hasValue, validationMessage := optionalStringField(args, key)
-	if validationMessage != "" || !hasValue {
-		return nil, hasValue, validationMessage
+// optionalMapJSONField reads an optional object argument as a native map (the
+// schema form) or a JSON-encoded object string (legacy form). An absent or empty
+// value yields (nil, false, ""); a non-object value returns a validation message.
+func optionalMapJSONField(args map[string]any, key string) (map[string]any, bool, string) {
+	raw, present := args[key]
+	if !present {
+		return nil, false, ""
 	}
 
-	var values map[string]any
-	if err := json.Unmarshal([]byte(jsonValue), &values); err != nil {
-		return nil, false, fmt.Sprintf("invalid %s JSON: %v", label, err)
-	}
+	objectError := key + " must be an object"
 
-	if values == nil {
-		return nil, false, label + " must be a JSON object"
-	}
+	switch value := raw.(type) {
+	case map[string]any:
+		return value, true, ""
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, false, ""
+		}
 
-	return values, true, ""
+		var values map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &values); err != nil {
+			return nil, false, objectError
+		}
+
+		if values == nil {
+			return nil, false, objectError
+		}
+
+		return values, true, ""
+	default:
+		return nil, false, objectError
+	}
 }
 
 func optionalStringField(args map[string]any, key string) (string, bool, string) {

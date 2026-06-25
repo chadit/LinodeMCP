@@ -87,7 +87,7 @@ func TestLinodeInstanceInterfaceAddToolValidation(t *testing.T) {
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterface: publicInterfaceAddJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterface: publicInterfaceAddJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
 		{name: caseMissingInterface, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: errInterfaceRequired},
-		{name: caseNonStringInterface, args: map[string]any{keyLinodeID: float64(123), keyInterface: map[string]any{keyIPv4: keyAddress}, keyConfirm: true}, wantContains: errInterfaceString},
+		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyInterface: map[string]any{keyIPv4: keyAddress}, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
 		{name: caseInvalidInterface, args: map[string]any{keyLinodeID: float64(123), keyInterface: `{`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
 		{name: caseNullInterface, args: map[string]any{keyLinodeID: float64(123), keyInterface: databaseJSONNull, keyConfirm: true}, wantContains: errInterfaceJSONObject},
 		{name: "unknown interface field", args: map[string]any{keyLinodeID: float64(123), keyInterface: `{"public":{},"typo":true}`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},

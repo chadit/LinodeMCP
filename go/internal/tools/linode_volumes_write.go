@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -218,38 +217,22 @@ func handleLinodeVolumeCloneRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeVolumeAttachTool creates a tool for attaching a volume to a Linode.
 func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_volume_attach",
-		mcp.WithDescription("Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"volume_id",
-			mcp.Required(),
-			mcp.Description("The ID of the volume to attach"),
-		),
-		mcp.WithNumber(
-			"linode_id",
-			mcp.Required(),
-			mcp.Description("The ID of the Linode instance to attach the volume to"),
-		),
-		mcp.WithNumber(
-			"config_id",
-			mcp.Description("The Linode config ID to attach to (optional)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm attaching the volume. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region.",
+		[]mcp.ToolOption{
+			mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+			mcp.WithNumber("volume_id", mcp.Required(), mcp.Description("The ID of the volume to attach")),
+			mcp.WithNumber("linode_id", mcp.Required(), mcp.Description("The ID of the Linode instance to attach the volume to")),
+			mcp.WithNumber("config_id", mcp.Description("The Linode config ID to attach to (optional)")),
+			mcp.WithBoolean("persist_across_boots", mcp.Description("Whether the volume should remain attached across instance reboots (optional)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm attaching the volume. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeVolumeAttachRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeAttachRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -294,7 +277,8 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	req := linode.AttachVolumeRequest{
-		LinodeID: linodeID,
+		LinodeID:           linodeID,
+		PersistAcrossBoots: request.GetBool("persist_across_boots", false),
 	}
 
 	if configID != 0 {
@@ -487,9 +471,9 @@ func NewLinodeVolumeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			"label",
 			mcp.Description("New label for the volume (1-32 chars, alphanumeric, hyphens, underscores)"),
 		),
-		mcp.WithString(
+		mcp.WithArray(
 			"tags",
-			mcp.Description("Comma-separated list of tags to assign to the volume"),
+			mcp.Description("Replacement tags for the volume (optional)"),
 		),
 		mcp.WithBoolean(
 			paramConfirm,
@@ -509,14 +493,18 @@ func NewLinodeVolumeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	volumeID := request.GetInt("volume_id", 0)
 	label := request.GetString("label", "")
-	tagsRaw := request.GetString("tags", "")
+
+	tags, hasTags, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
 
 	if IsDryRun(request) {
 		if volumeID == 0 {
 			return mcp.NewToolResultError("volume_id is required"), nil
 		}
 
-		if label == "" && tagsRaw == "" {
+		if label == "" && !hasTags {
 			return mcp.NewToolResultError("at least one of label or tags is required"), nil
 		}
 
@@ -524,7 +512,7 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 			fmt.Sprintf("/volumes/%d", volumeID),
 			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) },
 			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
-				return volumeUpdateSideEffects(ctx, state, label, tagsRaw)
+				return volumeUpdateSideEffects(ctx, state, label, hasTags)
 			})
 	}
 
@@ -536,7 +524,7 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError("volume_id is required"), nil
 	}
 
-	if label == "" && tagsRaw == "" {
+	if label == "" && !hasTags {
 		return mcp.NewToolResultError("at least one of label or tags is required"), nil
 	}
 
@@ -546,15 +534,7 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		req.Label = &label
 	}
 
-	if tagsRaw != "" {
-		var tags []string
-
-		for t := range strings.SplitSeq(tagsRaw, ",") {
-			if trimmed := strings.TrimSpace(t); trimmed != "" {
-				tags = append(tags, trimmed)
-			}
-		}
-
+	if hasTags {
 		req.Tags = tags
 	}
 

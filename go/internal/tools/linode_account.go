@@ -807,8 +807,8 @@ func NewLinodeAccountPaymentCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_account_payment_create",
 		"Makes a payment on the authenticated account.",
 		[]mcp.ToolOption{
-			mcp.WithString("payment_method_id", mcp.Description("Payment method ID to charge (optional).")),
-			mcp.WithNumber("usd", mcp.Required(), mcp.Description("Payment amount in USD.")),
+			mcp.WithNumber("payment_method_id", mcp.Description("Payment method ID to charge (optional).")),
+			mcp.WithString("usd", mcp.Required(), mcp.Description("Payment amount in USD, as a decimal string (e.g. \"25.50\").")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm making an account payment. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -4450,17 +4450,8 @@ func accountPaymentCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 	req := &linode.CreateAccountPaymentRequest{}
 
 	if raw, exists := args["payment_method_id"]; exists {
-		paymentMethodID, ok := raw.(string)
-		if !ok || strings.TrimSpace(paymentMethodID) == "" {
-			return nil, "payment_method_id must be a non-empty string"
-		}
-
-		if paymentMethodID != strings.TrimSpace(paymentMethodID) || strings.Contains(paymentMethodID, "/") || strings.Contains(paymentMethodID, "?") || strings.Contains(paymentMethodID, "..") {
-			return nil, "payment_method_id must not contain path separators, query separators, or traversal segments"
-		}
-
-		id, err := strconv.Atoi(paymentMethodID)
-		if err != nil || id <= 0 {
+		id, ok := numberArgToInt(raw)
+		if !ok || id <= 0 {
 			return nil, "payment_method_id must be a positive integer"
 		}
 
@@ -4472,12 +4463,17 @@ func accountPaymentCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 		return nil, "usd is required"
 	}
 
-	usd, ok := rawUSD.(float64)
-	if !ok || usd <= 0 {
+	usd, ok := rawUSD.(string)
+	if !ok || strings.TrimSpace(usd) == "" {
+		return nil, "usd must be a non-empty string"
+	}
+
+	amount, err := strconv.ParseFloat(strings.TrimSpace(usd), 64)
+	if err != nil || amount <= 0 {
 		return nil, "usd must be a positive number"
 	}
 
-	req.USD = usd
+	req.USD = strings.TrimSpace(usd)
 
 	return req, ""
 }

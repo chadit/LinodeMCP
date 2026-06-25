@@ -361,3 +361,63 @@ func newToolWithHandler(
 
 	return tool, wrappedHandler
 }
+
+// objectSliceFromToolArg normalizes an array-of-objects tool argument that may
+// arrive as a native []any (the schema form) or as a JSON-encoded string (legacy
+// form from a non-compliant client), decoding it into []T. An absent or empty
+// value yields a nil slice; a malformed value returns a validation message that
+// names the argument.
+func objectSliceFromToolArg[T any](raw any, name string) ([]T, string) {
+	var encoded []byte
+
+	switch value := raw.(type) {
+	case nil:
+		return nil, ""
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, ""
+		}
+
+		encoded = []byte(trimmed)
+	case []any:
+		marshaled, err := json.Marshal(value)
+		if err != nil {
+			return nil, name + " must be an array of objects"
+		}
+
+		encoded = marshaled
+	default:
+		return nil, name + " must be an array of objects"
+	}
+
+	var result []T
+	if err := json.Unmarshal(encoded, &result); err != nil {
+		return nil, name + " must be an array of objects"
+	}
+
+	return result, ""
+}
+
+// objectJSONFromToolArg returns the JSON text of a single-object tool argument
+// that may arrive as a native map (the schema form) or a JSON-encoded object
+// string (legacy form), for callers that then decode strictly. An absent value
+// yields ("", ""); a non-object value returns a validation message naming the
+// argument.
+func objectJSONFromToolArg(raw any, name string) (string, string) {
+	switch value := raw.(type) {
+	case nil:
+		return "", ""
+	case string:
+		return strings.TrimSpace(value), ""
+	case map[string]any:
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return "", name + " must be an object"
+		}
+
+		return string(encoded), ""
+	default:
+		return "", name + " must be an object"
+	}
+}

@@ -627,7 +627,7 @@ func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 				mcp.Description("The ID of the Linode instance to resize")),
 			mcp.WithString("type", mcp.Required(),
 				mcp.Description("The new Linode plan type (e.g., 'g6-standard-1')")),
-			mcp.WithBoolean("allow_auto_disk",
+			mcp.WithBoolean("allow_auto_disk_resize",
 				mcp.Description("Automatically resize disks when resizing to a larger plan (optional, default: false)")),
 			mcp.WithString("migration_type",
 				mcp.Description("Migration type: 'cold' (default) or 'warm' (optional)")),
@@ -654,7 +654,7 @@ type instanceResizeState struct {
 }
 
 // instanceResizeDiskInfo is one disk's drift-relevant fields. Disk sizes matter
-// because allow_auto_disk resizes them as part of the plan change.
+// because allow_auto_disk_resize resizes them as part of the plan change.
 type instanceResizeDiskInfo struct {
 	ID         int    `json:"id"`
 	Size       int    `json:"size"`
@@ -735,13 +735,13 @@ func newInstanceResizeAction(instanceID int, instanceType string, req linode.Res
 func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	instanceType := request.GetString("type", "")
-	allowAutoDisk := request.GetBool("allow_auto_disk", false)
+	allowAutoDiskResize := request.GetBool("allow_auto_disk_resize", false)
 	migrationType := request.GetString("migration_type", "")
 
 	req := linode.ResizeInstanceRequest{
-		Type:          instanceType,
-		AllowAutoDisk: allowAutoDisk,
-		MigrationType: migrationType,
+		Type:                instanceType,
+		AllowAutoDiskResize: allowAutoDiskResize,
+		MigrationType:       migrationType,
 	}
 
 	if instanceID != 0 && instanceType != "" {

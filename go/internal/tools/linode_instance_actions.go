@@ -376,8 +376,8 @@ func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to boot into rescue mode")),
-			mcp.WithString("devices",
-				mcp.Description("JSON object mapping device slots to disk/volume IDs, e.g. "+
+			mcp.WithObject("devices",
+				mcp.Description("Object mapping device slots to disk/volume IDs, e.g. "+
 					"{\"sda\":{\"disk_id\":123},\"sdb\":{\"volume_id\":456}} (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm booting into rescue mode. Ignored when dry_run=true.")),
@@ -415,9 +415,16 @@ func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolReque
 		Devices: make(map[string]*linode.RescueDeviceAssignment),
 	}
 
-	if devicesJSON := request.GetString("devices", ""); devicesJSON != "" {
-		if err := json.Unmarshal([]byte(devicesJSON), &req.Devices); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid devices JSON: %v", err)), nil
+	if rawDevices, present := request.GetArguments()["devices"]; present {
+		devicesJSON, validationMessage := objectJSONFromToolArg(rawDevices, "devices")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		if devicesJSON != "" {
+			if err := json.Unmarshal([]byte(devicesJSON), &req.Devices); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid devices JSON: %v", err)), nil
+			}
 		}
 	}
 

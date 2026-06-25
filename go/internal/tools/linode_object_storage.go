@@ -532,7 +532,7 @@ func NewLinodeObjectStorageQuotaUsageTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString(
-			"quota_id",
+			"obj_quota_id",
 			mcp.Required(),
 			mcp.Description("The Object Storage quota ID to retrieve usage for"),
 		),
@@ -546,14 +546,14 @@ func NewLinodeObjectStorageQuotaUsageTool(cfg *config.Config) (mcp.Tool, profile
 }
 
 func handleObjectStorageQuotaUsageRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	quotaID := request.GetString("quota_id", "")
+	quotaID := request.GetString("obj_quota_id", "")
 
 	if quotaID == "" {
-		return mcp.NewToolResultError("quota_id is required"), nil
+		return mcp.NewToolResultError("obj_quota_id is required"), nil
 	}
 
 	if !isSafeObjectStorageQuotaID(quotaID) {
-		return mcp.NewToolResultError("quota_id must not contain path separators, query separators, traversal segments, or unsupported characters"), nil
+		return mcp.NewToolResultError("obj_quota_id must not contain path separators, query separators, traversal segments, or unsupported characters"), nil
 	}
 
 	client, err := prepareClient(request, cfg)

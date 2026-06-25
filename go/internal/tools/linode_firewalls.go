@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -292,10 +291,10 @@ func NewLinodeFirewallRulesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose rules should be replaced.")),
-			mcp.WithString(paramFirewallRuleInbound, mcp.Required(),
-				mcp.Description("JSON array of inbound firewall rules.")),
-			mcp.WithString(paramFirewallRuleOutbound, mcp.Required(),
-				mcp.Description("JSON array of outbound firewall rules.")),
+			mcp.WithArray(paramFirewallRuleInbound, mcp.Required(),
+				mcp.Description("Array of inbound firewall rule objects.")),
+			mcp.WithArray(paramFirewallRuleOutbound, mcp.Required(),
+				mcp.Description("Array of outbound firewall rule objects.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm replacing firewall rules. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -325,12 +324,12 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	inbound, validationMessage := parseFirewallRuleSet(request.GetString(paramFirewallRuleInbound, ""), paramFirewallRuleInbound)
+	inbound, validationMessage := firewallRuleSetFromTool(request, paramFirewallRuleInbound)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	outbound, validationMessage := parseFirewallRuleSet(request.GetString(paramFirewallRuleOutbound, ""), paramFirewallRuleOutbound)
+	outbound, validationMessage := firewallRuleSetFromTool(request, paramFirewallRuleOutbound)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -371,11 +370,11 @@ func handleLinodeFirewallRulesUpdateDryRun(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	if _, msg := parseFirewallRuleSet(request.GetString(paramFirewallRuleInbound, ""), paramFirewallRuleInbound); msg != "" {
+	if _, msg := firewallRuleSetFromTool(request, paramFirewallRuleInbound); msg != "" {
 		return mcp.NewToolResultError(msg), nil
 	}
 
-	if _, msg := parseFirewallRuleSet(request.GetString(paramFirewallRuleOutbound, ""), paramFirewallRuleOutbound); msg != "" {
+	if _, msg := firewallRuleSetFromTool(request, paramFirewallRuleOutbound); msg != "" {
 		return mcp.NewToolResultError(msg), nil
 	}
 
@@ -388,18 +387,22 @@ func formatFirewallRulesUpdateError(err error) string {
 	return "Failed to update linode_firewall_rules_update: " + err.Error()
 }
 
-func parseFirewallRuleSet(raw, name string) ([]linode.FirewallRule, string) {
-	if raw == "" {
+// firewallRuleSetFromTool reads a required native array of firewall-rule objects.
+// An empty array is valid (it clears that direction's rules); an absent, null, or
+// malformed value is rejected.
+func firewallRuleSetFromTool(request *mcp.CallToolRequest, name string) ([]linode.FirewallRule, string) {
+	raw, present := request.GetArguments()[name]
+	if !present {
 		return nil, name + " is required"
 	}
 
-	var rules []linode.FirewallRule
-	if err := json.Unmarshal([]byte(raw), &rules); err != nil {
-		return nil, fmt.Sprintf("%s must be a JSON array of firewall rules: %v", name, err)
+	rules, validationMessage := objectSliceFromToolArg[linode.FirewallRule](raw, name)
+	if validationMessage != "" {
+		return nil, validationMessage
 	}
 
 	if rules == nil {
-		return nil, name + " must be a JSON array of firewall rules"
+		return nil, name + " must be an array of objects"
 	}
 
 	return rules, ""

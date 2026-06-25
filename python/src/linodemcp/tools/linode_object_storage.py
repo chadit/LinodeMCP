@@ -595,7 +595,7 @@ def create_linode_object_storage_quota_usage_get_tool() -> tuple[Tool, Capabilit
                     ),
                 },
                 "obj_quota_id": {
-                    "type": "integer",
+                    "type": "string",
                     "description": "The Object Storage quota ID to retrieve usage for.",
                 },
             },
@@ -604,26 +604,13 @@ def create_linode_object_storage_quota_usage_get_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
-def _parse_positive_int_argument(value: Any) -> int | None:
-    """Parse a positive integer tool argument."""
-    if isinstance(value, (bool, float)):
-        return None
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    if parsed <= 0:
-        return None
-    return parsed
-
-
 async def handle_linode_object_storage_quota_usage_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_quota_usage_get tool request."""
-    obj_quota_id = _parse_positive_int_argument(arguments.get("obj_quota_id"))
+    obj_quota_id = _parse_object_storage_quota_id(arguments.get("obj_quota_id"))
     if obj_quota_id is None:
-        return _error_response("obj_quota_id must be a positive integer")
+        return _error_response("obj_quota_id must be a valid Object Storage quota ID")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_object_storage_quota_usage(obj_quota_id)

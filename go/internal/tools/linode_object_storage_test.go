@@ -1419,7 +1419,7 @@ func TestLinodeObjectStorageQuotaUsageToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeObjectStorageQuotaUsageTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{"quota_id": "obj-bucket-us-ord-1"})
+	req := createRequestWithArgs(t, map[string]any{"obj_quota_id": "obj-bucket-us-ord-1"})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -1480,7 +1480,7 @@ func TestLinodeObjectStorageQuotaUsageToolInvalidQuotaId(t *testing.T) {
 		t.Run(quotaID, func(t *testing.T) {
 			t.Parallel()
 
-			req := createRequestWithArgs(t, map[string]any{"quota_id": quotaID})
+			req := createRequestWithArgs(t, map[string]any{"obj_quota_id": quotaID})
 
 			result, err := handler(t.Context(), req)
 			if err != nil {
@@ -1500,8 +1500,8 @@ func TestLinodeObjectStorageQuotaUsageToolInvalidQuotaId(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, "quota_id must not contain") {
-				t.Errorf("textContent.Text does not contain %v", "quota_id must not contain")
+			if !strings.Contains(textContent.Text, "obj_quota_id must not contain") {
+				t.Errorf("textContent.Text does not contain %v", "obj_quota_id must not contain")
 			}
 		})
 	}

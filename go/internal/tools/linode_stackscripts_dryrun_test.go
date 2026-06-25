@@ -44,7 +44,7 @@ func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  testStackScriptLabel,
 			keyScript: testStackScript,
-			keyImages: testDebian12Image,
+			keyImages: []any{testDebian12Image},
 			keyDryRun: true,
 		}))
 		if err != nil {
@@ -93,7 +93,7 @@ func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyScript: testStackScript,
-			keyImages: testDebian12Image,
+			keyImages: []any{testDebian12Image},
 			keyDryRun: true,
 		}))
 		if err != nil {

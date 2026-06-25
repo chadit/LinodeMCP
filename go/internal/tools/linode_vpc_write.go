@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -27,8 +26,8 @@ func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 				mcp.Description("Region for the VPC (e.g. us-east). Use linode_region_list to find valid values.")),
 			mcp.WithString("description",
 				mcp.Description("Description for the VPC (optional)")),
-			mcp.WithString("subnets",
-				mcp.Description("JSON array of subnets to create: [{\"label\": \"my-subnet\", \"ipv4\": \"10.0.0.0/24\"}] (optional)")),
+			mcp.WithArray("subnets",
+				mcp.Description("Array of subnet objects to create: [{\"label\": \"my-subnet\", \"ipv4\": \"10.0.0.0/24\"}] (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm VPC creation. This creates a billable resource. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -85,10 +84,10 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		req.Description = description
 	}
 
-	if subnetsJSON := request.GetString("subnets", ""); subnetsJSON != "" {
-		var subnets []linode.CreateSubnetRequest
-		if err := json.Unmarshal([]byte(subnetsJSON), &subnets); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid subnets JSON: %v", err)), nil
+	if rawSubnets, present := request.GetArguments()["subnets"]; present {
+		subnets, validationMessage := objectSliceFromToolArg[linode.CreateSubnetRequest](rawSubnets, "subnets")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
 		}
 
 		req.Subnets = subnets

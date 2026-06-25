@@ -12,12 +12,15 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
-const temporaryPaymentError = "temporary"
+const (
+	temporaryPaymentError = "temporary"
+	paymentUSDString      = "25.5"
+)
 
 func TestClientCreateAccountPaymentSuccess(t *testing.T) {
 	t.Parallel()
 
-	request := &linode.CreateAccountPaymentRequest{PaymentMethodID: 123, USD: 25.5}
+	request := &linode.CreateAccountPaymentRequest{PaymentMethodID: 123, USD: paymentUSDString}
 	created := linode.AccountPayment{ID: 456, Date: "2026-05-22T00:00:00", USD: 25.5}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -52,8 +55,8 @@ func TestClientCreateAccountPaymentSuccess(t *testing.T) {
 			t.Errorf("body[payment_method_id] = %v, want %v", body["payment_method_id"], 123)
 		}
 
-		if numVal, numOK := body["usd"].(float64); !numOK || math.Abs(numVal-float64(25.5)) > 0.001 {
-			t.Errorf("body[usd] = %v, want %v", body["usd"], 25.5)
+		if strVal, strOK := body["usd"].(string); !strOK || strVal != paymentUSDString {
+			t.Errorf("body[usd] = %v, want %v", body["usd"], paymentUSDString)
 		}
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
@@ -87,7 +90,7 @@ func TestClientCreateAccountPaymentSuccess(t *testing.T) {
 func TestClientCreateAccountPaymentWithDefaultMethodSuccess(t *testing.T) {
 	t.Parallel()
 
-	request := &linode.CreateAccountPaymentRequest{USD: 25.5}
+	request := &linode.CreateAccountPaymentRequest{USD: paymentUSDString}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -113,8 +116,8 @@ func TestClientCreateAccountPaymentWithDefaultMethodSuccess(t *testing.T) {
 			t.Errorf("body has unexpected key %v", "payment_method_id")
 		}
 
-		if numVal, numOK := body["usd"].(float64); !numOK || math.Abs(numVal-float64(25.5)) > 0.001 {
-			t.Errorf("body[usd] = %v, want %v", body["usd"], 25.5)
+		if strVal, strOK := body["usd"].(string); !strOK || strVal != paymentUSDString {
+			t.Errorf("body[usd] = %v, want %v", body["usd"], paymentUSDString)
 		}
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
@@ -164,7 +167,7 @@ func TestClientCreateAccountPaymentAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.CreateAccountPayment(t.Context(), &linode.CreateAccountPaymentRequest{PaymentMethodID: 123, USD: 25.5})
+	result, err := client.CreateAccountPayment(t.Context(), &linode.CreateAccountPaymentRequest{PaymentMethodID: 123, USD: paymentUSDString})
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -209,7 +212,7 @@ func TestClientCreateAccountPaymentDoesNotRetryTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
 
-	_, err := client.CreateAccountPayment(t.Context(), &linode.CreateAccountPaymentRequest{PaymentMethodID: 123, USD: 25.5})
+	_, err := client.CreateAccountPayment(t.Context(), &linode.CreateAccountPaymentRequest{PaymentMethodID: 123, USD: paymentUSDString})
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

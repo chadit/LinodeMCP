@@ -300,7 +300,7 @@ func TestLinodeFirewallRulesUpdateToolSuccess(t *testing.T) {
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyFirewallID: float64(123),
 		keyInbound:    `[{"action":"ACCEPT","protocol":"TCP","ports":"443","label":"allow-https"}]`,
-		keyOutbound:   databaseJSONArray,
+		keyOutbound:   []any{},
 		keyConfirm:    true,
 	}))
 	if err != nil {
@@ -403,8 +403,8 @@ func TestLinodeFirewallRulesUpdateToolRejectsInvalidInputsBeforeClientCall(t *te
 		caseQueryFirewallPathID:     {args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
 		caseTraversalFirewallPathID: {args: map[string]any{keyFirewallID: pathTraversalValue, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
 		"missing inbound":           {args: map[string]any{keyFirewallID: float64(123), keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound is required"},
-		"invalid inbound":           {args: map[string]any{keyFirewallID: float64(123), keyInbound: jsonObjectEmpty, keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound must be a JSON array"},
-		"null outbound":             {args: map[string]any{keyFirewallID: float64(123), keyInbound: databaseJSONArray, keyOutbound: `null`, keyConfirm: true}, want: "outbound must be a JSON array"},
+		"invalid inbound":           {args: map[string]any{keyFirewallID: float64(123), keyInbound: jsonObjectEmpty, keyOutbound: databaseJSONArray, keyConfirm: true}, want: "inbound must be an array of objects"},
+		"null outbound":             {args: map[string]any{keyFirewallID: float64(123), keyInbound: databaseJSONArray, keyOutbound: `null`, keyConfirm: true}, want: "outbound must be an array of objects"},
 	}
 
 	for name, tt := range cases {

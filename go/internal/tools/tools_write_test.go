@@ -5660,7 +5660,7 @@ func TestLinodeVolumeUpdateToolSuccessfulUpdateWithTags(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(444),
-		keyTags:     "production, db",
+		keyTags:     []any{"production", "db"},
 		keyConfirm:  true,
 	})
 
@@ -5898,7 +5898,7 @@ func TestLinodeImageCreateToolSuccessfulCreation(t *testing.T) {
 		keyLabel:       imageUploadLabelFixture,
 		keyDescription: "test image",
 		tcCloudInit:    true,
-		keyTags:        "blue, green",
+		keyTags:        []any{"blue", "green"},
 		keyConfirm:     true,
 	})
 
@@ -6256,27 +6256,27 @@ func TestLinodeStackScriptCreateToolValidation(t *testing.T) {
 	}{
 		{
 			name:         caseRequiresConfirm,
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: testDebian12Image},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: []any{testDebian12Image}},
 			wantContains: errConfirmEqualsTrue,
 		},
 		{
 			name:         "missing label",
-			args:         map[string]any{keyScript: testStackScript, keyImages: testDebian12Image, keyConfirm: true},
+			args:         map[string]any{keyScript: testStackScript, keyImages: []any{testDebian12Image}, keyConfirm: true},
 			wantContains: "label is required",
 		},
 		{
 			name:         "missing script",
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyImages: testDebian12Image, keyConfirm: true},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyImages: []any{testDebian12Image}, keyConfirm: true},
 			wantContains: "script is required",
 		},
 		{
 			name:         caseBlankLabelImageShareGroupToken,
-			args:         map[string]any{keyLabel: blankString, keyScript: testStackScript, keyImages: testDebian12Image, keyConfirm: true},
+			args:         map[string]any{keyLabel: blankString, keyScript: testStackScript, keyImages: []any{testDebian12Image}, keyConfirm: true},
 			wantContains: "label is required",
 		},
 		{
 			name:         "blank script",
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: blankString, keyImages: testDebian12Image, keyConfirm: true},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: blankString, keyImages: []any{testDebian12Image}, keyConfirm: true},
 			wantContains: "script is required",
 		},
 		{
@@ -6286,22 +6286,22 @@ func TestLinodeStackScriptCreateToolValidation(t *testing.T) {
 		},
 		{
 			name:         "query image",
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: configIDQueryValue, keyConfirm: true},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: []any{configIDQueryValue}, keyConfirm: true},
 			wantContains: errStackScriptImagesValid,
 		},
 		{
 			name:         "fragment image",
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: "linode/debian12#fragment", keyConfirm: true},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: []any{"linode/debian12#fragment"}, keyConfirm: true},
 			wantContains: errStackScriptImagesValid,
 		},
 		{
 			name:         "extra separator image",
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: "private/15/extra", keyConfirm: true},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: []any{"private/15/extra"}, keyConfirm: true},
 			wantContains: errStackScriptImagesValid,
 		},
 		{
 			name:         "traversal image",
-			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: privateImageTraversalFixture, keyConfirm: true},
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: []any{privateImageTraversalFixture}, keyConfirm: true},
 			wantContains: errStackScriptImagesValid,
 		},
 	}
@@ -6377,7 +6377,7 @@ func TestLinodeStackScriptCreateToolSuccessfulCreation(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyLabel:   testStackScriptLabel,
 		keyScript:  testStackScriptWithWhitespace,
-		keyImages:  testDebian12Image,
+		keyImages:  []any{testDebian12Image},
 		keyConfirm: true,
 	})
 
@@ -6430,7 +6430,7 @@ func TestLinodeStackScriptCreateToolClientErrorPropagates(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyLabel:   testStackScriptLabel,
 		keyScript:  testStackScript,
-		keyImages:  testDebian12Image,
+		keyImages:  []any{testDebian12Image},
 		keyConfirm: true,
 	})
 
@@ -6459,7 +6459,7 @@ func TestLinodeStackScriptCreateToolEmptyImagesAfterTrimRejected(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyLabel:   testStackScriptLabel,
 		keyScript:  testStackScript,
-		keyImages:  " , ",
+		keyImages:  []any{" "},
 		keyConfirm: true,
 	})
 

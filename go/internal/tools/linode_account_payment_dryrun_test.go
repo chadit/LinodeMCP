@@ -41,7 +41,7 @@ func TestLinodeAccountPaymentCreateToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeAccountPaymentCreateTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyPaymentUSD: float64(25),
+			keyPaymentUSD: "25",
 			keyDryRun:     true,
 		}))
 		if err != nil {

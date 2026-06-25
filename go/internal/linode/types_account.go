@@ -407,8 +407,8 @@ type AccountPayment struct {
 
 // CreateAccountPaymentRequest contains the request body for POST /account/payments.
 type CreateAccountPaymentRequest struct {
-	PaymentMethodID int     `json:"payment_method_id,omitempty"`
-	USD             float64 `json:"usd,omitempty"`
+	PaymentMethodID int    `json:"payment_method_id,omitempty"`
+	USD             string `json:"usd,omitempty"`
 }
 
 // AddAccountPromoCreditRequest contains the request body for POST /account/promo-codes.
