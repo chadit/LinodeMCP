@@ -264,7 +264,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
                     "description": ("The IP address to update (required)"),
                 },
                 "rdns": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": ("The reverse DNS value to assign (required)"),
                 },
                 "confirm": _CONFIRM_PROP,
@@ -351,7 +351,7 @@ def create_linode_networking_ip_update_tool() -> tuple[Tool, Capability]:
                     "description": ("The IP address to update (required)"),
                 },
                 "rdns": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": ("The reverse DNS value to assign (required)"),
                 },
                 "confirm": _CONFIRM_PROP,

@@ -13,10 +13,8 @@ import (
 )
 
 const (
-	profileTokensPath       = "/profile/tokens"
-	profileTokenFieldExpiry = "expiry"
-	profileTokenFieldLabel  = "label"
-	profileTokenFieldScopes = "scopes"
+	profileTokensPath      = "/profile/tokens"
+	profileTokenFieldLabel = "label"
 )
 
 // NewLinodeProfileTool creates a tool for retrieving Linode profile info.
@@ -334,9 +332,7 @@ func NewLinodeProfileTokenUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		"Updates a personal access token for the authenticated profile.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(profileTokenIDParam, mcp.Required(), mcp.Description("Personal access token ID.")),
-			mcp.WithString(profileTokenFieldExpiry, mcp.Description("Expiry timestamp to send in the update body.")),
-			mcp.WithString(profileTokenFieldLabel, mcp.Description("Token label.")),
-			mcp.WithString(profileTokenFieldScopes, mcp.Description("Token scopes.")),
+			mcp.WithString(profileTokenFieldLabel, mcp.Description("Token label. The label is the only field a token update can change.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating a personal access token. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -396,20 +392,20 @@ func profileTokenUpdateFromTool(request *mcp.CallToolRequest) (int, linode.Updat
 
 	body := linode.UpdateProfileTokenRequest{}
 
+	// A token update can only change the label. Expiry and scopes are fixed at
+	// creation time, so the update tool intentionally accepts label alone.
 	args := request.GetArguments()
-	for _, key := range []string{profileTokenFieldExpiry, profileTokenFieldLabel, profileTokenFieldScopes} {
-		if raw, exists := args[key]; exists {
-			value, ok := raw.(string)
-			if !ok || value == "" {
-				return 0, nil, key + " must be a non-empty string"
-			}
-
-			body[key] = value
+	if raw, exists := args[profileTokenFieldLabel]; exists {
+		value, ok := raw.(string)
+		if !ok || value == "" {
+			return 0, nil, profileTokenFieldLabel + " must be a non-empty string"
 		}
+
+		body[profileTokenFieldLabel] = value
 	}
 
 	if len(body) == 0 {
-		return 0, nil, "at least one profile " + "token field is required"
+		return 0, nil, profileTokenFieldLabel + " is required"
 	}
 
 	return tokenID, body, ""

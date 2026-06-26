@@ -1,5 +1,7 @@
 package linode
 
+import "encoding/json"
+
 // DatabaseEngine represents a Managed Database engine.
 type DatabaseEngine struct {
 	ID      string `json:"id"`
@@ -70,17 +72,23 @@ type CreateDatabaseInstanceRequest struct {
 	ClusterSize    int            `json:"cluster_size,omitempty"`
 	EngineConfig   map[string]any `json:"engine_config,omitempty"`
 	Fork           map[string]any `json:"fork,omitempty"`
-	PrivateNetwork *bool          `json:"private_network,omitempty"`
+	PrivateNetwork map[string]any `json:"private_network,omitempty"`
 	SSLConnection  *bool          `json:"ssl_connection,omitempty"`
 }
 
 // UpdateDatabaseInstanceRequest updates a MySQL Managed Database instance.
+//
+// PrivateNetwork is a json.RawMessage so the update can express three distinct
+// wire states the Linode API treats differently: omitted (leave the VPC binding
+// untouched), an object (attach or reconfigure), and an explicit null (detach
+// from the VPC). A nil/empty map cannot carry the explicit-null case because
+// omitempty would drop it, so the raw bytes are held verbatim instead.
 type UpdateDatabaseInstanceRequest struct {
-	AllowList      *[]string      `json:"allow_list,omitempty"`
-	EngineConfig   map[string]any `json:"engine_config,omitempty"`
-	Label          *string        `json:"label,omitempty"`
-	PrivateNetwork map[string]any `json:"private_network,omitempty"`
-	Type           *string        `json:"type,omitempty"`
-	Updates        map[string]any `json:"updates,omitempty"`
-	Version        *string        `json:"version,omitempty"`
+	AllowList      *[]string       `json:"allow_list,omitempty"`
+	EngineConfig   map[string]any  `json:"engine_config,omitempty"`
+	Label          *string         `json:"label,omitempty"`
+	PrivateNetwork json.RawMessage `json:"private_network,omitempty"`
+	Type           *string         `json:"type,omitempty"`
+	Updates        map[string]any  `json:"updates,omitempty"`
+	Version        *string         `json:"version,omitempty"`
 }

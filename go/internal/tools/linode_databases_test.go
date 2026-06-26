@@ -94,6 +94,7 @@ const (
 	databaseLabelRequiredMessage              = "label must be a non-empty string"
 	caseInvalidAllowList                      = "invalid allow list"
 	caseInvalidEngineConfig                   = "invalid engine config"
+	caseInvalidPrivateNetwork                 = "invalid private network"
 )
 
 func TestLinodeDatabaseEngineListToolDefinition(t *testing.T) {
@@ -3254,7 +3255,7 @@ func TestLinodeDatabaseInstanceCreateToolRequiredFieldValidation(t *testing.T) {
 		{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
 		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
 		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
-		{name: "invalid private network bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databasePrivateNetworkParam: boolStringTrue, keyConfirm: true}, wantMessage: "private_network must be a boolean"},
+		{name: caseInvalidPrivateNetwork, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
 	}
 
@@ -3518,7 +3519,7 @@ func TestLinodeDatabasePostgreSQLInstanceCreateToolRequiredFieldValidation(t *te
 		{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
 		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
 		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
-		{name: "invalid private network bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databasePrivateNetworkParam: boolStringTrue, keyConfirm: true}, wantMessage: "private_network must be a boolean"},
+		{name: caseInvalidPrivateNetwork, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
 	}
 
@@ -3783,6 +3784,153 @@ func TestLinodeDatabaseInstanceUpdateToolSuccess(t *testing.T) {
 	}
 }
 
+// An explicit null on private_network detaches the instance from its VPC. The
+// wire body must carry "private_network":null rather than rejecting the value or
+// dropping the field, matching the Linode API and the Python implementation.
+func TestLinodeDatabaseInstanceUpdateToolPrivateNetworkDetach(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		raw, present := body[databasePrivateNetworkParam]
+		if !present {
+			t.Error("private_network key missing from body, want present")
+		}
+
+		if string(raw) != databaseJSONNull {
+			t.Errorf("body[private_network] = %q, want null", string(raw))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		databaseInstanceIDParam:     databaseInstanceID,
+		databasePrivateNetworkParam: nil,
+		keyConfirm:                  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+// When private_network is absent the field must be omitted from the wire body
+// entirely so the existing VPC binding is left untouched.
+func TestLinodeDatabaseInstanceUpdateToolPrivateNetworkAbsentOmits(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if _, present := body[databasePrivateNetworkParam]; present {
+			t.Errorf("body contains private_network key, want omitted")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		databaseInstanceIDParam: databaseInstanceID,
+		keyLabel:                databaseInstanceLabel,
+		keyConfirm:              true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+// PostgreSQL update must detach on explicit null exactly like the MySQL path so
+// the two engines stay at parity.
+func TestLinodeDatabasePostgreSQLInstanceUpdateToolPrivateNetworkDetach(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != databasePostgreSQLInstancePath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
+		}
+
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		raw, present := body[databasePrivateNetworkParam]
+		if !present {
+			t.Error("private_network key missing from body, want present")
+		}
+
+		if string(raw) != databaseJSONNull {
+			t.Errorf("body[private_network] = %q, want null", string(raw))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		databaseInstanceIDParam:     databaseInstanceID,
+		databasePrivateNetworkParam: nil,
+		keyConfirm:                  true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
 func TestLinodeDatabaseInstanceUpdateToolInputValidation(t *testing.T) {
 	t.Parallel()
 
@@ -3800,14 +3948,13 @@ func TestLinodeDatabaseInstanceUpdateToolInputValidation(t *testing.T) {
 		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
 		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
 		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
+		{name: caseInvalidPrivateNetwork, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
 		{name: "numeric version", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseVersionParam: 8, keyConfirm: true}, wantMessage: "version must be a non-empty string"},
 		{name: "non-string allow list entry", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: []any{1}, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
 		{name: "object allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: jsonObjectEmpty, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
 		{name: "null engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONNull, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
 		{name: "array engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "null private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONNull, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "array private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONArray, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "null updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONNull, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
 		{name: "array updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
@@ -4100,7 +4247,7 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolInputValidation(t *testing.T)
 		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
 		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
 		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
+		{name: caseInvalidPrivateNetwork, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
 	}
 

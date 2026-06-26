@@ -807,11 +807,11 @@ def create_linode_instance_config_interface_add_tool() -> tuple[Tool, Capability
                     "description": "The interface purpose (required).",
                 },
                 "label": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": "Interface label. Required for vlan interfaces.",
                 },
                 "ipam_address": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": "Private CIDR address for vlan interfaces.",
                 },
                 "primary": {
@@ -824,18 +824,18 @@ def create_linode_instance_config_interface_add_tool() -> tuple[Tool, Capability
                     "description": "The VPC subnet ID. Required for vpc interfaces.",
                 },
                 "ip_ranges": {
-                    "type": ["array", "null"],
+                    "type": "array",
                     "items": {"type": "string"},
                     "description": (
                         "IPv4 CIDR VPC subnet ranges routed to this interface."
                     ),
                 },
                 "ipv4": {
-                    "type": ["object", "null"],
+                    "type": "object",
                     "description": "VPC IPv4 configuration for this interface.",
                 },
                 "ipv6": {
-                    "type": ["object", "null"],
+                    "type": "object",
                     "description": "VPC IPv6 configuration for this interface.",
                 },
                 "confirm": {
@@ -889,7 +889,7 @@ def create_linode_instance_interface_add_tool() -> tuple[Tool, Capability]:
 def create_linode_instance_interface_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_interface_update tool."""
     section_schema = {
-        "type": ["object", "null"],
+        "type": "object",
         "description": "Documented Linode interface update section.",
     }
     return Tool(

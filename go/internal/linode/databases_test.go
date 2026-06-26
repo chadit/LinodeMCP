@@ -54,6 +54,9 @@ const (
 	databaseEnginePostgreSQLID                = "postgresql/16"
 	databaseEnginePostgreSQL                  = "postgresql"
 	databasePostgreSQLConfigNamespace         = "pg"
+	databasePrivateNetworkVPCID               = "vpc_id"
+	databasePrivateNetworkSubnetID            = "subnet_id"
+	databasePrivateNetworkPublicAccess        = "public_access"
 )
 
 func TestClientListDatabaseEnginesSuccess(t *testing.T) {
@@ -2045,8 +2048,12 @@ func TestClientResetDatabasePostgreSQLInstanceCredentialsDoesNotRetryTransientPo
 func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
-	privateNetwork := true
 	sslConnection := true
+	privateNetwork := map[string]any{
+		databasePrivateNetworkVPCID:        float64(101),
+		databasePrivateNetworkSubnetID:     float64(202),
+		databasePrivateNetworkPublicAccess: false,
+	}
 	expectedReq := linode.CreateDatabaseInstanceRequest{
 		Label:          databaseInstanceLabel,
 		Type:           databaseInstanceType,
@@ -2055,7 +2062,7 @@ func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
 		AllowList:      []string{databaseAllowListCIDR},
 		ClusterSize:    3,
 		EngineConfig:   map[string]any{databaseConfigMaxConnections: float64(100)},
-		PrivateNetwork: &privateNetwork,
+		PrivateNetwork: privateNetwork,
 		SSLConnection:  &sslConnection,
 	}
 
@@ -2154,8 +2161,12 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
-	privateNetwork := true
 	sslConnection := true
+	privateNetwork := map[string]any{
+		databasePrivateNetworkVPCID:        float64(101),
+		databasePrivateNetworkSubnetID:     float64(202),
+		databasePrivateNetworkPublicAccess: false,
+	}
 	expectedReq := linode.CreateDatabaseInstanceRequest{
 		Label:          databaseInstanceLabel,
 		Type:           databaseInstanceType,
@@ -2164,7 +2175,7 @@ func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 		AllowList:      []string{databaseAllowListCIDR},
 		ClusterSize:    3,
 		EngineConfig:   map[string]any{databaseConfigMaxConnections: float64(100)},
-		PrivateNetwork: &privateNetwork,
+		PrivateNetwork: privateNetwork,
 		SSLConnection:  &sslConnection,
 	}
 
@@ -2349,7 +2360,7 @@ func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
 		AllowList:      &allowList,
 		EngineConfig:   map[string]any{"binlog_retention_period": float64(600)},
 		Label:          &label,
-		PrivateNetwork: map[string]any{"public_access": false, "vpc_id": float64(123), "subnet_id": float64(456)},
+		PrivateNetwork: json.RawMessage(`{"public_access":false,"subnet_id":456,"vpc_id":123}`),
 		Type:           &databaseType,
 		Updates:        map[string]any{"frequency": "weekly", "hour_of_day": float64(1)},
 		Version:        &version,
@@ -2460,7 +2471,7 @@ func TestClientUpdateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
 		AllowList:      &allowList,
 		EngineConfig:   map[string]any{databasePostgreSQLConfigNamespace: map[string]any{"timezone": "UTC"}},
 		Label:          &label,
-		PrivateNetwork: map[string]any{"public_access": false, "vpc_id": float64(123)},
+		PrivateNetwork: json.RawMessage(`{"public_access":false,"vpc_id":123}`),
 		Type:           &databaseType,
 		Updates:        map[string]any{"frequency": "weekly", "hour_of_day": float64(1)},
 		Version:        &version,

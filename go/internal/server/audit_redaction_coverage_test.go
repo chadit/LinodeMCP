@@ -121,9 +121,13 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 	//     are operational, not PII.
 	//   - addresses: a list of network addresses on firewall rules
 	//     (linode_firewalls). Same reasoning as `address`.
+	//   - ipam_address: a private CIDR network address for a VLAN config
+	//     interface (linode_instance_config_interface_add). Operational
+	//     network addressing, not PII.
 	knownSafePII := map[string]struct{}{
-		"address":   {},
-		"addresses": {},
+		"address":      {},
+		"addresses":    {},
+		"ipam_address": {},
 	}
 
 	srv := newCapabilityTestServer(t)

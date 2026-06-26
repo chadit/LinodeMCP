@@ -14403,6 +14403,51 @@ async def test_lke_clusters_list(sample_config: Config) -> None:
         assert "my-cluster" in result[0].text
 
 
+async def test_lke_clusters_list_no_filter_returns_all(sample_config: Config) -> None:
+    """LKE cluster list without a label filter should return every cluster."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_clusters.return_value = [
+            {"id": 1, "label": "prod-cluster", "region": "us-east"},
+            {"id": 2, "label": "dev-cluster", "region": "us-west"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_lke_cluster_list({}, sample_config))
+
+        payload = json.loads(result[0].text)
+        assert payload["count"] == 2
+        assert "filter" not in payload
+
+
+async def test_lke_clusters_list_filters_by_label_substring(
+    sample_config: Config,
+) -> None:
+    """LKE cluster list label filter is a case-insensitive substring match."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_clusters.return_value = [
+            {"id": 1, "label": "prod-cluster", "region": "us-east"},
+            {"id": 2, "label": "dev-cluster", "region": "us-west"},
+            {"id": 3, "label": "staging-prod", "region": "eu-west"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_list({"label": "PROD"}, sample_config)
+        )
+
+        payload = json.loads(result[0].text)
+        assert payload["count"] == 2
+        labels = {cluster["label"] for cluster in payload["clusters"]}
+        assert labels == {"prod-cluster", "staging-prod"}
+        assert payload["filter"] == "label=PROD"
+
+
 async def test_lke_cluster_get(sample_config: Config) -> None:
     """LKE cluster get should return cluster details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
@@ -15627,6 +15672,95 @@ async def test_vpcs_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "my-vpc" in result[0].text
+
+
+async def test_vpcs_list_no_filter_returns_all(sample_config: Config) -> None:
+    """VPC list without filters should return every VPC and no filter key."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpcs.return_value = [
+            {"id": 1, "label": "prod-vpc", "region": "us-east"},
+            {"id": 2, "label": "dev-vpc", "region": "us-west"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vpc_list({}, sample_config))
+
+        payload = json.loads(result[0].text)
+        assert payload["count"] == 2
+        assert "filter" not in payload
+
+
+async def test_vpcs_list_filters_by_label_substring(sample_config: Config) -> None:
+    """VPC list label filter is a case-insensitive substring match."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpcs.return_value = [
+            {"id": 1, "label": "prod-vpc", "region": "us-east"},
+            {"id": 2, "label": "dev-vpc", "region": "us-west"},
+            {"id": 3, "label": "staging-prod", "region": "us-east"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vpc_list({"label": "PROD"}, sample_config))
+
+        payload = json.loads(result[0].text)
+        assert payload["count"] == 2
+        labels = {vpc["label"] for vpc in payload["vpcs"]}
+        assert labels == {"prod-vpc", "staging-prod"}
+        assert payload["filter"] == "label=PROD"
+
+
+async def test_vpcs_list_filters_by_region_exact(sample_config: Config) -> None:
+    """VPC list region filter is a case-insensitive exact match, not substring."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpcs.return_value = [
+            {"id": 1, "label": "a", "region": "us-east"},
+            {"id": 2, "label": "b", "region": "us-west"},
+            {"id": 3, "label": "c", "region": "us-east-1"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_list({"region": "US-EAST"}, sample_config)
+        )
+
+        payload = json.loads(result[0].text)
+        assert payload["count"] == 1
+        assert payload["vpcs"][0]["id"] == 1
+        assert payload["filter"] == "region=US-EAST"
+
+
+async def test_vpcs_list_filters_by_label_and_region(sample_config: Config) -> None:
+    """VPC list applies label and region filters together."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpcs.return_value = [
+            {"id": 1, "label": "prod-vpc", "region": "us-east"},
+            {"id": 2, "label": "prod-vpc", "region": "us-west"},
+            {"id": 3, "label": "dev-vpc", "region": "us-east"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_list(
+                {"label": "prod", "region": "us-east"}, sample_config
+            )
+        )
+
+        payload = json.loads(result[0].text)
+        assert payload["count"] == 1
+        assert payload["vpcs"][0]["id"] == 1
+        assert payload["filter"] == "label=prod, region=us-east"
 
 
 async def test_vlans_list(sample_config: Config) -> None:
@@ -21967,6 +22101,8 @@ async def test_linode_nodebalancer_config_create_tool_definition() -> None:
     assert "stickiness" in props
     assert "check" in props
     assert "nodes" in props
+    # NodeBalancer configs have no label in the API, so the tool must omit it.
+    assert "label" not in props
 
 
 async def test_handle_linode_nodebalancer_config_create(sample_config: Config) -> None:
@@ -24298,6 +24434,9 @@ def test_create_linode_instance_config_create_tool_schema() -> None:
     assert props["root_device"]["type"] == "string"
     assert props["run_level"]["enum"] == ["default", "single", "binbash"]
     assert props["virt_mode"]["enum"] == ["paravirt", "fullvirt"]
+    # helpers and interfaces mirror Go: JSON-encoded string args, not required.
+    assert props["helpers"]["type"] == "string"
+    assert props["interfaces"]["type"] == "string"
     assert set(tool.inputSchema["required"]) == {
         "linode_id",
         "label",
@@ -24352,7 +24491,89 @@ async def test_handle_linode_instance_config_create_success(
         root_device="/dev/sda",
         run_level="default",
         virt_mode="paravirt",
+        helpers=None,
+        interfaces=None,
     )
+
+
+async def test_handle_linode_instance_config_create_passes_helpers_and_interfaces(
+    sample_config: Config,
+) -> None:
+    """Valid helpers/interfaces JSON strings decode and reach the client."""
+    devices = {"sda": {"disk_id": 123}}
+    helpers_json = json.dumps({"distro": True, "network": False})
+    interfaces_json = json.dumps([{"purpose": "public"}, {"purpose": "vlan"}])
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_instance_config.return_value = {"id": 1, "label": "c"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_create(
+            {
+                "linode_id": 456,
+                "label": "boot-config",
+                "devices": devices,
+                "helpers": helpers_json,
+                "interfaces": interfaces_json,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    mock_client.create_instance_config.assert_awaited_once_with(
+        456,
+        label="boot-config",
+        devices=devices,
+        comments=None,
+        kernel=None,
+        memory_limit=None,
+        root_device=None,
+        run_level=None,
+        virt_mode=None,
+        helpers={"distro": True, "network": False},
+        interfaces=[{"purpose": "public"}, {"purpose": "vlan"}],
+    )
+
+
+async def test_handle_linode_instance_config_create_rejects_bad_helpers(
+    sample_config: Config,
+) -> None:
+    """Malformed helpers JSON is rejected before any client call."""
+    result = await handle_linode_instance_config_create(
+        {
+            "linode_id": 456,
+            "label": "boot-config",
+            "devices": {"sda": {"disk_id": 123}},
+            "helpers": "{not json",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "invalid helpers JSON" in result[0].text
+
+
+async def test_handle_linode_instance_config_create_rejects_bad_interface_purpose(
+    sample_config: Config,
+) -> None:
+    """An interface with an unknown purpose is rejected."""
+    result = await handle_linode_instance_config_create(
+        {
+            "linode_id": 456,
+            "label": "boot-config",
+            "devices": {"sda": {"disk_id": 123}},
+            "interfaces": json.dumps([{"purpose": "bogus"}]),
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "interfaces[0].purpose must be public, vlan, or vpc" in result[0].text
 
 
 async def test_handle_linode_instance_config_create_dry_run_returns_preview(

@@ -28,7 +28,7 @@ const (
 	keyManagedSecretArg   = "password"
 	keyManagedSSHObject   = "ssh"
 	keyManagedSSHAccess   = "access"
-	keyManagedContactName = "contact_name"
+	keyManagedContactName = "name"
 	// Short sentinel values stay under the block-hardcoded-secrets hook's
 	// length threshold while still proving the preview never echoes them.
 	managedSecretSentinel  = "pw-create9"

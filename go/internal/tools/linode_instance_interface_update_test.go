@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,10 +19,53 @@ import (
 
 const (
 	toolLinodeInstanceInterfaceUpdate = "linode_instance_interface_update"
-	publicInterfaceUpdateJSON         = `{"public":{"ipv4":{"addresses":[{"address":"auto","primary":true}]}},"default_route":{"ipv4":true}}`
-	vpcInterfaceUpdateJSON            = `{"vpc":{"subnet_id":456,"ipv4":{"addresses":[{"address":"auto","primary":true,"nat_1_1_address":"auto"}],"ranges":[{"range":"/28"}]}},"default_route":{"ipv4":true}}`
-	vlanInterfaceUpdateJSON           = `{"vlan":{"vlan_label":"backend","ipam_address":"10.0.0.1/24"}}`
+	keyInterfacePublic                = "public"
+	keyInterfaceVPC                   = "vpc"
+	keyInterfaceVLAN                  = "vlan"
+	keyInterfaceDefaultRoute          = "default_route"
+	keyAddresses                      = "addresses"
+	keyVLANLabel                      = "vlan_label"
+	valueAuto                         = "auto"
+	primaryField                      = "primary"
+	blankWhitespace                   = "  "
+	errInterfaceAtLeastOneField       = "at least one of default_route, public, vpc, or vlan is required"
+	errInterfaceExactlyOneType        = "exactly one of public, vpc, or vlan is required"
 )
+
+func publicInterfaceUpdateArgs() map[string]any {
+	return map[string]any{
+		keyInterfacePublic:       map[string]any{keyIPv4: map[string]any{keyAddresses: []any{map[string]any{keyAddress: valueAuto, primaryField: true}}}},
+		keyInterfaceDefaultRoute: map[string]any{keyIPv4: true},
+	}
+}
+
+func vpcInterfaceUpdateArgs() map[string]any {
+	return map[string]any{
+		keyInterfaceVPC: map[string]any{
+			keySubnetID: float64(456),
+			keyIPv4: map[string]any{
+				keyAddresses: []any{map[string]any{keyAddress: valueAuto, primaryField: true, "nat_1_1_address": valueAuto}},
+				"ranges":     []any{map[string]any{keyIPv6Range: "/28"}},
+			},
+		},
+		keyInterfaceDefaultRoute: map[string]any{keyIPv4: true},
+	}
+}
+
+func vlanInterfaceUpdateArgs() map[string]any {
+	return map[string]any{
+		keyInterfaceVLAN: map[string]any{keyVLANLabel: "backend", "ipam_address": "10.0.0.1/24"},
+	}
+}
+
+// withInterfaceUpdatePath adds the linode/interface ids and confirm to a flat
+// interface body so validation cases share one base argument set.
+func withInterfaceUpdatePath(fields map[string]any) map[string]any {
+	args := map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}
+	maps.Copy(args, fields)
+
+	return args
+}
 
 func TestLinodeInstanceInterfaceUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}}}}
@@ -50,20 +94,14 @@ func TestLinodeInstanceInterfaceUpdateToolDefinition(t *testing.T) {
 	}
 
 	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	for _, key := range []string{keyLinodeID, keyInterfaceID, keyInterfaceDefaultRoute, keyInterfacePublic, keyInterfaceVLAN, keyInterfaceVPC, keyConfirm} {
+		if _, ok := props[key]; !ok {
+			t.Errorf("props missing key %v", key)
+		}
 	}
 
-	if _, ok := props[keyInterfaceID]; !ok {
-		t.Errorf("props missing key %v", keyInterfaceID)
-	}
-
-	if _, ok := props[keyInterface]; !ok {
-		t.Errorf("props missing key %v", keyInterface)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if _, ok := props[keyInterface]; ok {
+		t.Errorf("props should not contain legacy key %v", keyInterface)
 	}
 }
 
@@ -74,28 +112,25 @@ func TestLinodeInstanceInterfaceUpdateToolValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceInterfaceUpdateTool(cfg)
 
 	validationTests := []instanceConfigCreateValidationCase{
-		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON}, wantContains: errConfirmEqualsTrue},
-		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingLinodeID, args: map[string]any{keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID, keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
-		{name: "separator interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "query interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: shareGroupIDQueryValue, keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "traversal interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "missing interface id", args: map[string]any{keyLinodeID: float64(123), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "zero interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: caseMissingInterface, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errInterfaceRequired},
-		{name: caseNonStringInterface, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: map[string]any{keyIPv4: keyAddress}, keyConfirm: true}, wantContains: errInterfaceString},
-		{name: caseInvalidInterface, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: `{`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: caseNullInterface, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: databaseJSONNull, keyConfirm: true}, wantContains: errInterfaceJSONObject},
-		{name: "unknown interface field", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: `{"public":{},"typo":true}`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: "missing interface type", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: jsonObjectEmpty, keyConfirm: true}, wantContains: errInterfaceTypeExactlyOne},
-		{name: "multiple interface types", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: `{"public":{},"vlan":{"vlan_label":"backend"}}`, keyConfirm: true}, wantContains: errInterfaceTypeExactlyOne},
-		{name: "invalid vpc subnet", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: `{"vpc":{"subnet_id":0}}`, keyConfirm: true}, wantContains: "interface.vpc.subnet_id must be a positive integer"},
-		{name: "blank vlan label", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: `{"vlan":{"vlan_label":"  "}}`, keyConfirm: true}, wantContains: "interface.vlan.vlan_label is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID, keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: "separator interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "query interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: shareGroupIDQueryValue, keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "traversal interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "missing interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "zero interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "no interface fields", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errInterfaceAtLeastOneField},
+		{name: "non-object public", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: float64(1), keyConfirm: true}, wantContains: "public must be an object"},
+		{name: "missing interface type", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfaceDefaultRoute: map[string]any{keyIPv4: true}, keyConfirm: true}, wantContains: errInterfaceExactlyOneType},
+		{name: "multiple interface types", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: map[string]any{}, keyInterfaceVLAN: map[string]any{"vlan_label": "backend"}, keyConfirm: true}, wantContains: errInterfaceExactlyOneType},
+		{name: "invalid vpc subnet", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfaceVPC: map[string]any{keySubnetID: float64(0)}, keyConfirm: true}, wantContains: "vpc.subnet_id must be a positive integer"},
+		{name: "blank vlan label", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfaceVLAN: map[string]any{keyVLANLabel: blankWhitespace}, keyConfirm: true}, wantContains: "vlan.vlan_label is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -164,7 +199,7 @@ func TestLinodeInstanceInterfaceUpdateToolSuccessfulVpcInterfaceUpdate(t *testin
 	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: vpcInterfaceUpdateJSON, keyConfirm: true})
+	req := createRequestWithArgs(t, withInterfaceUpdatePath(vpcInterfaceUpdateArgs()))
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -208,7 +243,7 @@ func TestLinodeInstanceInterfaceUpdateToolClientError(t *testing.T) {
 	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: publicInterfaceUpdateJSON, keyConfirm: true})
+	req := createRequestWithArgs(t, withInterfaceUpdatePath(publicInterfaceUpdateArgs()))
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -251,8 +286,8 @@ func TestLinodeInstanceInterfaceUpdateToolAcceptsPublicAndVlanInterfaceBodies(t 
 	srvCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, srvHandler := tools.NewLinodeInstanceInterfaceUpdateTool(srvCfg)
 
-	for _, body := range []string{publicInterfaceUpdateJSON, vlanInterfaceUpdateJSON} {
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterface: body, keyConfirm: true})
+	for _, body := range []map[string]any{publicInterfaceUpdateArgs(), vlanInterfaceUpdateArgs()} {
+		req := createRequestWithArgs(t, withInterfaceUpdatePath(body))
 
 		result, err := srvHandler(t.Context(), req)
 		if err != nil {

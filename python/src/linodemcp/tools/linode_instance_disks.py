@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
@@ -43,6 +44,84 @@ def _split_comma_separated(raw: object) -> list[str] | None:
     parts = [segment.strip() for segment in raw.split(",")]
     entries = [segment for segment in parts if segment]
     return entries or None
+
+
+_VALID_CONFIG_INTERFACE_PURPOSES = frozenset({"public", "vlan", "vpc"})
+
+
+def _is_dict(value: Any) -> bool:
+    """Return True when value is a dict, isolating the isinstance narrowing."""
+    return isinstance(value, dict)
+
+
+def _is_list(value: Any) -> bool:
+    """Return True when value is a list, isolating the isinstance narrowing."""
+    return isinstance(value, list)
+
+
+def _parse_config_helpers(raw: object) -> tuple[Any, str | None]:
+    """Parse the helpers JSON-object string; return (value, error message).
+
+    Mirrors the Go create handler, which takes helpers as a JSON-encoded object
+    string and posts the decoded object verbatim so the Linode API can keep
+    evolving the boot-helper toggles without the tool rejecting new fields.
+    """
+    if raw is None:
+        return None, None
+    if not isinstance(raw, str) or not raw:
+        return None, None
+    try:
+        helpers: Any = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        return None, f"invalid helpers JSON: {exc}"
+    if not _is_dict(helpers):
+        return None, "helpers must be a JSON object"
+    return helpers, None
+
+
+def _validate_config_interfaces(interfaces: Any) -> str | None:
+    """Validate each interface object's purpose; return an error or None."""
+    for index, iface in enumerate(interfaces):
+        if not _is_dict(iface):
+            return "interfaces must be an array of objects"
+        if iface.get("purpose") not in _VALID_CONFIG_INTERFACE_PURPOSES:
+            return f"interfaces[{index}].purpose must be public, vlan, or vpc"
+    return None
+
+
+def _parse_config_interfaces(raw: object) -> tuple[Any, str | None]:
+    """Parse the interfaces JSON-array string; return (value, error message).
+
+    Mirrors the Go create handler: interfaces arrives as a JSON-encoded array of
+    objects, each carrying a purpose of public, vlan, or vpc.
+    """
+    if raw is None:
+        return None, None
+    if not isinstance(raw, str) or not raw:
+        return None, None
+    try:
+        interfaces: Any = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        return None, f"invalid interfaces JSON: {exc}"
+    if not _is_list(interfaces):
+        return None, "interfaces must be an array of objects"
+    error = _validate_config_interfaces(interfaces)
+    if error is not None:
+        return None, error
+    return interfaces, None
+
+
+def _parse_config_json_options(
+    arguments: dict[str, Any],
+) -> tuple[Any, Any, str | None]:
+    """Parse the helpers and interfaces options; return (helpers, interfaces, error)."""
+    helpers, helpers_err = _parse_config_helpers(arguments.get("helpers"))
+    if helpers_err is not None:
+        return None, None, helpers_err
+    interfaces, interfaces_err = _parse_config_interfaces(arguments.get("interfaces"))
+    if interfaces_err is not None:
+        return None, None, interfaces_err
+    return helpers, interfaces, None
 
 
 _ENV_PROP: dict[str, Any] = {
@@ -340,6 +419,14 @@ def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
                     "enum": ["paravirt", "fullvirt"],
                     "description": "Virtualization mode: paravirt or fullvirt",
                 },
+                "helpers": {
+                    "type": "string",
+                    "description": "Optional helpers JSON object",
+                },
+                "interfaces": {
+                    "type": "string",
+                    "description": "Optional interfaces JSON array",
+                },
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
@@ -365,6 +452,12 @@ async def handle_linode_instance_config_create(
         return _error_response("devices must be a non-empty object")
     devices_payload = devices
 
+    helpers_payload, interfaces_payload, json_err = _parse_config_json_options(
+        arguments
+    )
+    if json_err is not None:
+        return _error_response(json_err)
+
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
@@ -387,6 +480,27 @@ async def handle_linode_instance_config_create(
             _walk,
         )
 
+    return await _create_instance_config_live(
+        arguments,
+        cfg,
+        iid,
+        label,
+        devices_payload,
+        helpers_payload,
+        interfaces_payload,
+    )
+
+
+async def _create_instance_config_live(
+    arguments: dict[str, Any],
+    cfg: Config,
+    iid: int,
+    label: str,
+    devices_payload: dict[str, Any],
+    helpers_payload: Any,
+    interfaces_payload: Any,
+) -> list[TextContent]:
+    """Run the confirmed config-create after dry-run and validation passed."""
     confirm = arguments.get("confirm", False)
     if confirm is not True:
         return _error_response("Set confirm=true to proceed.")
@@ -407,6 +521,8 @@ async def handle_linode_instance_config_create(
             root_device=arguments.get("root_device"),
             run_level=arguments.get("run_level"),
             virt_mode=arguments.get("virt_mode"),
+            helpers=helpers_payload,
+            interfaces=interfaces_payload,
         )
 
     return await execute_tool(cfg, arguments, "create instance config", _call)

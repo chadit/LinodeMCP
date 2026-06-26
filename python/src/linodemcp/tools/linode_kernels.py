@@ -40,7 +40,7 @@ def create_linode_kernel_list_tool() -> tuple[Tool, Capability]:
         inputSchema={
             "type": "object",
             "properties": {
-                "environment": ENV_PARAM_SCHEMA,
+                **ENV_PARAM_SCHEMA,
                 "page": {
                     "type": "integer",
                     "minimum": 1,
@@ -94,7 +94,7 @@ def create_linode_kernel_get_tool() -> tuple[Tool, Capability]:
         inputSchema={
             "type": "object",
             "properties": {
-                "environment": ENV_PARAM_SCHEMA,
+                **ENV_PARAM_SCHEMA,
                 "kernel_id": {
                     "type": "string",
                     "pattern": _KERNEL_ID_PATTERN.pattern,

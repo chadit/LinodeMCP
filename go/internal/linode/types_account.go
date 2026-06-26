@@ -95,9 +95,16 @@ type Grants struct {
 	LKECluster   []Grant      `json:"lkecluster"`
 }
 
+// SecurityQuestionAnswer pairs a security question ID with its plaintext
+// answer for POST /profile/security-questions.
+type SecurityQuestionAnswer struct {
+	QuestionID int    `json:"question_id"`
+	Response   string `json:"response"`
+}
+
 // AnswerProfileSecurityQuestionsRequest contains the body for POST /profile/security-questions.
 type AnswerProfileSecurityQuestionsRequest struct {
-	SecurityQuestions string `json:"security_questions,omitempty"`
+	SecurityQuestions []SecurityQuestionAnswer `json:"security_questions,omitempty"`
 }
 
 // UpdateAccountUserGrantsRequest contains editable grant sections for

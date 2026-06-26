@@ -369,7 +369,7 @@ func newDatabaseInstanceCreateTool(
 		mcp.WithNumber(paramDatabaseClusterSize, mcp.Description("Number of nodes in the cluster (optional).")),
 		mcp.WithObject(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
 		mcp.WithObject(paramDatabaseFork, mcp.Description("Object describing source database fork/restore settings (optional).")),
-		mcp.WithBoolean(paramDatabasePrivateNetwork, mcp.Description("Whether to use private networking (optional).")),
+		mcp.WithObject(paramDatabasePrivateNetwork, mcp.Description("Object placing the database in a VPC (vpc_id, subnet_id, public_access). Omit for no private networking (optional).")),
 		mcp.WithBoolean(paramDatabaseSSLConnection, mcp.Description("Whether to require SSL connections (optional).")),
 		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database creation. This creates a billable resource. Ignored when dry_run=true.")),
 		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -428,7 +428,7 @@ func newDatabaseInstanceUpdateTool(
 		mcp.WithArray(paramDatabaseAllowList, mcp.Description("CIDR strings allowed to connect (optional).")),
 		mcp.WithObject(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
 		mcp.WithString(paramDatabaseLabel, mcp.Description("New label for the database instance (optional).")),
-		mcp.WithString(paramDatabasePrivateNetwork, mcp.Description("JSON object of private network settings (optional).")),
+		mcp.WithObject(paramDatabasePrivateNetwork, mcp.Description("Object placing the database in a VPC (vpc_id, subnet_id, public_access). Pass null to detach (optional).")),
 		mcp.WithString(paramDatabaseType, mcp.Description("New Linode type for the database instance (optional).")),
 		mcp.WithObject(paramDatabaseUpdates, mcp.Description("Object of maintenance update settings (optional).")),
 		mcp.WithString(paramDatabaseVersion, mcp.Description(versionDescription)),
@@ -1547,7 +1547,7 @@ func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linod
 		changed = true
 	}
 
-	privateNetwork, hasPrivateNetwork, validationMessage := optionalMapJSONField(args, paramDatabasePrivateNetwork)
+	privateNetwork, hasPrivateNetwork, validationMessage := optionalNullableMapJSONField(args, paramDatabasePrivateNetwork)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -1655,12 +1655,12 @@ func databaseInstanceCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 		req.Fork = fork
 	}
 
-	privateNetwork, validationMessage := optionalBoolArg(args, paramDatabasePrivateNetwork)
+	privateNetwork, hasPrivateNetwork, validationMessage := optionalMapJSONField(args, paramDatabasePrivateNetwork)
 	if validationMessage != "" {
 		return linode.CreateDatabaseInstanceRequest{}, validationMessage
 	}
 
-	if privateNetwork != nil {
+	if hasPrivateNetwork {
 		req.PrivateNetwork = privateNetwork
 	}
 
@@ -1748,6 +1748,56 @@ func optionalMapJSONField(args map[string]any, key string) (map[string]any, bool
 		}
 
 		return values, true, ""
+	default:
+		return nil, false, objectError
+	}
+}
+
+// optionalNullableMapJSONField reads an optional object argument that also
+// accepts an explicit JSON null. The Linode database update endpoints treat
+// private_network: null as "detach from the VPC", so null must reach the wire
+// rather than being rejected as a non-object. The raw JSON bytes are returned so
+// the caller can preserve all three states: absent (present=false, omit the
+// field), explicit null (the bytes "null"), and an object (the encoded map).
+func optionalNullableMapJSONField(args map[string]any, key string) (json.RawMessage, bool, string) {
+	raw, present := args[key]
+	if !present {
+		return nil, false, ""
+	}
+
+	objectError := key + " must be an object or null"
+
+	switch value := raw.(type) {
+	case nil:
+		return json.RawMessage("null"), true, ""
+	case map[string]any:
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, false, objectError
+		}
+
+		return encoded, true, ""
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, false, ""
+		}
+
+		if trimmed == "null" {
+			return json.RawMessage("null"), true, ""
+		}
+
+		var values map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &values); err != nil || values == nil {
+			return nil, false, objectError
+		}
+
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return nil, false, objectError
+		}
+
+		return encoded, true, ""
 	default:
 		return nil, false, objectError
 	}

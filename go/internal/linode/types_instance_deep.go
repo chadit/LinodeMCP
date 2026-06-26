@@ -1,5 +1,7 @@
 package linode
 
+import "encoding/json"
+
 // InstanceBackup represents a detailed backup of a Linode instance.
 type InstanceBackup struct {
 	ID        int                  `json:"id"`
@@ -111,21 +113,29 @@ type ConfigHelpers struct {
 }
 
 // ConfigInterface represents a legacy network interface in a configuration profile.
+//
+// IPv4 and IPv6 are raw JSON objects rather than typed structs because the
+// legacy config-interface endpoint accepts evolving VPC IP configuration shapes
+// (nat_1_1/vpc for IPv4; vpc/slaac/ranges for IPv6). Passing them through
+// verbatim keeps the tool from rejecting fields the API later adds.
 type ConfigInterface struct {
-	Purpose     string               `json:"purpose"`
-	Label       *string              `json:"label,omitempty"`
-	IPAMAddress *string              `json:"ipam_address,omitempty"`
-	Primary     *bool                `json:"primary,omitempty"`
-	SubnetID    *int                 `json:"subnet_id,omitempty"`
-	IPv4        *ConfigInterfaceIPv4 `json:"ipv4,omitempty"`
-	IPRanges    []string             `json:"ip_ranges,omitempty"`
+	Purpose     string          `json:"purpose"`
+	Label       *string         `json:"label,omitempty"`
+	IPAMAddress *string         `json:"ipam_address,omitempty"`
+	Primary     *bool           `json:"primary,omitempty"`
+	SubnetID    *int            `json:"subnet_id,omitempty"`
+	IPv4        json.RawMessage `json:"ipv4,omitempty"`
+	IPv6        json.RawMessage `json:"ipv6,omitempty"`
+	IPRanges    []string        `json:"ip_ranges,omitempty"`
 }
 
 // UpdateConfigInterfaceRequest represents fields that can update a configuration profile interface.
+//
+// IPv4 is a raw JSON object for the same reason as ConfigInterface.IPv4.
 type UpdateConfigInterfaceRequest struct {
-	Primary  *bool                `json:"primary,omitempty"`
-	IPv4     *ConfigInterfaceIPv4 `json:"ipv4,omitempty"`
-	IPRanges []string             `json:"ip_ranges,omitempty"`
+	Primary  *bool           `json:"primary,omitempty"`
+	IPv4     json.RawMessage `json:"ipv4,omitempty"`
+	IPRanges []string        `json:"ip_ranges,omitempty"`
 }
 
 // ConfigInterfaceResponse represents a legacy network interface returned by a configuration profile interface list.

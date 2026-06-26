@@ -237,12 +237,8 @@ func TestRedactionFieldsPIIList(t *testing.T) {
 		"address_1",
 		"address_2",
 		"city",
-		argContactEmail,
-		argContactName,
 		"phone",
 		"phone_number",
-		"phone_primary",
-		"phone_secondary",
 		"state",
 		"tax_id",
 		"zip",
@@ -311,9 +307,9 @@ func TestRedactWithPIIScrubsPIIFields(t *testing.T) {
 		argPhone:        "+1-555-0100",
 		argAddress1:     "123 Main St",
 		argCity:         "Springfield",
-		argContactName:  "Jane Doe",
-		argContactEmail: "jane@example.org",
-		"country":       "us", // not in PII list, must pass through
+		argContactName:  "Jane Doe",         // not in PII list, must pass through
+		argContactEmail: "jane@example.org", // not in PII list, must pass through
+		"country":       "us",               // not in PII list, must pass through
 	}
 
 	redacted, keys := audit.RedactWithPII(args)
@@ -350,22 +346,22 @@ func TestRedactWithPIIScrubsPIIFields(t *testing.T) {
 		t.Error("audit.IsRedacted(redacted[argCity]) = false, want true")
 	}
 
-	if !audit.IsRedacted(redacted[argContactName]) {
-		t.Error("audit.IsRedacted(redacted[argContactName]) = false, want true")
+	if !reflect.DeepEqual(redacted[argContactName], "Jane Doe") {
+		t.Errorf("redacted[argContactName] = %v, want %v", redacted[argContactName], "Jane Doe")
 	}
 
-	if !audit.IsRedacted(redacted[argContactEmail]) {
-		t.Error("audit.IsRedacted(redacted[argContactEmail]) = false, want true")
+	if !reflect.DeepEqual(redacted[argContactEmail], "jane@example.org") {
+		t.Errorf("redacted[argContactEmail] = %v, want %v", redacted[argContactEmail], "jane@example.org")
 	}
 	{
 		gotEls := slices.Clone(keys)
-		wantEls := slices.Clone([]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail})
+		wantEls := slices.Clone([]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity})
 
 		slices.Sort(gotEls)
 		slices.Sort(wantEls)
 
 		if !slices.Equal(gotEls, wantEls) {
-			t.Errorf("got %v, want %v (any order)", keys, []string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail})
+			t.Errorf("got %v, want %v (any order)", keys, []string{argKeyToken, argTaxID, argPhone, argAddress1, argCity})
 		}
 	}
 }

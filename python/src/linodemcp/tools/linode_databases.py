@@ -139,8 +139,8 @@ def _copy_database_private_network(
     if "private_network" not in arguments:
         return None
     private_network = arguments["private_network"]
-    if not isinstance(private_network, str) or not private_network.strip():
-        return "private_network must be a non-empty string"
+    if private_network is not None and not isinstance(private_network, dict):
+        return "private_network must be an object or null"
     payload["private_network"] = private_network
     return None
 
@@ -492,8 +492,11 @@ def create_linode_database_mysql_instance_create_tool() -> tuple[Tool, Capabilit
                     "description": "Restore/fork source configuration",
                 },
                 "private_network": {
-                    "type": "string",
-                    "description": "Private network identifier",
+                    "type": "object",
+                    "description": (
+                        "Object placing the database in a VPC (vpc_id, "
+                        "subnet_id, public_access). Omit for no private networking."
+                    ),
                 },
                 "ssl_connection": {
                     "type": "boolean",
@@ -551,8 +554,11 @@ def create_linode_database_postgresql_instance_create_tool() -> tuple[Tool, Capa
                     "description": "Restore/fork source configuration",
                 },
                 "private_network": {
-                    "type": "string",
-                    "description": "Private network identifier",
+                    "type": "object",
+                    "description": (
+                        "Object placing the database in a VPC (vpc_id, "
+                        "subnet_id, public_access). Omit for no private networking."
+                    ),
                 },
                 "ssl_connection": {
                     "type": "boolean",
@@ -795,8 +801,11 @@ def create_linode_database_mysql_instance_update_tool() -> tuple[Tool, Capabilit
                 },
                 "label": {"type": "string", "description": "Database label"},
                 "private_network": {
-                    "type": ["object", "null"],
-                    "description": "Private network configuration",
+                    "type": "object",
+                    "description": (
+                        "Object placing the database in a VPC (vpc_id, "
+                        "subnet_id, public_access). Pass null to detach."
+                    ),
                 },
                 "type": {"type": "string", "description": "Linode database plan type"},
                 "updates": {
@@ -873,8 +882,11 @@ def create_linode_database_postgresql_instance_update_tool() -> tuple[Tool, Capa
                 },
                 "label": {"type": "string", "description": "Database label"},
                 "private_network": {
-                    "type": ["object", "null"],
-                    "description": "Private network configuration",
+                    "type": "object",
+                    "description": (
+                        "Object placing the database in a VPC (vpc_id, "
+                        "subnet_id, public_access). Pass null to detach."
+                    ),
                 },
                 "type": {"type": "string", "description": "Linode database plan type"},
                 "updates": {

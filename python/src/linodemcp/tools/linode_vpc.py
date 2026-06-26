@@ -52,15 +52,28 @@ def _optional_int_argument(
     return value
 
 
+_VPC_LABEL_FILTER_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "Filter VPCs by label containing this string (case-insensitive)",
+}
+
+_VPC_REGION_FILTER_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "Filter VPCs by region (exact match, case-insensitive)",
+}
+
+
 def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_list tool."""
     return Tool(
         name="linode_vpc_list",
-        description="Lists all VPCs on the account",
+        description="Lists all VPCs. Can filter by label or region.",
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
+                "label": _VPC_LABEL_FILTER_PROP,
+                "region": _VPC_REGION_FILTER_PROP,
             },
         },
     ), Capability.Read
@@ -70,12 +83,42 @@ async def handle_linode_vpc_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_list tool request."""
+    label_filter = arguments.get("label", "")
+    region_filter = arguments.get("region", "")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         vpcs = await client.list_vpcs()
-        return {"count": len(vpcs), "vpcs": vpcs}
+        vpcs, applied = _filter_vpcs(vpcs, label_filter, region_filter)
+        response: dict[str, Any] = {"count": len(vpcs), "vpcs": vpcs}
+        if applied:
+            response["filter"] = ", ".join(applied)
+        return response
 
     return await execute_tool(cfg, arguments, "list VPCs", _call)
+
+
+def _filter_vpcs(
+    vpcs: list[dict[str, Any]], label_filter: str, region_filter: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Filter VPCs client-side to mirror the Go list tool.
+
+    Label uses a case-insensitive substring match; region uses a
+    case-insensitive exact match. Empty filters are ignored.
+    """
+    applied: list[str] = []
+
+    if label_filter:
+        needle = label_filter.lower()
+        vpcs = [v for v in vpcs if needle in str(v.get("label", "")).lower()]
+        applied.append(f"label={label_filter}")
+
+    if region_filter:
+        vpcs = [
+            v for v in vpcs if str(v.get("region", "")).lower() == region_filter.lower()
+        ]
+        applied.append(f"region={region_filter}")
+
+    return vpcs, applied
 
 
 def create_linode_vpc_get_tool() -> tuple[Tool, Capability]:

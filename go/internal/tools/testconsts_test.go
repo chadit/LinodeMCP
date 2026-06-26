@@ -44,7 +44,6 @@ const (
 	caseNonStringInterface     = "non-string interface"
 	caseNullInterface          = "null interface"
 	caseZeroContactID          = "zero contact id"
-	interfacePrimaryJSON       = `{"primary":true}`
 	memberLabelFixture         = "Engineering"
 	memberTokenFixture         = "member-token"
 	invalidServiceTypeSlash    = "dbaas/postgres"
@@ -516,7 +515,6 @@ const (
 	errTokenNoSeparators           = "token must not contain path separators"
 	errValidForShareGroupUUID      = "valid_for_sharegroup_uuid is required"
 	imageShareGroupCreated         = "2025-04-14T22:44:02"
-	configInterfacePublicJSON      = `{"purpose":"public"}`
 	purposePublic                  = "public"
 	purposeVPC                     = "vpc"
 	policyDrop                     = "DROP"

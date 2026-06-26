@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -16,6 +17,13 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
+const (
+	keyAPIDryRun          = "api_dry_run"
+	upgradeInterfacesPath = "/linode/instances/123/upgrade-interfaces"
+	toolInterfacesUpgrade = "linode_instance_interface_upgrade"
+	errAPIDryRunBoolean   = "api_dry_run must be a boolean"
+)
+
 func TestLinodeInterfacesUpgradeToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
@@ -26,8 +34,8 @@ func TestLinodeInterfacesUpgradeToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_interface_upgrade" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interface_upgrade")
+	if tool.Name != toolInterfacesUpgrade {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolInterfacesUpgrade)
 	}
 
 	if tool.Description == "" {
@@ -46,7 +54,7 @@ func TestLinodeInterfacesUpgradeToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	for _, key := range []string{keyLinodeID, keyConfigID, keyDryRun, keyConfirm} {
+	for _, key := range []string{keyLinodeID, keyConfigID, keyAPIDryRun, keyDryRun, keyConfirm} {
 		if _, ok := tool.InputSchema.Properties[key]; !ok {
 			t.Errorf("tool.InputSchema.Properties missing key %v", key)
 		}
@@ -81,7 +89,7 @@ func TestLinodeInterfacesUpgradeToolConfirm(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			args := map[string]any{keyLinodeID: float64(123), keyConfigID: float64(4567), keyDryRun: true}
+			args := map[string]any{keyLinodeID: float64(123), keyConfigID: float64(4567)}
 			if tt.set {
 				args[keyConfirm] = tt.value
 			}
@@ -131,7 +139,7 @@ func TestLinodeInterfacesUpgradeToolValidation(t *testing.T) {
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyConfirm: true}, wantContains: errConfigIDMin},
 		{name: "zero config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyConfirm: true}, wantContains: errConfigIDMin},
 		{name: caseNegativeConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-1), keyConfirm: true}, wantContains: errConfigIDMin},
-		{name: "string dry_run", args: map[string]any{keyLinodeID: float64(123), keyDryRun: boolStringTrue, keyConfirm: true}, wantContains: "dry_run must be a boolean"},
+		{name: "string api_dry_run", args: map[string]any{keyLinodeID: float64(123), keyAPIDryRun: boolStringTrue, keyConfirm: true}, wantContains: errAPIDryRunBoolean},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -157,16 +165,55 @@ func TestLinodeInterfacesUpgradeToolValidation(t *testing.T) {
 	}
 }
 
+func TestLinodeInterfacesUpgradeToolDryRunPreview(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123})
+	_, _, handler := tools.NewLinodeInterfacesUpgradeTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: float64(123),
+		keyDryRun:   true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(body["tool"], toolInterfacesUpgrade) {
+		t.Errorf("got %v, want %v", body["tool"], toolInterfacesUpgrade)
+	}
+
+	would, _ := body["would_execute"].(map[string]any)
+	if !reflect.DeepEqual(would["method"], http.MethodPost) {
+		t.Errorf("got %v, want %v", would["method"], http.MethodPost)
+	}
+
+	if !reflect.DeepEqual(would["path"], upgradeInterfacesPath) {
+		t.Errorf("got %v, want %v", would["path"], upgradeInterfacesPath)
+	}
+
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
+		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	}
+}
+
 func TestLinodeInterfacesUpgradeToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	configID := 4567
 
-	var dryRun bool
-
 	response := linode.UpgradeLinodeInterfacesResponse{
 		ConfigID: configID,
-		DryRun:   dryRun,
+		DryRun:   false,
 		Interfaces: []linode.InstanceInterface{
 			{ID: 0, MACAddress: macAddressFixture},
 		},
@@ -177,8 +224,8 @@ func TestLinodeInterfacesUpgradeToolSuccess(t *testing.T) {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		if r.URL.Path != "/linode/instances/123/upgrade-interfaces" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/upgrade-interfaces")
+		if r.URL.Path != upgradeInterfacesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, upgradeInterfacesPath)
 		}
 
 		if r.URL.RawQuery != "" {
@@ -222,10 +269,10 @@ func TestLinodeInterfacesUpgradeToolSuccess(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeInterfacesUpgradeTool(srvCfg)
 
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
-		keyLinodeID: float64(123),
-		keyConfigID: float64(configID),
-		keyDryRun:   dryRun,
-		keyConfirm:  true,
+		keyLinodeID:  float64(123),
+		keyConfigID:  float64(configID),
+		keyAPIDryRun: false,
+		keyConfirm:   true,
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -253,7 +300,7 @@ func TestLinodeInterfacesUpgradeToolSuccess(t *testing.T) {
 	}
 }
 
-func TestLinodeInterfacesUpgradeToolOmittedDryRunDefaultsToPreview(t *testing.T) {
+func TestLinodeInterfacesUpgradeToolOmittedAPIDryRunNotSent(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -261,8 +308,8 @@ func TestLinodeInterfacesUpgradeToolOmittedDryRunDefaultsToPreview(t *testing.T)
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
 		}
 
-		if r.URL.Path != "/linode/instances/123/upgrade-interfaces" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/upgrade-interfaces")
+		if r.URL.Path != upgradeInterfacesPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, upgradeInterfacesPath)
 		}
 
 		var got linode.UpgradeLinodeInterfacesRequest
@@ -274,17 +321,13 @@ func TestLinodeInterfacesUpgradeToolOmittedDryRunDefaultsToPreview(t *testing.T)
 			t.Errorf("got.ConfigID = %v, want nil", got.ConfigID)
 		}
 
-		if got.DryRun == nil {
-			t.Fatal("dry_run should default to true")
-		}
-
-		if !(*got.DryRun) {
-			t.Error("*got.DryRun = false, want true")
+		if got.DryRun != nil {
+			t.Errorf("got.DryRun = %v, want nil", got.DryRun)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.UpgradeLinodeInterfacesResponse{DryRun: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(linode.UpgradeLinodeInterfacesResponse{}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

@@ -48,15 +48,24 @@ def _validate_lke_tier(value: object) -> str | None:
     return value
 
 
+_LKE_LABEL_FILTER_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "Filter clusters by label containing this string (case-insensitive)",
+}
+
+
 def create_linode_lke_cluster_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_list tool."""
     return Tool(
         name="linode_lke_cluster_list",
-        description="Lists all LKE (Kubernetes) clusters on the account",
+        description=(
+            "Lists all Linode Kubernetes Engine (LKE) clusters. Can filter by label."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
+                "label": _LKE_LABEL_FILTER_PROP,
             },
         },
     ), Capability.Read
@@ -66,10 +75,24 @@ async def handle_linode_lke_cluster_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_cluster_list tool request."""
+    label_filter = arguments.get("label", "")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         clusters = await client.list_lke_clusters()
-        return {"count": len(clusters), "clusters": clusters}
+        response: dict[str, Any]
+        if label_filter:
+            needle = label_filter.lower()
+            clusters = [
+                c for c in clusters if needle in str(c.get("label", "")).lower()
+            ]
+            response = {
+                "count": len(clusters),
+                "clusters": clusters,
+                "filter": f"label={label_filter}",
+            }
+        else:
+            response = {"count": len(clusters), "clusters": clusters}
+        return response
 
     return await execute_tool(cfg, arguments, "list LKE clusters", _call)
 

@@ -677,7 +677,7 @@ def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
             "properties": {
                 **ENV_PARAM_SCHEMA,
                 "expiry": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": (
                         "Expiration timestamp for the token. Omit to keep valid "
                         "until manually revoked."

@@ -47,7 +47,7 @@ func TestClientAnswerProfileSecurityQuestionsSuccess(t *testing.T) {
 			actualJSON   any
 		)
 
-		if err := json.Unmarshal([]byte(`{"security_questions":"answer payload"}`), &expectedJSON); err != nil {
+		if err := json.Unmarshal([]byte(`{"security_questions":[{"question_id":1,"response":"first"},{"question_id":2,"response":"second"},{"question_id":3,"response":"third"}]}`), &expectedJSON); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
@@ -69,7 +69,11 @@ func TestClientAnswerProfileSecurityQuestionsSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
 
-	err := client.AnswerProfileSecurityQuestions(t.Context(), &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: "answer payload"})
+	err := client.AnswerProfileSecurityQuestions(t.Context(), &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: []linode.SecurityQuestionAnswer{
+		{QuestionID: 1, Response: "first"},
+		{QuestionID: 2, Response: "second"},
+		{QuestionID: 3, Response: "third"},
+	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

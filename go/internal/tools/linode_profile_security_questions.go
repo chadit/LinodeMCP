@@ -13,6 +13,10 @@ import (
 const (
 	profileSecurityQuestionsPath  = "/profile/security-questions"
 	profileSecurityQuestionsParam = "security_questions"
+
+	profileSecurityQuestionsCount    = 3
+	profileSecurityResponseMinLength = 3
+	profileSecurityResponseMaxLength = 17
 )
 
 // NewLinodeProfileSecurityQuestionsAnswerTool creates a tool for answering profile security questions.
@@ -22,8 +26,8 @@ func NewLinodeProfileSecurityQuestionsAnswerTool(cfg *config.Config) (mcp.Tool, 
 		"linode_profile_security_question_answer",
 		"Answers security questions for the authenticated profile. Pass dry_run=true to preview without submitting.",
 		[]mcp.ToolOption{
-			mcp.WithString(profileSecurityQuestionsParam, mcp.Required(),
-				mcp.Description("Security question answers payload to submit.")),
+			mcp.WithArray(profileSecurityQuestionsParam, mcp.Required(),
+				mcp.Description("Exactly 3 security question answers, each an object with a positive question_id and a 3-to-17-character response.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm submitting profile security question answers. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -41,7 +45,7 @@ func handleLinodeProfileSecurityQuestionsAnswerRequest(ctx context.Context, requ
 	}
 
 	if IsDryRun(request) {
-		redactedReq := &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: "[redacted]"}
+		redactedReq := redactSecurityQuestionsRequest(req)
 
 		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_security_question_answer", httpMethodPost,
 			profileSecurityQuestionsPath, redactedReq, nil,
@@ -70,25 +74,62 @@ func handleLinodeProfileSecurityQuestionsAnswerRequest(ctx context.Context, requ
 
 func answerProfileSecurityQuestionsRequestFromTool(request *mcp.CallToolRequest) (*linode.AnswerProfileSecurityQuestionsRequest, string) {
 	args := request.GetArguments()
-	req := linode.AnswerProfileSecurityQuestionsRequest{}
 
 	raw, exists := args[profileSecurityQuestionsParam]
 	if !exists {
 		return nil, profileSecurityQuestionsParam + " is required"
 	}
 
-	value, ok := raw.(string)
-	if !ok {
-		return nil, profileSecurityQuestionsParam + " must be a string"
+	answers, validationMessage := objectSliceFromToolArg[linode.SecurityQuestionAnswer](raw, profileSecurityQuestionsParam)
+	if validationMessage != "" {
+		return nil, validationMessage
 	}
 
-	if value == "" {
-		return nil, profileSecurityQuestionsParam + " must not be empty"
+	if validationMessage := validateSecurityQuestionAnswers(answers); validationMessage != "" {
+		return nil, validationMessage
 	}
 
-	req.SecurityQuestions = value
+	return &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: answers}, ""
+}
 
-	return &req, ""
+// validateSecurityQuestionAnswers enforces the same shape the Linode API and the
+// Python implementation require: exactly three answers, each with a positive,
+// unique question_id and a response between 3 and 17 characters.
+func validateSecurityQuestionAnswers(answers []linode.SecurityQuestionAnswer) string {
+	if len(answers) != profileSecurityQuestionsCount {
+		return profileSecurityQuestionsParam + " must contain exactly 3 answers"
+	}
+
+	seen := make(map[int]struct{}, profileSecurityQuestionsCount)
+
+	for _, answer := range answers {
+		if answer.QuestionID < 1 {
+			return "question_id must be a positive integer"
+		}
+
+		if _, duplicate := seen[answer.QuestionID]; duplicate {
+			return "question_id values must be unique"
+		}
+
+		seen[answer.QuestionID] = struct{}{}
+
+		if len(answer.Response) < profileSecurityResponseMinLength || len(answer.Response) > profileSecurityResponseMaxLength {
+			return "response length must be between 3 and 17 characters"
+		}
+	}
+
+	return ""
+}
+
+// redactSecurityQuestionsRequest replaces every plaintext response with a
+// placeholder so the dry-run preview body never echoes the answers.
+func redactSecurityQuestionsRequest(req *linode.AnswerProfileSecurityQuestionsRequest) *linode.AnswerProfileSecurityQuestionsRequest {
+	redacted := make([]linode.SecurityQuestionAnswer, len(req.SecurityQuestions))
+	for i, answer := range req.SecurityQuestions {
+		redacted[i] = linode.SecurityQuestionAnswer{QuestionID: answer.QuestionID, Response: "[redacted]"}
+	}
+
+	return &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: redacted}
 }
 
 func answerProfileSecurityQuestionsErrorMessage(ctx context.Context, client *linode.Client, req *linode.AnswerProfileSecurityQuestionsRequest) string {

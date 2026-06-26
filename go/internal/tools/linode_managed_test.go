@@ -528,9 +528,9 @@ func TestLinodeManagedContactUpdateToolSuccess(t *testing.T) {
 			}
 		}
 
-		wantPhone := map[string]any{"primary": managedContactPhoneFixture, "secondary": "555-1212"}
+		wantPhone := map[string]any{managedContactPhonePrimaryKey: managedContactPhoneFixture, managedContactPhoneSecondaryKey: managedContactPhone2Fixture}
 
-		phone, ok := got["phone"].(map[string]any)
+		phone, ok := got[managedContactPhoneParam].(map[string]any)
 		if !ok {
 			t.Error("phone should be object")
 		}
@@ -555,9 +555,11 @@ func TestLinodeManagedContactUpdateToolSuccess(t *testing.T) {
 		keyName:                      managedContactsToolName,
 		keyEmail:                     managedContactsToolEmail,
 		managedContactUpdateGroupKey: "on-call",
-		"phone_primary":              managedContactPhoneFixture,
-		"phone_secondary":            "555-1212",
-		keyConfirm:                   true,
+		managedContactPhoneParam: map[string]any{
+			managedContactPhonePrimaryKey:   managedContactPhoneFixture,
+			managedContactPhoneSecondaryKey: managedContactPhone2Fixture,
+		},
+		keyConfirm: true,
 	})
 
 	result, err := handler(t.Context(), req)
@@ -657,8 +659,9 @@ func TestLinodeManagedContactUpdateToolInvalidInputRejectsBeforeClient(t *testin
 		{name: "numeric name", args: map[string]any{managedContactUpdateIDKey: 567, keyName: 123, keyConfirm: true}, wantMessage: "name must be a string"},
 		{name: managedContactUpdateCaseNumericEmail, args: map[string]any{managedContactUpdateIDKey: 567, keyEmail: 123, keyConfirm: true}, wantMessage: "email must be a string"},
 		{name: "numeric group", args: map[string]any{managedContactUpdateIDKey: 567, managedContactUpdateGroupKey: 123, keyConfirm: true}, wantMessage: "group must be a string"},
-		{name: "numeric primary phone", args: map[string]any{managedContactUpdateIDKey: 567, "phone_primary": 123, keyConfirm: true}, wantMessage: "phone_primary must be a string"},
-		{name: "numeric secondary phone", args: map[string]any{managedContactUpdateIDKey: 567, "phone_secondary": 123, keyConfirm: true}, wantMessage: "phone_secondary must be a string"},
+		{name: "numeric primary phone", args: map[string]any{managedContactUpdateIDKey: 567, managedContactPhoneParam: map[string]any{managedContactPhonePrimaryKey: 123}, keyConfirm: true}, wantMessage: "phone.primary must be a non-empty string"},
+		{name: "numeric secondary phone", args: map[string]any{managedContactUpdateIDKey: 567, managedContactPhoneParam: map[string]any{managedContactPhoneSecondaryKey: 123}, keyConfirm: true}, wantMessage: "phone.secondary must be a non-empty string"},
+		{name: "phone not object", args: map[string]any{managedContactUpdateIDKey: 567, managedContactPhoneParam: managedContactPhone2Fixture, keyConfirm: true}, wantMessage: "phone must be an object"},
 	}
 
 	for _, testCase := range cases {

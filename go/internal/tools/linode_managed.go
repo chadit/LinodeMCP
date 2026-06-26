@@ -45,8 +45,7 @@ const (
 	managedContactUpdateNameParam            = "name"
 	managedContactUpdateEmailParam           = "email"
 	managedContactUpdateGroupParam           = "group"
-	managedContactUpdatePhone1Param          = "phone_primary"
-	managedContactUpdatePhone2Param          = "phone_secondary"
+	managedContactUpdatePhoneParam           = "phone"
 	managedContactDeleteIDParam              = "contact_id"
 	managedContactDeleteIDMessage            = "contact_id must be a positive integer"
 	managedIssueGetIDParam                   = "issue_id"
@@ -367,8 +366,7 @@ func NewLinodeManagedContactUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString(managedContactUpdateNameParam, mcp.Description("Updated contact name.")),
 			mcp.WithString(managedContactUpdateEmailParam, mcp.Description("Updated contact email address.")),
 			mcp.WithString(managedContactUpdateGroupParam, mcp.Description("Updated contact group.")),
-			mcp.WithString(managedContactUpdatePhone1Param, mcp.Description("Updated primary phone number.")),
-			mcp.WithString(managedContactUpdatePhone2Param, mcp.Description("Updated secondary phone number.")),
+			mcp.WithObject(managedContactUpdatePhoneParam, mcp.Description("Updated phone numbers object: { primary: string, secondary: string }.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed contact. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -1346,17 +1344,12 @@ func managedContactUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateM
 
 	phone := &linode.UpdateManagedContactPhone{}
 
-	var phoneFields int
-
-	if validationMessage := managedContactOptionalString(request, managedContactUpdatePhone1Param, &phone.Primary, &phoneFields); validationMessage != "" {
+	phoneSet, validationMessage := managedContactPhoneFromArgs(request.GetArguments(), &phone.Primary, &phone.Secondary)
+	if validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := managedContactOptionalString(request, managedContactUpdatePhone2Param, &phone.Secondary, &phoneFields); validationMessage != "" {
-		return nil, validationMessage
-	}
-
-	if phoneFields > 0 {
+	if phoneSet {
 		req.Phone = phone
 		fields++
 	}

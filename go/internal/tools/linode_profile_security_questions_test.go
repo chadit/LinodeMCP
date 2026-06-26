@@ -20,8 +20,48 @@ import (
 const (
 	toolProfileSecurityQuestionsAnswer = "linode_profile_security_question_answer"
 	keySecurityQuestions               = "security_questions"
-	profileSecurityQuestionsPayload    = "answer payload"
+	keyQuestionID                      = "question_id"
+	keyResponse                        = "response"
+	securityAnswerResponseFirst        = "first answer"
+	securityAnswerResponseSecond       = "second answer"
+	securityAnswerResponseThird        = "third answer"
 )
+
+// validSecurityQuestionsPayload returns the array form the tool now accepts:
+// exactly three answers, each an object with a positive question_id and a
+// response of valid length.
+func validSecurityQuestionsPayload() []any {
+	return []any{
+		map[string]any{keyQuestionID: 1, keyResponse: securityAnswerResponseFirst},
+		map[string]any{keyQuestionID: 2, keyResponse: securityAnswerResponseSecond},
+		map[string]any{keyQuestionID: 3, keyResponse: securityAnswerResponseThird},
+	}
+}
+
+// assertRedactedSecurityAnswers verifies the dry-run preview body carries the
+// answers as an array whose responses are scrubbed while question IDs survive.
+func assertRedactedSecurityAnswers(t *testing.T, answers []any) {
+	t.Helper()
+
+	if len(answers) != len(validSecurityQuestionsPayload()) {
+		t.Errorf("len(answers) = %v, want %v", len(answers), len(validSecurityQuestionsPayload()))
+	}
+
+	for idx, raw := range answers {
+		answer, isObject := raw.(map[string]any)
+		if !isObject {
+			t.Fatalf("answers[%d] = %T, want map[string]any", idx, raw)
+		}
+
+		if !reflect.DeepEqual(answer[keyResponse], "[redacted]") {
+			t.Errorf("answers[%d][response] = %v, want %v", idx, answer[keyResponse], "[redacted]")
+		}
+
+		if _, hasQuestionID := answer[keyQuestionID]; !hasQuestionID {
+			t.Errorf("answers[%d] missing question_id", idx)
+		}
+	}
+}
 
 func TestLinodeProfileSecurityQuestionsAnswerToolDefinition(t *testing.T) {
 	t.Parallel()
@@ -61,8 +101,49 @@ func TestLinodeProfileSecurityQuestionsAnswerToolSecurityQuestionsValidationBefo
 		message string
 	}{
 		{name: caseMissing, args: map[string]any{keyConfirm: true}, message: "security_questions is required"},
-		{name: "empty", args: map[string]any{keySecurityQuestions: "", keyConfirm: true}, message: "security_questions must not be empty"},
-		{name: caseString, args: map[string]any{keySecurityQuestions: []any{"unexpected"}, keyConfirm: true}, message: "security_questions must be a string"},
+		{
+			name: "wrong count",
+			args: map[string]any{keySecurityQuestions: []any{
+				map[string]any{keyQuestionID: 1, keyResponse: securityAnswerResponseFirst},
+			}, keyConfirm: true},
+			message: "security_questions must contain exactly 3 answers",
+		},
+		{
+			name: "non-positive question_id",
+			args: map[string]any{keySecurityQuestions: []any{
+				map[string]any{keyQuestionID: 0, keyResponse: securityAnswerResponseFirst},
+				map[string]any{keyQuestionID: 2, keyResponse: securityAnswerResponseSecond},
+				map[string]any{keyQuestionID: 3, keyResponse: securityAnswerResponseThird},
+			}, keyConfirm: true},
+			message: "question_id must be a positive integer",
+		},
+		{
+			name: "duplicate question_id",
+			args: map[string]any{keySecurityQuestions: []any{
+				map[string]any{keyQuestionID: 1, keyResponse: securityAnswerResponseFirst},
+				map[string]any{keyQuestionID: 1, keyResponse: securityAnswerResponseSecond},
+				map[string]any{keyQuestionID: 3, keyResponse: securityAnswerResponseThird},
+			}, keyConfirm: true},
+			message: "question_id values must be unique",
+		},
+		{
+			name: "response too short",
+			args: map[string]any{keySecurityQuestions: []any{
+				map[string]any{keyQuestionID: 1, keyResponse: "no"},
+				map[string]any{keyQuestionID: 2, keyResponse: securityAnswerResponseSecond},
+				map[string]any{keyQuestionID: 3, keyResponse: securityAnswerResponseThird},
+			}, keyConfirm: true},
+			message: "response length must be between 3 and 17 characters",
+		},
+		{
+			name: caseString,
+			args: map[string]any{keySecurityQuestions: []any{
+				map[string]any{keyQuestionID: "not-an-int", keyResponse: securityAnswerResponseFirst},
+				map[string]any{keyQuestionID: 2, keyResponse: securityAnswerResponseSecond},
+				map[string]any{keyQuestionID: 3, keyResponse: securityAnswerResponseThird},
+			}, keyConfirm: true},
+			message: "security_questions must be an array of objects",
+		},
 	}
 
 	for _, tt := range cases {
@@ -135,7 +216,7 @@ func TestLinodeProfileSecurityQuestionsAnswerToolConfirmRequiredBeforeClientCall
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 			_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-			args := map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload}
+			args := map[string]any{keySecurityQuestions: validSecurityQuestionsPayload()}
 			if tt.set {
 				args[keyConfirm] = tt.value
 			}
@@ -180,7 +261,7 @@ func TestLinodeProfileSecurityQuestionsAnswerToolDryRunPreviewsWithoutClientCall
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyDryRun: true})
+	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: validSecurityQuestionsPayload(), keyDryRun: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -231,12 +312,17 @@ func TestLinodeProfileSecurityQuestionsAnswerToolDryRunPreviewsWithoutClientCall
 		t.Error("hasBody = false, want true")
 	}
 
-	if !reflect.DeepEqual(bodyValue[keySecurityQuestions], "[redacted]") {
-		t.Errorf("bodyValue[keySecurityQuestions] = %v, want %v", bodyValue[keySecurityQuestions], "[redacted]")
+	answers, isArray := bodyValue[keySecurityQuestions].([]any)
+	if !isArray {
+		t.Fatalf("bodyValue[keySecurityQuestions] = %T, want []any", bodyValue[keySecurityQuestions])
 	}
 
-	if strings.Contains(textContent.Text, profileSecurityQuestionsPayload) {
-		t.Errorf("dry-run output must not expose answers: %q unexpectedly contains %q", textContent.Text, profileSecurityQuestionsPayload)
+	assertRedactedSecurityAnswers(t, answers)
+
+	for _, plaintext := range []string{securityAnswerResponseFirst, securityAnswerResponseSecond, securityAnswerResponseThird} {
+		if strings.Contains(textContent.Text, plaintext) {
+			t.Errorf("dry-run output must not expose answers: %q unexpectedly contains %q", textContent.Text, plaintext)
+		}
 	}
 
 	if !strings.Contains(textContent.Text, "side_effects") {
@@ -269,7 +355,7 @@ func TestLinodeProfileSecurityQuestionsAnswerToolSuccess(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 		{
-			expectedJSON := `{"security_questions":"answer payload"}`
+			expectedJSON := `{"security_questions":[{"question_id":1,"response":"first answer"},{"question_id":2,"response":"second answer"},{"question_id":3,"response":"third answer"}]}`
 			actualJSON := string(body)
 
 			var (
@@ -301,7 +387,7 @@ func TestLinodeProfileSecurityQuestionsAnswerToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: validSecurityQuestionsPayload(), keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -352,7 +438,7 @@ func TestLinodeProfileSecurityQuestionsAnswerToolApiErrorProducesToolError(t *te
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeProfileSecurityQuestionsAnswerTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: profileSecurityQuestionsPayload, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keySecurityQuestions: validSecurityQuestionsPayload(), keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {

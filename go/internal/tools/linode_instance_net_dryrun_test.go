@@ -324,10 +324,10 @@ func TestLinodeInstanceInterfaceUpdateToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeInstanceInterfaceUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID:    float64(123),
-			keyInterfaceID: float64(55),
-			keyInterface:   ifacePublicJSON,
-			keyDryRun:      true,
+			keyLinodeID:        float64(123),
+			keyInterfaceID:     float64(55),
+			keyInterfacePublic: map[string]any{},
+			keyDryRun:          true,
 		}))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -366,9 +366,9 @@ func TestLinodeInstanceInterfaceUpdateToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeInstanceInterfaceUpdateTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID:  float64(123),
-			keyInterface: ifacePublicJSON,
-			keyDryRun:    true,
+			keyLinodeID:        float64(123),
+			keyInterfacePublic: map[string]any{},
+			keyDryRun:          true,
 		}))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -400,9 +400,9 @@ func TestLinodeInstanceInterfaceSettingsUpdateToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeInstanceInterfaceSettingsUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123),
-			"settings":  `{"network_helper":true}`,
-			keyDryRun:   true,
+			keyLinodeID:      float64(123),
+			"network_helper": true,
+			keyDryRun:        true,
 		}))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

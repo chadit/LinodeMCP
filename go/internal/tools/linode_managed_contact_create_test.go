@@ -19,21 +19,23 @@ import (
 )
 
 const (
-	managedContactCreateToolName      = "linode_managed_contact_create"
-	managedContactNameParam           = "contact_name"
-	managedContactEmailParam          = "contact_email"
-	managedContactNameFixture         = "John Doe"
-	managedContactEmailFixture        = "john.doe@example.org"
-	managedContactGroupFixture        = "on-call"
-	managedContactPhoneFixture        = "123-456-7890"
-	managedContactPhonePrimaryParam   = "phone_primary"
-	managedContactPhoneSecondaryParam = "phone_secondary"
-	managedContactCreateEndpoint      = "/managed/contacts"
-	errManagedContactFieldRequired    = "at least one managed contact field is required"
-	errManagedContactReadOnlyField    = "id and updated are read-only"
-	errManagedContactNameNonEmpty     = "name must be a non-empty string"
-	errManagedContactEmailNonEmpty    = "email must be a non-empty string"
-	errManagedContactPhoneNonEmpty    = "phone_primary must be a non-empty string"
+	managedContactCreateToolName    = "linode_managed_contact_create"
+	managedContactNameParam         = "name"
+	managedContactEmailParam        = "email"
+	managedContactPhoneParam        = "phone"
+	managedContactPhonePrimaryKey   = "primary"
+	managedContactPhoneSecondaryKey = "secondary"
+	managedContactNameFixture       = "John Doe"
+	managedContactEmailFixture      = "john.doe@example.org"
+	managedContactGroupFixture      = "on-call"
+	managedContactPhoneFixture      = "123-456-7890"
+	managedContactPhone2Fixture     = "555-1212"
+	managedContactCreateEndpoint    = "/managed/contacts"
+	errManagedContactFieldRequired  = "at least one managed contact field is required"
+	errManagedContactReadOnlyField  = "id and updated are read-only"
+	errManagedContactNameNonEmpty   = "name must be a non-empty string"
+	errManagedContactEmailNonEmpty  = "email must be a non-empty string"
+	errManagedContactPhoneNonEmpty  = "phone.primary must be a non-empty string"
 )
 
 func TestLinodeManagedContactCreateToolDefinition(t *testing.T) {
@@ -67,8 +69,8 @@ func TestLinodeManagedContactCreateToolDefinition(t *testing.T) {
 		t.Errorf("props missing key %v", managedContactEmailParam)
 	}
 
-	if _, ok := props[managedContactPhonePrimaryParam]; !ok {
-		t.Errorf("props missing key %v", managedContactPhonePrimaryParam)
+	if _, ok := props[managedContactPhoneParam]; !ok {
+		t.Errorf("props missing key %v", managedContactPhoneParam)
 	}
 
 	if _, ok := props[keyConfirm]; !ok {
@@ -153,7 +155,7 @@ func TestLinodeManagedContactCreateToolInvalidRequestRejectedBeforeClientCall(t 
 		{name: "read only updated", args: map[string]any{keyUpdated: "2018-01-01T00:01:01", managedContactNameParam: managedContactNameFixture, keyConfirm: true}, wantMessage: errManagedContactReadOnlyField},
 		{name: "managed contact empty name", args: map[string]any{managedContactNameParam: "", keyConfirm: true}, wantMessage: errManagedContactNameNonEmpty},
 		{name: "managed contact numeric email", args: map[string]any{managedContactEmailParam: 123, keyConfirm: true}, wantMessage: errManagedContactEmailNonEmpty},
-		{name: "blank phone", args: map[string]any{managedContactPhonePrimaryParam: blankString, keyConfirm: true}, wantMessage: errManagedContactPhoneNonEmpty},
+		{name: "blank phone", args: map[string]any{managedContactPhoneParam: map[string]any{managedContactPhonePrimaryKey: blankString}, keyConfirm: true}, wantMessage: errManagedContactPhoneNonEmpty},
 	}
 
 	for _, testCase := range cases {
@@ -252,7 +254,7 @@ func TestLinodeManagedContactCreateToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeManagedContactCreateTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{managedContactNameParam: managedContactNameFixture, managedContactEmailParam: managedContactEmailFixture, "group": managedContactGroupFixture, managedContactPhonePrimaryParam: managedContactPhoneFixture, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{managedContactNameParam: managedContactNameFixture, managedContactEmailParam: managedContactEmailFixture, "group": managedContactGroupFixture, managedContactPhoneParam: map[string]any{managedContactPhonePrimaryKey: managedContactPhoneFixture}, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {

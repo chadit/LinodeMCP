@@ -1,5 +1,7 @@
 """Linode account tool - authenticated user account information."""
 
+import base64
+import binascii
 import re
 from pathlib import Path
 from typing import Any, cast
@@ -42,6 +44,7 @@ _ACCOUNT_GRANT_FIELDS = (
     "global",
     "image",
     "linode",
+    "lkecluster",
     "longview",
     "nodebalancer",
     "stackscript",
@@ -835,6 +838,12 @@ def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
                     "pattern": _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT,
                     "description": "OAuth client ID",
                 },
+                "thumbnail_png_base64": {
+                    "type": "string",
+                    "description": (
+                        "Base64-encoded PNG image for the OAuth client thumbnail."
+                    ),
+                },
                 "confirm": {
                     "type": "boolean",
                     "description": (
@@ -844,7 +853,7 @@ def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["client_id", "confirm"],
+            "required": ["client_id", "confirm", "thumbnail_png_base64"],
         },
     ), Capability.Admin
 
@@ -913,6 +922,23 @@ async def handle_linode_account_oauth_client_update(
     )
 
 
+def _decode_thumbnail_png(value: Any) -> tuple[bytes | None, str | None]:
+    """Decode the thumbnail_png_base64 argument; return (bytes, error message).
+
+    Mirrors the Go handler, which requires a non-empty standard-base64 string
+    and posts the decoded PNG bytes to the thumbnail endpoint.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None, "thumbnail_png_base64 must be a non-empty string"
+    try:
+        # validate=True rejects non-alphabet characters, matching Go's strict
+        # base64.StdEncoding.DecodeString rather than silently dropping them.
+        thumbnail_png = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        return None, "thumbnail_png_base64 must be valid standard base64"
+    return thumbnail_png, None
+
+
 async def handle_linode_account_oauth_client_thumbnail_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -922,6 +948,14 @@ async def handle_linode_account_oauth_client_thumbnail_update(
         return error_response(
             "client_id must be a non-empty ID without path separators, "
             "query separators, or traversal segments"
+        )
+
+    thumbnail_png, thumbnail_err = _decode_thumbnail_png(
+        arguments.get("thumbnail_png_base64")
+    )
+    if thumbnail_png is None:
+        return error_response(
+            thumbnail_err or "thumbnail_png_base64 must be a non-empty string"
         )
 
     encoded_client_id = quote(client_id, safe="")
@@ -942,7 +976,9 @@ async def handle_linode_account_oauth_client_thumbnail_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        oauth_client = await client.update_account_oauth_client_thumbnail(client_id)
+        oauth_client = await client.update_account_oauth_client_thumbnail(
+            client_id, thumbnail_png
+        )
         return {
             "message": "OAuth client thumbnail updated successfully",
             "client": oauth_client,
@@ -2170,7 +2206,7 @@ _ACCOUNT_SETTINGS_ALLOWED_ARGUMENTS = frozenset(
 )
 
 _ACCOUNT_USER_UPDATE_BOOLEAN_FIELDS = frozenset({"restricted"})
-_ACCOUNT_USER_UPDATE_STRING_FIELDS = frozenset({"email", "username"})
+_ACCOUNT_USER_UPDATE_STRING_FIELDS = frozenset({"email", "new_username"})
 _ACCOUNT_USER_UPDATE_LIST_FIELDS = frozenset({"ssh_keys"})
 _ACCOUNT_USER_UPDATE_FIELDS = tuple(
     sorted(
@@ -2184,7 +2220,7 @@ _ACCOUNT_USER_UPDATE_ALLOWED_ARGUMENTS = frozenset(
         "environment",
         "confirm",
         PARAM_DRY_RUN,
-        "current_username",
+        "username",
         *_ACCOUNT_USER_UPDATE_FIELDS,
     }
 )
@@ -2195,17 +2231,16 @@ def _validate_account_user_update_username(
     value: object,
 ) -> tuple[str | None, str | None]:
     if value is None:
-        return None, "current_username is required"
+        return None, "username is required"
     if not isinstance(value, str):
-        return None, "current_username must be a string"
+        return None, "username must be a string"
     username = value.strip()
     if not username:
-        return None, "current_username is required"
+        return None, "username is required"
     if username != value or not _ACCOUNT_USER_USERNAME_PATTERN.fullmatch(username):
         return (
             None,
-            "current_username must contain only letters, numbers, underscores, "
-            "and hyphens",
+            "username must contain only letters, numbers, underscores, and hyphens",
         )
     return username, None
 
@@ -2238,11 +2273,15 @@ def _account_user_update_body_error(arguments: dict[str, Any]) -> str | None:
 
 
 def _account_user_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
-    return {
+    body = {
         key: arguments[key]
         for key in _ACCOUNT_USER_UPDATE_FIELDS
-        if arguments.get(key) is not None
+        if key != "new_username" and arguments.get(key) is not None
     }
+    # new_username is the tool arg; the PUT body renames the user via "username".
+    if arguments.get("new_username") is not None:
+        body["username"] = arguments["new_username"]
+    return body
 
 
 def create_linode_account_settings_update_tool() -> tuple[Tool, Capability]:
@@ -2480,21 +2519,27 @@ def create_linode_account_user_update_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 **ENV_PARAM_SCHEMA,
-                "current_username": {
+                "username": {
                     "type": "string",
-                    "description": "Current username to update",
+                    "description": "Account username to update.",
                 },
-                "email": {"type": "string", "description": "User email address"},
+                "email": {
+                    "type": "string",
+                    "description": "New email address for the account user.",
+                },
                 "restricted": {
                     "type": "boolean",
-                    "description": "Whether the user is restricted",
+                    "description": "Whether the account user is restricted.",
                 },
                 "ssh_keys": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "SSH keys for the user",
+                    "description": "SSH public keys for the account user.",
                 },
-                "username": {"type": "string", "description": "New username"},
+                "new_username": {
+                    "type": "string",
+                    "description": "New username for the account user.",
+                },
                 "confirm": {
                     "type": "boolean",
                     "description": (
@@ -2505,7 +2550,7 @@ def create_linode_account_user_update_tool() -> tuple[Tool, Capability]:
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["current_username", "confirm"],
+            "required": ["username", "confirm"],
         },
     ), Capability.Admin
 
@@ -2515,10 +2560,10 @@ async def handle_linode_account_user_update(
 ) -> list[TextContent]:
     """Handle linode_account_user_update tool request."""
     current_username, username_error = _validate_account_user_update_username(
-        arguments.get("current_username")
+        arguments.get("username")
     )
     if username_error is not None or current_username is None:
-        return error_response(username_error or "current_username is required")
+        return error_response(username_error or "username is required")
 
     validation_error = _account_user_update_body_error(arguments)
     if validation_error is not None:
@@ -4705,7 +4750,7 @@ async def handle_linode_managed_sshkey_get(
     return await execute_tool(cfg, arguments, "get Linode Managed SSH key", _call)
 
 
-_MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name", "phone")
+_MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name")
 _MANAGED_SERVICE_READ_ONLY_FIELDS = {"created", "id", "status", "updated"}
 _MANAGED_SERVICE_TYPES = {"tcp", "url"}
 _MANAGED_CREDENTIAL_REQUIRED_FIELDS = ("label", "password")
@@ -4890,13 +4935,22 @@ async def handle_linode_managed_credential_update(
     return await execute_tool(cfg, arguments, "update Linode Managed credential", _call)
 
 
-def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, str]:
-    """Collect documented Managed contact body fields from tool arguments."""
-    body = {
+def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Collect documented Managed contact body fields from tool arguments.
+
+    The string fields (email, group, name) carry through as-is; the phone
+    argument is a nested object with optional primary and secondary numbers.
+    """
+    body: dict[str, Any] = {
         field: value
         for field in _MANAGED_CONTACT_BODY_FIELDS
         if (value := _optional_string_argument(arguments, field)) is not None
     }
+    if "phone" in arguments:
+        phone_body = _managed_contact_phone_body(arguments.get("phone"))
+        if isinstance(phone_body, str):
+            raise ValueError(phone_body)
+        body["phone"] = phone_body
     if not body:
         raise ValueError("At least one of email, group, name, or phone is required")
     return body
@@ -5262,8 +5316,17 @@ async def handle_linode_managed_service_disable(
 
 def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contact_create tool."""
-    body_properties = {
+    body_properties: dict[str, Any] = {
         field: {"type": "string"} for field in _MANAGED_CONTACT_BODY_FIELDS
+    }
+    body_properties["phone"] = {
+        "type": "object",
+        "description": "Phone contact details",
+        "properties": {
+            "primary": {"type": ["string", "null"]},
+            "secondary": {"type": ["string", "null"]},
+        },
+        "additionalProperties": False,
     }
     return Tool(
         name="linode_managed_contact_create",
@@ -5410,7 +5473,7 @@ def create_linode_managed_contact_update_tool() -> tuple[Tool, Capability]:
                     "description": "Email address for issue alerts",
                 },
                 "group": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": "Display grouping for this contact",
                 },
                 "name": {
@@ -5596,7 +5659,7 @@ def create_linode_managed_service_update_tool() -> tuple[Tool, Capability]:
                 },
                 "address": {"type": "string", "description": "Service monitor URL"},
                 "body": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": "Expected response body text, or null to clear",
                 },
                 "consultation_group": {
@@ -5610,11 +5673,11 @@ def create_linode_managed_service_update_tool() -> tuple[Tool, Capability]:
                 },
                 "label": {"type": "string", "description": "Display label"},
                 "notes": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": "Notes for support staff, or null to clear",
                 },
                 "region": {
-                    "type": ["string", "null"],
+                    "type": "string",
                     "description": "Region for private IP monitors, or null to clear",
                 },
                 "service_type": {

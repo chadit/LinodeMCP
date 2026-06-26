@@ -2425,6 +2425,9 @@ async def test_account_oauth_client_thumbnail_update_schema_requires_confirm() -
         tool.inputSchema["properties"]["client_id"]["pattern"]
         == r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
     )
+    # The PNG payload is required so the tool can actually upload a thumbnail.
+    assert tool.inputSchema["properties"]["thumbnail_png_base64"]["type"] == "string"
+    assert "thumbnail_png_base64" in tool.inputSchema["required"]
 
 
 async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
@@ -2443,7 +2446,11 @@ async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_oauth_client_thumbnail_update",
-            {"client_id": "client-1", "confirm": True},
+            {
+                "client_id": "client-1",
+                "confirm": True,
+                "thumbnail_png_base64": "iVBORw0KGgo=",
+            },
         )
 
     assert json.loads(result[0].text) == {
@@ -2451,7 +2458,7 @@ async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
         "client": response_data,
     }
     mock_client.update_account_oauth_client_thumbnail.assert_awaited_once_with(
-        "client-1"
+        "client-1", b"\x89PNG\r\n\x1a\n"
     )
 
 
@@ -2463,7 +2470,12 @@ async def test_account_oauth_client_thumbnail_update_dry_run_skips_client_call(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_account_oauth_client_thumbnail_update",
-            {"client_id": "client-1", "confirm": False, "dry_run": True},
+            {
+                "client_id": "client-1",
+                "confirm": False,
+                "dry_run": True,
+                "thumbnail_png_base64": "iVBORw0KGgo=",
+            },
         )
 
     body = json.loads(result[0].text)
@@ -2481,7 +2493,10 @@ async def test_account_oauth_client_thumbnail_update_requires_confirm_true(
 ) -> None:
     """Thumbnail update rejects non-true confirm values before client calls."""
     for confirm in (None, False, "true", 1):
-        args: dict[str, object] = {"client_id": "client-1"}
+        args: dict[str, object] = {
+            "client_id": "client-1",
+            "thumbnail_png_base64": "iVBORw0KGgo=",
+        }
         if confirm is not None:
             args["confirm"] = confirm
         with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -2507,6 +2522,28 @@ async def test_account_oauth_client_thumbnail_update_rejects_invalid_client_id(
             )
 
         assert "client_id must be" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_thumbnail_update_rejects_bad_png(
+    sample_config: Config,
+) -> None:
+    """Thumbnail update validates the PNG payload before any client call."""
+    cases = [
+        ({"client_id": "client-1", "confirm": True}, "non-empty string"),
+        (
+            {"client_id": "client-1", "confirm": True, "thumbnail_png_base64": "!!!"},
+            "valid standard base64",
+        ),
+    ]
+    for args, expected in cases:
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch(
+                "linode_account_oauth_client_thumbnail_update", args
+            )
+
+        assert expected in result[0].text
         mock_client_class.assert_not_called()
 
 
@@ -6070,6 +6107,13 @@ async def test_account_user_grants_update_tool_is_exported_and_registered(
         "id",
         "permissions",
     ]
+    # lkecluster is a per-entity grant category that Go advertises; Python must
+    # expose it with the same array shape so the surfaces stay in parity.
+    assert tool.inputSchema["properties"]["lkecluster"]["type"] == "array"
+    assert tool.inputSchema["properties"]["lkecluster"]["items"]["required"] == [
+        "id",
+        "permissions",
+    ]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["username", "confirm"]
@@ -6114,6 +6158,37 @@ async def test_account_user_grants_update_dispatches_from_registry(
             "global": {"account_access": "read_only", "add_linodes": True},
             "linode": [{"id": 123, "permissions": "read_write"}],
         },
+    )
+
+
+async def test_account_user_grants_update_passes_lkecluster_grants(
+    sample_config: Config,
+) -> None:
+    """lkecluster grants are collected and forwarded to the client unchanged."""
+    response_data = {"lkecluster": [{"id": 555, "permissions": "read_write"}]}
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock(return_value=response_data)
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_grants_update",
+            {
+                "username": "alice-dev",
+                "lkecluster": [{"id": 555, "permissions": "read_write"}],
+                "confirm": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["grants"] == response_data
+    mock_client.update_account_user_grants.assert_awaited_once_with(
+        "alice-dev",
+        {"lkecluster": [{"id": 555, "permissions": "read_write"}]},
     )
 
 
@@ -6589,7 +6664,7 @@ async def test_database_cluster_create_dispatches_from_registry(
         "cluster_size": 3,
         "engine_config": {"binlog_retention_period": 600},
         "fork": {"source": 456},
-        "private_network": "vpc-1",
+        "private_network": {"vpc_id": 101, "subnet_id": 202, "public_access": False},
         "ssl_connection": True,
         "confirm": True,
     }
@@ -6772,10 +6847,10 @@ async def test_database_cluster_create_rejects_non_true_confirm(
                 "type": "g6-dedicated-2",
                 "engine": "mysql/8.0",
                 "region": "us-east",
-                "private_network": "",
+                "private_network": "vpc",
                 "confirm": True,
             },
-            "private_network must be a non-empty string",
+            "private_network must be an object or null",
         ),
     ],
 )
@@ -6936,7 +7011,7 @@ async def test_database_postgresql_instance_create_dispatches_from_registry(
         "cluster_size": 3,
         "engine_config": {"shared_buffers": "256MB"},
         "fork": {"source": 456},
-        "private_network": "vpc-1",
+        "private_network": {"vpc_id": 101, "subnet_id": 202, "public_access": False},
         "ssl_connection": True,
         "confirm": True,
     }
@@ -11060,8 +11135,12 @@ async def test_managed_contact_create_tool_is_exported_and_registered(
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    for field in ("email", "group", "name", "phone"):
+    for field in ("email", "group", "name"):
         assert tool.inputSchema["properties"][field]["type"] == "string"
+    phone_schema = tool.inputSchema["properties"]["phone"]
+    assert phone_schema["type"] == "object"
+    assert phone_schema["properties"]["primary"]["type"] == ["string", "null"]
+    assert phone_schema["properties"]["secondary"]["type"] == ["string", "null"]
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_contact_create" in srv.registered_tool_names
@@ -11126,7 +11205,7 @@ async def test_managed_contact_create_dry_run_includes_body_and_skips_client(
                 "email": "ops@example.com",
                 "group": "support",
                 "name": "Ops",
-                "phone": "555-0100",
+                "phone": {"primary": "555-0100"},
             },
         )
 
@@ -11137,7 +11216,7 @@ async def test_managed_contact_create_dry_run_includes_body_and_skips_client(
         "email": "ops@example.com",
         "group": "support",
         "name": "Ops",
-        "phone": "555-0100",
+        "phone": {"primary": "555-0100"},
     }
     mock_client_class.assert_not_called()
 
@@ -17243,7 +17322,10 @@ async def test_account_user_update_tool_is_exported_and_registered(
     assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["username"]["type"] == "string"
+    assert tool.inputSchema["properties"]["new_username"]["type"] == "string"
     assert "confirm" in tool.inputSchema["required"]
+    assert "username" in tool.inputSchema["required"]
 
     cfg = dataclasses.replace(
         sample_config,
@@ -17284,8 +17366,8 @@ async def test_account_user_update_handler_updates_user(
 
         result = await handle_linode_account_user_update(
             {
-                "current_username": "old-user",
-                "username": "new-user",
+                "username": "old-user",
+                "new_username": "new-user",
                 "email": "new@example.com",
                 "restricted": False,
                 "ssh_keys": ["ssh-rsa AAA"],
@@ -17314,7 +17396,7 @@ async def test_account_user_update_dry_run_encodes_username(
 
     result = await handle_linode_account_user_update(
         {
-            "current_username": "old-user",
+            "username": "old-user",
             "email": "new@example.com",
             "confirm": True,
             "dry_run": True,
@@ -17329,6 +17411,27 @@ async def test_account_user_update_dry_run_encodes_username(
     assert payload["would_execute"]["body"] == {"email": "new@example.com"}
 
 
+async def test_account_user_update_new_username_renames_via_body(
+    sample_config: Config,
+) -> None:
+    """new_username is the path-keyed rename, sent in the body as username."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    result = await handle_linode_account_user_update(
+        {
+            "username": "old-user",
+            "new_username": "renamed-user",
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["path"] == "/account/users/old-user"
+    assert payload["would_execute"]["body"] == {"username": "renamed-user"}
+
+
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
 async def test_account_user_update_requires_boolean_confirm(
     sample_config: Config, confirm: object
@@ -17337,7 +17440,7 @@ async def test_account_user_update_requires_boolean_confirm(
     from linodemcp.tools import handle_linode_account_user_update
 
     arguments: dict[str, object] = {
-        "current_username": "old-user",
+        "username": "old-user",
         "email": "new@example.com",
     }
     if confirm is not None:
@@ -17355,7 +17458,7 @@ async def test_account_user_update_requires_boolean_confirm(
 
 
 @pytest.mark.parametrize(
-    "current_username",
+    "username",
     [
         "bad/user",
         "bad?user",
@@ -17366,8 +17469,8 @@ async def test_account_user_update_requires_boolean_confirm(
         "bad\nuser",
     ],
 )
-async def test_account_user_update_rejects_invalid_current_username(
-    sample_config: Config, current_username: str
+async def test_account_user_update_rejects_invalid_username(
+    sample_config: Config, username: str
 ) -> None:
     """Malformed account usernames are rejected before client calls."""
     from linodemcp.tools import handle_linode_account_user_update
@@ -17377,19 +17480,19 @@ async def test_account_user_update_rejects_invalid_current_username(
         mock_client_class.return_value = mock_client
         result = await handle_linode_account_user_update(
             {
-                "current_username": current_username,
+                "username": username,
                 "email": "new@example.com",
                 "confirm": True,
             },
             sample_config,
         )
 
-    assert "current_username must contain only" in result[0].text
+    assert "username must contain only" in result[0].text
     mock_client.update_account_user.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "current_username",
+    "username",
     [
         "bad/user",
         "bad?user",
@@ -17400,8 +17503,8 @@ async def test_account_user_update_rejects_invalid_current_username(
         "bad\nuser",
     ],
 )
-async def test_account_user_update_dry_run_rejects_invalid_current_username(
-    sample_config: Config, current_username: str
+async def test_account_user_update_dry_run_rejects_invalid_username(
+    sample_config: Config, username: str
 ) -> None:
     """Dry-run rejects malformed account usernames before preview construction."""
     from linodemcp.tools import handle_linode_account_user_update
@@ -17411,7 +17514,7 @@ async def test_account_user_update_dry_run_rejects_invalid_current_username(
         mock_client_class.return_value = mock_client
         result = await handle_linode_account_user_update(
             {
-                "current_username": current_username,
+                "username": username,
                 "email": "new@example.com",
                 "confirm": True,
                 "dry_run": True,
@@ -17419,7 +17522,7 @@ async def test_account_user_update_dry_run_rejects_invalid_current_username(
             sample_config,
         )
 
-    assert "current_username must contain only" in result[0].text
+    assert "username must contain only" in result[0].text
     mock_client.update_account_user.assert_not_called()
 
 
@@ -17427,16 +17530,16 @@ async def test_account_user_update_dry_run_rejects_invalid_current_username(
     ("arguments", "message"),
     [
         (
-            {"current_username": "old-user", "confirm": True},
+            {"username": "old-user", "confirm": True},
             "At least one account user field",
         ),
         (
-            {"current_username": "old-user", "confirm": True, "unknown": "x"},
+            {"username": "old-user", "confirm": True, "unknown": "x"},
             "Unsupported account user field",
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
                 "email": False,
             },
@@ -17444,15 +17547,15 @@ async def test_account_user_update_dry_run_rejects_invalid_current_username(
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
-                "username": 123,
+                "new_username": 123,
             },
-            "username must be a string",
+            "new_username must be a string",
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
                 "restricted": "false",
             },
@@ -17460,19 +17563,19 @@ async def test_account_user_update_dry_run_rejects_invalid_current_username(
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
                 "ssh_keys": "ssh-rsa AAA",
             },
             "ssh_keys must be a list of strings",
         ),
         (
-            {"current_username": "old-user", "confirm": True, "ssh_keys": [1]},
+            {"username": "old-user", "confirm": True, "ssh_keys": [1]},
             "ssh_keys must be a list of strings",
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
                 "last_login": "2025-01-01T00:00:00",
             },
@@ -17480,19 +17583,19 @@ async def test_account_user_update_dry_run_rejects_invalid_current_username(
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
                 "password_created": "2025-01-01T00:00:00",
             },
             "Unsupported account user field",
         ),
         (
-            {"current_username": "old-user", "confirm": True, "tfa_enabled": True},
+            {"username": "old-user", "confirm": True, "tfa_enabled": True},
             "Unsupported account user field",
         ),
         (
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "confirm": True,
                 "verified_phone_number": "+15551234567",
             },
@@ -17534,7 +17637,7 @@ async def test_account_user_update_client_error_is_reported(
 
         result = await handle_linode_account_user_update(
             {
-                "current_username": "old-user",
+                "username": "old-user",
                 "email": "new@example.com",
                 "confirm": True,
             },

@@ -244,9 +244,13 @@ func TestLinodeProfileTokenUpdateToolDefinition(t *testing.T) {
 		t.Errorf("props missing key %v", keyConfirm)
 	}
 
-	for _, field := range []string{keyExpiry, keyLabel, profileTokenScopesField} {
-		if _, ok := props[field]; !ok {
-			t.Errorf("props missing key %v", field)
+	if _, ok := props[keyLabel]; !ok {
+		t.Errorf("props missing key %v", keyLabel)
+	}
+
+	for _, field := range []string{keyExpiry, profileTokenScopesField} {
+		if _, ok := props[field]; ok {
+			t.Errorf("props has unexpected key %v (a token update only changes the label)", field)
 		}
 	}
 
@@ -327,10 +331,8 @@ func TestLinodeProfileTokenUpdateValidation(t *testing.T) {
 		{name: "query token id", args: map[string]any{profileTokenIDParam: profileTokenQueryValue, keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},
 		{name: "signed token id", args: map[string]any{profileTokenIDParam: "+12345", keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},
 		{name: "traversal token id", args: map[string]any{profileTokenIDParam: pathTraversalValue, keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},
-		{name: "missing fields", args: map[string]any{profileTokenIDParam: profileTokenIDFixture, keyConfirm: true}, want: "at least one profile token field is required"},
+		{name: caseMissingLabel, args: map[string]any{profileTokenIDParam: profileTokenIDFixture, keyConfirm: true}, want: errLabelRequired},
 		{name: caseEmptyLabel, args: map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: "", keyConfirm: true}, want: databaseLabelRequiredMessage},
-		{name: "empty expiry", args: map[string]any{profileTokenIDParam: profileTokenIDFixture, keyExpiry: "", keyConfirm: true}, want: "expiry must be a non-empty string"},
-		{name: "numeric scopes", args: map[string]any{profileTokenIDParam: profileTokenIDFixture, profileTokenScopesField: 123, keyConfirm: true}, want: "scopes must be a non-empty string"},
 	}
 
 	for _, testCase := range cases {
@@ -386,8 +388,8 @@ func TestLinodeProfileTokenUpdateToolSuccess(t *testing.T) {
 			t.Errorf("body[keyLabel] = %v, want %v", body[keyLabel], profileTokenLabel)
 		}
 
-		if !reflect.DeepEqual(body[profileTokenScopesField], profileTokenUpdatedScopes) {
-			t.Errorf("body[profileTokenScopesField] = %v, want %v", body[profileTokenScopesField], profileTokenUpdatedScopes)
+		if _, hasScopes := body[profileTokenScopesField]; hasScopes {
+			t.Errorf("body should not contain %v (a token update only changes the label)", profileTokenScopesField)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -400,7 +402,7 @@ func TestLinodeProfileTokenUpdateToolSuccess(t *testing.T) {
 
 	_, _, handler := tools.NewLinodeProfileTokenUpdateTool(profileTokenUpdateConfig(srv.URL))
 
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, profileTokenScopesField: profileTokenUpdatedScopes, keyConfirm: true}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{profileTokenIDParam: profileTokenIDFixture, keyLabel: profileTokenLabel, keyConfirm: true}))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

@@ -13,11 +13,9 @@ import (
 )
 
 const (
-	configGetPath       = "/linode/instances/123/configs/456"
-	configIfaceGetPath  = "/linode/instances/123/configs/456/interfaces/789"
-	configDevicesJSON   = `{"sda":{"disk_id":123}}`
-	configIfaceAddJSON  = `{"purpose":"public"}`
-	configIfaceEditJSON = `{"primary":true}`
+	configGetPath      = "/linode/instances/123/configs/456"
+	configIfaceGetPath = "/linode/instances/123/configs/456/interfaces/789"
+	configDevicesJSON  = `{"sda":{"disk_id":123}}`
 )
 
 func TestLinodeInstanceConfigCreateToolDryRun(t *testing.T) {
@@ -257,10 +255,10 @@ func TestLinodeInstanceConfigInterfaceAddToolDryRun(t *testing.T) {
 		_, _, handler := tools.NewLinodeInstanceConfigInterfaceAddTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyLinodeID:  float64(123),
-			keyConfigID:  float64(456),
-			keyInterface: configIfaceAddJSON,
-			keyDryRun:    true,
+			keyLinodeID: float64(123),
+			keyConfigID: float64(456),
+			keyPurpose:  purposePublic,
+			keyDryRun:   true,
 		}))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -316,7 +314,7 @@ func TestLinodeInstanceConfigInterfaceUpdateToolDryRun(t *testing.T) {
 			keyLinodeID:    float64(123),
 			keyConfigID:    float64(456),
 			keyInterfaceID: float64(789),
-			keyInterface:   configIfaceEditJSON,
+			keyPrimary:     true,
 			keyDryRun:      true,
 		}))
 		if err != nil {

@@ -134,13 +134,14 @@ const (
 	supportTicketVLANParam             = "vlan"
 	supportTicketVolumeIDParam         = "volume_id"
 	supportTicketVPCIDParam            = "vpc_id"
-	managedContactNameParam            = "contact_name"
-	managedContactEmailParam           = "contact_email"
+	managedContactNameParam            = "name"
+	managedContactEmailParam           = "email"
 	managedContactGroupParam           = "group"
 	managedContactIDParam              = "id"
 	managedContactUpdatedParam         = "updated"
-	managedContactPhonePrimaryParam    = "phone_primary"
-	managedContactPhoneSecondaryParam  = "phone_secondary"
+	managedContactPhoneParam           = "phone"
+	managedContactPhonePrimaryKey      = "primary"
+	managedContactPhoneSecondaryKey    = "secondary"
 	errManagedContactFieldRequired     = "at least one managed contact field is required"
 	errManagedContactReadOnlyField     = "id and updated are read-only and cannot be set when creating a managed contact"
 	accountLoginsPageSizeMin           = 25
@@ -710,8 +711,7 @@ func NewLinodeManagedContactCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString(managedContactNameParam, mcp.Description("Name for the managed contact.")),
 			mcp.WithString(managedContactEmailParam, mcp.Description("Email address for the managed contact.")),
 			mcp.WithString(managedContactGroupParam, mcp.Description("Display grouping for the managed contact.")),
-			mcp.WithString(managedContactPhonePrimaryParam, mcp.Description("Primary phone number for the managed contact.")),
-			mcp.WithString(managedContactPhoneSecondaryParam, mcp.Description("Secondary phone number for the managed contact.")),
+			mcp.WithObject(managedContactPhoneParam, mcp.Description("Phone numbers object: { primary: string, secondary: string }.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm managed contact creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -4131,15 +4131,13 @@ func managedContactCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 	}
 
 	var phone linode.CreateManagedContactPhoneRequest
-	if validationMessage := optionalManagedContactString(args, managedContactPhonePrimaryParam, &phone.Primary); validationMessage != "" {
+
+	phoneSet, validationMessage := managedContactPhoneFromArgs(args, &phone.Primary, &phone.Secondary)
+	if validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := optionalManagedContactString(args, managedContactPhoneSecondaryParam, &phone.Secondary); validationMessage != "" {
-		return nil, validationMessage
-	}
-
-	if phone.Primary != nil || phone.Secondary != nil {
+	if phoneSet {
 		createRequest.Phone = &phone
 		fieldSet = true
 	}
@@ -4149,6 +4147,42 @@ func managedContactCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 	}
 
 	return &createRequest, ""
+}
+
+// managedContactPhoneFromArgs reads the nested phone object argument and
+// writes its primary/secondary numbers into the provided targets. It
+// reports whether at least one number was set so callers can flag the
+// phone field as present. An absent phone argument is not an error.
+func managedContactPhoneFromArgs(args map[string]any, primary, secondary **string) (bool, string) {
+	raw, exists := args[managedContactPhoneParam]
+	if !exists {
+		return false, ""
+	}
+
+	phoneObj, isObject := raw.(map[string]any)
+	if !isObject {
+		return false, managedContactPhoneParam + " must be an object"
+	}
+
+	var fields int
+
+	if validationMessage := optionalManagedContactString(phoneObj, managedContactPhonePrimaryKey, primary); validationMessage != "" {
+		return false, managedContactPhoneParam + "." + validationMessage
+	}
+
+	if *primary != nil {
+		fields++
+	}
+
+	if validationMessage := optionalManagedContactString(phoneObj, managedContactPhoneSecondaryKey, secondary); validationMessage != "" {
+		return false, managedContactPhoneParam + "." + validationMessage
+	}
+
+	if *secondary != nil {
+		fields++
+	}
+
+	return fields > 0, ""
 }
 
 func optionalManagedContactString(args map[string]any, name string, target **string) string {

@@ -26,6 +26,11 @@ const (
 	statsMonthMax        = 12
 	statsYearRangeError  = "year must be an integer between 2000 and 2037"
 	statsMonthRangeError = "month must be an integer between 1 and 12"
+
+	interfaceFieldDefaultRoute = "default_route"
+	interfaceFieldPublic       = "public"
+	interfaceFieldVLAN         = "vlan"
+	interfaceFieldVPC          = "vpc"
 )
 
 // NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
@@ -540,8 +545,10 @@ func NewLinodeInstanceInterfaceSettingsUpdateTool(cfg *config.Config) (mcp.Tool,
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("settings", mcp.Required(),
-				mcp.Description("JSON object with optional default_route and/or network_helper fields.")),
+			mcp.WithBoolean("network_helper",
+				mcp.Description("Enable or disable Network Helper.")),
+			mcp.WithObject("default_route",
+				mcp.Description("Default route interface IDs (ipv4_interface_id and/or ipv6_interface_id).")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm interface settings update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -603,22 +610,33 @@ func handleInstanceInterfaceSettingsUpdateRequest(ctx context.Context, request *
 }
 
 func instanceInterfaceSettingsUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceInterfaceSettingsRequest, string) {
-	settingsJSON, validationMessage := stringArgument(request, "settings", true)
+	args := request.GetArguments()
+
+	settingsReq := &linode.UpdateInstanceInterfaceSettingsRequest{}
+
+	networkHelper, validationMessage := optionalBoolArg(args, "network_helper")
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	var settingsReq *linode.UpdateInstanceInterfaceSettingsRequest
-	if err := strictDecodeJSON(settingsJSON, &settingsReq); err != nil {
-		return nil, fmt.Sprintf("invalid settings JSON: %v", err)
-	}
+	settingsReq.NetworkHelper = networkHelper
 
-	if settingsReq == nil {
-		return nil, interfaceJSONObjRequired
+	if raw, present := args[interfaceFieldDefaultRoute]; present && raw != nil {
+		defaultRouteJSON, fieldMessage := objectJSONFromToolArg(raw, interfaceFieldDefaultRoute)
+		if fieldMessage != "" {
+			return nil, fieldMessage
+		}
+
+		var defaultRoute *linode.InterfaceDefaultRoute
+		if err := strictDecodeJSON(defaultRouteJSON, &defaultRoute); err != nil {
+			return nil, fmt.Sprintf("invalid default_route: %v", err)
+		}
+
+		settingsReq.DefaultRoute = defaultRoute
 	}
 
 	if settingsReq.DefaultRoute == nil && settingsReq.NetworkHelper == nil {
-		return nil, "at least one interface settings field is required"
+		return nil, "network_helper or default_route is required"
 	}
 
 	return settingsReq, ""
@@ -639,8 +657,14 @@ func NewLinodeInstanceInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profile
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithNumber("interface_id", mcp.Required(),
 				mcp.Description("The ID of the Linode interface")),
-			mcp.WithString("interface", mcp.Required(),
-				mcp.Description("JSON object defining exactly one interface update type: public, vpc, or vlan.")),
+			mcp.WithObject("default_route",
+				mcp.Description("Default route settings for the interface.")),
+			mcp.WithObject("public",
+				mcp.Description("Public interface settings. Set exactly one of public, vpc, or vlan.")),
+			mcp.WithObject("vlan",
+				mcp.Description("VLAN interface settings. Set exactly one of public, vpc, or vlan.")),
+			mcp.WithObject("vpc",
+				mcp.Description("VPC interface settings. Set exactly one of public, vpc, or vlan.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm interface update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -709,14 +733,36 @@ func handleInstanceInterfaceUpdateRequest(ctx context.Context, request *mcp.Call
 }
 
 func instanceInterfaceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceInterfaceRequest, string) {
-	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
-	if validationMessage != "" {
-		return nil, validationMessage
+	args := request.GetArguments()
+
+	fields := map[string]json.RawMessage{}
+
+	for _, name := range []string{interfaceFieldDefaultRoute, interfaceFieldPublic, interfaceFieldVLAN, interfaceFieldVPC} {
+		raw, present := args[name]
+		if !present || raw == nil {
+			continue
+		}
+
+		fieldJSON, fieldMessage := objectJSONFromToolArg(raw, name)
+		if fieldMessage != "" {
+			return nil, fieldMessage
+		}
+
+		fields[name] = json.RawMessage(fieldJSON)
+	}
+
+	if len(fields) == 0 {
+		return nil, "at least one of default_route, public, vpc, or vlan is required"
+	}
+
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Sprintf("invalid interface fields: %v", err)
 	}
 
 	var interfaceReq *linode.UpdateInstanceInterfaceRequest
-	if err := strictDecodeJSON(interfaceJSON, &interfaceReq); err != nil {
-		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
+	if err := strictDecodeJSON(string(encoded), &interfaceReq); err != nil {
+		return nil, fmt.Sprintf("invalid interface fields: %v", err)
 	}
 
 	if interfaceReq == nil {
@@ -740,7 +786,7 @@ func validateInstanceInterfaceUpdateRequest(req *linode.UpdateInstanceInterfaceR
 		typeCount++
 
 		if req.VPC.SubnetID <= 0 {
-			return "interface.vpc.subnet_id must be a positive integer"
+			return "vpc.subnet_id must be a positive integer"
 		}
 	}
 
@@ -748,12 +794,12 @@ func validateInstanceInterfaceUpdateRequest(req *linode.UpdateInstanceInterfaceR
 		typeCount++
 
 		if strings.TrimSpace(req.VLAN.Label) == "" {
-			return "interface.vlan.vlan_label is required"
+			return "vlan.vlan_label is required"
 		}
 	}
 
 	if typeCount != 1 {
-		return "interface must define exactly one of public, vpc, or vlan"
+		return "exactly one of public, vpc, or vlan is required"
 	}
 
 	return ""
@@ -814,16 +860,17 @@ func NewLinodeInterfacesUpgradeTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_interface_upgrade",
-		"Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: Setting dry_run=false irreversibly changes instance network configuration.",
+		"Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: This irreversibly changes instance network configuration.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithNumber("config_id",
 				mcp.Description("Optional configuration profile ID to upgrade")),
-			mcp.WithBoolean("dry_run",
-				mcp.Description("Preview the upgrade when true or omitted; set false to perform the irreversible upgrade")),
+			mcp.WithBoolean("api_dry_run",
+				mcp.Description("Pass dry_run to the Linode API to validate the upgrade without applying it.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm the interface upgrade request.")),
+				mcp.Description("Must be true to confirm the interface upgrade request. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeInterfacesUpgradeRequest,
 	)
@@ -832,10 +879,6 @@ func NewLinodeInterfacesUpgradeTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 }
 
 func handleLinodeInterfacesUpgradeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This can irreversibly upgrade Linode network interfaces when dry_run=false. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -844,6 +887,16 @@ func handleLinodeInterfacesUpgradeRequest(ctx context.Context, request *mcp.Call
 	upgradeReq, validationMessage := buildUpgradeLinodeInterfacesRequest(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_interface_upgrade", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/upgrade-interfaces", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
+	if result := RequireConfirm(request, "This irreversibly upgrades Linode network interfaces. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -872,17 +925,12 @@ func buildUpgradeLinodeInterfacesRequest(request *mcp.CallToolRequest) (*linode.
 		req.ConfigID = &configID
 	}
 
-	dryRun, validationMessage := optionalBoolArg(args, "dry_run")
+	apiDryRun, validationMessage := optionalBoolArg(args, "api_dry_run")
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if dryRun == nil {
-		defaultDryRun := true
-		dryRun = &defaultDryRun
-	}
-
-	req.DryRun = dryRun
+	req.DryRun = apiDryRun
 
 	return req, ""
 }

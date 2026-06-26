@@ -1052,6 +1052,140 @@ func TestLinodeNodeBalancerConfigCreateToolSuccess(t *testing.T) {
 	}
 }
 
+func TestLinodeNodeBalancerConfigCreateToolNodesReachRequestBody(t *testing.T) {
+	t.Parallel()
+
+	const keyNodes = "nodes"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != tcNodebalancers123Configs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		nodes, isArray := body[keyNodes].([]any)
+		if !isArray {
+			t.Fatalf("body[nodes] = %T, want []any", body[keyNodes])
+		}
+
+		if len(nodes) != 1 {
+			t.Fatalf("len(nodes) = %v, want %v", len(nodes), 1)
+		}
+
+		node, isObject := nodes[0].(map[string]any)
+		if !isObject {
+			t.Fatalf("nodes[0] = %T, want map[string]any", nodes[0])
+		}
+
+		for key, want := range map[string]any{
+			keyLabel:    "backend-1",
+			keyAddress:  nodeBalancerNodeAddress,
+			keyWeight:   float64(50),
+			keyMode:     nodeBalancerNodeModeAccept,
+			keySubnetID: float64(7),
+		} {
+			if !reflect.DeepEqual(node[key], want) {
+				t.Errorf("nodes[0][%v] = %v, want %v", key, node[key], want)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
+
+	args := map[string]any{
+		keyNodeBalancerID: float64(123),
+		keyPort:           float64(80),
+		keyConfirm:        true,
+		keyNodes: []any{
+			map[string]any{
+				keyLabel:    "backend-1",
+				keyAddress:  nodeBalancerNodeAddress,
+				keyWeight:   float64(50),
+				keyMode:     nodeBalancerNodeModeAccept,
+				keySubnetID: float64(7),
+			},
+		},
+	}
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+}
+
+func TestLinodeNodeBalancerConfigCreateToolNodesInvalidProducesError(t *testing.T) {
+	t.Parallel()
+
+	const keyNodes = "nodes"
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
+
+	args := map[string]any{
+		keyNodeBalancerID: float64(123),
+		keyPort:           float64(80),
+		keyConfirm:        true,
+		keyNodes:          []any{map[string]any{keyWeight: "not-an-int"}},
+	}
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "nodes must be an array of objects") {
+		t.Errorf("error text %q does not contain %q", text.Text, "nodes must be an array of objects")
+	}
+
+	if calls.Load() != int32(0) {
+		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+	}
+}
+
 func TestLinodeNodeBalancerConfigCreateToolClientError(t *testing.T) {
 	t.Parallel()
 

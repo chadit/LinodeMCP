@@ -26,7 +26,7 @@ def test_create_linode_managed_contacts_update_tool() -> None:
     assert properties["contact_id"]["minimum"] == 1
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"
-    assert properties["group"]["type"] == ["string", "null"]
+    assert properties["group"]["type"] == "string"
     assert properties["phone"]["properties"]["primary"]["type"] == [
         "string",
         "null",

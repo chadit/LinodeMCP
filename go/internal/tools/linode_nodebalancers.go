@@ -23,6 +23,7 @@ const (
 	nodeBalancerConfigKeySSLKey            = "ssl_key"
 	nodeBalancerConfigKeyProxyProtocol     = "proxy_protocol"
 	nodeBalancerConfigKeyUDPCheckPort      = "udp_check_port"
+	nodeBalancerConfigKeyNodes             = "nodes"
 	nodeBalancerNodeKeySubnetID            = "subnet_id"
 	nodeBalancerConfigProtocolHTTP         = "http"
 	nodeBalancerConfigProtocolHTTPS        = "https"
@@ -287,6 +288,8 @@ func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profil
 				mcp.Description("Optional proxy protocol version for TCP configs: none, v1, or v2")),
 			mcp.WithNumber(nodeBalancerConfigKeyUDPCheckPort,
 				mcp.Description("Optional health check port for UDP configs, from 1 through 65535")),
+			mcp.WithArray(nodeBalancerConfigKeyNodes,
+				mcp.Description("Optional backend nodes to attach to this config, each an object with label, address, and optional weight, mode, and subnet_id")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm NodeBalancer config creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -1145,6 +1148,15 @@ func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (lino
 
 	if req.UDPCheckPort, message = optionalNodeBalancerConfigInt(args, nodeBalancerConfigKeyUDPCheckPort); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
+	}
+
+	if raw, exists := args[nodeBalancerConfigKeyNodes]; exists {
+		nodes, nodesMessage := objectSliceFromToolArg[linode.CreateNodeBalancerNodeRequest](raw, nodeBalancerConfigKeyNodes)
+		if nodesMessage != "" {
+			return linode.CreateNodeBalancerConfigRequest{}, nodesMessage
+		}
+
+		req.Nodes = nodes
 	}
 
 	return req, ""

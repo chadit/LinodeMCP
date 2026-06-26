@@ -1143,22 +1143,50 @@ async def test_retryable_update_account_oauth_client_delegates_to_client() -> No
 
 
 async def test_update_account_oauth_client_thumbnail_sends_route() -> None:
-    """OAuth client thumbnail update sends PUT with an empty JSON body."""
+    """OAuth client thumbnail update PUTs the raw PNG bytes as image/png."""
     client = Client("https://api.linode.com/v4", "test-token")
+    thumbnail = b"\x89PNG\r\n\x1a\n"
     response_data = {"id": "client-1", "thumbnail_url": "https://example.com/t.png"}
     mock_response = MagicMock()
     mock_response.status_code = 200
+    mock_response.content = b'{"id":"client-1"}'
     mock_response.json.return_value = response_data
 
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.update_account_oauth_client_thumbnail("client-1")
+        result = await client.update_account_oauth_client_thumbnail(
+            "client-1", thumbnail
+        )
 
     assert result == response_data
-    mock_request.assert_called_once_with(
-        "PUT", "/account/oauth-clients/client-1/thumbnail", {}
+    mock_request.assert_awaited_once_with(
+        "PUT",
+        "https://api.linode.com/v4/account/oauth-clients/client-1/thumbnail",
+        headers={
+            "Authorization": "Bearer test-token",
+            "Content-Type": "image/png",
+            "User-Agent": "LinodeMCP/1.0",
+        },
+        content=thumbnail,
     )
+    await client.close()
+
+
+async def test_update_account_oauth_client_thumbnail_handles_empty_body() -> None:
+    """OAuth client thumbnail update returns {} when the API sends no body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = b""
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_account_oauth_client_thumbnail("client-1", b"png")
+
+    assert result == {}
+    mock_response.json.assert_not_called()
     await client.close()
 
 
@@ -1167,15 +1195,19 @@ async def test_update_account_oauth_client_thumbnail_encodes_client_id() -> None
     client = Client("https://api.linode.com/v4", "test-token")
     mock_response = MagicMock()
     mock_response.status_code = 200
+    mock_response.content = b'{"id":"client/123?query"}'
     mock_response.json.return_value = {"id": "client/123?query"}
 
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        await client.update_account_oauth_client_thumbnail("client/123?query")
+        await client.update_account_oauth_client_thumbnail("client/123?query", b"png")
 
-    mock_request.assert_called_once_with(
-        "PUT", "/account/oauth-clients/client%2F123%3Fquery/thumbnail", {}
+    await_args = mock_request.await_args
+    assert await_args is not None
+    assert await_args.args == (
+        "PUT",
+        "https://api.linode.com/v4/account/oauth-clients/client%2F123%3Fquery/thumbnail",
     )
     await client.close()
 
@@ -1184,11 +1216,11 @@ async def test_update_account_oauth_client_thumbnail_wraps_http_errors() -> None
     """OAuth client thumbnail update wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
 
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.update_account_oauth_client_thumbnail("client-1")
+            await client.update_account_oauth_client_thumbnail("client-1", b"png")
 
     assert "UpdateAccountOAuthClientThumbnail" in str(excinfo.value)
     await client.close()
@@ -1209,9 +1241,11 @@ async def test_retryable_update_account_oauth_client_thumbnail_delegates_once() 
         ) as mock_retry,
     ):
         mock_update.return_value = {"id": "client-1"}
-        result = await retryable.update_account_oauth_client_thumbnail("client-1")
+        result = await retryable.update_account_oauth_client_thumbnail(
+            "client-1", b"png"
+        )
 
-    mock_update.assert_awaited_once_with("client-1")
+    mock_update.assert_awaited_once_with("client-1", b"png")
     mock_retry.assert_not_called()
     assert result == {"id": "client-1"}
     await retryable.close()
@@ -4285,7 +4319,7 @@ async def test_create_mysql_database_instance_sends_post_body() -> None:
         "cluster_size": 3,
         "engine_config": {"binlog_retention_period": 600},
         "fork": {"source": 123},
-        "private_network": "vpc-1",
+        "private_network": {"vpc_id": 101, "subnet_id": 202, "public_access": False},
         "ssl_connection": True,
     }
     response_data = {"id": 123, "label": "primary-db"}
@@ -5531,7 +5565,7 @@ async def test_create_managed_contact_sends_post_to_managed_contacts_route() -> 
     response_data: dict[str, Any] = {
         "name": "Ops",
         "email": "ops@example.com",
-        "phone": "555-0100",
+        "phone": {"primary": "555-0100", "secondary": None},
         "group": "support",
     }
     mock_response = MagicMock()
@@ -5545,7 +5579,7 @@ async def test_create_managed_contact_sends_post_to_managed_contacts_route() -> 
             email="ops@example.com",
             group="support",
             name="Ops",
-            phone="555-0100",
+            phone={"primary": "555-0100"},
         )
 
     assert result == response_data
@@ -5556,7 +5590,7 @@ async def test_create_managed_contact_sends_post_to_managed_contacts_route() -> 
             "email": "ops@example.com",
             "group": "support",
             "name": "Ops",
-            "phone": "555-0100",
+            "phone": {"primary": "555-0100"},
         },
     )
     await client.close()
@@ -19702,7 +19736,17 @@ async def test_retryable_create_instance_config_delegates_once_without_retry() -
             )
 
     mock_create.assert_awaited_once_with(
-        456, "boot-config", {"sda": {}}, None, None, None, None, "single", None
+        456,
+        "boot-config",
+        {"sda": {}},
+        None,
+        None,
+        None,
+        None,
+        "single",
+        None,
+        None,
+        None,
     )
     await client.close()
 

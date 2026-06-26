@@ -845,7 +845,7 @@ func handleLinodeFirewallTemplateGetRequest(ctx context.Context, request *mcp.Ca
 
 func validateFirewallTemplateSlug(slug string) string {
 	switch slug {
-	case "public", "vpc":
+	case interfaceFieldPublic, "vpc":
 		return ""
 	case "":
 		return "slug is required"

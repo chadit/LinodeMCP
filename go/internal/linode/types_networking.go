@@ -215,6 +215,8 @@ type CreateNodeBalancerConfigRequest struct {
 	SSLKey        string `json:"ssl_key,omitempty"`
 	ProxyProtocol string `json:"proxy_protocol,omitempty"`
 	UDPCheckPort  int    `json:"udp_check_port,omitempty"`
+
+	Nodes []CreateNodeBalancerNodeRequest `json:"nodes,omitempty"`
 }
 
 // NodeBalancerNode represents a backend node on a NodeBalancer config.

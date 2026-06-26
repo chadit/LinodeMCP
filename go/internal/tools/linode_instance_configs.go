@@ -25,6 +25,9 @@ const (
 	configInterfaceUpdateNoFields = "at least one interface update field must be provided"
 	interfaceJSONObjRequired      = "interface must be a JSON object"
 	paramConfigInterfaceID        = "interface_id"
+
+	configInterfacePurposeVLAN = "vlan"
+	configInterfacePurposeVPC  = "vpc"
 )
 
 // NewLinodeInstanceConfigListTool creates a tool for listing configuration profiles on a Linode instance.
@@ -394,8 +397,23 @@ func NewLinodeInstanceConfigInterfaceAddTool(cfg *config.Config) (mcp.Tool, prof
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithNumber("config_id", mcp.Required(),
 				mcp.Description("The ID of the configuration profile")),
-			mcp.WithString("interface", mcp.Required(),
-				mcp.Description("JSON object for the interface to add. Must include purpose: public, vlan, or vpc.")),
+			mcp.WithString("purpose", mcp.Required(),
+				mcp.Enum("public", "vlan", "vpc"),
+				mcp.Description("The interface purpose (required).")),
+			mcp.WithString("label",
+				mcp.Description("Interface label. Required for vlan interfaces.")),
+			mcp.WithString("ipam_address",
+				mcp.Description("Private CIDR address for vlan interfaces.")),
+			mcp.WithBoolean("primary",
+				mcp.Description("Whether this is the primary non-vlan interface.")),
+			mcp.WithNumber("subnet_id",
+				mcp.Description("The VPC subnet ID. Required for vpc interfaces.")),
+			mcp.WithArray("ip_ranges",
+				mcp.Description("IPv4 CIDR VPC subnet ranges routed to this interface.")),
+			mcp.WithObject("ipv4",
+				mcp.Description("VPC IPv4 configuration for this interface.")),
+			mcp.WithObject("ipv6",
+				mcp.Description("VPC IPv6 configuration for this interface.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm configuration profile interface creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -464,29 +482,122 @@ func handleInstanceConfigInterfaceAddRequest(ctx context.Context, request *mcp.C
 }
 
 func configInterfaceFromTool(request *mcp.CallToolRequest) (*linode.ConfigInterface, string) {
-	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
+	purpose, validationMessage := stringArgument(request, "purpose", true)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	return parseConfigInterface(interfaceJSON)
-}
-
-func parseConfigInterface(interfaceJSON string) (*linode.ConfigInterface, string) {
-	var configInterface *linode.ConfigInterface
-	if err := strictDecodeJSON(interfaceJSON, &configInterface); err != nil {
-		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
+	if !validConfigInterfacePurpose(purpose) {
+		return nil, "purpose must be public, vlan, or vpc"
 	}
 
-	if configInterface == nil {
-		return nil, interfaceJSONObjRequired
-	}
-
-	if !validConfigInterfacePurpose(configInterface.Purpose) {
-		return nil, "interface.purpose must be public, vlan, or vpc"
+	configInterface := &linode.ConfigInterface{Purpose: purpose}
+	if validationMessage := applyConfigInterfaceAddFields(request, configInterface); validationMessage != "" {
+		return nil, validationMessage
 	}
 
 	return configInterface, ""
+}
+
+func applyConfigInterfaceAddFields(request *mcp.CallToolRequest, configInterface *linode.ConfigInterface) string {
+	args := request.GetArguments()
+
+	if validationMessage := applyConfigInterfaceStringFields(request, args, configInterface); validationMessage != "" {
+		return validationMessage
+	}
+
+	return applyConfigInterfaceNetworkFields(request, args, configInterface)
+}
+
+func applyConfigInterfaceStringFields(request *mcp.CallToolRequest, args map[string]any, configInterface *linode.ConfigInterface) string {
+	if _, exists := args["label"]; exists {
+		label, validationMessage := stringArgument(request, "label", false)
+		if validationMessage != "" {
+			return validationMessage
+		}
+
+		configInterface.Label = &label
+	}
+
+	if configInterface.Purpose == configInterfacePurposeVLAN && (configInterface.Label == nil || *configInterface.Label == "") {
+		return "label is required for vlan interfaces"
+	}
+
+	if _, exists := args["ipam_address"]; exists {
+		ipamAddress, validationMessage := stringArgument(request, "ipam_address", false)
+		if validationMessage != "" {
+			return validationMessage
+		}
+
+		configInterface.IPAMAddress = &ipamAddress
+	}
+
+	return ""
+}
+
+func applyConfigInterfaceNetworkFields(request *mcp.CallToolRequest, args map[string]any, configInterface *linode.ConfigInterface) string {
+	if _, exists := args["subnet_id"]; exists {
+		subnetID, ok := getPositiveIntArgument(request, "subnet_id")
+		if !ok {
+			return "subnet_id must be a positive integer"
+		}
+
+		configInterface.SubnetID = &subnetID
+	}
+
+	if configInterface.Purpose == configInterfacePurposeVPC && configInterface.SubnetID == nil {
+		return "subnet_id is required for vpc interfaces"
+	}
+
+	if rawPrimary, exists := args["primary"]; exists {
+		primary, validationMessage := boolToolArg(rawPrimary, "primary")
+		if validationMessage != "" {
+			return validationMessage
+		}
+
+		configInterface.Primary = &primary
+	}
+
+	if _, exists := args["ip_ranges"]; exists {
+		ipRanges, validationMessage := stringSliceFromToolArg(args["ip_ranges"], "ip_ranges")
+		if validationMessage != "" {
+			return validationMessage
+		}
+
+		configInterface.IPRanges = ipRanges
+	}
+
+	if validationMessage := applyConfigInterfaceObject(args, "ipv4", &configInterface.IPv4); validationMessage != "" {
+		return validationMessage
+	}
+
+	return applyConfigInterfaceObject(args, "ipv6", &configInterface.IPv6)
+}
+
+// applyConfigInterfaceObject reads a JSON object argument (ipv4/ipv6) and stores
+// its JSON verbatim so the legacy config-interface endpoint receives the VPC IP
+// fields the caller sent without this tool needing to track the shape. The value
+// must be an object; a scalar or array is rejected so the request body stays
+// valid JSON.
+func applyConfigInterfaceObject(args map[string]any, name string, target *json.RawMessage) string {
+	raw, exists := args[name]
+	if !exists {
+		return ""
+	}
+
+	object, isObject := raw.(map[string]any)
+	if !isObject {
+		return name + " must be an object"
+	}
+
+	encoded, err := json.Marshal(object)
+	if err != nil {
+		return name + " must be an object"
+	}
+
+	*target = json.RawMessage(encoded)
+
+	return ""
 }
 
 func formatAddConfigInterfaceError(linodeID, configID int, err error) string {
@@ -506,8 +617,12 @@ func NewLinodeInstanceConfigInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, p
 				mcp.Description("The ID of the configuration profile")),
 			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
 				mcp.Description("The ID of the configuration profile interface")),
-			mcp.WithString("interface", mcp.Required(),
-				mcp.Description("JSON object with interface update fields: ip_ranges, ipv4, and/or primary.")),
+			mcp.WithArray("ip_ranges",
+				mcp.Description("IPv4 ranges routed to this interface.")),
+			mcp.WithObject("ipv4",
+				mcp.Description("IPv4 configuration for this interface.")),
+			mcp.WithBoolean("primary",
+				mcp.Description("Whether this is the primary interface.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm configuration profile interface update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -583,22 +698,29 @@ func handleInstanceConfigInterfaceUpdateRequest(ctx context.Context, request *mc
 }
 
 func updateConfigInterfaceFromTool(request *mcp.CallToolRequest) (*linode.UpdateConfigInterfaceRequest, string) {
-	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
-	if validationMessage != "" {
+	args := request.GetArguments()
+	configInterface := &linode.UpdateConfigInterfaceRequest{}
+
+	if _, exists := args["ip_ranges"]; exists {
+		ipRanges, validationMessage := stringSliceFromToolArg(args["ip_ranges"], "ip_ranges")
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		configInterface.IPRanges = ipRanges
+	}
+
+	if validationMessage := applyConfigInterfaceObject(args, "ipv4", &configInterface.IPv4); validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	return parseUpdateConfigInterface(interfaceJSON)
-}
+	if rawPrimary, exists := args["primary"]; exists {
+		primary, validationMessage := boolToolArg(rawPrimary, "primary")
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
 
-func parseUpdateConfigInterface(interfaceJSON string) (*linode.UpdateConfigInterfaceRequest, string) {
-	var configInterface *linode.UpdateConfigInterfaceRequest
-	if err := strictDecodeJSON(interfaceJSON, &configInterface); err != nil {
-		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
-	}
-
-	if configInterface == nil {
-		return nil, interfaceJSONObjRequired
+		configInterface.Primary = &primary
 	}
 
 	if configInterface.Primary == nil && configInterface.IPv4 == nil && configInterface.IPRanges == nil {
@@ -1429,7 +1551,7 @@ func parseConfigInterfaces(raw any) ([]linode.ConfigInterface, string) {
 
 func validConfigInterfacePurpose(purpose string) bool {
 	switch purpose {
-	case "public", "vlan", "vpc":
+	case interfaceFieldPublic, configInterfacePurposeVLAN, configInterfacePurposeVPC:
 		return true
 	default:
 		return false

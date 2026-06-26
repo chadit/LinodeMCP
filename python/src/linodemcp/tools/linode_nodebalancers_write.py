@@ -1357,10 +1357,6 @@ def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
                     "minimum": 1,
                     "description": "The ID of the NodeBalancer (required)",
                 },
-                "label": {
-                    "type": "string",
-                    "description": "Label for the config (optional)",
-                },
                 "port": {
                     "type": "integer",
                     "minimum": 1,
@@ -1482,7 +1478,6 @@ async def handle_linode_nodebalancer_config_create(
 
     fields: dict[str, Any] = {}
     for key in (
-        "label",
         "port",
         "protocol",
         "algorithm",

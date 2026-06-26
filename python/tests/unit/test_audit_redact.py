@@ -48,6 +48,7 @@ def test_redaction_list_matches_go_canonical() -> None:
         "private_key",
         "root_pass",
         "secret",
+        "security_questions",
         "service_token",
         "ssh_key",
         "ssl_key",
@@ -166,12 +167,8 @@ def test_redaction_fields_pii_locks_conservative_scope() -> None:
         "address_1",
         "address_2",
         "city",
-        "contact_email",
-        "contact_name",
         "phone",
         "phone_number",
-        "phone_primary",
-        "phone_secondary",
         "state",
         "tax_id",
         "zip",
@@ -214,8 +211,8 @@ def test_redact_with_pii_scrubs_pii_fields() -> None:
         "phone": "+1-555-0100",
         "address_1": "123 Main St",
         "city": "Springfield",
-        "contact_name": "Jane Doe",
-        "contact_email": "jane@example.org",
+        "contact_name": "Jane Doe",  # not in PII list, must pass through
+        "contact_email": "jane@example.org",  # not in PII list, must pass through
         "country": "us",  # not in PII list, must pass through
     }
 
@@ -232,8 +229,8 @@ def test_redact_with_pii_scrubs_pii_fields() -> None:
     assert is_redacted(redacted["phone"])
     assert is_redacted(redacted["address_1"])
     assert is_redacted(redacted["city"])
-    assert is_redacted(redacted["contact_name"])
-    assert is_redacted(redacted["contact_email"])
+    assert redacted["contact_name"] == "Jane Doe"
+    assert redacted["contact_email"] == "jane@example.org"
     assert sorted(keys) == sorted(
         [
             "token",
@@ -241,8 +238,6 @@ def test_redact_with_pii_scrubs_pii_fields() -> None:
             "phone",
             "address_1",
             "city",
-            "contact_name",
-            "contact_email",
         ],
     )
 

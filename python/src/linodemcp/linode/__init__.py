@@ -2702,16 +2702,30 @@ class Client:
             raise NetworkError("UpdateAccountOAuthClient", e) from e
 
     async def update_account_oauth_client_thumbnail(
-        self, client_id: str
+        self, client_id: str, thumbnail_png: bytes
     ) -> dict[str, Any]:
-        """Update an OAuth client's thumbnail on the Linode account."""
+        """Update an OAuth client's thumbnail on the Linode account.
+
+        The API expects the raw PNG bytes as the request body with an
+        image/png content type, so this bypasses the JSON make_request path and
+        sends the bytes directly, mirroring the Go client.
+        """
         encoded_client_id = quote(str(client_id), safe="")
+        endpoint = f"/account/oauth-clients/{encoded_client_id}/thumbnail"
+        url = self.base_url + endpoint
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "image/png",
+            "User-Agent": "LinodeMCP/1.0",
+        }
         try:
-            response = await self.make_request(
-                "PUT",
-                f"/account/oauth-clients/{encoded_client_id}/thumbnail",
-                {},
+            response = await self.client.request(
+                "PUT", url, headers=headers, content=thumbnail_png
             )
+            if response.status_code >= HTTP_BAD_REQUEST:
+                self._handle_error_response(response)
+            if not response.content:
+                return {}
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5047,10 +5061,10 @@ class Client:
         email: str | None = None,
         group: str | None = None,
         name: str | None = None,
-        phone: str | None = None,
+        phone: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a Managed contact."""
-        body = {
+        body: dict[str, Any] = {
             "email": email,
             "group": group,
             "name": name,
@@ -10030,6 +10044,8 @@ class Client:
         root_device: str | None = None,
         run_level: str | None = None,
         virt_mode: str | None = None,
+        helpers: dict[str, Any] | None = None,
+        interfaces: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Create a configuration profile for an instance."""
         encoded_instance_id = quote(str(instance_id), safe="")
@@ -10043,6 +10059,8 @@ class Client:
                 "root_device": root_device,
                 "run_level": run_level,
                 "virt_mode": virt_mode,
+                "helpers": helpers,
+                "interfaces": interfaces,
             }
             body.update({k: v for k, v in optional_fields.items() if v is not None})
 
@@ -11387,10 +11405,12 @@ class RetryableClient:
         return result
 
     async def update_account_oauth_client_thumbnail(
-        self, client_id: str
+        self, client_id: str, thumbnail_png: bytes
     ) -> dict[str, Any]:
         """Update an account OAuth client thumbnail without replaying the write."""
-        return await self.client.update_account_oauth_client_thumbnail(client_id)
+        return await self.client.update_account_oauth_client_thumbnail(
+            client_id, thumbnail_png
+        )
 
     async def list_account_events(
         self, page: int | None = None, page_size: int | None = None
@@ -12622,7 +12642,7 @@ class RetryableClient:
         email: str | None = None,
         group: str | None = None,
         name: str | None = None,
-        phone: str | None = None,
+        phone: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a Managed contact by delegating once without retry."""
         return await self.client.create_managed_contact(
@@ -14797,6 +14817,8 @@ class RetryableClient:
         root_device: str | None = None,
         run_level: str | None = None,
         virt_mode: str | None = None,
+        helpers: dict[str, Any] | None = None,
+        interfaces: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Create instance config without retrying the non-idempotent POST."""
         return await self.client.create_instance_config(
@@ -14809,6 +14831,8 @@ class RetryableClient:
             root_device,
             run_level,
             virt_mode,
+            helpers,
+            interfaces,
         )
 
     async def update_instance_disk(

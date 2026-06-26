@@ -20,6 +20,20 @@ import (
 const (
 	keyRunLevel = "run_level"
 	keyVirtMode = "virt_mode"
+
+	keyPurpose     = "purpose"
+	keyPrimary     = "primary"
+	keyIPRanges    = "ip_ranges"
+	keyIPAMAddress = "ipam_address"
+	keyIPv6        = "ipv6"
+
+	purposeVLAN     = "vlan"
+	nonObjectIPv4   = "not-an-object"
+	errIPv4NotObj   = "ipv4 must be an object"
+	errIPRangesType = "ip_ranges must be an array of strings"
+
+	errPurposeRequired = "purpose is required"
+	errPurposeInvalid  = "purpose must be public, vlan, or vpc"
 )
 
 type instanceConfigCreateValidationCase struct {
@@ -42,7 +56,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseMissingLabel, args: map[string]any{keyLinodeID: float64(123), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "non-string label", args: map[string]any{keyLinodeID: float64(123), keyLabel: float64(99), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: "label must be a string"},
-		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyLabel: "  ", keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
+		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyLabel: blankWhitespace, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "missing devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: "devices is required"},
 		{name: "array devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: []any{}, keyConfirm: true}, wantContains: "devices must be an object"},
 		{name: "null devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: databaseJSONNull, keyConfirm: true}, wantContains: "devices must be a JSON object"},
@@ -338,20 +352,18 @@ func TestLinodeInstanceConfigInterfaceAddToolDefinition(t *testing.T) {
 	}
 
 	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	for _, key := range []string{keyLinodeID, keyConfigID, keyPurpose, keyLabel, keyIPAMAddress, keyPrimary, keySubnetID, keyIPRanges, keyIPv4, keyIPv6, keyConfirm} {
+		if _, ok := props[key]; !ok {
+			t.Errorf("props missing key %v", key)
+		}
 	}
 
-	if _, ok := props[keyConfigID]; !ok {
-		t.Errorf("props missing key %v", keyConfigID)
+	if _, ok := props[keyInterface]; ok {
+		t.Errorf("props should not contain key %v", keyInterface)
 	}
 
-	if _, ok := props[keyInterface]; !ok {
-		t.Errorf("props missing key %v", keyInterface)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !slices.Contains(tool.InputSchema.Required, keyPurpose) {
+		t.Errorf("required does not contain %v", keyPurpose)
 	}
 }
 
@@ -366,27 +378,27 @@ func TestLinodeInstanceConfigInterfaceAddToolValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceConfigInterfaceAddTool(cfg)
 
 	validationTests := []instanceConfigCreateValidationCase{
-		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: configInterfacePublicJSON}, wantContains: errConfirmEqualsTrue},
-		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: "invalid config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterface: configInterfacePublicJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseMissingInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: errInterfaceRequired},
-		{name: caseNonStringInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: []any{}, keyConfirm: true}, wantContains: errInterfaceString},
-		{name: caseInvalidInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: `{`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: caseNullInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: databaseJSONNull, keyConfirm: true}, wantContains: errInterfaceJSONObject},
-		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: `{"purpose":"public","typo":true}`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: "trailing interface JSON", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: `{"purpose":"public"} {}`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: `{"purpose":"bad"}`, keyConfirm: true}, wantContains: "interface.purpose must be public, vlan, or vpc"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: "invalid config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: "missing purpose", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: errPurposeRequired},
+		{name: "invalid purpose", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: "router", keyConfirm: true}, wantContains: errPurposeInvalid},
+		{name: "vlan without label", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposeVLAN, keyConfirm: true}, wantContains: "label is required for vlan interfaces"},
+		{name: "vpc without subnet", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposeVPC, keyConfirm: true}, wantContains: "subnet_id is required for vpc interfaces"},
+		{name: "non-bool primary", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyPrimary: float64(1), keyConfirm: true}, wantContains: "primary must be a boolean"},
+		{name: "bad ip_ranges", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyIPRanges: []any{float64(1)}, keyConfirm: true}, wantContains: errIPRangesType},
+		{name: "non-object ipv4", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyIPv4: nonObjectIPv4, keyConfirm: true}, wantContains: errIPv4NotObj},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -461,10 +473,12 @@ func TestLinodeInstanceConfigInterfaceAddToolSuccessfulCreation(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeInstanceConfigInterfaceAddTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyLinodeID:  float64(123),
-		keyConfigID:  float64(789),
-		keyInterface: `{"purpose":"vpc","primary":true}`,
-		keyConfirm:   true,
+		keyLinodeID: float64(123),
+		keyConfigID: float64(789),
+		keyPurpose:  purposeVPC,
+		keySubnetID: float64(5),
+		keyPrimary:  true,
+		keyConfirm:  true,
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -514,10 +528,10 @@ func TestLinodeInstanceConfigInterfaceAddToolClientError(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeInstanceConfigInterfaceAddTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyLinodeID:  float64(123),
-		keyConfigID:  float64(789),
-		keyInterface: configInterfacePublicJSON,
-		keyConfirm:   true,
+		keyLinodeID: float64(123),
+		keyConfigID: float64(789),
+		keyPurpose:  purposePublic,
+		keyConfirm:  true,
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -1491,24 +1505,14 @@ func TestLinodeInstanceConfigInterfaceUpdateToolDefinition(t *testing.T) {
 	}
 
 	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	for _, key := range []string{keyLinodeID, keyConfigID, keyInterfaceID, keyIPRanges, keyIPv4, keyPrimary, keyConfirm} {
+		if _, ok := props[key]; !ok {
+			t.Errorf("props missing key %v", key)
+		}
 	}
 
-	if _, ok := props[keyConfigID]; !ok {
-		t.Errorf("props missing key %v", keyConfigID)
-	}
-
-	if _, ok := props[keyInterfaceID]; !ok {
-		t.Errorf("props missing key %v", keyInterfaceID)
-	}
-
-	if _, ok := props[keyInterface]; !ok {
-		t.Errorf("props missing key %v", keyInterface)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if _, ok := props[keyInterface]; ok {
+		t.Errorf("props should not contain key %v", keyInterface)
 	}
 }
 
@@ -1523,28 +1527,26 @@ func TestLinodeInstanceConfigInterfaceUpdateToolValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceConfigInterfaceUpdateTool(cfg)
 
 	validationTests := []instanceConfigCreateValidationCase{
-		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON}, wantContains: errConfirmEqualsTrue},
-		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: paymentMethodIDSlash, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: caseMissingInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyConfirm: true}, wantContains: errInterfaceRequired},
-		{name: caseNonStringInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: []any{}, keyConfirm: true}, wantContains: errInterfaceString},
-		{name: caseInvalidInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: `{`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: caseNullInterface, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: databaseJSONNull, keyConfirm: true}, wantContains: errInterfaceJSONObject},
-		{name: caseNoUpdateFields, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: jsonObjectEmpty, keyConfirm: true}, wantContains: "at least one interface update field"},
-		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: `{"primary":true,"typo":true}`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: paymentMethodIDSlash, keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "non-bool primary", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: float64(1), keyConfirm: true}, wantContains: "primary must be a boolean"},
+		{name: "bad ip_ranges", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyIPRanges: []any{float64(1)}, keyConfirm: true}, wantContains: errIPRangesType},
+		{name: "non-object ipv4", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyIPv4: nonObjectIPv4, keyConfirm: true}, wantContains: errIPv4NotObj},
+		{name: caseNoUpdateFields, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyConfirm: true}, wantContains: "at least one interface update field"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1623,7 +1625,8 @@ func TestLinodeInstanceConfigInterfaceUpdateToolSuccessfulUpdate(t *testing.T) {
 		keyLinodeID:    float64(123),
 		keyConfigID:    float64(789),
 		keyInterfaceID: float64(101),
-		keyInterface:   `{"primary":true,"ip_ranges":["10.0.0.0/24"]}`,
+		keyPrimary:     true,
+		keyIPRanges:    []any{cidrV4},
 		keyConfirm:     true,
 	})
 
@@ -1677,7 +1680,7 @@ func TestLinodeInstanceConfigInterfaceUpdateToolClientError(t *testing.T) {
 		keyLinodeID:    float64(123),
 		keyConfigID:    float64(789),
 		keyInterfaceID: float64(101),
-		keyInterface:   interfacePrimaryJSON,
+		keyPrimary:     true,
 		keyConfirm:     true,
 	})
 
