@@ -249,6 +249,14 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			"backups_enabled",
 			mcp.Description("Enable backups for this instance (optional, default: false)"),
 		),
+		mcp.WithArray(
+			"authorized_keys",
+			mcp.Description("SSH public keys to install for the root user (optional). Requires an image."),
+		),
+		mcp.WithBoolean(
+			"booted",
+			mcp.Description("Whether to boot the instance after creation (optional, defaults to true when an image is provided)"),
+		),
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
@@ -338,6 +346,23 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 				FirewallID:   &firewallID,
 			},
 		},
+	}
+
+	if raw, exists := request.GetArguments()["authorized_keys"]; exists {
+		keys, validationMessage := stringSliceFromToolArg(raw, "authorized_keys")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		req.AuthorizedKeys = keys
+	}
+
+	// Only set Booted when the caller explicitly passed it: the MCP schema
+	// delivers booleans as false by default, so checking the raw arguments map
+	// distinguishes "not provided" from an explicit false.
+	if _, ok := request.GetArguments()["booted"]; ok {
+		booted := request.GetBool("booted", true)
+		req.Booted = &booted
 	}
 
 	instance, err := client.CreateInstance(ctx, &req)

@@ -1061,11 +1061,11 @@ func (c *Client) httpGetNodeBalancerVPCConfig(ctx context.Context, nodeBalancerI
 }
 
 // ListNodeBalancerConfigs retrieves configs for a NodeBalancer by its ID.
-func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int) ([]NodeBalancerConfig, error) {
+func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID, page, pageSize int) ([]NodeBalancerConfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointNodeBalancerConfigs, nodeBalancerID)
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointNodeBalancerConfigs, nodeBalancerID), page, pageSize)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -1083,7 +1083,7 @@ func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID
 }
 
 // ListNodeBalancerFirewalls retrieves Cloud Firewalls assigned to a NodeBalancer.
-func (c *Client) httpListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID int) ([]Firewall, error) {
+func (c *Client) httpListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID, page, pageSize int) ([]Firewall, error) {
 	if nodeBalancerID <= 0 {
 		return nil, ErrNodeBalancerIDPositive
 	}
@@ -1092,7 +1092,7 @@ func (c *Client) httpListNodeBalancerFirewalls(ctx context.Context, nodeBalancer
 	defer cancel()
 
 	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
-	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/firewalls"
+	endpoint := withPaginationQuery(endpointNodeBalancers+"/"+encodedNodeBalancerID+"/firewalls", page, pageSize)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

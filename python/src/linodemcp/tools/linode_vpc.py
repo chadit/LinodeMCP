@@ -37,6 +37,21 @@ _IPV6_RANGE_PROP: dict[str, Any] = {
 }
 
 
+def _optional_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be at most {maximum}")
+    return value
+
+
 def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_list tool."""
     return Tool(
@@ -137,6 +152,17 @@ def create_linode_ipv6_range_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -146,9 +172,14 @@ async def handle_linode_ipv6_range_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_ipv6_range_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        response = await client.list_ipv6_ranges()
+        response = await client.list_ipv6_ranges(page=page, page_size=page_size)
         ranges: list[dict[str, Any]] = response.get("data", [])
         return {"count": len(ranges), "ipv6_ranges": ranges}
 
@@ -164,6 +195,17 @@ def create_linode_ipv6_pool_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -173,9 +215,14 @@ async def handle_linode_ipv6_pool_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_ipv6_pool_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        response = await client.list_ipv6_pools()
+        response = await client.list_ipv6_pools(page=page, page_size=page_size)
         pools: list[dict[str, Any]] = response.get("data", [])
         return {"count": len(pools), "ipv6_pools": pools}
 

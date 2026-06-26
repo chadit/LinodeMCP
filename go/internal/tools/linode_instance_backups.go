@@ -99,6 +99,8 @@ func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to snapshot")),
+			mcp.WithString("label",
+				mcp.Description("Label for the manual snapshot (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm snapshot creation. This overwrites any existing manual snapshot. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -135,7 +137,7 @@ func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	backup, err := client.CreateInstanceBackup(ctx, linodeID)
+	backup, err := client.CreateInstanceBackup(ctx, linodeID, request.GetString("label", ""))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create snapshot for instance %d: %v", linodeID, err)), nil
 	}

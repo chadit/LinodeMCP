@@ -22,12 +22,27 @@ import (
 const (
 	managedLinodeSettingsUpdateToolName  = "linode_managed_linode_settings_update"
 	managedLinodeSettingsUpdateIDKey     = "linode_id"
-	managedLinodeSettingsUpdateAccessKey = "ssh_access"
-	managedLinodeSettingsUpdateIPKey     = "ssh_ip"
-	managedLinodeSettingsUpdatePortKey   = "ssh_port"
-	managedLinodeSettingsUpdateUserKey   = "ssh_user"
-	managedLinodeSettingsUpdatePortError = "ssh_port must be an integer between 1 and 65535"
+	managedLinodeSettingsUpdateSSHKey    = "ssh"
+	managedLinodeSettingsUpdateAccessKey = "access"
+	managedLinodeSettingsUpdateIPKey     = "ip"
+	managedLinodeSettingsUpdatePortKey   = "port"
+	managedLinodeSettingsUpdateUserKey   = "user"
+	managedLinodeSettingsUpdatePortError = "ssh.port must be an integer between 1 and 65535"
 )
+
+// managedSettingsUpdateArgs builds tool args for the nested ssh object. A nil
+// linodeID omits the linode_id key so the missing-id case can be exercised.
+func managedSettingsUpdateArgs(linodeID any, ssh map[string]any) map[string]any {
+	args := map[string]any{
+		managedLinodeSettingsUpdateSSHKey: ssh,
+		keyConfirm:                        true,
+	}
+	if linodeID != nil {
+		args[managedLinodeSettingsUpdateIDKey] = linodeID
+	}
+
+	return args
+}
 
 func TestLinodeManagedLinodeSettingsUpdateToolDefinition(t *testing.T) {
 	t.Parallel()
@@ -43,11 +58,13 @@ func TestLinodeManagedLinodeSettingsUpdateToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyConfirm)
+	for _, key := range []string{keyConfirm, managedLinodeSettingsUpdateSSHKey} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
 	}
 
-	for _, key := range []string{keyConfirm, managedLinodeSettingsUpdateIDKey} {
+	for _, key := range []string{keyConfirm, managedLinodeSettingsUpdateIDKey, managedLinodeSettingsUpdateSSHKey} {
 		if !slices.Contains(tool.InputSchema.Required, key) {
 			t.Errorf("tool.InputSchema.Required does not contain %v", key)
 		}
@@ -132,12 +149,14 @@ func TestLinodeManagedLinodeSettingsUpdateToolSuccess(t *testing.T) {
 	_, _, handler := tools.NewLinodeManagedLinodeSettingsUpdateTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		managedLinodeSettingsUpdateIDKey:     123,
-		managedLinodeSettingsUpdateAccessKey: true,
-		managedLinodeSettingsUpdateIPKey:     testNetIPv4AddressOne,
-		managedLinodeSettingsUpdatePortKey:   port,
-		managedLinodeSettingsUpdateUserKey:   user,
-		keyConfirm:                           true,
+		managedLinodeSettingsUpdateIDKey: 123,
+		managedLinodeSettingsUpdateSSHKey: map[string]any{
+			managedLinodeSettingsUpdateAccessKey: true,
+			managedLinodeSettingsUpdateIPKey:     testNetIPv4AddressOne,
+			managedLinodeSettingsUpdatePortKey:   port,
+			managedLinodeSettingsUpdateUserKey:   user,
+		},
+		keyConfirm: true,
 	})
 
 	result, err := handler(t.Context(), req)
@@ -188,7 +207,10 @@ func TestLinodeManagedLinodeSettingsUpdateToolConfirmRejectsBeforeClient(t *test
 			cfg := &config.Config{}
 			_, _, handler := tools.NewLinodeManagedLinodeSettingsUpdateTool(cfg)
 
-			args := map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateAccessKey: true}
+			args := map[string]any{
+				managedLinodeSettingsUpdateIDKey:  123,
+				managedLinodeSettingsUpdateSSHKey: map[string]any{managedLinodeSettingsUpdateAccessKey: true},
+			}
 			if testCase.setConfirm {
 				args[keyConfirm] = testCase.confirm
 			}
@@ -221,20 +243,22 @@ func TestLinodeManagedLinodeSettingsUpdateToolInvalidInputRejectsBeforeClient(t 
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: caseMissingLinodeID, args: map[string]any{managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-		{name: "zero linode id", args: map[string]any{managedLinodeSettingsUpdateIDKey: 0, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-		{name: caseSlashLinodeID, args: map[string]any{managedLinodeSettingsUpdateIDKey: pathSeparatorValue, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-		{name: caseQueryLinodeID, args: map[string]any{managedLinodeSettingsUpdateIDKey: "123?x=1", managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-		{name: caseTraversalLinodeID, args: map[string]any{managedLinodeSettingsUpdateIDKey: pathTraversalValue, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-		{name: managedContactUpdateEmptyCase, args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, keyConfirm: true}, wantMessage: "at least one mutable SSH setting is required"},
-		{name: "numeric ssh ip", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateIPKey: 123, keyConfirm: true}, wantMessage: "ssh_ip must be a string"},
-		{name: "string ssh access", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateAccessKey: boolStringTrue, keyConfirm: true}, wantMessage: "ssh_access must be a boolean"},
-		{name: "zero ssh port", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdatePortKey: 0, keyConfirm: true}, wantMessage: managedLinodeSettingsUpdatePortError},
-		{name: "large ssh port", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdatePortKey: 65536, keyConfirm: true}, wantMessage: managedLinodeSettingsUpdatePortError},
-		{name: "fractional ssh port", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdatePortKey: 22.5, keyConfirm: true}, wantMessage: managedLinodeSettingsUpdatePortError},
-		{name: "infinite ssh port", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdatePortKey: math.Inf(1), keyConfirm: true}, wantMessage: managedLinodeSettingsUpdatePortError},
-		{name: "nan ssh port", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdatePortKey: math.NaN(), keyConfirm: true}, wantMessage: managedLinodeSettingsUpdatePortError},
-		{name: "numeric ssh user", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateUserKey: 123, keyConfirm: true}, wantMessage: "ssh_user must be a string"},
+		{name: caseMissingLinodeID, args: managedSettingsUpdateArgs(nil, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
+		{name: "zero linode id", args: managedSettingsUpdateArgs(0, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
+		{name: caseSlashLinodeID, args: managedSettingsUpdateArgs(pathSeparatorValue, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
+		{name: caseQueryLinodeID, args: managedSettingsUpdateArgs("123?x=1", map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
+		{name: caseTraversalLinodeID, args: managedSettingsUpdateArgs(pathTraversalValue, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
+		{name: "missing ssh", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, keyConfirm: true}, wantMessage: "ssh is required and must be an object"},
+		{name: "ssh wrong type", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateSSHKey: "nope", keyConfirm: true}, wantMessage: "ssh must be an object"},
+		{name: managedContactUpdateEmptyCase, args: managedSettingsUpdateArgs(123, map[string]any{}), wantMessage: "at least one mutable SSH setting is required"},
+		{name: "numeric ssh ip", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdateIPKey: 123}), wantMessage: "ssh.ip must be a string"},
+		{name: "string ssh access", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdateAccessKey: boolStringTrue}), wantMessage: "ssh.access must be a boolean"},
+		{name: "zero ssh port", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdatePortKey: 0}), wantMessage: managedLinodeSettingsUpdatePortError},
+		{name: "large ssh port", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdatePortKey: 65536}), wantMessage: managedLinodeSettingsUpdatePortError},
+		{name: "fractional ssh port", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdatePortKey: 22.5}), wantMessage: managedLinodeSettingsUpdatePortError},
+		{name: "infinite ssh port", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdatePortKey: math.Inf(1)}), wantMessage: managedLinodeSettingsUpdatePortError},
+		{name: "nan ssh port", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdatePortKey: math.NaN()}), wantMessage: managedLinodeSettingsUpdatePortError},
+		{name: "numeric ssh user", args: managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdateUserKey: 123}), wantMessage: "ssh.user must be a string"},
 	}
 
 	for _, testCase := range cases {
@@ -300,7 +324,7 @@ func TestLinodeManagedLinodeSettingsUpdateToolApiError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeManagedLinodeSettingsUpdateTool(cfg)
 
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, managedSettingsUpdateArgs(123, map[string]any{managedLinodeSettingsUpdateAccessKey: true})))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

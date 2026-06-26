@@ -30,6 +30,10 @@ func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 				mcp.Description("Label for the cloned instance (optional)")),
 			mcp.WithBoolean("backups_enabled",
 				mcp.Description("Enable backups on the cloned instance (optional)")),
+			mcp.WithArray("configs",
+				mcp.Description("Config profile IDs to clone (optional). Defaults to all configs when omitted.")),
+			mcp.WithArray("disks",
+				mcp.Description("Disk IDs to clone (optional). Defaults to all disks when omitted.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm instance cloning. This creates a billable resource. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -77,6 +81,24 @@ func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolReques
 
 	if request.GetBool("backups_enabled", false) {
 		req.BackupsEnabled = true
+	}
+
+	if raw, exists := request.GetArguments()["configs"]; exists {
+		configs, validationMessage := intSliceFromToolArg(raw, "configs")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		req.Configs = configs
+	}
+
+	if raw, exists := request.GetArguments()["disks"]; exists {
+		disks, validationMessage := intSliceFromToolArg(raw, "disks")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		req.Disks = disks
 	}
 
 	client, err := prepareClient(request, cfg)

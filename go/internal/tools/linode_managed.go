@@ -20,57 +20,61 @@ const (
 	managedCredentialsPath    = "/managed/" + "credentials"
 	managedLinodeSettingsPath = "/managed/linode-settings"
 
-	managedContactsPageSizeMin             = 25
-	managedContactsPageSizeMax             = 500
-	managedServiceLabelParam               = "label"
-	managedServiceTypeParam                = "service_type"
-	managedServiceAddressParam             = "address"
-	managedServiceTimeoutParam             = "timeout"
-	managedServiceBodyParam                = "body"
-	managedServiceConsultationParam        = "consultation_group"
-	managedServiceCredentialsParam         = "credentials"
-	managedServiceNotesParam               = "notes"
-	managedServiceRegionParam              = "region"
-	managedServiceTimeoutMin               = 1
-	managedServiceTimeoutMax               = 255
-	errManagedServiceType                  = "service_type must be url or tcp"
-	errManagedServiceTimeout               = "timeout must be an integer between 1 and 255"
-	managedLinodeSettingsIDParam           = "linode_id"
-	errManagedLinodeSettingsIDPositive     = "linode_id must be a positive integer"
-	maxManagedLinodeSettingsIDFromJSON     = 9007199254740991
-	managedContactGetIDParam               = "contact_id"
-	errManagedContactGetIDPositive         = "contact_id must be a positive integer"
-	maxManagedContactGetIDFromJSON         = 9007199254740991
-	managedContactUpdateIDParam            = "contact_id"
-	managedContactUpdateNameParam          = "name"
-	managedContactUpdateEmailParam         = "email"
-	managedContactUpdateGroupParam         = "group"
-	managedContactUpdatePhone1Param        = "phone_primary"
-	managedContactUpdatePhone2Param        = "phone_secondary"
-	managedContactDeleteIDParam            = "contact_id"
-	managedContactDeleteIDMessage          = "contact_id must be a positive integer"
-	managedIssueGetIDParam                 = "issue_id"
-	errManagedIssueGetIDPositive           = "issue_id must be a positive integer"
-	maxManagedIssueGetIDFromJSON           = 9007199254740991
-	managedIssuesPageSizeMin               = 25
-	managedIssuesPageSizeMax               = 500
-	managedServiceGetIDParam               = "service_id"
-	managedServiceDeleteIDParam            = "service_id"
-	errManagedServiceGetIDPositive         = "service_id must be a positive integer"
-	errManagedServiceUpdateFields          = "at least one managed service field is required"
-	maxManagedServiceGetIDFromJSON         = 9007199254740991
-	managedServicesPageSizeMin             = 25
-	managedServicesPageSizeMax             = 500
-	managedLinodeSettingsPageSizeMin       = 25
-	managedLinodeSettingsPageSizeMax       = 500
-	managedLinodeSettingsUpdateIDParam     = "linode_id"
-	managedLinodeSettingsUpdateAccessParam = "ssh_access"
-	managedLinodeSettingsUpdateIPParam     = "ssh_ip"
-	managedLinodeSettingsUpdatePortParam   = "ssh_port"
-	managedLinodeSettingsUpdateUserParam   = "ssh_user"
-	managedLinodeSettingsUpdateIDMessage   = "linode_id must be a positive integer"
-	managedLinodeSettingsUpdateSSHMessage  = "at least one mutable SSH setting is required"
-	managedLinodeSettingsUpdatePortMessage = "ssh_port must be an integer between 1 and 65535"
+	managedContactsPageSizeMin               = 25
+	managedContactsPageSizeMax               = 500
+	managedServiceLabelParam                 = "label"
+	managedServiceTypeParam                  = "service_type"
+	managedServiceAddressParam               = "address"
+	managedServiceTimeoutParam               = "timeout"
+	managedServiceBodyParam                  = "body"
+	managedServiceConsultationParam          = "consultation_group"
+	managedServiceCredentialsParam           = "credentials"
+	managedServiceNotesParam                 = "notes"
+	managedServiceRegionParam                = "region"
+	managedServiceTimeoutMin                 = 1
+	managedServiceTimeoutMax                 = 255
+	errManagedServiceType                    = "service_type must be url or tcp"
+	errManagedServiceTimeout                 = "timeout must be an integer between 1 and 255"
+	managedLinodeSettingsIDParam             = "linode_id"
+	errManagedLinodeSettingsIDPositive       = "linode_id must be a positive integer"
+	maxManagedLinodeSettingsIDFromJSON       = 9007199254740991
+	managedContactGetIDParam                 = "contact_id"
+	errManagedContactGetIDPositive           = "contact_id must be a positive integer"
+	maxManagedContactGetIDFromJSON           = 9007199254740991
+	managedContactUpdateIDParam              = "contact_id"
+	managedContactUpdateNameParam            = "name"
+	managedContactUpdateEmailParam           = "email"
+	managedContactUpdateGroupParam           = "group"
+	managedContactUpdatePhone1Param          = "phone_primary"
+	managedContactUpdatePhone2Param          = "phone_secondary"
+	managedContactDeleteIDParam              = "contact_id"
+	managedContactDeleteIDMessage            = "contact_id must be a positive integer"
+	managedIssueGetIDParam                   = "issue_id"
+	errManagedIssueGetIDPositive             = "issue_id must be a positive integer"
+	maxManagedIssueGetIDFromJSON             = 9007199254740991
+	managedIssuesPageSizeMin                 = 25
+	managedIssuesPageSizeMax                 = 500
+	managedServiceGetIDParam                 = "service_id"
+	managedServiceDeleteIDParam              = "service_id"
+	errManagedServiceGetIDPositive           = "service_id must be a positive integer"
+	errManagedServiceUpdateFields            = "at least one managed service field is required"
+	maxManagedServiceGetIDFromJSON           = 9007199254740991
+	managedServicesPageSizeMin               = 25
+	managedServicesPageSizeMax               = 500
+	managedLinodeSettingsPageSizeMin         = 25
+	managedLinodeSettingsPageSizeMax         = 500
+	managedLinodeSettingsUpdateIDParam       = "linode_id"
+	managedLinodeSettingsUpdateSSHParam      = "ssh"
+	managedLinodeSettingsUpdateAccessKey     = "access"
+	managedLinodeSettingsUpdateIPKey         = "ip"
+	managedLinodeSettingsUpdatePortKey       = "port"
+	managedLinodeSettingsUpdateUserKey       = "user"
+	managedLinodeSettingsUpdateIDMessage     = "linode_id must be a positive integer"
+	managedLinodeSettingsUpdateSSHMessage    = "at least one mutable SSH setting is required"
+	managedLinodeSettingsUpdateSSHReqMsg     = "ssh is required and must be an object"
+	managedLinodeSettingsUpdateSSHTypeMsg    = "ssh must be an object"
+	managedLinodeSettingsUpdateAccessTypeMsg = "ssh.access must be a boolean"
+	managedLinodeSettingsUpdatePortMessage   = "ssh.port must be an integer between 1 and 65535"
 )
 
 // NewLinodeManagedServiceCreateTool creates a tool for creating a Managed service monitor.
@@ -200,10 +204,8 @@ func NewLinodeManagedLinodeSettingsUpdateTool(cfg *config.Config) (mcp.Tool, pro
 		"Updates Managed service SSH settings for one Linode.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(managedLinodeSettingsUpdateIDParam, mcp.Required(), mcp.Description("The numeric Linode ID whose Managed settings should be updated.")),
-			mcp.WithBoolean(managedLinodeSettingsUpdateAccessParam, mcp.Description("Whether Managed service responders may access the Linode over SSH.")),
-			mcp.WithString(managedLinodeSettingsUpdateIPParam, mcp.Description("The IP address Managed service responders should use for SSH access.")),
-			mcp.WithNumber(managedLinodeSettingsUpdatePortParam, mcp.Description("The SSH port Managed service responders should use, between 1 and 65535.")),
-			mcp.WithString(managedLinodeSettingsUpdateUserParam, mcp.Description("The SSH username Managed service responders should use.")),
+			mcp.WithObject(managedLinodeSettingsUpdateSSHParam, mcp.Required(),
+				mcp.Description("SSH settings object: { access: bool, ip: string, port: int (1-65535), user: string }")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating Managed Linode settings. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -674,30 +676,39 @@ func managedLinodeSettingsUpdateIDFromTool(request *mcp.CallToolRequest) (int, s
 }
 
 func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateManagedLinodeSettingsRequest, string) {
-	args := request.GetArguments()
+	raw, present := request.GetArguments()[managedLinodeSettingsUpdateSSHParam]
+	if !present {
+		return nil, managedLinodeSettingsUpdateSSHReqMsg
+	}
+
+	sshObj, isObj := raw.(map[string]any)
+	if !isObj {
+		return nil, managedLinodeSettingsUpdateSSHTypeMsg
+	}
+
 	ssh := &linode.UpdateManagedLinodeSettingsSSH{}
 
 	var fields int
 
-	if raw, exists := args[managedLinodeSettingsUpdateAccessParam]; exists {
-		value, ok := raw.(bool)
+	if value, exists := sshObj[managedLinodeSettingsUpdateAccessKey]; exists {
+		access, ok := value.(bool)
 		if !ok {
-			return nil, managedLinodeSettingsUpdateAccessParam + " must be a boolean"
+			return nil, managedLinodeSettingsUpdateAccessTypeMsg
 		}
 
-		ssh.Access = &value
+		ssh.Access = &access
 		fields++
 	}
 
-	if validationMessage := managedLinodeSettingsUpdateOptionalString(args, managedLinodeSettingsUpdateIPParam, &ssh.IP, &fields); validationMessage != "" {
+	if validationMessage := managedLinodeSettingsUpdateOptionalString(sshObj, managedLinodeSettingsUpdateIPKey, &ssh.IP, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := managedLinodeSettingsUpdateOptionalPort(args, &ssh.Port, &fields); validationMessage != "" {
+	if validationMessage := managedLinodeSettingsUpdateOptionalPort(sshObj, &ssh.Port, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := managedLinodeSettingsUpdateOptionalString(args, managedLinodeSettingsUpdateUserParam, &ssh.User, &fields); validationMessage != "" {
+	if validationMessage := managedLinodeSettingsUpdateOptionalString(sshObj, managedLinodeSettingsUpdateUserKey, &ssh.User, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
@@ -708,15 +719,15 @@ func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.
 	return &linode.UpdateManagedLinodeSettingsRequest{SSH: ssh}, ""
 }
 
-func managedLinodeSettingsUpdateOptionalString(args map[string]any, name string, target **string, fields *int) string {
-	raw, exists := args[name]
+func managedLinodeSettingsUpdateOptionalString(sshObj map[string]any, key string, target **string, fields *int) string {
+	raw, exists := sshObj[key]
 	if !exists {
 		return ""
 	}
 
 	value, ok := raw.(string)
 	if !ok {
-		return name + " must be a string"
+		return managedLinodeSettingsUpdateSSHParam + "." + key + " must be a string"
 	}
 
 	*target = &value
@@ -725,8 +736,8 @@ func managedLinodeSettingsUpdateOptionalString(args map[string]any, name string,
 	return ""
 }
 
-func managedLinodeSettingsUpdateOptionalPort(args map[string]any, target **int, fields *int) string {
-	raw, exists := args[managedLinodeSettingsUpdatePortParam]
+func managedLinodeSettingsUpdateOptionalPort(sshObj map[string]any, target **int, fields *int) string {
+	raw, exists := sshObj[managedLinodeSettingsUpdatePortKey]
 	if !exists {
 		return ""
 	}

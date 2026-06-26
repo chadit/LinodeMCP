@@ -213,6 +213,8 @@ type CreateNodeBalancerConfigRequest struct {
 	CipherSuite   string `json:"cipher_suite,omitempty"`
 	SSLCert       string `json:"ssl_cert,omitempty"`
 	SSLKey        string `json:"ssl_key,omitempty"`
+	ProxyProtocol string `json:"proxy_protocol,omitempty"`
+	UDPCheckPort  int    `json:"udp_check_port,omitempty"`
 }
 
 // NodeBalancerNode represents a backend node on a NodeBalancer config.
@@ -229,18 +231,20 @@ type NodeBalancerNode struct {
 
 // CreateNodeBalancerNodeRequest represents the request body for creating a NodeBalancer config node.
 type CreateNodeBalancerNodeRequest struct {
-	Label   string `json:"label"`
-	Address string `json:"address"`
-	Weight  int    `json:"weight,omitempty"`
-	Mode    string `json:"mode,omitempty"`
+	Label    string `json:"label"`
+	Address  string `json:"address"`
+	Weight   int    `json:"weight,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+	SubnetID int    `json:"subnet_id,omitempty"`
 }
 
 // UpdateNodeBalancerNodeRequest represents the request body for updating a NodeBalancer config node.
 type UpdateNodeBalancerNodeRequest struct {
-	Label   string `json:"label,omitempty"`
-	Address string `json:"address,omitempty"`
-	Weight  int    `json:"weight,omitempty"`
-	Mode    string `json:"mode,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Address  string `json:"address,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+	SubnetID int    `json:"subnet_id,omitempty"`
 }
 
 // UpdateNodeBalancerConfigRequest represents the request body for updating a NodeBalancer config.
@@ -259,6 +263,8 @@ type UpdateNodeBalancerConfigRequest struct {
 	CipherSuite   string `json:"cipher_suite,omitempty"`
 	SSLCert       string `json:"ssl_cert,omitempty"`
 	SSLKey        string `json:"ssl_key,omitempty"`
+	ProxyProtocol string `json:"proxy_protocol,omitempty"`
+	UDPCheckPort  int    `json:"udp_check_port,omitempty"`
 }
 
 // NodeBalancerNodesStatus represents the health summary for nodes on a NodeBalancer config.

@@ -57,8 +57,10 @@ func TestLinodeNodeBalancerFirewallListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyNodeBalancerID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyNodeBalancerID)
+	for _, key := range []string{keyNodeBalancerID, keyPage, keyPageSize} {
+		if _, ok := tool.InputSchema.Properties[key]; !ok {
+			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		}
 	}
 
 	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
@@ -996,6 +998,8 @@ func TestLinodeNodeBalancerConfigCreateToolSuccess(t *testing.T) {
 			keyPort:          float64(80),
 			keyCheckInterval: float64(10),
 			keyCheckPath:     tcHealth,
+			keyProxyProtocol: valueProxyV2,
+			keyUDPCheckPort:  float64(8080),
 		} {
 			if !reflect.DeepEqual(body[key], want) {
 				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
@@ -1017,7 +1021,7 @@ func TestLinodeNodeBalancerConfigCreateToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: tcHealth, keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: tcHealth, keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyProxyProtocol: valueProxyV2, keyUDPCheckPort: float64(8080), keyConfirm: true}))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1068,7 +1072,7 @@ func TestLinodeNodeBalancerConfigCreateToolClientError(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: tcHealth, keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyConfirm: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyAlgorithm: valueRoundRobin, keyStickiness: valueNone, keyCheck: protocolHTTP, keyCheckInterval: float64(10), keyCheckTimeout: float64(5), keyCheckAttempts: float64(3), keyCheckPath: tcHealth, keyCheckBody: statusOK, keyCheckPassive: true, keyCipherSuite: valueRecommended, keyProxyProtocol: valueProxyV2, keyUDPCheckPort: float64(8080), keyConfirm: true}))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1454,6 +1458,7 @@ func TestLinodeNodeBalancerNodeCreateToolSuccess(t *testing.T) {
 			keyLabel:                nodeBalancerNodeLabelWeb1,
 			keyAddress:              nodeBalancerNodeAddress,
 			nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept,
+			keySubnetID:             float64(789),
 		} {
 			if !reflect.DeepEqual(body[key], want) {
 				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
@@ -1475,7 +1480,7 @@ func TestLinodeNodeBalancerNodeCreateToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeNodeBalancerNodeCreateTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keySubnetID: float64(789), keyConfirm: true}))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

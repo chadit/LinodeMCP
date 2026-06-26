@@ -515,6 +515,17 @@ def create_linode_instance_interface_history_list_tool() -> tuple[Tool, Capabili
                     "minimum": 1,
                     "description": "The ID of the Linode instance (required)",
                 },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
             "required": ["linode_id"],
         },
@@ -1374,8 +1385,16 @@ async def handle_linode_instance_interface_history_list(
     if linode_id is None:
         return error_response("linode_id must be a positive integer")
 
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_interface_history(linode_id)
+        return await client.list_instance_interface_history(
+            linode_id, page=page, page_size=page_size
+        )
 
     return await execute_tool(
         cfg,

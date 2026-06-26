@@ -276,6 +276,7 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		"Updates an existing DNS domain. Can modify SOA email, description, TTL, and status. Pass dry_run=true to preview without updating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to update")),
+			mcp.WithString("domain", mcp.Description("New domain name, for example example.com (optional)")),
 			mcp.WithString("soa_email", mcp.Description("New SOA email address (optional)")),
 			mcp.WithString("description", mcp.Description("New description (optional)")),
 			mcp.WithString("status", mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)")),
@@ -297,6 +298,7 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		return handleLinodeDomainUpdateDryRun(ctx, request, cfg, domainID)
 	}
 
+	domainName := request.GetString("domain", "")
 	soaEmail := request.GetString("soa_email", "")
 	description := request.GetString("description", "")
 	status := request.GetString("status", "")
@@ -316,6 +318,7 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	req := linode.UpdateDomainRequest{
+		Domain:      domainName,
 		SOAEmail:    soaEmail,
 		Description: description,
 		Status:      status,

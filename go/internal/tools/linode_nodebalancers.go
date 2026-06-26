@@ -21,6 +21,9 @@ const (
 	nodeBalancerConfigKeyProtocol          = "protocol"
 	nodeBalancerConfigKeySSLCert           = "ssl_cert"
 	nodeBalancerConfigKeySSLKey            = "ssl_key"
+	nodeBalancerConfigKeyProxyProtocol     = "proxy_protocol"
+	nodeBalancerConfigKeyUDPCheckPort      = "udp_check_port"
+	nodeBalancerNodeKeySubnetID            = "subnet_id"
 	nodeBalancerConfigProtocolHTTP         = "http"
 	nodeBalancerConfigProtocolHTTPS        = "https"
 	nodeBalancerConfigProtocolTCP          = "tcp"
@@ -126,6 +129,8 @@ func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profil
 		[]mcp.ToolOption{
 			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose Cloud Firewalls should be listed")),
+			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
 		},
 		handleLinodeNodeBalancerFirewallListRequest,
 	)
@@ -183,6 +188,8 @@ func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles
 		[]mcp.ToolOption{
 			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose configs should be listed")),
+			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
 		},
 		handleLinodeNodeBalancerConfigListRequest,
 	)
@@ -276,6 +283,10 @@ func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profil
 			mcp.WithString("cipher_suite", mcp.Description("Optional HTTPS cipher suite")),
 			mcp.WithString(nodeBalancerConfigKeySSLCert, mcp.Description("Optional HTTPS certificate PEM")),
 			mcp.WithString(nodeBalancerConfigKeySSLKey, mcp.Description("Optional HTTPS private key PEM")),
+			mcp.WithString(nodeBalancerConfigKeyProxyProtocol,
+				mcp.Description("Optional proxy protocol version for TCP configs: none, v1, or v2")),
+			mcp.WithNumber(nodeBalancerConfigKeyUDPCheckPort,
+				mcp.Description("Optional health check port for UDP configs, from 1 through 65535")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm NodeBalancer config creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -303,6 +314,8 @@ func NewLinodeNodeBalancerNodeCreateTool(cfg *config.Config) (mcp.Tool, profiles
 				mcp.Description("Backend node address, including port, for example 192.0.2.10:80")),
 			mcp.WithNumber("weight", mcp.Description("Optional traffic weight for this node")),
 			mcp.WithString("mode", mcp.Description("Optional node mode: accept, reject, drain, or backup")),
+			mcp.WithNumber(nodeBalancerNodeKeySubnetID,
+				mcp.Description("Optional VPC subnet ID for VPC backend nodes")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm NodeBalancer node creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -355,6 +368,8 @@ func NewLinodeNodeBalancerNodeUpdateTool(cfg *config.Config) (mcp.Tool, profiles
 				mcp.Description("Optional backend node address, including port, for example 192.0.2.10:80")),
 			mcp.WithNumber("weight", mcp.Description("Optional traffic weight for this node")),
 			mcp.WithString("mode", mcp.Description("Optional node mode: accept, reject, drain, or backup")),
+			mcp.WithNumber(nodeBalancerNodeKeySubnetID,
+				mcp.Description("Optional VPC subnet ID for VPC backend nodes")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm NodeBalancer node update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -395,6 +410,10 @@ func NewLinodeNodeBalancerConfigUpdateTool(cfg *config.Config) (mcp.Tool, profil
 			mcp.WithString("cipher_suite", mcp.Description("Optional HTTPS cipher suite")),
 			mcp.WithString(nodeBalancerConfigKeySSLCert, mcp.Description("Optional HTTPS certificate PEM")),
 			mcp.WithString(nodeBalancerConfigKeySSLKey, mcp.Description("Optional HTTPS private key PEM")),
+			mcp.WithString(nodeBalancerConfigKeyProxyProtocol,
+				mcp.Description("Optional proxy protocol version for TCP configs: none, v1, or v2")),
+			mcp.WithNumber(nodeBalancerConfigKeyUDPCheckPort,
+				mcp.Description("Optional health check port for UDP configs, from 1 through 65535")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be set to true to confirm NodeBalancer config update. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
@@ -516,12 +535,17 @@ func handleLinodeNodeBalancerFirewallListRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
+	page, pageSize, validationMessage := nodeBalancerListPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	firewalls, err := client.ListNodeBalancerFirewalls(ctx, nodeBalancerID)
+	firewalls, err := client.ListNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list firewalls for NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
@@ -556,7 +580,7 @@ func handleLinodeNodeBalancerFirewallUpdateRequest(ctx context.Context, request 
 		return RunDryRunPreview(ctx, request, cfg, "linode_nodebalancer_firewall_update", "PUT",
 			fmt.Sprintf("/nodebalancers/%d/firewalls", nodeBalancerID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
-				return c.ListNodeBalancerFirewalls(ctx, nodeBalancerID)
+				return c.ListNodeBalancerFirewalls(ctx, nodeBalancerID, 0, 0)
 			})
 	}
 
@@ -701,12 +725,17 @@ func handleLinodeNodeBalancerConfigListRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
+	page, pageSize, validationMessage := nodeBalancerListPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list configs for NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
@@ -919,7 +948,7 @@ func handleLinodeNodeBalancerConfigUpdateRequest(ctx context.Context, request *m
 }
 
 func listNodeBalancerConfigs(ctx context.Context, client *linode.Client, nodeBalancerID int) ([]linode.NodeBalancerConfig, string) {
-	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID, 0, 0)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -1025,7 +1054,7 @@ func handleLinodeNodeBalancerConfigCreateDryRun(ctx context.Context, request *mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID, 0, 0)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch NodeBalancer configs for dry-run: %v", err)), nil
 	}
@@ -1112,6 +1141,12 @@ func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (lino
 		req.CheckPassive = &v
 	}
 
+	req.ProxyProtocol = request.GetString(nodeBalancerConfigKeyProxyProtocol, "")
+
+	if req.UDPCheckPort, message = optionalNodeBalancerConfigInt(args, nodeBalancerConfigKeyUDPCheckPort); message != "" {
+		return linode.CreateNodeBalancerConfigRequest{}, message
+	}
+
 	return req, ""
 }
 
@@ -1177,6 +1212,12 @@ func nodeBalancerConfigUpdateRequestFromTool(request *mcp.CallToolRequest) (lino
 		}
 
 		req.CheckPassive = &v
+	}
+
+	req.ProxyProtocol = request.GetString(nodeBalancerConfigKeyProxyProtocol, "")
+
+	if req.UDPCheckPort, message = optionalNodeBalancerConfigInt(args, nodeBalancerConfigKeyUDPCheckPort); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
 
 	if req == (linode.UpdateNodeBalancerConfigRequest{}) {
@@ -1261,6 +1302,22 @@ func nodeBalancerIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	}
 
 	return nodeBalancerID, ""
+}
+
+func nodeBalancerListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", nodeBalancerConfigNodesPageSizeMin, nodeBalancerConfigNodesPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
 }
 
 func handleLinodeNodeBalancerNodeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1438,6 +1495,15 @@ func nodeBalancerNodeUpdateRequestFromTool(request *mcp.CallToolRequest) (linode
 		}
 	}
 
+	if _, exists := args[nodeBalancerNodeKeySubnetID]; exists {
+		subnetID, message := optionalPaginationInt(args, nodeBalancerNodeKeySubnetID, 1, 0)
+		if message != "" {
+			return linode.UpdateNodeBalancerNodeRequest{}, message
+		}
+
+		req.SubnetID = subnetID
+	}
+
 	if req == (linode.UpdateNodeBalancerNodeRequest{}) {
 		return linode.UpdateNodeBalancerNodeRequest{}, "at least one update field is required"
 	}
@@ -1472,6 +1538,15 @@ func nodeBalancerNodeCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 		if !slices.Contains([]string{"accept", "reject", "drain", "backup"}, req.Mode) {
 			return linode.CreateNodeBalancerNodeRequest{}, "mode must be one of: accept, reject, drain, backup"
 		}
+	}
+
+	if _, exists := args[nodeBalancerNodeKeySubnetID]; exists {
+		subnetID, message := optionalPaginationInt(args, nodeBalancerNodeKeySubnetID, 1, 0)
+		if message != "" {
+			return linode.CreateNodeBalancerNodeRequest{}, message
+		}
+
+		req.SubnetID = subnetID
 	}
 
 	return req, ""

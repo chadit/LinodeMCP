@@ -346,10 +346,13 @@ type AccountEventEntity struct {
 	URL   string `json:"url"`
 }
 
-// CreateAccountUserRequest contains the required fields for POST /account/users.
+// CreateAccountUserRequest contains the fields for POST /account/users.
+// Restricted is a pointer so an omitted value is distinguishable from an
+// explicit false.
 type CreateAccountUserRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	Username   string `json:"username"`
+	Email      string `json:"email"`
+	Restricted *bool  `json:"restricted,omitempty"`
 }
 
 // UpdateAccountUserRequest contains editable fields for PUT /account/users/{username}.

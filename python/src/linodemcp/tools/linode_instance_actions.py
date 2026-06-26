@@ -85,6 +85,10 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
                     "type": "string",
                     "description": "Label for cloned instance",
                 },
+                "backups_enabled": {
+                    "type": "boolean",
+                    "description": "Enable backups on the cloned instance (optional)",
+                },
                 "disks": {
                     "type": "array",
                     "description": "Disk IDs to include",
@@ -136,6 +140,7 @@ async def handle_linode_instance_clone(
             region=arguments.get("region"),
             instance_type=arguments.get("type"),
             label=arguments.get("label"),
+            backups_enabled=bool(arguments.get("backups_enabled", False)),
             disks=arguments.get("disks"),
             configs=arguments.get("configs"),
         )
@@ -260,6 +265,13 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
                     "type": "array",
                     "description": ("Usernames with SSH keys on profile"),
                     "items": {"type": "string"},
+                },
+                "booted": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether to boot the instance after rebuild"
+                        " (optional, defaults to true)"
+                    ),
                 },
                 "confirm": {
                     "type": "boolean",
@@ -396,6 +408,10 @@ async def handle_linode_instance_rebuild(
     if not confirm:
         return _error_response("This is destructive. Set confirm=true to proceed.")
 
+    # Mirror Go's explicit-only semantics: pass booted only when the caller
+    # supplied the key, so an omitted value leaves the API default (true).
+    booted = bool(arguments["booted"]) if "booted" in arguments else None
+
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
@@ -405,6 +421,7 @@ async def handle_linode_instance_rebuild(
             root_pass=root_pass,
             authorized_keys=arguments.get("authorized_keys"),
             authorized_users=arguments.get("authorized_users"),
+            booted=booted,
         )
 
     return await execute_tool(cfg, arguments, "rebuild instance", _call)

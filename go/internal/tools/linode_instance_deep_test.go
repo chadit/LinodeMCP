@@ -1139,6 +1139,10 @@ func TestLinodeInstanceBackupCreateToolSuccessfulCreation(t *testing.T) {
 
 	backup := linode.InstanceBackup{ID: 300, Label: "snapshot-manual", Status: "pending", Type: wordSnapshot}
 
+	const requestLabel = "nightly-snap"
+
+	var capturedBody map[string]any
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/linode/instances/123/backups" {
 			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/backups")
@@ -1146,6 +1150,10 @@ func TestLinodeInstanceBackupCreateToolSuccessfulCreation(t *testing.T) {
 
 		if r.Method != http.MethodPost {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1163,7 +1171,7 @@ func TestLinodeInstanceBackupCreateToolSuccessfulCreation(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeInstanceBackupCreateTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyLabel: requestLabel, keyConfirm: true})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -1176,6 +1184,10 @@ func TestLinodeInstanceBackupCreateToolSuccessfulCreation(t *testing.T) {
 
 	if result.IsError {
 		t.Error("result.IsError = true, want false")
+	}
+
+	if capturedBody["label"] != requestLabel {
+		t.Errorf("capturedBody[label] = %v, want %v", capturedBody["label"], requestLabel)
 	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
@@ -3602,6 +3614,8 @@ func TestLinodeInstanceCloneToolSuccessfulClone(t *testing.T) {
 
 	instance := linode.Instance{ID: 999, Label: "my-linode-clone", Region: regionUSEast, Status: "provisioning"}
 
+	var capturedBody map[string]any
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/linode/instances/123/clone" {
 			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/linode/instances/123/clone")
@@ -3609,6 +3623,10 @@ func TestLinodeInstanceCloneToolSuccessfulClone(t *testing.T) {
 
 		if r.Method != http.MethodPost {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -3628,6 +3646,7 @@ func TestLinodeInstanceCloneToolSuccessfulClone(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyLinodeID: float64(123), keyLabel: "my-linode-clone", keyConfirm: true,
+		"configs": []any{float64(11), float64(22)}, "disks": []any{float64(33)},
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -3641,6 +3660,14 @@ func TestLinodeInstanceCloneToolSuccessfulClone(t *testing.T) {
 
 	if result.IsError {
 		t.Error("result.IsError = true, want false")
+	}
+
+	if !reflect.DeepEqual(capturedBody["configs"], []any{float64(11), float64(22)}) {
+		t.Errorf("capturedBody[configs] = %v, want %v", capturedBody["configs"], []any{float64(11), float64(22)})
+	}
+
+	if !reflect.DeepEqual(capturedBody["disks"], []any{float64(33)}) {
+		t.Errorf("capturedBody[disks] = %v, want %v", capturedBody["disks"], []any{float64(33)})
 	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)

@@ -622,6 +622,7 @@ func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		[]mcp.ToolOption{
 			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Username for the new account user.")),
 			mcp.WithString(accountUserEmailParam, mcp.Required(), mcp.Description("Email address for the new account user.")),
+			mcp.WithBoolean("restricted", mcp.Description("Whether the new account user is restricted (optional, defaults to false).")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user creation. Ignored when dry_run=true.")),
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
@@ -3807,7 +3808,18 @@ func accountUserCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.Cre
 		return nil, validationMessage
 	}
 
-	return &linode.CreateAccountUserRequest{Username: username, Email: email}, ""
+	req := &linode.CreateAccountUserRequest{Username: username, Email: email}
+
+	if raw, exists := args["restricted"]; exists {
+		restricted, restrictedMessage := boolToolArg(raw, "restricted")
+		if restrictedMessage != "" {
+			return nil, restrictedMessage
+		}
+
+		req.Restricted = &restricted
+	}
+
+	return req, ""
 }
 
 func handleLinodeAccountSupportTicketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

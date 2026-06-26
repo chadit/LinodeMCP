@@ -134,7 +134,7 @@ async def test_retryable_client_list_instance_interface_history_uses_read_retry(
 
     assert result["results"] == 0
     assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(123)
+    mock_list.assert_awaited_once_with(123, page=None, page_size=None)
 
 
 def test_create_linode_instance_interfaces_history_list_tool_schema() -> None:
@@ -164,7 +164,9 @@ async def test_handle_linode_instance_interfaces_history_list_success(
     payload = json.loads(result[0].text)
     assert payload["results"] == 1
     assert payload["data"] == [{"linode_id": 123, "action": "interface_create"}]
-    mock_linode_client.list_instance_interface_history.assert_awaited_once_with(123)
+    mock_linode_client.list_instance_interface_history.assert_awaited_once_with(
+        123, page=None, page_size=None
+    )
 
 
 @pytest.mark.asyncio

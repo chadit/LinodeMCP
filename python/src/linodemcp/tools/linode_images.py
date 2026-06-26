@@ -165,6 +165,17 @@ def create_linode_image_sharegroup_by_image_list_tool() -> tuple[Tool, Capabilit
                         "(required)"
                     ),
                 },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
             "required": ["image_id"],
         },
@@ -323,6 +334,17 @@ def create_linode_image_sharegroup_image_list_tool() -> tuple[Tool, Capability]:
                     "minimum": 1,
                     "description": "Image share group ID (required)",
                 },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
             "required": ["sharegroup_id"],
         },
@@ -347,6 +369,17 @@ def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]
                     "type": "integer",
                     "minimum": 1,
                     "description": "Image share group ID (required)",
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
                 },
             },
             "required": ["sharegroup_id"],
@@ -735,6 +768,17 @@ def create_linode_image_sharegroup_token_list_tool() -> tuple[Tool, Capability]:
                         "Linode environment to use (optional, defaults to 'default')"
                     ),
                 },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -805,6 +849,17 @@ def create_linode_image_sharegroup_token_image_list_tool() -> tuple[Tool, Capabi
                 "token_uuid": {
                     "type": "string",
                     "description": "Image share group token UUID (required)",
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
                 },
             },
             "required": ["token_uuid"],
@@ -1500,8 +1555,16 @@ async def handle_linode_image_sharegroup_by_image_list(
 
     image_id_str = cast("str", image_id).strip()
 
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroups_by_image(image_id_str)
+        data = await client.list_image_sharegroups_by_image(
+            image_id_str, page=page, page_size=page_size
+        )
         sharegroups = data.get("data", [])
         return {
             "message": "Image share groups listed for image",
@@ -1612,9 +1675,14 @@ async def handle_linode_image_sharegroup_token_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_token_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_tokens()
+        data = await client.list_image_sharegroup_tokens(page=page, page_size=page_size)
         tokens = data.get("data", [])
         return {
             "message": "Image share group tokens listed",
@@ -1813,8 +1881,16 @@ async def handle_linode_image_sharegroup_image_list(
 
     sharegroup_id_str = str(cast("int", sharegroup_id))
 
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_images(sharegroup_id_str)
+        data = await client.list_image_sharegroup_images(
+            sharegroup_id_str, page=page, page_size=page_size
+        )
         images = data.get("data", [])
         return {
             "message": "Image share group images retrieved",
@@ -1839,8 +1915,16 @@ async def handle_linode_image_sharegroup_member_list(
 
     sharegroup_id_str = str(cast("int", sharegroup_id))
 
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_members(sharegroup_id_str)
+        data = await client.list_image_sharegroup_members(
+            sharegroup_id_str, page=page, page_size=page_size
+        )
         members = data.get("data", [])
         return {
             "message": "Image share group members retrieved",
@@ -2277,8 +2361,16 @@ async def handle_linode_image_sharegroup_token_image_list(
 
     token_uuid_str = cast("str", token_uuid).strip()
 
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_images_by_token(token_uuid_str)
+        data = await client.list_image_sharegroup_images_by_token(
+            token_uuid_str, page=page, page_size=page_size
+        )
         images = data.get("data", [])
         return {
             "message": "Image share group images retrieved",

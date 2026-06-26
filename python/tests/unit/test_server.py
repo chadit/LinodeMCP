@@ -1320,7 +1320,7 @@ async def test_ipv6_pools_list_dispatches_from_registry(
         "count": 1,
         "ipv6_pools": response_data["data"],
     }
-    mock_client.list_ipv6_pools.assert_awaited_once_with()
+    mock_client.list_ipv6_pools.assert_awaited_once_with(page=None, page_size=None)
 
 
 async def test_account_beta_enroll_tool_is_exported_and_registered(
@@ -2115,7 +2115,9 @@ async def test_account_maintenance_list_dispatches_from_registry(
         result = await srv.dispatch("linode_account_maintenance_list", {})
 
     assert json.loads(result[0].text) == response_data
-    mock_client.list_account_maintenance.assert_awaited_once_with()
+    mock_client.list_account_maintenance.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_maintenance_policies_list_tool_is_exported_and_registered(
@@ -2150,7 +2152,9 @@ async def test_maintenance_policies_list_dispatches_from_registry(
         result = await srv.dispatch("linode_maintenance_policy_list", {})
 
     assert json.loads(result[0].text) == response_data
-    mock_client.list_maintenance_policies.assert_awaited_once_with()
+    mock_client.list_maintenance_policies.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_account_oauth_clients_list_tool_is_exported_and_registered(
@@ -11763,7 +11767,9 @@ async def test_managed_services_list_dispatches_from_registry(
 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
-    mock_client.list_managed_services.assert_awaited_once_with()
+    mock_client.list_managed_services.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_managed_issue_get_tool_is_exported_and_registered(
@@ -12092,7 +12098,6 @@ async def test_account_user_create_tool_is_exported_and_registered(
     assert tool.inputSchema["required"] == [
         "username",
         "email",
-        "restricted",
         "confirm",
     ]
 
@@ -12200,20 +12205,19 @@ async def test_account_user_create_validates_required_arguments(
     mock_client.create_account_user.assert_not_called()
 
 
-@pytest.mark.parametrize("restricted_value", [None, "true", "false", 1, 0])
-async def test_account_user_create_requires_boolean_restricted(
+@pytest.mark.parametrize("restricted_value", ["true", "false", 1, 0])
+async def test_account_user_create_rejects_non_boolean_restricted(
     sample_config: Config, restricted_value: object
 ) -> None:
-    """Account user create rejects ambiguous access semantics before client call."""
+    """Account user create rejects non-boolean restricted before the client call."""
     mock_client = AsyncMock()
     mock_client.create_account_user = AsyncMock()
     arguments: dict[str, object] = {
         "username": "newuser",
         "email": "new@example.test",
+        "restricted": restricted_value,
         "confirm": True,
     }
-    if restricted_value is not None:
-        arguments["restricted"] = restricted_value
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client_class.return_value = mock_client
@@ -12221,8 +12225,43 @@ async def test_account_user_create_requires_boolean_restricted(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_account_user_create", arguments)
 
-    assert "restricted is required and must be a boolean" in result[0].text
+    assert "restricted must be a boolean" in result[0].text
     mock_client.create_account_user.assert_not_called()
+
+
+async def test_account_user_create_defaults_restricted_to_false(
+    sample_config: Config,
+) -> None:
+    """Omitting restricted creates an unrestricted user, matching the API default."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock(
+        return_value={
+            "username": "newuser",
+            "email": "new@example.test",
+            "restricted": False,
+        }
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_create",
+            {
+                "username": "newuser",
+                "email": "new@example.test",
+                "confirm": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Account user created successfully"
+    mock_client.create_account_user.assert_awaited_once_with(
+        "newuser", "new@example.test", False
+    )
 
 
 async def test_account_user_create_dry_run_skips_client_call(
@@ -12643,7 +12682,36 @@ async def test_account_payment_create_dispatches_from_registry(
     payload = json.loads(result[0].text)
     assert payload["payment_method_id"] == 123
     assert payload["usd"] == "25.00"
-    mock_client.create_account_payment.assert_awaited_once_with(123, "25.00")
+    mock_client.create_account_payment.assert_awaited_once_with(
+        "25.00", payment_method_id=123
+    )
+
+
+async def test_account_payment_create_omits_default_payment_method(
+    sample_config: Config,
+) -> None:
+    """Omitting payment_method_id charges the account default, like the API."""
+    mock_client = AsyncMock()
+    mock_client.create_account_payment = AsyncMock(
+        return_value={"id": 456, "usd": "25.00"}
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_create",
+            {"usd": "25.00", "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["usd"] == "25.00"
+    mock_client.create_account_payment.assert_awaited_once_with(
+        "25.00", payment_method_id=None
+    )
 
 
 @pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
@@ -12670,7 +12738,6 @@ async def test_account_payment_create_requires_boolean_confirm(
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("payment_method_id", None, "payment_method_id is required"),
         (
             "payment_method_id",
             False,
@@ -15838,7 +15905,9 @@ async def test_monitor_alert_channels_list_dispatches_from_registry(
     result_json = json.loads(result[0].text)
     assert result_json["alert_channels"] == response_data["data"]
     assert result_json["count"] == 1
-    mock_client.list_monitor_alert_channels.assert_awaited_once_with()
+    mock_client.list_monitor_alert_channels.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_monitor_alert_definitions_list_tool_is_exported_and_registered(
@@ -15883,7 +15952,9 @@ async def test_monitor_alert_definitions_list_dispatches_from_registry(
     result_json = json.loads(result[0].text)
     assert result_json["alert_definitions"] == response_data["data"]
     assert result_json["count"] == 1
-    mock_client.list_monitor_alert_definitions.assert_awaited_once_with()
+    mock_client.list_monitor_alert_definitions.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_monitor_service_alert_definitions_list_tool_is_exported_and_registered(
@@ -16007,7 +16078,9 @@ async def test_monitor_dashboards_list_dispatches_from_registry(
     result_json = json.loads(result[0].text)
     assert result_json["dashboards"] == response_data["data"]
     assert result_json["count"] == 1
-    mock_client.list_monitor_dashboards.assert_awaited_once_with()
+    mock_client.list_monitor_dashboards.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_monitor_dashboard_get_tool_is_exported_and_registered(

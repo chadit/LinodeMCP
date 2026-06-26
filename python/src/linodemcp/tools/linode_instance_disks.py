@@ -31,6 +31,20 @@ def _error_response(message: str) -> list[TextContent]:
     return [TextContent(type="text", text=f"Error: {message}")]
 
 
+def _split_comma_separated(raw: object) -> list[str] | None:
+    """Split a comma-separated string into trimmed, non-empty entries.
+
+    Mirrors the Go disk-create handler so both languages accept the same
+    comma-delimited input and post the same array body to the Linode API.
+    Returns None when nothing is supplied so the client omits the key.
+    """
+    if not isinstance(raw, str):
+        return None
+    parts = [segment.strip() for segment in raw.split(",")]
+    entries = [segment for segment in parts if segment]
+    return entries or None
+
+
 _ENV_PROP: dict[str, Any] = {
     "type": "string",
     "description": "Linode environment to use (optional, defaults to 'default')",
@@ -299,6 +313,33 @@ def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
                     "type": "object",
                     "description": "Config devices mapping, such as sda/sdb entries",
                 },
+                "comments": {
+                    "type": "string",
+                    "description": "Optional comments for the configuration profile",
+                },
+                "kernel": {
+                    "type": "string",
+                    "description": "Kernel ID to boot, e.g. linode/latest-64bit",
+                },
+                "memory_limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional memory limit in MB",
+                },
+                "root_device": {
+                    "type": "string",
+                    "description": "Root device to boot, e.g. /dev/sda",
+                },
+                "run_level": {
+                    "type": "string",
+                    "enum": ["default", "single", "binbash"],
+                    "description": "Run level: default, single, or binbash",
+                },
+                "virt_mode": {
+                    "type": "string",
+                    "enum": ["paravirt", "fullvirt"],
+                    "description": "Virtualization mode: paravirt or fullvirt",
+                },
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
@@ -350,11 +391,22 @@ async def handle_linode_instance_config_create(
     if confirm is not True:
         return _error_response("Set confirm=true to proceed.")
 
+    memory_limit_arg = arguments.get("memory_limit")
+    memory_limit = int(memory_limit_arg) if memory_limit_arg is not None else None
+
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         return await client.create_instance_config(
-            iid, label=label, devices=devices_payload
+            iid,
+            label=label,
+            devices=devices_payload,
+            comments=arguments.get("comments"),
+            kernel=arguments.get("kernel"),
+            memory_limit=memory_limit,
+            root_device=arguments.get("root_device"),
+            run_level=arguments.get("run_level"),
+            virt_mode=arguments.get("virt_mode"),
         )
 
     return await execute_tool(cfg, arguments, "create instance config", _call)
@@ -389,6 +441,17 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
                 "root_pass": {
                     "type": "string",
                     "description": ("Root password (required with image)"),
+                },
+                "authorized_keys": {
+                    "type": "string",
+                    "description": "Comma-separated list of SSH public keys to install",
+                },
+                "authorized_users": {
+                    "type": "string",
+                    "description": (
+                        "Comma-separated list of Linode usernames whose SSH keys"
+                        " to install"
+                    ),
                 },
                 "confirm": _CONFIRM_PROP,
                 PARAM_DRY_RUN: DRY_RUN_PROP,
@@ -454,6 +517,8 @@ async def handle_linode_instance_disk_create(
             filesystem=arguments.get("filesystem"),
             image=arguments.get("image"),
             root_pass=arguments.get("root_pass"),
+            authorized_keys=_split_comma_separated(arguments.get("authorized_keys")),
+            authorized_users=_split_comma_separated(arguments.get("authorized_users")),
         )
 
     return await execute_tool(cfg, arguments, "create instance disk", _call)

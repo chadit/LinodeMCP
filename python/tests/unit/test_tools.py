@@ -2950,7 +2950,11 @@ async def test_create_linode_account_maintenance_list_tool() -> None:
 
     assert tool.name == "linode_account_maintenance_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "page",
+        "page_size",
+    }
     assert "required" not in tool.inputSchema
 
 
@@ -2970,7 +2974,9 @@ async def test_handle_linode_account_maintenance_list(sample_config: Config) -> 
 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
-    mock_client.list_account_maintenance.assert_awaited_once_with()
+    mock_client.list_account_maintenance.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_create_linode_maintenance_policies_list_tool() -> None:
@@ -2979,7 +2985,11 @@ async def test_create_linode_maintenance_policies_list_tool() -> None:
 
     assert tool.name == "linode_maintenance_policy_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "page",
+        "page_size",
+    }
     assert "required" not in tool.inputSchema
 
 
@@ -2999,7 +3009,9 @@ async def test_handle_linode_maintenance_policies_list(sample_config: Config) ->
 
     assert len(result) == 1
     assert json.loads(result[0].text) == response_data
-    mock_client.list_maintenance_policies.assert_awaited_once_with()
+    mock_client.list_maintenance_policies.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 async def test_create_linode_account_availability_list_tool() -> None:
@@ -9857,6 +9869,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
             {
                 "domain": "example.com",
                 "soa_email": "admin@example.com",
+                "ttl_sec": 3600,
                 "confirm": True,
             },
             sample_config,
@@ -9864,6 +9877,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "example.com" in result[0].text
+        assert mock_client.create_domain.call_args.kwargs["ttl_sec"] == 3600
 
 
 async def test_handle_linode_domain_update(sample_config: Config) -> None:
@@ -9888,12 +9902,21 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_domain_update(
-            {"domain_id": 12345, "description": "Updated", "confirm": True},
+            {
+                "domain_id": 12345,
+                "description": "Updated",
+                "status": "disabled",
+                "ttl_sec": 7200,
+                "confirm": True,
+            },
             sample_config,
         )
 
         assert len(result) == 1
         assert "updated" in result[0].text.lower()
+        update_kwargs = mock_client.update_domain.call_args.kwargs
+        assert update_kwargs["status"] == "disabled"
+        assert update_kwargs["ttl_sec"] == 7200
 
 
 async def test_domain_update_dry_run_surfaces_field_changes(
@@ -10022,6 +10045,9 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
                 "type": "A",
                 "name": "www",
                 "target": "192.0.2.1",
+                "service": "_http",
+                "protocol": "_tcp",
+                "tag": "issue",
                 "confirm": True,
             },
             sample_config,
@@ -10029,6 +10055,10 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
 
         assert len(result) == 1
         assert "www" in result[0].text
+        record_kwargs = mock_client.create_domain_record.call_args.kwargs
+        assert record_kwargs["service"] == "_http"
+        assert record_kwargs["protocol"] == "_tcp"
+        assert record_kwargs["tag"] == "issue"
 
 
 async def test_handle_linode_domain_record_update(sample_config: Config) -> None:
@@ -17358,6 +17388,25 @@ async def test_instance_clone_success(
         assert "cloned" in result[0].text
 
 
+async def test_instance_clone_passes_backups_enabled(
+    sample_config: Config,
+) -> None:
+    """Clone forwards backups_enabled to the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
+        mock_client = AsyncMock()
+        mock_client.clone_instance.return_value = {"id": 999, "label": "cloned"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mc.return_value = mock_client
+
+        await handle_linode_instance_clone(
+            {"linode_id": 123, "backups_enabled": True, "confirm": True},
+            sample_config,
+        )
+
+    assert mock_client.clone_instance.await_args.kwargs["backups_enabled"] is True
+
+
 async def test_instance_migrate_no_confirm(
     sample_config: Config,
 ) -> None:
@@ -17858,8 +17907,36 @@ async def test_handle_linode_instance_disk_create_success(
     assert data["id"] == 50
     assert data["label"] == "my-disk"
     mock_linode_client.create_instance_disk.assert_called_once_with(
-        123, label="my-disk", size=1024, filesystem=None, image=None, root_pass=None
+        123,
+        label="my-disk",
+        size=1024,
+        filesystem=None,
+        image=None,
+        root_pass=None,
+        authorized_keys=None,
+        authorized_users=None,
     )
+
+
+async def test_handle_linode_instance_disk_create_passes_authorized_lists(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Disk create splits comma-separated authorized lists for the client."""
+    mock_linode_client.create_instance_disk.return_value = {"id": 50, "label": "d"}
+    await handle_linode_instance_disk_create(
+        {
+            "linode_id": 123,
+            "label": "d",
+            "size": 1024,
+            "authorized_keys": "ssh-ed25519 AAAA, ssh-rsa BBBB",
+            "authorized_users": "alice, bob",
+            "confirm": True,
+        },
+        sample_config,
+    )
+    call_kwargs = mock_linode_client.create_instance_disk.call_args.kwargs
+    assert call_kwargs["authorized_keys"] == ["ssh-ed25519 AAAA", "ssh-rsa BBBB"]
+    assert call_kwargs["authorized_users"] == ["alice", "bob"]
 
 
 async def test_handle_linode_instance_disk_update_success(
@@ -18317,7 +18394,26 @@ async def test_handle_linode_instance_rebuild_success(
         root_pass="Str0ngP@ssw0rd!",
         authorized_keys=None,
         authorized_users=None,
+        booted=None,
     )
+
+
+async def test_handle_linode_instance_rebuild_passes_booted(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Rebuild forwards booted only when the caller supplies it."""
+    mock_linode_client.rebuild_instance.return_value = {"id": 123}
+    await handle_linode_instance_rebuild(
+        {
+            "linode_id": 123,
+            "image": "linode/ubuntu24.04",
+            "root_pass": "Str0ngP@ssw0rd!",
+            "booted": False,
+            "confirm": True,
+        },
+        sample_config,
+    )
+    assert mock_linode_client.rebuild_instance.call_args.kwargs["booted"] is False
 
 
 async def test_instance_rebuild_dry_run_returns_preview(
@@ -19904,7 +20000,7 @@ async def test_handle_linode_profile_tokens_list_success(
             {"id": 67890, "label": "ci-token"},
         ]
     }
-    mock_client.list_profile_tokens.assert_awaited_once_with()
+    mock_client.list_profile_tokens.assert_awaited_once_with(page=None, page_size=None)
 
 
 async def test_handle_linode_profile_tokens_list_error(
@@ -20058,7 +20154,7 @@ async def test_handle_linode_profile_logins_list_success(
             {"id": 67890, "ip": "192.0.2.11"},
         ]
     }
-    mock_client.list_profile_logins.assert_awaited_once_with()
+    mock_client.list_profile_logins.assert_awaited_once_with(page=None, page_size=None)
 
 
 async def test_handle_linode_profile_logins_list_error(
@@ -20360,7 +20456,7 @@ async def test_handle_linode_profile_devices_list_success(
             {"id": 456, "user_agent": "curl/8.0"},
         ]
     }
-    mock_client.list_profile_devices.assert_awaited_once_with()
+    mock_client.list_profile_devices.assert_awaited_once_with(page=None, page_size=None)
 
 
 async def test_handle_linode_profile_devices_list_error(
@@ -21896,6 +21992,9 @@ async def test_handle_linode_nodebalancer_config_create(sample_config: Config) -
                 "nodebalancer_id": 8,
                 "port": 80,
                 "protocol": "http",
+                "cipher_suite": "recommended",
+                "ssl_cert": "cert-pem-placeholder",
+                "ssl_key": "key-pem-placeholder",
                 "confirm": True,
             },
             sample_config,
@@ -21905,7 +22004,14 @@ async def test_handle_linode_nodebalancer_config_create(sample_config: Config) -
         data = json.loads(result[0].text)
         assert data == mock_result
         mock_client.create_nodebalancer_config.assert_called_once_with(
-            8, {"port": 80, "protocol": "http"}
+            8,
+            {
+                "port": 80,
+                "protocol": "http",
+                "cipher_suite": "recommended",
+                "ssl_cert": "cert-pem-placeholder",
+                "ssl_key": "key-pem-placeholder",
+            },
         )
 
 
@@ -24185,6 +24291,13 @@ def test_create_linode_instance_config_create_tool_schema() -> None:
     assert tool.inputSchema["properties"]["devices"]["type"] == "object"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    props = tool.inputSchema["properties"]
+    assert props["comments"]["type"] == "string"
+    assert props["kernel"]["type"] == "string"
+    assert props["memory_limit"]["type"] == "integer"
+    assert props["root_device"]["type"] == "string"
+    assert props["run_level"]["enum"] == ["default", "single", "binbash"]
+    assert props["virt_mode"]["enum"] == ["paravirt", "fullvirt"]
     assert set(tool.inputSchema["required"]) == {
         "linode_id",
         "label",
@@ -24214,6 +24327,12 @@ async def test_handle_linode_instance_config_create_success(
                 "linode_id": "456",
                 "label": "boot-config",
                 "devices": devices,
+                "comments": "boot profile",
+                "kernel": "linode/latest-64bit",
+                "memory_limit": 2048,
+                "root_device": "/dev/sda",
+                "run_level": "default",
+                "virt_mode": "paravirt",
                 "confirm": True,
             },
             sample_config,
@@ -24224,7 +24343,15 @@ async def test_handle_linode_instance_config_create_success(
     assert body["id"] == 987
     assert body["label"] == "boot-config"
     mock_client.create_instance_config.assert_awaited_once_with(
-        456, label="boot-config", devices=devices
+        456,
+        label="boot-config",
+        devices=devices,
+        comments="boot profile",
+        kernel="linode/latest-64bit",
+        memory_limit=2048,
+        root_device="/dev/sda",
+        run_level="default",
+        virt_mode="paravirt",
     )
 
 

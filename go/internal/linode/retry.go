@@ -3111,13 +3111,13 @@ func (c *Client) GetNodeBalancerVPCConfig(ctx context.Context, nodeBalancerID, v
 }
 
 // ListNodeBalancerConfigs retrieves configs for a node balancer by ID with automatic retry on transient failures.
-func (c *Client) ListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int) ([]NodeBalancerConfig, error) {
+func (c *Client) ListNodeBalancerConfigs(ctx context.Context, nodeBalancerID, page, pageSize int) ([]NodeBalancerConfig, error) {
 	var configs []NodeBalancerConfig
 
 	err := c.executeWithRetry(ctx, "ListNodeBalancerConfigs", func() error {
 		var err error
 
-		configs, err = c.httpListNodeBalancerConfigs(ctx, nodeBalancerID)
+		configs, err = c.httpListNodeBalancerConfigs(ctx, nodeBalancerID, page, pageSize)
 
 		return err
 	})
@@ -3126,13 +3126,13 @@ func (c *Client) ListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int
 }
 
 // ListNodeBalancerFirewalls retrieves Cloud Firewalls assigned to a NodeBalancer with automatic retry on transient failures.
-func (c *Client) ListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID int) ([]Firewall, error) {
+func (c *Client) ListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID, page, pageSize int) ([]Firewall, error) {
 	var firewalls []Firewall
 
 	err := c.executeWithRetry(ctx, "ListNodeBalancerFirewalls", func() error {
 		var err error
 
-		firewalls, err = c.httpListNodeBalancerFirewalls(ctx, nodeBalancerID)
+		firewalls, err = c.httpListNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize)
 
 		return err
 	})
@@ -4754,13 +4754,13 @@ func (c *Client) GetInstanceBackup(ctx context.Context, linodeID, backupID int) 
 }
 
 // CreateInstanceBackup creates a manual snapshot with automatic retry on transient failures.
-func (c *Client) CreateInstanceBackup(ctx context.Context, linodeID int) (*InstanceBackup, error) {
+func (c *Client) CreateInstanceBackup(ctx context.Context, linodeID int, label string) (*InstanceBackup, error) {
 	var backup *InstanceBackup
 
 	err := c.executeWithRetry(ctx, "CreateInstanceBackup", func() error {
 		var retryErr error
 
-		backup, retryErr = c.httpCreateInstanceBackup(ctx, linodeID)
+		backup, retryErr = c.httpCreateInstanceBackup(ctx, linodeID, label)
 
 		return retryErr
 	})

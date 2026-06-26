@@ -1428,6 +1428,19 @@ def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
                     "maximum": 65535,
                     "description": "TCP/HTTP health check port for UDP backends",
                 },
+                "cipher_suite": {
+                    "type": "string",
+                    "enum": ["recommended", "legacy"],
+                    "description": "SSL cipher suite (HTTPS only).",
+                },
+                "ssl_cert": {
+                    "type": "string",
+                    "description": "PEM-formatted SSL certificate (HTTPS only).",
+                },
+                "ssl_key": {
+                    "type": "string",
+                    "description": "PEM-formatted SSL private key (HTTPS only).",
+                },
                 "nodes": {
                     "type": "array",
                     "items": {"type": "object"},
@@ -1483,6 +1496,9 @@ async def handle_linode_nodebalancer_config_create(
         "check_passive",
         "proxy_protocol",
         "udp_check_port",
+        "cipher_suite",
+        "ssl_cert",
+        "ssl_key",
         "nodes",
     ):
         value = arguments.get(key)

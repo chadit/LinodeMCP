@@ -289,7 +289,7 @@ async def test_retryable_list_image_sharegroups_by_image_uses_retry() -> None:
 
     assert result["results"] == 0
     assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with("private/12345")
+    mock_list.assert_awaited_once_with("private/12345", page=None, page_size=None)
 
 
 @pytest.mark.asyncio
@@ -350,7 +350,7 @@ async def test_handle_linode_image_sharegroups_by_image_list_success(
         "results": 1,
     }
     mock_linode_client.list_image_sharegroups_by_image.assert_awaited_once_with(
-        "private/12345"
+        "private/12345", page=None, page_size=None
     )
 
 
@@ -796,7 +796,7 @@ async def test_retryable_client_list_image_sharegroup_tokens_uses_read_retry() -
 
     assert result["results"] == 0
     assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
 
 
 @pytest.mark.asyncio
@@ -1186,7 +1186,7 @@ async def test_retryable_list_images_by_token_uses_read_retry() -> None:
 
     assert result["data"][0]["id"] == "private/ubuntu"
     assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(token_uuid)
+    mock_list.assert_awaited_once_with(token_uuid, page=None, page_size=None)
 
 
 def test_create_token_sharegroup_images_list_tool_schema() -> None:
@@ -1195,7 +1195,12 @@ def test_create_token_sharegroup_images_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_image_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment", "token_uuid"}
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "token_uuid",
+        "page",
+        "page_size",
+    }
     assert tool.inputSchema["required"] == ["token_uuid"]
 
 
@@ -1226,7 +1231,7 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_images_list_suc
         "results": 1,
     }
     mock_linode_client.list_image_sharegroup_images_by_token.assert_awaited_once_with(
-        token_uuid
+        token_uuid, page=None, page_size=None
     )
 
 
@@ -1373,7 +1378,7 @@ async def test_retryable_list_image_sharegroup_members_uses_read_retry() -> None
 
     assert result["data"][0]["username"] == "alice"
     assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(sharegroup_id)
+    mock_list.assert_awaited_once_with(sharegroup_id, page=None, page_size=None)
 
 
 def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
@@ -1383,7 +1388,12 @@ def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
     assert tool.name == "linode_image_sharegroup_member_list"
     assert capability is Capability.Read
     sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
-    assert set(tool.inputSchema["properties"]) == {"environment", "sharegroup_id"}
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "sharegroup_id",
+        "page",
+        "page_size",
+    }
     assert tool.inputSchema["required"] == ["sharegroup_id"]
     assert sharegroup_id_schema["type"] == "integer"
 
@@ -1415,7 +1425,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
         "results": 1,
     }
     mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
-        str(sharegroup_id)
+        str(sharegroup_id), page=None, page_size=None
     )
 
 
@@ -1441,7 +1451,7 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
         "results": 0,
     }
     mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
-        str(sharegroup_id)
+        str(sharegroup_id), page=None, page_size=None
     )
 
 
@@ -2405,7 +2415,7 @@ async def test_retryable_list_image_sharegroup_images_uses_read_retry() -> None:
 
     assert result["data"][0]["id"] == "private/ubuntu"
     assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(sharegroup_id)
+    mock_list.assert_awaited_once_with(sharegroup_id, page=None, page_size=None)
 
 
 @pytest.mark.asyncio
@@ -3227,7 +3237,12 @@ def test_create_linode_images_sharegroup_images_list_tool_schema() -> None:
     assert tool.name == "linode_image_sharegroup_image_list"
     assert capability is Capability.Read
     sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
-    assert set(tool.inputSchema["properties"]) == {"environment", "sharegroup_id"}
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "sharegroup_id",
+        "page",
+        "page_size",
+    }
     assert tool.inputSchema["required"] == ["sharegroup_id"]
     assert sharegroup_id_schema["type"] == "integer"
 
@@ -3259,7 +3274,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
         "results": 1,
     }
     mock_linode_client.list_image_sharegroup_images.assert_awaited_once_with(
-        str(sharegroup_id)
+        str(sharegroup_id), page=None, page_size=None
     )
 
 
@@ -3768,12 +3783,16 @@ def test_linode_images_sharegroups_token_delete_in_version_features() -> None:
 
 
 def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
-    """Tool schema exposes only the documented environment argument."""
+    """Tool schema exposes the documented environment and pagination arguments."""
     tool, capability = create_linode_image_sharegroup_token_list_tool()
 
     assert tool.name == "linode_image_sharegroup_token_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "page",
+        "page_size",
+    }
     assert "required" not in tool.inputSchema
 
 
@@ -3810,7 +3829,9 @@ async def test_handle_linode_images_sharegroups_tokens_list_success(
         "pages": 1,
         "results": 1,
     }
-    mock_linode_client.list_image_sharegroup_tokens.assert_awaited_once_with()
+    mock_linode_client.list_image_sharegroup_tokens.assert_awaited_once_with(
+        page=None, page_size=None
+    )
 
 
 def test_linode_images_sharegroups_tokens_list_registered() -> None:

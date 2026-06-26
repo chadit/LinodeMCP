@@ -1068,6 +1068,58 @@ func TestLinodeInstanceCreateToolBodyShapeMatchesBIMHelperScriptsReference(t *te
 	}
 }
 
+func TestLinodeInstanceCreateToolSendsAuthorizedKeysAndBooted(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.Instance{ID: 456, Region: regionUSEast}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+
+	const exampleKey = "ssh-ed25519 AAAAexamplekey"
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyRegion:         regionUSEast,
+		keyType:           typeG6Nanode1,
+		keyFirewallID:     12345,
+		"authorized_keys": []any{exampleKey},
+		"booted":          false,
+		keyConfirm:        true,
+	})
+
+	result, err := successHandler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil || result.IsError {
+		t.Fatalf("result = %v, want success", result)
+	}
+
+	if !reflect.DeepEqual(capturedBody["authorized_keys"], []any{exampleKey}) {
+		t.Errorf("capturedBody[authorized_keys] = %v, want %v", capturedBody["authorized_keys"], []any{exampleKey})
+	}
+
+	if capturedBody["booted"] != false {
+		t.Errorf("capturedBody[booted] = %v, want %v", capturedBody["booted"], false)
+	}
+}
+
 func TestLinodeInstanceCreateToolRouteFlagsOmitIpv4KeyWhenFalse(t *testing.T) {
 	t.Parallel()
 
@@ -2914,6 +2966,8 @@ func TestLinodeDomainUpdateToolSuccessfulUpdate(t *testing.T) {
 		Status: statusActive,
 	}
 
+	var capturedBody map[string]any
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/domains/111" {
 			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/111")
@@ -2921,6 +2975,10 @@ func TestLinodeDomainUpdateToolSuccessfulUpdate(t *testing.T) {
 
 		if r.Method != http.MethodPut {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -2938,6 +2996,7 @@ func TestLinodeDomainUpdateToolSuccessfulUpdate(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyDomainID: float64(111),
+		keyDomain:   domainExample,
 		keySoaEmail: "new@example.com",
 		keyConfirm:  true,
 	})
@@ -2953,6 +3012,10 @@ func TestLinodeDomainUpdateToolSuccessfulUpdate(t *testing.T) {
 
 	if result.IsError {
 		t.Error("result.IsError = true, want false")
+	}
+
+	if capturedBody["domain"] != domainExample {
+		t.Errorf("capturedBody[domain] = %v, want %v", capturedBody["domain"], domainExample)
 	}
 
 	textContent, ok := result.Content[0].(mcp.TextContent)

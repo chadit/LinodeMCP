@@ -674,7 +674,7 @@ async def test_retryable_list_account_maintenance_delegates_to_client() -> None:
         mock_list.return_value = {"data": []}
         result = await retryable.list_account_maintenance()
 
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     assert result == {"data": []}
     await retryable.close()
 
@@ -723,7 +723,7 @@ async def test_retryable_list_maintenance_policies_delegates_to_client() -> None
         mock_list.return_value = {"data": []}
         result = await retryable.list_maintenance_policies()
 
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     assert result == {"data": []}
     await retryable.close()
 
@@ -2809,7 +2809,7 @@ async def test_create_account_payment_sends_post_body() -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.create_account_payment(123, "25.00")
+        result = await client.create_account_payment("25.00", 123)
 
     assert result == response_data
     mock_request.assert_called_once_with("POST", "/account/payments", payload)
@@ -2922,7 +2922,7 @@ async def test_create_account_payment_wraps_http_errors() -> None:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.create_account_payment(123, "25.00")
+            await client.create_account_payment("25.00", 123)
 
     assert "CreateAccountPayment" in str(excinfo.value)
     await client.close()
@@ -3013,9 +3013,9 @@ async def test_retryable_create_account_payment_does_not_replay() -> None:
     ) as mock_create:
         mock_create.side_effect = httpx.HTTPError("transient")
         with pytest.raises(httpx.HTTPError):
-            await retryable.create_account_payment(123, "25.00")
+            await retryable.create_account_payment("25.00", 123)
 
-    mock_create.assert_awaited_once_with(123, "25.00")
+    mock_create.assert_awaited_once_with("25.00", 123)
     await retryable.close()
 
 
@@ -6746,7 +6746,7 @@ async def test_retryable_list_managed_services_delegates_to_client() -> None:
         result = await retryable.list_managed_services()
 
     assert result == {"data": [], "page": 1, "pages": 1, "results": 0}
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     await retryable.close()
 
 
@@ -9379,7 +9379,7 @@ async def test_retryable_client_list_vlans() -> None:
         vlans = await client.list_vlans()
 
         assert vlans == expected_vlans
-        mock_list_vlans.assert_awaited_once_with()
+        mock_list_vlans.assert_awaited_once_with(page=None, page_size=None)
 
     await client.close()
 
@@ -14943,15 +14943,13 @@ class TestMakeRequestBody:
         payload = {"data": [{"id": 1, "label": "Resource Usage"}]}
 
         with patch.object(
-            retryable,
-            "_execute_with_retry",
-            new_callable=AsyncMock,
-        ) as mock_execute:
-            mock_execute.return_value = payload
+            retryable.client, "list_monitor_dashboards", new_callable=AsyncMock
+        ) as mock_list:
+            mock_list.return_value = payload
             result = await retryable.list_monitor_dashboards()
 
         assert result == payload
-        mock_execute.assert_awaited_once_with(retryable.client.list_monitor_dashboards)
+        mock_list.assert_awaited_once_with(page=None, page_size=None)
         await retryable.close()
 
     async def test_retryable_get_monitor_dashboard_delegates_to_client(self) -> None:
@@ -16743,7 +16741,7 @@ async def test_retryable_list_profile_tokens_delegates_to_client() -> None:
         result = await client.list_profile_tokens()
 
     assert result == [{"id": 12345, "label": "api-token"}]
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     await client.close()
 
 
@@ -16913,7 +16911,7 @@ async def test_retryable_list_profile_logins_delegates_to_client() -> None:
         result = await client.list_profile_logins()
 
     assert result == [{"id": 12345, "ip": "192.0.2.10"}]
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     await client.close()
 
 
@@ -17302,7 +17300,7 @@ async def test_retryable_client_list_profile_devices_delegates() -> None:
         result = await client.list_profile_devices()
 
     assert result == [{"id": 123}]
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     await client.close()
 
 
@@ -18611,15 +18609,13 @@ async def test_retryable_list_monitor_alert_channels_delegates_to_client() -> No
     payload = {"data": [{"id": 10000, "label": "Email Ops", "type": "email"}]}
 
     with patch.object(
-        retryable,
-        "_execute_with_retry",
-        new_callable=AsyncMock,
-    ) as mock_execute:
-        mock_execute.return_value = payload
+        retryable.client, "list_monitor_alert_channels", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = payload
         result = await retryable.list_monitor_alert_channels()
 
     assert result == payload
-    mock_execute.assert_awaited_once_with(retryable.client.list_monitor_alert_channels)
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     await retryable.close()
 
 
@@ -18629,17 +18625,13 @@ async def test_retryable_list_monitor_alert_definitions_delegates_to_client() ->
     payload = {"data": [{"id": 12345, "label": "CPU high"}]}
 
     with patch.object(
-        retryable,
-        "_execute_with_retry",
-        new_callable=AsyncMock,
-    ) as mock_execute:
-        mock_execute.return_value = payload
+        retryable.client, "list_monitor_alert_definitions", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = payload
         result = await retryable.list_monitor_alert_definitions()
 
     assert result == payload
-    mock_execute.assert_awaited_once_with(
-        retryable.client.list_monitor_alert_definitions
-    )
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     await retryable.close()
 
 
@@ -19157,7 +19149,7 @@ async def test_monitor_global_alert_definitions_list_tool_success() -> None:
 
         result = await handle_linode_monitor_alert_definition_list({}, cfg)
 
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     assert "Monitor alert definitions listed" in result[0].text
     assert "CPU Usage" in result[0].text
 
@@ -19196,7 +19188,7 @@ async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> 
 
         result = await handle_linode_monitor_alert_channel_list({}, cfg)
 
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     assert "Monitor alert channels listed" in result[0].text
     assert "Email Ops" in result[0].text
 
@@ -19381,7 +19373,7 @@ async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None
 
         result = await handle_linode_monitor_dashboard_list({}, cfg)
 
-    mock_list.assert_awaited_once_with()
+    mock_list.assert_awaited_once_with(page=None, page_size=None)
     assert "Monitor dashboards listed" in result[0].text
     assert "Resource Usage" in result[0].text
 
@@ -19702,9 +19694,16 @@ async def test_retryable_create_instance_config_delegates_once_without_retry() -
         mock_create.side_effect = httpx.TransportError("transient")
 
         with pytest.raises(httpx.TransportError):
-            await client.create_instance_config(456, "boot-config", {"sda": {}})
+            await client.create_instance_config(
+                456,
+                "boot-config",
+                {"sda": {}},
+                run_level="single",
+            )
 
-    mock_create.assert_awaited_once_with(456, "boot-config", {"sda": {}})
+    mock_create.assert_awaited_once_with(
+        456, "boot-config", {"sda": {}}, None, None, None, None, "single", None
+    )
     await client.close()
 
 

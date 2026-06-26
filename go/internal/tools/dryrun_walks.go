@@ -1944,7 +1944,7 @@ func domainDeleteDependencyWalk(ctx context.Context, client *linode.Client, doma
 func nodebalancerDeleteDependencyWalk(ctx context.Context, client *linode.Client, nodeBalancerID int, _ any) (DryRunDetails, error) {
 	var details DryRunDetails
 
-	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID, 0, 0)
 	if err != nil {
 		details.Warnings = append(details.Warnings, fmt.Sprintf("Could not list NodeBalancer configs: %v", err))
 

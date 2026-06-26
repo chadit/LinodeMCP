@@ -72,6 +72,12 @@ type RestoreBackupRequest struct {
 	Overwrite bool `json:"overwrite"`
 }
 
+// CreateInstanceBackupRequest represents the optional request body for taking a
+// manual snapshot. Label is omitted from the wire when empty.
+type CreateInstanceBackupRequest struct {
+	Label string `json:"label,omitempty"`
+}
+
 // InstanceConfig represents a Linode configuration profile.
 type InstanceConfig struct {
 	ID          int                       `json:"id"`

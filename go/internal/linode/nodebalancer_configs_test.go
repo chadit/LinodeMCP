@@ -58,7 +58,7 @@ func TestClientListNodeBalancerConfigsSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListNodeBalancerConfigs(t.Context(), 123)
+	got, err := client.ListNodeBalancerConfigs(t.Context(), 123, 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,6 +92,42 @@ func TestClientListNodeBalancerConfigsSuccess(t *testing.T) {
 	}
 }
 
+func TestClientListNodeBalancerConfigsForwardsPagination(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != nodeBalancerConfigsPath {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, nodeBalancerConfigsPath)
+		}
+
+		if r.URL.Query().Get(keyPage) != "2" {
+			t.Errorf("r.URL.Query().Get(keyPage) = %v, want %v", r.URL.Query().Get(keyPage), "2")
+		}
+
+		if r.URL.Query().Get(keyPageSize) != "25" {
+			t.Errorf("r.URL.Query().Get(keyPageSize) = %v, want %v", r.URL.Query().Get(keyPageSize), "25")
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyID: 456}}}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.ListNodeBalancerConfigs(t.Context(), 123, 2, 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+}
+
 func TestClientListNodeBalancerConfigsAPIError(t *testing.T) {
 	t.Parallel()
 
@@ -115,7 +151,7 @@ func TestClientListNodeBalancerConfigsAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListNodeBalancerConfigs(t.Context(), 123)
+	got, err := client.ListNodeBalancerConfigs(t.Context(), 123, 0, 0)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -168,7 +204,7 @@ func TestClientListNodeBalancerConfigsRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	got, err := client.ListNodeBalancerConfigs(t.Context(), 123)
+	got, err := client.ListNodeBalancerConfigs(t.Context(), 123, 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -221,6 +221,10 @@ func TestLinodeAccountUserCreateToolSuccess(t *testing.T) {
 			t.Errorf("got.Email = %v, want %v", got.Email, accountUserEmail)
 		}
 
+		if got.Restricted == nil || !*got.Restricted {
+			t.Errorf("got.Restricted = %v, want true", got.Restricted)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: accountUserUsername, Email: accountUserEmail, UserType: "default"}); err != nil {
@@ -232,7 +236,7 @@ func TestLinodeAccountUserCreateToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeAccountUserCreateTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyUsername: accountUserUsername, keyEmail: accountUserEmail, keyRestricted: true, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {

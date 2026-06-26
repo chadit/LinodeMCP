@@ -228,9 +228,6 @@ _OAUTH_CLIENT_UPDATE_FIELDS = (
     "label",
     "public",
     "redirect_uri",
-    "secret",
-    "status",
-    "thumbnail_url",
 )
 _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
 _ACCOUNT_OAUTH_CLIENT_ID_PATTERN = re.compile(_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT)
@@ -310,7 +307,7 @@ def create_linode_account_user_create_tool() -> tuple[Tool, Capability]:
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["username", "email", "restricted", "confirm"],
+            "required": ["username", "email", "confirm"],
         },
     ), Capability.Admin
 
@@ -325,9 +322,9 @@ async def handle_linode_account_user_create(
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
-    restricted = arguments.get("restricted")
+    restricted = arguments.get("restricted", False)
     if type(restricted) is not bool:
-        return error_response("restricted is required and must be a boolean")
+        return error_response("restricted must be a boolean")
 
     body = {"username": username, "email": email, "restricted": restricted}
 
@@ -663,7 +660,20 @@ def create_linode_account_maintenance_list_tool() -> tuple[Tool, Capability]:
         description="Lists maintenances on the Linode account.",
         inputSchema={
             "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
         },
     ), Capability.Read
 
@@ -672,9 +682,14 @@ async def handle_linode_account_maintenance_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_maintenance_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_maintenance()
+        return await client.list_account_maintenance(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode account maintenance", _call)
 
@@ -686,7 +701,20 @@ def create_linode_maintenance_policy_list_tool() -> tuple[Tool, Capability]:
         description="Lists available maintenance policies.",
         inputSchema={
             "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
         },
     ), Capability.Read
 
@@ -695,9 +723,14 @@ async def handle_linode_maintenance_policy_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_maintenance_policy_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_maintenance_policies()
+        return await client.list_maintenance_policies(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode maintenance policies", _call)
 
@@ -768,12 +801,6 @@ def create_linode_account_oauth_client_update_tool() -> tuple[Tool, Capability]:
                     "description": "Whether the client is public",
                 },
                 "redirect_uri": {"type": "string", "description": "OAuth redirect URI"},
-                "secret": {"type": "string", "description": "OAuth client secret"},
-                "status": {"type": "string", "description": "OAuth client status"},
-                "thumbnail_url": {
-                    "type": "string",
-                    "description": "OAuth client thumbnail URL",
-                },
                 "confirm": {
                     "type": "boolean",
                     "description": (
@@ -1125,7 +1152,7 @@ def create_linode_account_payment_create_tool() -> tuple[Tool, Capability]:
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["payment_method_id", "usd", "confirm"],
+            "required": ["usd", "confirm"],
         },
     ), Capability.Admin
 
@@ -1133,23 +1160,27 @@ def create_linode_account_payment_create_tool() -> tuple[Tool, Capability]:
 def _account_payment_create_body(
     arguments: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
-    payment_method_id = arguments.get("payment_method_id")
-    if payment_method_id is None:
-        return None, "payment_method_id is required"
-    if (
-        isinstance(payment_method_id, bool)
-        or not isinstance(payment_method_id, int)
-        or payment_method_id < 1
-    ):
-        return None, "payment_method_id must be a positive integer"
-
     usd, usd_error = _required_nonempty_string_argument(arguments, "usd")
     if usd_error is not None or usd is None:
         return None, usd_error or "usd is required"
     if _USD_AMOUNT_PATTERN.fullmatch(usd) is None:
         return None, "usd must be a positive dollar amount with up to two decimals"
 
-    return {"payment_method_id": payment_method_id, "usd": usd}, None
+    body: dict[str, Any] = {"usd": usd}
+
+    # payment_method_id is optional; when omitted the API charges the
+    # account's default method. Validate only when the caller supplies it.
+    payment_method_id = arguments.get("payment_method_id")
+    if payment_method_id is not None:
+        if (
+            isinstance(payment_method_id, bool)
+            or not isinstance(payment_method_id, int)
+            or payment_method_id < 1
+        ):
+            return None, "payment_method_id must be a positive integer"
+        body["payment_method_id"] = payment_method_id
+
+    return body, None
 
 
 async def handle_linode_account_payment_create(
@@ -1178,7 +1209,8 @@ async def handle_linode_account_payment_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_account_payment(
-            request_body["payment_method_id"], str(request_body["usd"])
+            str(request_body["usd"]),
+            payment_method_id=request_body.get("payment_method_id"),
         )
 
     return await execute_tool(cfg, arguments, "create Linode account payment", _call)
@@ -5872,7 +5904,20 @@ def create_linode_managed_service_list_tool() -> tuple[Tool, Capability]:
         description="Lists Managed services on the Linode account.",
         inputSchema={
             "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
         },
     ), Capability.Read
 
@@ -5881,9 +5926,14 @@ async def handle_linode_managed_service_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_managed_service_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_managed_services()
+        return await client.list_managed_services(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode Managed services", _call)
 

@@ -26,7 +26,8 @@ const (
 
 	keyManagedTimeout     = "timeout"
 	keyManagedSecretArg   = "password"
-	keyManagedSSHAccess   = "ssh_access"
+	keyManagedSSHObject   = "ssh"
+	keyManagedSSHAccess   = "access"
 	keyManagedContactName = "contact_name"
 	// Short sentinel values stay under the block-hardcoded-secrets hook's
 	// length threshold while still proving the preview never echoes them.
@@ -489,7 +490,7 @@ func TestLinodeManagedLinodeSettingsUpdateToolDryRun(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLinodeID:         float64(40),
-			keyManagedSSHAccess: true,
+			keyManagedSSHObject: map[string]any{keyManagedSSHAccess: true},
 			keyDryRun:           true,
 		}))
 		if err != nil {

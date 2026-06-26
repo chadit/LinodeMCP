@@ -118,13 +118,18 @@ func (c *Client) httpGetInstanceBackup(ctx context.Context, linodeID, backupID i
 }
 
 // CreateInstanceBackup creates a manual snapshot for a Linode instance.
-func (c *Client) httpCreateInstanceBackup(ctx context.Context, linodeID int) (*InstanceBackup, error) {
+func (c *Client) httpCreateInstanceBackup(ctx context.Context, linodeID int, label string) (*InstanceBackup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
 	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/backups", linodeID)
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	var body any
+	if label != "" {
+		body = CreateInstanceBackupRequest{Label: label}
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateInstanceBackup", Err: err}
 	}

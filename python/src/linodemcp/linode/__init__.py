@@ -115,6 +115,18 @@ def _validate_positive_path_int(value: object, name: str) -> int:
     return value
 
 
+def _paginated_endpoint(base: str, page: int | None, page_size: int | None) -> str:
+    """Append page and page_size query parameters to an endpoint when set."""
+    params: dict[str, int] = {}
+    if page is not None:
+        params["page"] = page
+    if page_size is not None:
+        params["page_size"] = page_size
+    if not params:
+        return base
+    return f"{base}?{urlencode(params)}"
+
+
 def _validate_managed_linode_settings_ssh(value: object) -> dict[str, Any]:
     """Validate Managed Linode SSH settings payload."""
     if not isinstance(value, dict):
@@ -2447,11 +2459,23 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigInterfaces", e) from e
 
-    async def list_instance_interface_history(self, linode_id: int) -> dict[str, Any]:
+    async def list_instance_interface_history(
+        self,
+        linode_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List network interface history for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         encoded_linode_id = quote(str(linode_id), safe="")
         endpoint = f"/linode/instances/{encoded_linode_id}/interfaces/history"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
             response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
@@ -2601,19 +2625,43 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteAccountUser", e) from e
 
-    async def list_account_maintenance(self) -> dict[str, Any]:
+    async def list_account_maintenance(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List maintenances on the Linode account."""
+        endpoint = "/account/maintenance"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/account/maintenance")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountMaintenance", e) from e
 
-    async def list_maintenance_policies(self) -> dict[str, Any]:
+    async def list_maintenance_policies(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List maintenance policies."""
+        endpoint = "/maintenance/policies"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/maintenance/policies")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2909,10 +2957,12 @@ class Client:
             raise NetworkError("CreateAccountPaymentMethod", e) from e
 
     async def create_account_payment(
-        self, payment_method_id: int, usd: str
+        self, usd: str, payment_method_id: int | None = None
     ) -> dict[str, Any]:
         """Make a payment on the Linode account."""
-        body = {"payment_method_id": payment_method_id, "usd": usd}
+        body: dict[str, Any] = {"usd": usd}
+        if payment_method_id is not None:
+            body["payment_method_id"] = payment_method_id
         try:
             response = await self.make_request("POST", "/account/payments", body)
             data_response: dict[str, Any] = response.json()
@@ -3885,14 +3935,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroups", e) from e
 
-    async def list_image_sharegroups_by_image(self, image_id: str) -> dict[str, Any]:
+    async def list_image_sharegroups_by_image(
+        self,
+        image_id: str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List share groups for a Linode image."""
         image_id_value = validate_image_sharegroups_image_id(image_id)
         image_id_path = quote(image_id_value, safe="")
+        endpoint = f"/images/{image_id_path}/sharegroups"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request(
-                "GET", f"/images/{image_id_path}/sharegroups"
-            )
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3965,10 +4026,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateImageSharegroup", e) from e
 
-    async def list_image_sharegroup_tokens(self) -> dict[str, Any]:
+    async def list_image_sharegroup_tokens(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List image share group tokens for the user."""
+        endpoint = "/images/sharegroups/tokens"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/images/sharegroups/tokens")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3999,39 +4072,69 @@ class Client:
             raise NetworkError("GetImageSharegroupByToken", e) from e
 
     async def list_image_sharegroup_images_by_token(
-        self, token_uuid: str
+        self,
+        token_uuid: str,
+        page: int | None = None,
+        page_size: int | None = None,
     ) -> dict[str, Any]:
         """List images available through an image share group token."""
         token_uuid_path = quote(token_uuid, safe="")
+        endpoint = f"/images/sharegroups/tokens/{token_uuid_path}/sharegroup/images"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request(
-                "GET",
-                f"/images/sharegroups/tokens/{token_uuid_path}/sharegroup/images",
-            )
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupImagesByToken", e) from e
 
-    async def list_image_sharegroup_images(self, sharegroup_id: str) -> dict[str, Any]:
+    async def list_image_sharegroup_images(
+        self,
+        sharegroup_id: str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List images available in an image share group."""
         sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        endpoint = f"/images/sharegroups/{sharegroup_id_path}/images"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request(
-                "GET", f"/images/sharegroups/{sharegroup_id_path}/images"
-            )
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupImages", e) from e
 
-    async def list_image_sharegroup_members(self, sharegroup_id: str) -> dict[str, Any]:
+    async def list_image_sharegroup_members(
+        self,
+        sharegroup_id: str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List members of an image share group."""
         sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        endpoint = f"/images/sharegroups/{sharegroup_id_path}/members"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request(
-                "GET", f"/images/sharegroups/{sharegroup_id_path}/members"
-            )
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4602,10 +4705,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListFirewallRuleVersions", e) from e
 
-    async def list_vlans(self) -> list[dict[str, Any]]:
+    async def list_vlans(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
         """List VLANs."""
+        endpoint = "/networking/vlans"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/networking/vlans")
+            response = await self.make_request("GET", endpoint)
             data = response.json()
             vlans: list[dict[str, Any]] = data.get("data", [])
             return vlans
@@ -5226,10 +5341,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetManagedLinodeSettings", e) from e
 
-    async def list_managed_services(self) -> dict[str, Any]:
+    async def list_managed_services(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List Managed services."""
+        endpoint = "/managed/services"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/managed/services")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6689,22 +6816,33 @@ class Client:
             logins.append(cast("dict[str, Any]", item))
         return logins, pages_raw
 
-    async def list_profile_logins(self) -> list[dict[str, Any]]:
-        """List profile logins."""
+    async def list_profile_logins(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """List profile logins.
+
+        When page or page_size is provided the caller wants a single page; the
+        request honors those query parameters and returns only that page. With
+        neither set the method walks every page and returns the full list.
+        """
         logger.info("Listing profile logins")
 
+        single_page = page is not None or page_size is not None
         try:
             logins: list[dict[str, Any]] = []
-            page = 1
+            current_page = page if page is not None else 1
             pages = 1
-            while page <= pages:
-                endpoint = "/profile/logins"
-                if page > 1:
-                    endpoint = f"/profile/logins?page={page}"
+            while current_page <= pages:
+                query_page = current_page if (single_page or current_page > 1) else None
+                endpoint = _paginated_endpoint("/profile/logins", query_page, page_size)
                 response = await self.make_request("GET", endpoint)
                 page_logins, pages = self._parse_profile_logins_page(response)
                 logins.extend(page_logins)
-                page += 1
+                if single_page:
+                    break
+                current_page += 1
             logger.info("Profile logins listed", extra={"login_count": len(logins)})
             return logins
         except httpx.ConnectTimeout as e:
@@ -6749,22 +6887,35 @@ class Client:
             devices.append(cast("dict[str, Any]", item))
         return devices, pages_raw
 
-    async def list_profile_devices(self) -> list[dict[str, Any]]:
-        """List trusted profile devices."""
+    async def list_profile_devices(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """List trusted profile devices.
+
+        When page or page_size is provided the caller wants a single page; the
+        request honors those query parameters and returns only that page. With
+        neither set the method walks every page and returns the full list.
+        """
         logger.info("Listing profile trusted devices")
 
+        single_page = page is not None or page_size is not None
         try:
             devices: list[dict[str, Any]] = []
-            page = 1
+            current_page = page if page is not None else 1
             pages = 1
-            while page <= pages:
-                endpoint = "/profile/devices"
-                if page > 1:
-                    endpoint = f"/profile/devices?page={page}"
+            while current_page <= pages:
+                query_page = current_page if (single_page or current_page > 1) else None
+                endpoint = _paginated_endpoint(
+                    "/profile/devices", query_page, page_size
+                )
                 response = await self.make_request("GET", endpoint)
                 page_devices, pages = self._parse_profile_devices_page(response)
                 devices.extend(page_devices)
-                page += 1
+                if single_page:
+                    break
+                current_page += 1
             logger.info(
                 "Profile trusted devices listed",
                 extra={"device_count": len(devices)},
@@ -6785,22 +6936,33 @@ class Client:
             logger.exception("HTTP error listing profile trusted devices: %s", e)
             raise NetworkError("ListProfileDevices", e) from e
 
-    async def list_profile_tokens(self) -> list[dict[str, Any]]:
-        """List personal access tokens."""
+    async def list_profile_tokens(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """List personal access tokens.
+
+        When page or page_size is provided the caller wants a single page; the
+        request honors those query parameters and returns only that page. With
+        neither set the method walks every page and returns the full list.
+        """
         logger.info("Listing profile tokens")
 
+        single_page = page is not None or page_size is not None
         try:
             tokens: list[dict[str, Any]] = []
-            page = 1
+            current_page = page if page is not None else 1
             pages = 1
-            while page <= pages:
-                endpoint = "/profile/tokens"
-                if page > 1:
-                    endpoint = f"/profile/tokens?page={page}"
+            while current_page <= pages:
+                query_page = current_page if (single_page or current_page > 1) else None
+                endpoint = _paginated_endpoint("/profile/tokens", query_page, page_size)
                 response = await self.make_request("GET", endpoint)
                 page_tokens, pages = self._parse_profile_tokens_page(response)
                 tokens.extend(page_tokens)
-                page += 1
+                if single_page:
+                    break
+                current_page += 1
             logger.info("Profile tokens listed", extra={"token_count": len(tokens)})
             return tokens
         except httpx.ConnectTimeout as e:
@@ -7303,12 +7465,24 @@ class Client:
             logger.exception("HTTP error listing monitor services: %s", e)
             raise NetworkError("ListMonitorServices", e) from e
 
-    async def list_monitor_dashboards(self) -> dict[str, Any]:
+    async def list_monitor_dashboards(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List Linode Metrics dashboards."""
         logger.info("Listing monitor dashboards")
 
+        endpoint = "/monitor/dashboards"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/monitor/dashboards")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -7324,12 +7498,24 @@ class Client:
             logger.exception("HTTP error listing monitor dashboards: %s", e)
             raise NetworkError("ListMonitorDashboards", e) from e
 
-    async def list_monitor_alert_definitions(self) -> dict[str, Any]:
+    async def list_monitor_alert_definitions(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List Linode Metrics alert definitions."""
         logger.info("Listing monitor alert definitions")
 
+        endpoint = "/monitor/alert-definitions"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/monitor/alert-definitions")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -7347,12 +7533,24 @@ class Client:
             logger.exception("HTTP error listing monitor alert definitions: %s", e)
             raise NetworkError("ListMonitorAlertDefinitions", e) from e
 
-    async def list_monitor_alert_channels(self) -> dict[str, Any]:
+    async def list_monitor_alert_channels(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List Linode Metrics alert channels."""
         logger.info("Listing monitor alert channels")
 
+        endpoint = "/monitor/alert-channels"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/monitor/alert-channels")
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -8274,6 +8472,7 @@ class Client:
         soa_email: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        ttl_sec: int | None = None,
     ) -> Domain:
         """Create a new domain."""
         validate_label(domain)
@@ -8288,6 +8487,8 @@ class Client:
                 body["description"] = description
             if tags:
                 body["tags"] = tags
+            if ttl_sec is not None:
+                body["ttl_sec"] = ttl_sec
 
             response = await self.make_request("POST", "/domains", body)
             data = response.json()
@@ -8378,6 +8579,8 @@ class Client:
         soa_email: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        status: str | None = None,
+        ttl_sec: int | None = None,
     ) -> Domain:
         """Update a domain."""
         endpoint = f"/domains/{domain_id}"
@@ -8393,6 +8596,10 @@ class Client:
                 body["description"] = description
             if tags is not None:
                 body["tags"] = tags
+            if status:
+                body["status"] = status
+            if ttl_sec is not None:
+                body["ttl_sec"] = ttl_sec
 
             response = await self.make_request("PUT", endpoint, body)
             data = response.json()
@@ -8443,6 +8650,9 @@ class Client:
         weight: int | None = None,
         port: int | None = None,
         ttl_sec: int | None = None,
+        service: str | None = None,
+        protocol: str | None = None,
+        tag: str | None = None,
     ) -> DomainRecord:
         """Create a new domain record."""
         endpoint = f"/domains/{domain_id}/records"
@@ -8465,6 +8675,9 @@ class Client:
                 "weight": weight,
                 "port": port,
                 "ttl_sec": ttl_sec,
+                "service": service,
+                "protocol": protocol,
+                "tag": tag,
             }
             body.update({k: v for k, v in optional_fields.items() if v is not None})
 
@@ -9780,6 +9993,8 @@ class Client:
         filesystem: str | None = None,
         image: str | None = None,
         root_pass: str | None = None,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a disk for an instance."""
         endpoint = f"/linode/instances/{instance_id}/disks"
@@ -9794,6 +10009,10 @@ class Client:
                 body["image"] = image
             if root_pass is not None:
                 body["root_pass"] = root_pass
+            if authorized_keys is not None:
+                body["authorized_keys"] = authorized_keys
+            if authorized_users is not None:
+                body["authorized_users"] = authorized_users
             response = await self.make_request("POST", endpoint, body)
             result: dict[str, Any] = response.json()
             return result
@@ -9805,16 +10024,29 @@ class Client:
         instance_id: int,
         label: str,
         devices: dict[str, Any],
+        comments: str | None = None,
+        kernel: str | None = None,
+        memory_limit: int | None = None,
+        root_device: str | None = None,
+        run_level: str | None = None,
+        virt_mode: str | None = None,
     ) -> dict[str, Any]:
         """Create a configuration profile for an instance."""
         encoded_instance_id = quote(str(instance_id), safe="")
         endpoint = f"/linode/instances/{encoded_instance_id}/configs"
         try:
-            response = await self.make_request(
-                "POST",
-                endpoint,
-                {"label": label, "devices": devices},
-            )
+            body: dict[str, Any] = {"label": label, "devices": devices}
+            optional_fields: dict[str, Any] = {
+                "comments": comments,
+                "kernel": kernel,
+                "memory_limit": memory_limit,
+                "root_device": root_device,
+                "run_level": run_level,
+                "virt_mode": virt_mode,
+            }
+            body.update({k: v for k, v in optional_fields.items() if v is not None})
+
+            response = await self.make_request("POST", endpoint, body)
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10037,6 +10269,7 @@ class Client:
         region: str | None = None,
         instance_type: str | None = None,
         label: str | None = None,
+        backups_enabled: bool = False,
         disks: list[int] | None = None,
         configs: list[int] | None = None,
     ) -> dict[str, Any]:
@@ -10050,6 +10283,8 @@ class Client:
                 body["type"] = instance_type
             if label is not None:
                 body["label"] = label
+            if backups_enabled:
+                body["backups_enabled"] = True
             if disks is not None:
                 body["disks"] = disks
             if configs is not None:
@@ -10082,6 +10317,7 @@ class Client:
         root_pass: str,
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
+        booted: bool | None = None,
     ) -> dict[str, Any]:
         """Rebuild an instance with a new image."""
         endpoint = f"/linode/instances/{instance_id}/rebuild"
@@ -10094,6 +10330,8 @@ class Client:
                 body["authorized_keys"] = authorized_keys
             if authorized_users is not None:
                 body["authorized_users"] = authorized_users
+            if booted is not None:
+                body["booted"] = booted
             response = await self.make_request("POST", endpoint, body)
             result: dict[str, Any] = response.json()
             return result
@@ -11024,10 +11262,17 @@ class RetryableClient:
             linode_id, config_id, interface_id, fields
         )
 
-    async def list_instance_interface_history(self, linode_id: int) -> dict[str, Any]:
+    async def list_instance_interface_history(
+        self,
+        linode_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List Linode instance network interface history with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_instance_interface_history, linode_id
+            lambda: self.client.list_instance_interface_history(
+                linode_id, page=page, page_size=page_size
+            )
         )
         return result
 
@@ -11097,17 +11342,27 @@ class RetryableClient:
         """Delete an account user by delegating once without retry."""
         return await self.client.delete_account_user(username)
 
-    async def list_account_maintenance(self) -> dict[str, Any]:
+    async def list_account_maintenance(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List account maintenance with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_account_maintenance
+            lambda: self.client.list_account_maintenance(page=page, page_size=page_size)
         )
         return result
 
-    async def list_maintenance_policies(self) -> dict[str, Any]:
+    async def list_maintenance_policies(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List maintenance policies with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_maintenance_policies
+            lambda: self.client.list_maintenance_policies(
+                page=page, page_size=page_size
+            )
         )
         return result
 
@@ -11467,10 +11722,10 @@ class RetryableClient:
         )
 
     async def create_account_payment(
-        self, payment_method_id: int, usd: str
+        self, usd: str, payment_method_id: int | None = None
     ) -> dict[str, Any]:
         """Make an account payment once without retry replay."""
-        return await self.client.create_account_payment(payment_method_id, usd)
+        return await self.client.create_account_payment(usd, payment_method_id)
 
     async def add_account_promo_credit(self, promo_code: str) -> dict[str, Any]:
         """Add an account promo credit once without retry replay."""
@@ -11750,10 +12005,17 @@ class RetryableClient:
         """Delete a single image share group without retry replay."""
         await self.client.delete_image_sharegroup(sharegroup_id)
 
-    async def list_image_sharegroups_by_image(self, image_id: str) -> dict[str, Any]:
+    async def list_image_sharegroups_by_image(
+        self,
+        image_id: str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List share groups for a Linode image with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            lambda: self.client.list_image_sharegroups_by_image(image_id)
+            lambda: self.client.list_image_sharegroups_by_image(
+                image_id, page=page, page_size=page_size
+            )
         )
         return result
 
@@ -11789,10 +12051,16 @@ class RetryableClient:
             sharegroup_id, label=label, description=description
         )
 
-    async def list_image_sharegroup_tokens(self) -> dict[str, Any]:
+    async def list_image_sharegroup_tokens(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List image share group tokens for the user with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_image_sharegroup_tokens
+            lambda: self.client.list_image_sharegroup_tokens(
+                page=page, page_size=page_size
+            )
         )
         return result
 
@@ -11811,25 +12079,44 @@ class RetryableClient:
         return result
 
     async def list_image_sharegroup_images_by_token(
-        self, token_uuid: str
+        self,
+        token_uuid: str,
+        page: int | None = None,
+        page_size: int | None = None,
     ) -> dict[str, Any]:
         """List images by share group token with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            lambda: self.client.list_image_sharegroup_images_by_token(token_uuid)
+            lambda: self.client.list_image_sharegroup_images_by_token(
+                token_uuid, page=page, page_size=page_size
+            )
         )
         return result
 
-    async def list_image_sharegroup_images(self, sharegroup_id: str) -> dict[str, Any]:
+    async def list_image_sharegroup_images(
+        self,
+        sharegroup_id: str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List images by share group with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            lambda: self.client.list_image_sharegroup_images(sharegroup_id)
+            lambda: self.client.list_image_sharegroup_images(
+                sharegroup_id, page=page, page_size=page_size
+            )
         )
         return result
 
-    async def list_image_sharegroup_members(self, sharegroup_id: str) -> dict[str, Any]:
+    async def list_image_sharegroup_members(
+        self,
+        sharegroup_id: str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List members by share group with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            lambda: self.client.list_image_sharegroup_members(sharegroup_id)
+            lambda: self.client.list_image_sharegroup_members(
+                sharegroup_id, page=page, page_size=page_size
+            )
         )
         return result
 
@@ -12127,10 +12414,14 @@ class RetryableClient:
         )
         return result
 
-    async def list_vlans(self) -> list[dict[str, Any]]:
+    async def list_vlans(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
         """List VLANs with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_vlans
+            lambda: self.client.list_vlans(page=page, page_size=page_size)
         )
         return result
 
@@ -12499,10 +12790,14 @@ class RetryableClient:
         )
         return result
 
-    async def list_managed_services(self) -> dict[str, Any]:
+    async def list_managed_services(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List Managed services with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_managed_services
+            lambda: self.client.list_managed_services(page=page, page_size=page_size)
         )
         return result
 
@@ -13200,10 +13495,14 @@ class RetryableClient:
         result: dict[str, Any] = await self._execute_with_retry(_create_profile_token)
         return result
 
-    async def list_profile_tokens(self) -> list[dict[str, Any]]:
+    async def list_profile_tokens(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
         """List profile tokens with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_profile_tokens
+            lambda: self.client.list_profile_tokens(page=page, page_size=page_size)
         )
         return result
 
@@ -13214,10 +13513,14 @@ class RetryableClient:
         )
         return result
 
-    async def list_profile_logins(self) -> list[dict[str, Any]]:
+    async def list_profile_logins(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
         """List profile logins with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_profile_logins
+            lambda: self.client.list_profile_logins(page=page, page_size=page_size)
         )
         return result
 
@@ -13228,10 +13531,14 @@ class RetryableClient:
         )
         return result
 
-    async def list_profile_devices(self) -> list[dict[str, Any]]:
+    async def list_profile_devices(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
         """List profile trusted devices with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_profile_devices
+            lambda: self.client.list_profile_devices(page=page, page_size=page_size)
         )
         return result
 
@@ -13342,24 +13649,40 @@ class RetryableClient:
         )
         return result
 
-    async def list_monitor_dashboards(self) -> dict[str, Any]:
+    async def list_monitor_dashboards(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List monitor dashboards with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_monitor_dashboards
+            lambda: self.client.list_monitor_dashboards(page=page, page_size=page_size)
         )
         return result
 
-    async def list_monitor_alert_definitions(self) -> dict[str, Any]:
+    async def list_monitor_alert_definitions(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List monitor alert definitions with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_monitor_alert_definitions
+            lambda: self.client.list_monitor_alert_definitions(
+                page=page, page_size=page_size
+            )
         )
         return result
 
-    async def list_monitor_alert_channels(self) -> dict[str, Any]:
+    async def list_monitor_alert_channels(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
         """List monitor alert channels with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_monitor_alert_channels
+            lambda: self.client.list_monitor_alert_channels(
+                page=page, page_size=page_size
+            )
         )
         return result
 
@@ -13657,10 +13980,17 @@ class RetryableClient:
         soa_email: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        ttl_sec: int | None = None,
     ) -> Domain:
         """Create domain with retry."""
         result: Domain = await self._execute_with_retry(
-            self.client.create_domain, domain, domain_type, soa_email, description, tags
+            self.client.create_domain,
+            domain,
+            domain_type,
+            soa_email,
+            description,
+            tags,
+            ttl_sec,
         )
         return result
 
@@ -13679,10 +14009,19 @@ class RetryableClient:
         soa_email: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        status: str | None = None,
+        ttl_sec: int | None = None,
     ) -> Domain:
         """Update domain with retry."""
         result: Domain = await self._execute_with_retry(
-            self.client.update_domain, domain_id, domain, soa_email, description, tags
+            self.client.update_domain,
+            domain_id,
+            domain,
+            soa_email,
+            description,
+            tags,
+            status,
+            ttl_sec,
         )
         return result
 
@@ -13700,6 +14039,9 @@ class RetryableClient:
         weight: int | None = None,
         port: int | None = None,
         ttl_sec: int | None = None,
+        service: str | None = None,
+        protocol: str | None = None,
+        tag: str | None = None,
     ) -> DomainRecord:
         """Create domain record with retry."""
         result: DomainRecord = await self._execute_with_retry(
@@ -13712,6 +14054,9 @@ class RetryableClient:
             weight,
             port,
             ttl_sec,
+            service,
+            protocol,
+            tag,
         )
         return result
 
@@ -14424,6 +14769,8 @@ class RetryableClient:
         filesystem: str | None = None,
         image: str | None = None,
         root_pass: str | None = None,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create instance disk with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -14434,6 +14781,8 @@ class RetryableClient:
             filesystem,
             image,
             root_pass,
+            authorized_keys,
+            authorized_users,
         )
         return result
 
@@ -14442,9 +14791,25 @@ class RetryableClient:
         instance_id: int,
         label: str,
         devices: dict[str, Any],
+        comments: str | None = None,
+        kernel: str | None = None,
+        memory_limit: int | None = None,
+        root_device: str | None = None,
+        run_level: str | None = None,
+        virt_mode: str | None = None,
     ) -> dict[str, Any]:
         """Create instance config without retrying the non-idempotent POST."""
-        return await self.client.create_instance_config(instance_id, label, devices)
+        return await self.client.create_instance_config(
+            instance_id,
+            label,
+            devices,
+            comments,
+            kernel,
+            memory_limit,
+            root_device,
+            run_level,
+            virt_mode,
+        )
 
     async def update_instance_disk(
         self,
@@ -14603,6 +14968,7 @@ class RetryableClient:
         region: str | None = None,
         instance_type: str | None = None,
         label: str | None = None,
+        backups_enabled: bool = False,
         disks: list[int] | None = None,
         configs: list[int] | None = None,
     ) -> dict[str, Any]:
@@ -14613,6 +14979,7 @@ class RetryableClient:
             region,
             instance_type,
             label,
+            backups_enabled,
             disks,
             configs,
         )
@@ -14637,6 +15004,7 @@ class RetryableClient:
         root_pass: str,
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
+        booted: bool | None = None,
     ) -> dict[str, Any]:
         """Rebuild instance with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -14646,6 +15014,7 @@ class RetryableClient:
             root_pass,
             authorized_keys,
             authorized_users,
+            booted,
         )
         return result
 

@@ -784,6 +784,17 @@ def create_linode_profile_token_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -793,9 +804,14 @@ async def handle_linode_profile_token_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_token_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        tokens = await client.list_profile_tokens()
+        tokens = await client.list_profile_tokens(page=page, page_size=page_size)
         return {"tokens": [_redact_profile_token(token) for token in tokens]}
 
     return await execute_tool(cfg, arguments, "list Linode profile tokens", _call)
@@ -845,6 +861,17 @@ def create_linode_profile_login_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -854,9 +881,16 @@ async def handle_linode_profile_login_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_login_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return {"logins": await client.list_profile_logins()}
+        return {
+            "logins": await client.list_profile_logins(page=page, page_size=page_size)
+        }
 
     return await execute_tool(cfg, arguments, "list Linode profile logins", _call)
 
@@ -870,6 +904,17 @@ def create_linode_profile_device_list_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {
                 **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -879,9 +924,16 @@ async def handle_linode_profile_device_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_device_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return {"devices": await client.list_profile_devices()}
+        return {
+            "devices": await client.list_profile_devices(page=page, page_size=page_size)
+        }
 
     return await execute_tool(
         cfg, arguments, "list Linode profile trusted devices", _call

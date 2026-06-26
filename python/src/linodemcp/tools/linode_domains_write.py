@@ -249,6 +249,10 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
                     "type": "string",
                     "description": "Description for the domain (optional)",
                 },
+                "ttl_sec": {
+                    "type": "integer",
+                    "description": "Default TTL in seconds for records (optional)",
+                },
                 "confirm": {
                     "type": "boolean",
                     "description": (
@@ -296,6 +300,7 @@ async def handle_linode_domain_create(
             domain_type=arguments.get("type", "master"),
             soa_email=arguments.get("soa_email"),
             description=arguments.get("description"),
+            ttl_sec=arguments.get("ttl_sec"),
         )
         return {
             "message": (
@@ -340,6 +345,17 @@ def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
                 "description": {
                     "type": "string",
                     "description": "New description (optional)",
+                },
+                "status": {
+                    "type": "string",
+                    "description": (
+                        "New status: 'active', 'disabled', or 'edit_mode' (optional)"
+                    ),
+                    "enum": ["active", "disabled", "edit_mode"],
+                },
+                "ttl_sec": {
+                    "type": "integer",
+                    "description": "New default TTL in seconds (optional)",
                 },
                 "confirm": {
                     "type": "boolean",
@@ -422,6 +438,8 @@ async def handle_linode_domain_update(
             domain=arguments.get("domain"),
             soa_email=arguments.get("soa_email"),
             description=arguments.get("description"),
+            status=arguments.get("status"),
+            ttl_sec=arguments.get("ttl_sec"),
         )
         return {
             "message": f"Domain {domain_id} updated successfully",

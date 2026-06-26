@@ -210,6 +210,21 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "Port (for SRV records)",
                 },
+                "service": {
+                    "type": "string",
+                    "description": "Service name for SRV records (e.g., '_http')",
+                },
+                "protocol": {
+                    "type": "string",
+                    "description": "Protocol for SRV records (e.g., '_tcp', '_udp')",
+                },
+                "tag": {
+                    "type": "string",
+                    "description": (
+                        "Tag for CAA records: 'issue', 'issuewild', or 'iodef' "
+                        "(optional)"
+                    ),
+                },
                 "ttl_sec": {
                     "type": "integer",
                     "description": "TTL in seconds (optional)",
@@ -283,6 +298,9 @@ async def handle_linode_domain_record_create(
             weight=arguments.get("weight"),
             port=arguments.get("port"),
             ttl_sec=arguments.get("ttl_sec"),
+            service=arguments.get("service"),
+            protocol=arguments.get("protocol"),
+            tag=arguments.get("tag"),
         )
         return {
             "message": (

@@ -24,6 +24,21 @@ if TYPE_CHECKING:
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
+def _optional_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be at most {maximum}")
+    return value
+
+
 def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_list tool."""
     return Tool(
@@ -111,6 +126,17 @@ def create_linode_monitor_dashboard_list_tool() -> tuple[Tool, Capability]:
                         "Linode environment to use (optional, defaults to 'default')"
                     ),
                 },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -130,6 +156,17 @@ def create_linode_monitor_alert_definition_list_tool() -> tuple[Tool, Capability
                         "Linode environment to use (optional, defaults to 'default')"
                     ),
                 },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
             },
         },
     ), Capability.Read
@@ -148,6 +185,17 @@ def create_linode_monitor_alert_channel_list_tool() -> tuple[Tool, Capability]:
                     "description": (
                         "Linode environment to use (optional, defaults to 'default')"
                     ),
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
                 },
             },
         },
@@ -528,9 +576,14 @@ async def handle_linode_monitor_dashboard_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_dashboard_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_dashboards()
+        data = await client.list_monitor_dashboards(page=page, page_size=page_size)
         dashboards = data.get("data", [])
         return {
             "message": "Monitor dashboards listed",
@@ -548,9 +601,16 @@ async def handle_linode_monitor_alert_definition_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_alert_definition_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_alert_definitions()
+        data = await client.list_monitor_alert_definitions(
+            page=page, page_size=page_size
+        )
         alert_definitions = data.get("data", [])
         return {
             "message": "Monitor alert definitions listed",
@@ -568,9 +628,14 @@ async def handle_linode_monitor_alert_channel_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_alert_channel_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_alert_channels()
+        data = await client.list_monitor_alert_channels(page=page, page_size=page_size)
         alert_channels = data.get("data", [])
         return {
             "message": "Monitor alert channels listed",

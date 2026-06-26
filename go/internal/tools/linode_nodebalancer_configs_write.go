@@ -103,7 +103,7 @@ func deleteNodeBalancerConfig(ctx context.Context, client *linode.Client, nodeBa
 }
 
 func fetchNodeBalancerConfigForDryRun(ctx context.Context, client *linode.Client, nodeBalancerID, configID int) (linode.NodeBalancerConfig, string) {
-	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID, 0, 0)
 	if err != nil {
 		return linode.NodeBalancerConfig{}, "Failed to fetch state for dry-run: " + err.Error()
 	}
