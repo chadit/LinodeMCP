@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "linode/mcp/v1/lke_node.proto";
+
+// LKENodePoolDisk is one ephemeral disk attached to a node pool.
+message LKENodePoolDisk {
+  int32 size = 1;
+  string type = 2;
+}
+
+// LKENodePoolAutoscaler is the optional autoscaling config of a node pool.
+message LKENodePoolAutoscaler {
+  bool enabled = 1;
+  int32 min = 2;
+  int32 max = 3;
+}
+
+// LKENodePool mirrors one node pool within an LKE cluster.
+message LKENodePool {
+  int32 id = 1;
+  int32 cluster_id = 2;
+  string type = 3;
+  int32 count = 4;
+  repeated LKENodePoolDisk disks = 5;
+  LKENodePoolAutoscaler autoscaler = 6;
+  repeated LKENode nodes = 7;
+  repeated string tags = 8;
+}
+
+// LKENodePoolGetInput is the input contract for linode_lke_pool_get.
+message LKENodePoolGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster (required).
+  string cluster_id = 2;
+  // The ID of the node pool to retrieve (required).
+  string pool_id = 3;
+}

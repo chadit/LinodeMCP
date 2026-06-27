@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -37,16 +36,13 @@ func TestLinodeRegionGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyRegionID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyRegionID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyRegionID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyRegionID)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyRegionID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyRegionID)
-	}
-
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

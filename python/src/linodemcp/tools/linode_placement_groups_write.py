@@ -23,6 +23,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_placement_groups import placement_group_to_response_dict
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -211,9 +212,16 @@ async def handle_linode_placement_group_create(
     label, region, placement_group_type, placement_group_policy = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_placement_group(
+        placement_group = await client.create_placement_group(
             label, region, placement_group_type, placement_group_policy
         )
+        return {
+            "message": (
+                f"Placement group '{placement_group.get('label', '')}' "
+                "created successfully"
+            ),
+            "placement_group": placement_group_to_response_dict(placement_group),
+        }
 
     return await execute_tool(cfg, arguments, "create placement group", _call)
 
@@ -408,7 +416,9 @@ async def handle_linode_placement_group_update(
         return error_response(_LABEL_ERROR)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_placement_group(group_id, label)
+        return placement_group_to_response_dict(
+            await client.update_placement_group(group_id, label)
+        )
 
     return await execute_tool(cfg, arguments, "update placement group", _call)
 
@@ -481,7 +491,13 @@ async def handle_linode_placement_group_assign(
     group_id, linodes = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.assign_placement_group(group_id, linodes)
+        placement_group = await client.assign_placement_group(group_id, linodes)
+        return {
+            "message": (
+                f"Assigned {len(linodes)} Linode(s) to placement group {group_id}"
+            ),
+            "placement_group": placement_group_to_response_dict(placement_group),
+        }
 
     return await execute_tool(
         cfg, arguments, "assign Linodes to placement group", _call
@@ -544,7 +560,13 @@ async def handle_linode_placement_group_unassign(
     group_id, linodes = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.unassign_placement_group(group_id, linodes)
+        placement_group = await client.unassign_placement_group(group_id, linodes)
+        return {
+            "message": (
+                f"Linodes unassigned from placement group {group_id} successfully"
+            ),
+            "placement_group": placement_group_to_response_dict(placement_group),
+        }
 
     return await execute_tool(
         cfg, arguments, "unassign Linodes from placement group", _call

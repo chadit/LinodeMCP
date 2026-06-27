@@ -1055,6 +1055,13 @@ class Domain:
     tags: list[str]
     created: str
     updated: str
+    retry_sec: int = 0
+    master_ips: list[str] = dc_field(default_factory=list[str])
+    axfr_ips: list[str] = dc_field(default_factory=list[str])
+    expire_sec: int = 0
+    refresh_sec: int = 0
+    ttl_sec: int = 0
+    group: str = ""
 
 
 @dataclass
@@ -1078,6 +1085,9 @@ class DomainRecord:
     ttl_sec: int
     created: str
     updated: str
+    service: str = ""
+    protocol: str = ""
+    tag: str = ""
 
 
 @dataclass
@@ -1639,13 +1649,19 @@ def _serialize_instance_interface(iface: InstanceInterface) -> dict[str, Any]:
 
 
 def _serialize_backups(backups: Backups) -> dict[str, Any]:
-    """Serialize backup settings in Go struct-field order: schedule,
-    last_successful (null when absent), enabled, available.
+    """Serialize backup settings in proto-canonical order: schedule,
+    last_successful (omitted when absent, matching protojson's handling of an
+    unset message field), enabled, available.
     """
-    last: dict[str, Any] | None = None
+    body: dict[str, Any] = {
+        "schedule": {
+            "day": backups.schedule.day,
+            "window": backups.schedule.window,
+        },
+    }
     if backups.last_successful is not None:
         snap = backups.last_successful
-        last = {
+        body["last_successful"] = {
             "id": snap.id,
             "label": snap.label,
             "status": snap.status,
@@ -1655,15 +1671,9 @@ def _serialize_backups(backups: Backups) -> dict[str, Any]:
             "updated": snap.updated,
             "finished": snap.finished,
         }
-    return {
-        "schedule": {
-            "day": backups.schedule.day,
-            "window": backups.schedule.window,
-        },
-        "last_successful": last,
-        "enabled": backups.enabled,
-        "available": backups.available,
-    }
+    body["enabled"] = backups.enabled
+    body["available"] = backups.available
+    return body
 
 
 def instance_to_response_dict(instance: Instance) -> dict[str, Any]:
@@ -1707,10 +1717,9 @@ def instance_to_response_dict(instance: Instance) -> dict[str, Any]:
     }
     if instance.interface_generation:
         body["interface_generation"] = instance.interface_generation
-    if instance.interfaces:
-        body["interfaces"] = [
-            _serialize_instance_interface(iface) for iface in instance.interfaces
-        ]
+    body["interfaces"] = [
+        _serialize_instance_interface(iface) for iface in instance.interfaces
+    ]
     return body
 
 
@@ -10290,7 +10299,7 @@ class Client:
         backups_enabled: bool = False,
         disks: list[int] | None = None,
         configs: list[int] | None = None,
-    ) -> dict[str, Any]:
+    ) -> Instance:
         """Clone an instance."""
         endpoint = f"/linode/instances/{instance_id}/clone"
         try:
@@ -10308,8 +10317,7 @@ class Client:
             if configs is not None:
                 body["configs"] = configs
             response = await self.make_request("POST", endpoint, body)
-            result: dict[str, Any] = response.json()
-            return result
+            return self._parse_instance(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("CloneInstance", e) from e
 
@@ -10709,6 +10717,13 @@ class Client:
             tags=data.get("tags", []),
             created=data.get("created", ""),
             updated=data.get("updated", ""),
+            retry_sec=data.get("retry_sec", 0),
+            master_ips=data.get("master_ips", []),
+            axfr_ips=data.get("axfr_ips", []),
+            expire_sec=data.get("expire_sec", 0),
+            refresh_sec=data.get("refresh_sec", 0),
+            ttl_sec=data.get("ttl_sec", 0),
+            group=data.get("group", ""),
         )
 
     def _parse_domain_record(self, data: dict[str, Any]) -> DomainRecord:
@@ -10724,6 +10739,9 @@ class Client:
             ttl_sec=data.get("ttl_sec", 0),
             created=data.get("created", ""),
             updated=data.get("updated", ""),
+            service=data.get("service") or "",
+            protocol=data.get("protocol") or "",
+            tag=data.get("tag") or "",
         )
 
     def _parse_firewall(self, data: dict[str, Any]) -> Firewall:
@@ -14995,9 +15013,9 @@ class RetryableClient:
         backups_enabled: bool = False,
         disks: list[int] | None = None,
         configs: list[int] | None = None,
-    ) -> dict[str, Any]:
+    ) -> Instance:
         """Clone instance with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        result: Instance = await self._execute_with_retry(
             self.client.clone_instance,
             instance_id,
             region,

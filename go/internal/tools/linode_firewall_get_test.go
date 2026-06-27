@@ -35,12 +35,13 @@ func TestLinodeFirewallGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyFirewallID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyFirewallID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {
@@ -115,21 +116,23 @@ func TestLinodeFirewallGetToolSuccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	wrapped, isMap := body["firewall"].(map[string]any)
+	if body[keyLabel] != firewallGetFixtureLabel {
+		t.Errorf("got %v, want %v", body[keyLabel], firewallGetFixtureLabel)
+	}
+
+	rules, isMap := body["rules"].(map[string]any)
 	if !isMap {
-		t.Fatal("response is missing the firewall wrapper key")
+		t.Fatal("response is missing the rules object")
 	}
 
-	if wrapped[keyLabel] != firewallGetFixtureLabel {
-		t.Errorf("got %v, want %v", wrapped[keyLabel], firewallGetFixtureLabel)
+	inbound, isArray := rules["inbound"].([]any)
+	if !isArray || len(inbound) != 2 {
+		t.Errorf("rules.inbound = %v, want 2 elements", rules["inbound"])
 	}
 
-	if wrapped["rules_inbound_count"] != float64(2) {
-		t.Errorf("got %v, want %v", wrapped["rules_inbound_count"], 2)
-	}
-
-	if wrapped["rules_outbound_count"] != float64(1) {
-		t.Errorf("got %v, want %v", wrapped["rules_outbound_count"], 1)
+	outbound, isArray := rules["outbound"].([]any)
+	if !isArray || len(outbound) != 1 {
+		t.Errorf("rules.outbound = %v, want 1 element", rules["outbound"])
 	}
 }
 

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// ImageShareGroupMember is one membership token in an image share group. updated
+// and expiry are nullable (omitted when unset).
+message ImageShareGroupMember {
+  string token_uuid = 1;
+  string status = 2;
+  string label = 3;
+  string created = 4;
+  optional string updated = 5;
+  optional string expiry = 6;
+}
+
+// ImageShareGroupMemberTokenGetInput is the input contract for
+// linode_image_sharegroup_member_token_get.
+message ImageShareGroupMemberTokenGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The image share group ID (required).
+  int32 sharegroup_id = 2;
+  // The image share group member token UUID (required).
+  string token_uuid = 3;
+}

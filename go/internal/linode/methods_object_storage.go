@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -81,6 +83,29 @@ func (c *Client) httpGetObjectStorageBucket(ctx context.Context, region, label s
 	}
 
 	return &bucket, nil
+}
+
+// httpGetObjectStorageBucketProto retrieves an Object Storage bucket as a proto
+// message.
+func (c *Client) httpGetObjectStorageBucketProto(ctx context.Context, region, label string) (*linodev1.ObjectStorageBucket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageBucket", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	bucket := &linodev1.ObjectStorageBucket{}
+	if err := c.handleProtoResponse(resp, bucket); err != nil {
+		return nil, err
+	}
+
+	return bucket, nil
 }
 
 // ListObjectStorageBucketContents lists objects in a bucket.
@@ -226,6 +251,28 @@ func (c *Client) httpGetObjectStorageKey(ctx context.Context, keyID int) (*Objec
 	return &key, nil
 }
 
+// httpGetObjectStorageKeyProto retrieves an Object Storage key as a proto message.
+func (c *Client) httpGetObjectStorageKeyProto(ctx context.Context, keyID int) (*linodev1.ObjectStorageKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageKey", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	key := &linodev1.ObjectStorageKey{}
+	if err := c.handleProtoResponse(resp, key); err != nil {
+		return nil, err
+	}
+
+	return key, nil
+}
+
 // GetObjectStorageQuotaUsage retrieves usage data for a specific Object Storage quota.
 func (c *Client) httpGetObjectStorageQuotaUsage(ctx context.Context, quotaID string) (*ObjectStorageQuotaUsage, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -327,6 +374,29 @@ func (c *Client) httpGetObjectStorageBucketAccess(ctx context.Context, region, l
 	return &access, nil
 }
 
+// httpGetObjectStorageBucketAccessProto retrieves a bucket's access config as a
+// proto message.
+func (c *Client) httpGetObjectStorageBucketAccessProto(ctx context.Context, region, label string) (*linodev1.ObjectStorageBucketAccess, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageBucketAccess", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	access := &linodev1.ObjectStorageBucketAccess{}
+	if err := c.handleProtoResponse(resp, access); err != nil {
+		return nil, err
+	}
+
+	return access, nil
+}
+
 // CreateObjectStorageBucket creates a new Object Storage bucket.
 func (c *Client) httpCreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -345,6 +415,27 @@ func (c *Client) httpCreateObjectStorageBucket(ctx context.Context, req CreateOb
 	}
 
 	return &bucket, nil
+}
+
+// httpCreateObjectStorageBucketProto creates an Object Storage bucket as a proto
+// message.
+func (c *Client) httpCreateObjectStorageBucketProto(ctx context.Context, req CreateObjectStorageBucketRequest) (*linodev1.ObjectStorageBucket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjBuckets, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateObjectStorageBucket", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	bucket := &linodev1.ObjectStorageBucket{}
+	if err := c.handleProtoResponse(resp, bucket); err != nil {
+		return nil, err
+	}
+
+	return bucket, nil
 }
 
 // DeleteObjectStorageBucket deletes an Object Storage bucket.
@@ -416,6 +507,26 @@ func (c *Client) httpCreateObjectStorageKey(ctx context.Context, req CreateObjec
 	}
 
 	return &key, nil
+}
+
+// httpCreateObjectStorageKeyProto creates an Object Storage key as a proto message.
+func (c *Client) httpCreateObjectStorageKeyProto(ctx context.Context, req CreateObjectStorageKeyRequest) (*linodev1.ObjectStorageKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjKeys, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateObjectStorageKey", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	key := &linodev1.ObjectStorageKey{}
+	if err := c.handleProtoResponse(resp, key); err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }
 
 // UpdateObjectStorageKey updates an Object Storage access key.
@@ -496,6 +607,28 @@ func (c *Client) httpGetObjectACL(ctx context.Context, region, label, name strin
 	return &result, nil
 }
 
+// httpGetObjectACLProto retrieves an object's ACL as a proto message.
+func (c *Client) httpGetObjectACLProto(ctx context.Context, region, label, name string) (*linodev1.ObjectACL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl?name=%s", url.PathEscape(region), url.PathEscape(label), url.QueryEscape(name))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectACL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	result := &linodev1.ObjectACL{}
+	if err := c.handleProtoResponse(resp, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // UpdateObjectACL updates the ACL of an object in Object Storage.
 func (c *Client) httpUpdateObjectACL(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*ObjectACL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -538,6 +671,28 @@ func (c *Client) httpGetBucketSSL(ctx context.Context, region, label string) (*B
 	}
 
 	return &result, nil
+}
+
+// httpGetBucketSSLProto retrieves a bucket's TLS status as a proto message.
+func (c *Client) httpGetBucketSSLProto(ctx context.Context, region, label string) (*linodev1.BucketSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetBucketSSL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	result := &linodev1.BucketSSL{}
+	if err := c.handleProtoResponse(resp, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // DeleteBucketSSL deletes the SSL/TLS certificate from an Object Storage bucket.

@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Transfer is the bandwidth transfer summary attached to several resources.
+message Transfer {
+  double in = 1;
+  double out = 2;
+  double total = 3;
+}
+
+// NodeBalancer mirrors the Linode NodeBalancer object.
+message NodeBalancer {
+  int32 id = 1;
+  string label = 2;
+  string region = 3;
+  string hostname = 4;
+  string ipv4 = 5;
+  string ipv6 = 6;
+  int32 client_conn_throttle = 7;
+  Transfer transfer = 8;
+  repeated string tags = 9;
+  string created = 10;
+  string updated = 11;
+}
+
+// NodeBalancerWriteResponse is the {message, nodebalancer} envelope the
+// NodeBalancer create/update tools return.
+message NodeBalancerWriteResponse {
+  string message = 1;
+  NodeBalancer nodebalancer = 2;
+}
+
+// NodeBalancerGetInput is the input contract for linode_nodebalancer_get.
+message NodeBalancerGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer to retrieve (required).
+  int32 nodebalancer_id = 2;
+}

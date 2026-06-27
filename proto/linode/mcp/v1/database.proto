@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "linode/mcp/v1/longview.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// DatabaseTypeEngine is one engine pricing entry nested in a database type.
+message DatabaseTypeEngine {
+  int32 quantity = 1;
+  Price price = 2;
+}
+
+// DatabaseTypeEngines groups the per-engine pricing for a database type. mysql
+// and postgresql are repeated (emitted as []).
+message DatabaseTypeEngines {
+  repeated DatabaseTypeEngine mysql = 1;
+  repeated DatabaseTypeEngine postgresql = 2;
+}
+
+// DatabaseType mirrors a Managed Database node type (plan).
+message DatabaseType {
+  string id = 1;
+  string label = 2;
+  string class = 3;
+  int32 disk = 4;
+  int32 memory = 5;
+  int32 vcpus = 6;
+  bool deprecated = 7;
+  DatabaseTypeEngines engines = 8;
+}
+
+// DatabaseTypeGetInput is the input contract for linode_database_type_get.
+message DatabaseTypeGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the database type to retrieve (required).
+  string type_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}

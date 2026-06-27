@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// BucketSSL reports whether an Object Storage bucket has a TLS certificate
+// configured.
+message BucketSSL {
+  bool ssl = 1;
+}
+
+// BucketSSLGetInput is the input contract for linode_object_storage_ssl_get.
+message BucketSSLGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (required).
+  string region = 2;
+  // The bucket label (required).
+  string label = 3;
+}

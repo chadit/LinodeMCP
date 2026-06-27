@@ -23,6 +23,11 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_object_storage import (
+    object_storage_bucket_to_response_dict,
+    object_storage_key_to_response_dict,
+)
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -230,7 +235,7 @@ async def handle_linode_object_storage_bucket_create(
         )
         return {
             "message": (f"Bucket '{label}' created successfully in {region}"),
-            "bucket": bucket,
+            "bucket": object_storage_bucket_to_response_dict(bucket),
         }
 
     return await execute_tool(cfg, arguments, "create bucket", _call)
@@ -864,7 +869,7 @@ async def handle_linode_object_storage_key_create(
                 " created successfully"
                 f" (ID: {key.get('id', 'unknown')})"
             ),
-            "key": key,
+            "key": object_storage_key_to_response_dict(key),
         }
 
     return await execute_tool(cfg, arguments, "create access key", _call)
@@ -1155,6 +1160,14 @@ async def handle_linode_object_storage_presigned_url_create(
     return await execute_tool(cfg, arguments, "generate presigned URL", _call)
 
 
+def object_acl_to_response_dict(acl: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw object ACL API dict to proto-canonical form."""
+    return {
+        "acl": acl.get("acl") or "",
+        "acl_xml": acl.get("acl_xml") or "",
+    }
+
+
 def create_linode_object_storage_object_acl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_object_acl_get tool."""
     return Tool(
@@ -1163,30 +1176,7 @@ def create_linode_object_storage_object_acl_get_tool() -> tuple[Tool, Capability
             "Gets the Access Control List (ACL) for a specific"
             " object in an Object Storage bucket"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region where the bucket is located"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The bucket label (name)",
-                },
-                "name": {
-                    "type": "string",
-                    "description": ("The object key (path/filename within the bucket)"),
-                },
-            },
-            "required": ["region", "label", "name"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectACLGetInput"),
     ), Capability.Read
 
 
@@ -1206,7 +1196,9 @@ async def handle_linode_object_storage_object_acl_get(
         return _error_response("name (object key) is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_acl(region, label, name)
+        return object_acl_to_response_dict(
+            await client.get_object_acl(region, label, name)
+        )
 
     return await execute_tool(cfg, arguments, "retrieve object ACL", _call)
 
@@ -1342,6 +1334,11 @@ async def handle_linode_object_storage_object_acl_update(
     return await execute_tool(cfg, arguments, "update object ACL", _call)
 
 
+def bucket_ssl_to_response_dict(ssl: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw bucket SSL API dict to proto-canonical form."""
+    return {"ssl": bool(ssl.get("ssl"))}
+
+
 def create_linode_object_storage_ssl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_ssl_get tool."""
     return Tool(
@@ -1350,26 +1347,7 @@ def create_linode_object_storage_ssl_get_tool() -> tuple[Tool, Capability]:
             "Checks whether an Object Storage bucket has an"
             " SSL/TLS certificate installed"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region where the bucket is located"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The bucket label (name)",
-                },
-            },
-            "required": ["region", "label"],
-        },
+        inputSchema=schema("linode.mcp.v1.BucketSSLGetInput"),
     ), Capability.Read
 
 
@@ -1386,7 +1364,7 @@ async def handle_linode_object_storage_ssl_get(
         return _error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_bucket_ssl(region, label)
+        return bucket_ssl_to_response_dict(await client.get_bucket_ssl(region, label))
 
     return await execute_tool(cfg, arguments, "retrieve SSL status", _call)
 

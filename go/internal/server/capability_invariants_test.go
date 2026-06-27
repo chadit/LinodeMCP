@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"encoding/json"
 	"slices"
 	"testing"
 
@@ -64,6 +65,57 @@ func schemaHasBooleanProp(schema map[string]any, name string) bool {
 	typeVal, isString := props["type"].(string)
 
 	return isString && typeVal == "boolean"
+}
+
+// toolSchemaProps returns a registered tool's input-schema properties.
+// Programmatically built tools populate the structured InputSchema, but
+// proto-backed tools built with NewToolWithRawSchema carry only
+// RawInputSchema and leave the structured Properties empty, so fall back to
+// parsing the raw JSON schema for those.
+func toolSchemaProps(t *testing.T, info *server.ToolInfo) map[string]any {
+	t.Helper()
+
+	if len(info.InputSchema.Properties) > 0 {
+		return info.InputSchema.Properties
+	}
+
+	if len(info.RawInputSchema) == 0 {
+		return nil
+	}
+
+	var parsed struct {
+		Properties map[string]any `json:"properties"`
+	}
+
+	if err := json.Unmarshal(info.RawInputSchema, &parsed); err != nil {
+		t.Fatalf("parse raw input schema for %s: %v", info.Name, err)
+	}
+
+	return parsed.Properties
+}
+
+// toolSchemaRequired returns a registered tool's required-field list from
+// whichever schema form the tool uses (see toolSchemaProps).
+func toolSchemaRequired(t *testing.T, info *server.ToolInfo) []string {
+	t.Helper()
+
+	if len(info.InputSchema.Properties) > 0 {
+		return info.InputSchema.Required
+	}
+
+	if len(info.RawInputSchema) == 0 {
+		return nil
+	}
+
+	var parsed struct {
+		Required []string `json:"required"`
+	}
+
+	if err := json.Unmarshal(info.RawInputSchema, &parsed); err != nil {
+		t.Fatalf("parse raw input schema for %s: %v", info.Name, err)
+	}
+
+	return parsed.Required
 }
 
 // TestNoCapabilityUnknownInRegistry enforces the Phase 1+ steady-state
@@ -205,11 +257,11 @@ func TestCapabilityAndDryRunInvariants(t *testing.T) {
 
 		switch info.Capability {
 		case profiles.CapWrite, profiles.CapDestroy, profiles.CapAdmin:
-			hasDryRun := schemaHasBooleanProp(info.InputSchema.Properties, "dry_run")
+			hasDryRun := schemaHasBooleanProp(toolSchemaProps(t, &info), "dry_run")
 			_, isPending := pending[info.Name]
 
 			if hasDryRun != !isPending {
-				t.Errorf("hasDryRun = %v, want %v", hasDryRun, !isPending)
+				t.Errorf("tool %s: hasDryRun = %v, want %v", info.Name, hasDryRun, !isPending)
 			}
 		case profiles.CapRead, profiles.CapMeta, profiles.CapUnknown:
 		}
@@ -299,7 +351,7 @@ func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 			}
 
-			if _, ok := info.InputSchema.Properties["skip_ipv6_rdns"]; !ok {
+			if _, ok := toolSchemaProps(t, &info)["skip_ipv6_rdns"]; !ok {
 				t.Errorf("info.InputSchema.Properties missing key %v", "skip_ipv6_rdns")
 			}
 		case "linode_networking_ip_get":
@@ -309,7 +361,7 @@ func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 			}
 
-			if _, ok := info.InputSchema.Properties["address"]; !ok {
+			if _, ok := toolSchemaProps(t, &info)["address"]; !ok {
 				t.Errorf("info.InputSchema.Properties missing key %v", "address")
 			}
 		}

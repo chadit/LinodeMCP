@@ -24,6 +24,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_vpc import vpc_subnet_to_dict, vpc_to_response_dict
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -244,12 +245,19 @@ async def handle_linode_vpc_create(
         return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_vpc(
+        vpc = await client.create_vpc(
             label=label,
             region=region,
             description=arguments.get("description"),
             subnets=arguments.get("subnets"),
         )
+        return {
+            "message": (
+                f"VPC '{vpc.get('label', '')}' (ID: {vpc.get('id', 0)}) "
+                f"created in {vpc.get('region', '')}"
+            ),
+            "vpc": vpc_to_response_dict(vpc),
+        }
 
     return await execute_tool(cfg, arguments, "create VPC", _call)
 
@@ -337,11 +345,15 @@ async def handle_linode_vpc_update(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_vpc(
+        vpc = await client.update_vpc(
             vpc_id=vpc_id,
             label=arguments.get("label"),
             description=arguments.get("description"),
         )
+        return {
+            "message": f"VPC {vpc_id} modified successfully",
+            "vpc": vpc_to_response_dict(vpc),
+        }
 
     return await execute_tool(cfg, arguments, "update VPC", _call)
 
@@ -585,11 +597,18 @@ async def handle_linode_vpc_subnet_create(
         return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_vpc_subnet(
+        subnet = await client.create_vpc_subnet(
             vpc_id=cast("int", vpc_id),
             label=label,
             ipv4=ipv4,
         )
+        return {
+            "message": (
+                f"Subnet '{subnet.get('label', '')}' (ID: {subnet.get('id', 0)}) "
+                f"created in VPC {vpc_id}"
+            ),
+            "subnet": vpc_subnet_to_dict(subnet),
+        }
 
     return await execute_tool(cfg, arguments, "create VPC subnet", _call)
 
@@ -654,11 +673,15 @@ async def handle_linode_vpc_subnet_update(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_vpc_subnet(
+        subnet = await client.update_vpc_subnet(
             vpc_id=vpc_id,
             subnet_id=subnet_id,
             label=label,
         )
+        return {
+            "message": f"Subnet {subnet_id} in VPC {vpc_id} modified successfully",
+            "subnet": vpc_subnet_to_dict(subnet),
+        }
 
     return await execute_tool(cfg, arguments, "update VPC subnet", _call)
 

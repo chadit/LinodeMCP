@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -106,20 +107,17 @@ func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instance, err := client.CloneInstance(ctx, linodeID, req)
+	instance, err := client.CloneInstanceProto(ctx, linodeID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to clone instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string           `json:"message"`
-		Instance *linode.Instance `json:"instance"`
-	}{
-		Message:  fmt.Sprintf("Instance %d cloned as '%s' (ID: %d) in %s", linodeID, instance.Label, instance.ID, instance.Region),
+	response := &linodev1.InstanceWriteResponse{
+		Message:  fmt.Sprintf("Instance %d cloned as '%s' (ID: %d) in %s", linodeID, instance.GetLabel(), instance.GetId(), instance.GetRegion()),
 		Instance: instance,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeInstanceMigrateTool creates a tool for migrating a Linode instance to a new region.

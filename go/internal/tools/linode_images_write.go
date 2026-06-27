@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
@@ -226,20 +227,17 @@ func handleLinodeImageUpdateRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updated, err := client.UpdateImage(ctx, imageID, req)
+	updated, err := client.UpdateImageProto(ctx, imageID, req)
 	if err != nil {
 		return mcp.NewToolResultError(formatImageUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message string        `json:"message"`
-		Image   *linode.Image `json:"image"`
-	}{
-		Message: fmt.Sprintf("Image '%s' updated successfully", updated.ID),
+	response := &linodev1.ImageWriteResponse{
+		Message: fmt.Sprintf("Image '%s' updated successfully", updated.GetId()),
 		Image:   updated,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image response: %v", err)), nil
 	}
@@ -1465,20 +1463,17 @@ func handleLinodeImageCreateRequest(ctx context.Context, request *mcp.CallToolRe
 		Tags:        tags,
 	}
 
-	created, err := client.CreateImage(ctx, &req)
+	created, err := client.CreateImageProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create image: %v", err)), nil
 	}
 
-	response := struct {
-		Message string        `json:"message"`
-		Image   *linode.Image `json:"image"`
-	}{
-		Message: fmt.Sprintf("Image '%s' (%s) created successfully", created.Label, created.ID),
+	response := &linodev1.ImageWriteResponse{
+		Message: fmt.Sprintf("Image '%s' (%s) created successfully", created.GetLabel(), created.GetId()),
 		Image:   created,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image response: %v", err)), nil
 	}

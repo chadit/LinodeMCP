@@ -23,6 +23,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_nodebalancers import nodebalancer_to_response_dict
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -528,14 +529,7 @@ async def handle_linode_nodebalancer_create(
                 f"NodeBalancer '{nb.label}' (ID: {nb.id}) "
                 f"created successfully in {nb.region}"
             ),
-            "nodebalancer": {
-                "id": nb.id,
-                "label": nb.label,
-                "region": nb.region,
-                "hostname": nb.hostname,
-                "ipv4": nb.ipv4,
-                "ipv6": nb.ipv6,
-            },
+            "nodebalancer": nodebalancer_to_response_dict(nb),
         }
 
     return await execute_tool(cfg, arguments, "create NodeBalancer", _call)
@@ -633,13 +627,8 @@ async def handle_linode_nodebalancer_update(
             client_conn_throttle=arguments.get("client_conn_throttle"),
         )
         return {
-            "message": f"NodeBalancer {nodebalancer_id} updated successfully",
-            "nodebalancer": {
-                "id": nb.id,
-                "label": nb.label,
-                "client_conn_throttle": nb.client_conn_throttle,
-                "updated": nb.updated,
-            },
+            "message": f"NodeBalancer {nodebalancer_id} modified successfully",
+            "nodebalancer": nodebalancer_to_response_dict(nb),
         }
 
     return await execute_tool(cfg, arguments, "update NodeBalancer", _call)

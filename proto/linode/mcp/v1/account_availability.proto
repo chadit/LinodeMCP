@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// AccountAvailability reports which services are available and unavailable to the
+// account in one region.
+message AccountAvailability {
+  repeated string available = 1;
+  string region = 2;
+  repeated string unavailable = 3;
+}
+
+// AccountAvailabilityGetInput is the input contract for
+// linode_account_availability_get.
+message AccountAvailabilityGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The region slug to inspect (required).
+  string region_id = 2;
+}

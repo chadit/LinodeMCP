@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -98,6 +100,29 @@ func (c *Client) httpGetDomainZoneFile(ctx context.Context, domainID int) (*Doma
 	return &zoneFile, nil
 }
 
+// httpGetDomainZoneFileProto retrieves a domain's rendered zone file as a proto
+// message.
+func (c *Client) httpGetDomainZoneFileProto(ctx context.Context, domainID int) (*linodev1.DomainZoneFile, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/zone-file", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDomainZoneFile", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	zoneFile := &linodev1.DomainZoneFile{}
+	if err := c.handleProtoResponse(resp, zoneFile); err != nil {
+		return nil, err
+	}
+
+	return zoneFile, nil
+}
+
 // ImportDomain imports a domain zone from a remote nameserver.
 func (c *Client) httpImportDomain(ctx context.Context, req *ImportDomainRequest) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -116,6 +141,48 @@ func (c *Client) httpImportDomain(ctx context.Context, req *ImportDomainRequest)
 	}
 
 	return &domain, nil
+}
+
+// httpImportDomainProto imports a domain and decodes the response as a proto message.
+func (c *Client) httpImportDomainProto(ctx context.Context, req *ImportDomainRequest) (*linodev1.Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDomains+"/import", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ImportDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	domain := &linodev1.Domain{}
+	if err := c.handleProtoResponse(resp, domain); err != nil {
+		return nil, err
+	}
+
+	return domain, nil
+}
+
+// httpCloneDomainProto clones a domain and decodes the response as a proto message.
+func (c *Client) httpCloneDomainProto(ctx context.Context, domainID int, req *CloneDomainRequest) (*linodev1.Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/clone", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	domain := &linodev1.Domain{}
+	if err := c.handleProtoResponse(resp, domain); err != nil {
+		return nil, err
+	}
+
+	return domain, nil
 }
 
 // CloneDomain clones a DNS domain and its records.
@@ -180,6 +247,70 @@ func (c *Client) httpUpdateDomain(ctx context.Context, domainID int, req *Update
 	}
 
 	return &domain, nil
+}
+
+// httpGetDomainProto retrieves a domain as a proto message.
+func (c *Client) httpGetDomainProto(ctx context.Context, domainID int) (*linodev1.Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	domain := &linodev1.Domain{}
+	if err := c.handleProtoResponse(resp, domain); err != nil {
+		return nil, err
+	}
+
+	return domain, nil
+}
+
+// httpCreateDomainProto creates a domain as a proto message.
+func (c *Client) httpCreateDomainProto(ctx context.Context, req *CreateDomainRequest) (*linodev1.Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDomains, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	domain := &linodev1.Domain{}
+	if err := c.handleProtoResponse(resp, domain); err != nil {
+		return nil, err
+	}
+
+	return domain, nil
+}
+
+// httpUpdateDomainProto updates a domain as a proto message.
+func (c *Client) httpUpdateDomainProto(ctx context.Context, domainID int, req *UpdateDomainRequest) (*linodev1.Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	domain := &linodev1.Domain{}
+	if err := c.handleProtoResponse(resp, domain); err != nil {
+		return nil, err
+	}
+
+	return domain, nil
 }
 
 // DeleteDomain deletes a DNS domain and all its records.
@@ -263,6 +394,72 @@ func (c *Client) httpUpdateDomainRecord(ctx context.Context, domainID, recordID 
 	}
 
 	return &record, nil
+}
+
+// httpGetDomainRecordProto retrieves a domain record as a proto message.
+func (c *Client) httpGetDomainRecordProto(ctx context.Context, domainID, recordID int) (*linodev1.DomainRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDomainRecord", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	record := &linodev1.DomainRecord{}
+	if err := c.handleProtoResponse(resp, record); err != nil {
+		return nil, err
+	}
+
+	return record, nil
+}
+
+// httpCreateDomainRecordProto creates a domain record as a proto message.
+func (c *Client) httpCreateDomainRecordProto(ctx context.Context, domainID int, req *CreateDomainRecordRequest) (*linodev1.DomainRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/records", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDomainRecord", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	record := &linodev1.DomainRecord{}
+	if err := c.handleProtoResponse(resp, record); err != nil {
+		return nil, err
+	}
+
+	return record, nil
+}
+
+// httpUpdateDomainRecordProto updates a domain record as a proto message.
+func (c *Client) httpUpdateDomainRecordProto(ctx context.Context, domainID, recordID int, req *UpdateDomainRecordRequest) (*linodev1.DomainRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateDomainRecord", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	record := &linodev1.DomainRecord{}
+	if err := c.handleProtoResponse(resp, record); err != nil {
+		return nil, err
+	}
+
+	return record, nil
 }
 
 // DeleteDomainRecord deletes a DNS record from a domain.

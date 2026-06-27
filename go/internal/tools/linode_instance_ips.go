@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -50,18 +51,15 @@ func handleInstanceIPsListRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeInstanceIPGetTool creates a tool for retrieving a specific IP address for a Linode instance.
 func NewLinodeInstanceIPGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_ip_get",
 		"Retrieves details of a specific IP address for a Linode instance",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("address", mcp.Required(),
-				mcp.Description("The IP address to retrieve (e.g. 203.0.113.1)")),
-		},
-		handleInstanceIPGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceIPGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceIPGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -82,12 +80,12 @@ func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ip, err := client.GetInstanceIP(ctx, linodeID, address)
+	ip, err := client.GetInstanceIPProto(ctx, linodeID, address)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get IP %s for instance %d: %v", address, linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(ip)
+	return MarshalProtoToolResponse(ip)
 }
 
 // NewLinodeInstanceIPAllocateTool creates a tool for allocating a new IP address for a Linode instance.

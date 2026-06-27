@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -174,20 +175,17 @@ func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cluster, err := client.CreateLKECluster(ctx, req)
+	cluster, err := client.CreateLKEClusterProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create LKE cluster: %v", err)), nil
 	}
 
-	response := struct {
-		Message string             `json:"message"`
-		Cluster *linode.LKECluster `json:"cluster"`
-	}{
-		Message: fmt.Sprintf("LKE cluster '%s' (ID: %d) created in %s with Kubernetes %s", cluster.Label, cluster.ID, cluster.Region, cluster.K8sVersion),
+	response := &linodev1.LKEClusterWriteResponse{
+		Message: fmt.Sprintf("LKE cluster '%s' (ID: %d) created in %s with Kubernetes %s", cluster.GetLabel(), cluster.GetId(), cluster.GetRegion(), cluster.GetK8SVersion()),
 		Cluster: cluster,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeLKEClusterUpdateTool creates a tool for updating an LKE cluster.
@@ -269,20 +267,17 @@ func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cluster, err := client.UpdateLKECluster(ctx, clusterID, req)
+	cluster, err := client.UpdateLKEClusterProto(ctx, clusterID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify LKE cluster %d: %v", clusterID, err)), nil
 	}
 
-	response := struct {
-		Message string             `json:"message"`
-		Cluster *linode.LKECluster `json:"cluster"`
-	}{
+	response := &linodev1.LKEClusterWriteResponse{
 		Message: fmt.Sprintf("LKE cluster %d modified successfully", clusterID),
 		Cluster: cluster,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeLKEClusterDeleteTool creates a tool for deleting an LKE cluster.

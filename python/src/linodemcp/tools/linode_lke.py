@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 
 def _validate_lke_path_segment(value: Any) -> str:
@@ -97,19 +98,30 @@ async def handle_linode_lke_cluster_list(
     return await execute_tool(cfg, arguments, "list LKE clusters", _call)
 
 
+def lke_cluster_to_response_dict(cluster: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE cluster API dict to proto-canonical LKECluster form."""
+    control_plane: dict[str, Any] = cluster.get("control_plane") or {}
+    return {
+        "id": cluster.get("id", 0),
+        "label": cluster.get("label", ""),
+        "region": cluster.get("region", ""),
+        "k8s_version": cluster.get("k8s_version", ""),
+        "status": cluster.get("status", ""),
+        "tags": cluster.get("tags") or [],
+        "created": cluster.get("created", ""),
+        "updated": cluster.get("updated", ""),
+        "control_plane": {
+            "high_availability": control_plane.get("high_availability", False),
+        },
+    }
+
+
 def create_linode_lke_cluster_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_get tool."""
     return Tool(
         name="linode_lke_cluster_get",
         description="Gets details of a specific LKE cluster by ID",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-            },
-            "required": ["cluster_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEClusterGetInput"),
     ), Capability.Read
 
 
@@ -126,7 +138,7 @@ async def handle_linode_lke_cluster_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_cluster(cluster_id)
+        return lke_cluster_to_response_dict(await client.get_lke_cluster(cluster_id))
 
     return await execute_tool(cfg, arguments, "get LKE cluster", _call)
 
@@ -166,23 +178,55 @@ async def handle_linode_lke_pool_list(
     return await execute_tool(cfg, arguments, "list LKE node pools", _call)
 
 
+def _lke_node_pool_disk_to_response_dict(disk: dict[str, Any]) -> dict[str, Any]:
+    """Shape a node pool ephemeral disk to proto-canonical form."""
+    return {"size": disk.get("size", 0), "type": disk.get("type", "")}
+
+
+def _lke_node_pool_autoscaler_to_response_dict(
+    autoscaler: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a node pool autoscaler to proto-canonical form."""
+    return {
+        "enabled": autoscaler.get("enabled", False),
+        "min": autoscaler.get("min", 0),
+        "max": autoscaler.get("max", 0),
+    }
+
+
+def lke_node_pool_to_response_dict(pool: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE node pool API dict to proto-canonical form.
+
+    autoscaler is a nullable message (omitted when null); disks/nodes/tags are
+    repeated (always lists). nodes reuse the LKENode shaper.
+    """
+    body: dict[str, Any] = {
+        "id": pool.get("id", 0),
+        "cluster_id": pool.get("cluster_id", 0),
+        "type": pool.get("type", ""),
+        "count": pool.get("count", 0),
+        "disks": [
+            _lke_node_pool_disk_to_response_dict(disk)
+            for disk in cast("list[dict[str, Any]]", pool.get("disks") or [])
+        ],
+        "nodes": [
+            lke_node_to_response_dict(node)
+            for node in cast("list[dict[str, Any]]", pool.get("nodes") or [])
+        ],
+        "tags": pool.get("tags") or [],
+    }
+    autoscaler = pool.get("autoscaler")
+    if autoscaler is not None:
+        body["autoscaler"] = _lke_node_pool_autoscaler_to_response_dict(autoscaler)
+    return body
+
+
 def create_linode_lke_pool_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_get tool."""
     return Tool(
         name="linode_lke_pool_get",
         description="Gets details of a specific node pool in an LKE cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "pool_id": {
-                    "type": "string",
-                    "description": "The ID of the node pool (required)",
-                },
-            },
-            "required": ["cluster_id", "pool_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodePoolGetInput"),
     ), Capability.Read
 
 
@@ -206,9 +250,20 @@ async def handle_linode_lke_pool_get(
         return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_node_pool(cluster_id, pool_id)
+        return lke_node_pool_to_response_dict(
+            await client.get_lke_node_pool(cluster_id, pool_id)
+        )
 
     return await execute_tool(cfg, arguments, "get LKE node pool", _call)
+
+
+def lke_node_to_response_dict(node: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE node API dict to proto-canonical form."""
+    return {
+        "id": node.get("id", ""),
+        "instance_id": node.get("instance_id", 0),
+        "status": node.get("status", ""),
+    }
 
 
 def create_linode_lke_node_get_tool() -> tuple[Tool, Capability]:
@@ -216,18 +271,7 @@ def create_linode_lke_node_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_node_get",
         description="Gets details of a specific node in an LKE cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "node_id": {
-                    "type": "string",
-                    "description": "The ID of the node (required, string)",
-                },
-            },
-            "required": ["cluster_id", "node_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodeGetInput"),
     ), Capability.Read
 
 
@@ -247,9 +291,16 @@ async def handle_linode_lke_node_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_node(cluster_id, str(node_id))
+        return lke_node_to_response_dict(
+            await client.get_lke_node(cluster_id, str(node_id))
+        )
 
     return await execute_tool(cfg, arguments, "get LKE node", _call)
+
+
+def lke_kubeconfig_to_response_dict(kubeconfig: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE kubeconfig API dict to proto-canonical form."""
+    return {"kubeconfig": kubeconfig.get("kubeconfig") or ""}
 
 
 def create_linode_lke_kubeconfig_get_tool() -> tuple[Tool, Capability]:
@@ -257,14 +308,7 @@ def create_linode_lke_kubeconfig_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_kubeconfig_get",
         description="Gets the kubeconfig for an LKE cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-            },
-            "required": ["cluster_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEKubeconfigGetInput"),
     ), Capability.Read
 
 
@@ -281,9 +325,16 @@ async def handle_linode_lke_kubeconfig_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_kubeconfig(cluster_id)
+        return lke_kubeconfig_to_response_dict(
+            await client.get_lke_kubeconfig(cluster_id)
+        )
 
     return await execute_tool(cfg, arguments, "get LKE kubeconfig", _call)
+
+
+def lke_dashboard_to_response_dict(dashboard: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE dashboard API dict to proto-canonical form."""
+    return {"url": dashboard.get("url") or ""}
 
 
 def create_linode_lke_dashboard_get_tool() -> tuple[Tool, Capability]:
@@ -291,14 +342,7 @@ def create_linode_lke_dashboard_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_dashboard_get",
         description="Gets the dashboard URL for an LKE cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-            },
-            "required": ["cluster_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEDashboardGetInput"),
     ), Capability.Read
 
 
@@ -315,7 +359,9 @@ async def handle_linode_lke_dashboard_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_dashboard(cluster_id)
+        return lke_dashboard_to_response_dict(
+            await client.get_lke_dashboard(cluster_id)
+        )
 
     return await execute_tool(cfg, arguments, "get LKE dashboard", _call)
 
@@ -415,22 +461,17 @@ async def handle_linode_lke_version_list(
     return await execute_tool(cfg, arguments, "list LKE versions", _call)
 
 
+def lke_version_to_response_dict(version: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE version API dict to proto-canonical form."""
+    return {"id": version.get("id") or ""}
+
+
 def create_linode_lke_version_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_version_get tool."""
     return Tool(
         name="linode_lke_version_get",
         description="Gets details of a specific LKE Kubernetes version",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "version": {
-                    "type": "string",
-                    "description": "The Kubernetes version (e.g. '1.29') (required)",
-                },
-            },
-            "required": ["version"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEVersionGetInput"),
     ), Capability.Read
 
 
@@ -443,7 +484,7 @@ async def handle_linode_lke_version_get(
         return error_response("version is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_version(str(version))
+        return lke_version_to_response_dict(await client.get_lke_version(str(version)))
 
     return await execute_tool(cfg, arguments, "get LKE version", _call)
 
@@ -505,26 +546,17 @@ async def handle_linode_lke_tier_version_list(
     return await execute_tool(cfg, arguments, "list LKE tier versions", _call)
 
 
+def lke_tier_version_to_response_dict(version: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw LKE tier version API dict to proto-canonical form."""
+    return {"id": version.get("id") or "", "tier": version.get("tier") or ""}
+
+
 def create_linode_lke_tier_version_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_tier_version_get tool."""
     return Tool(
         name="linode_lke_tier_version_get",
         description="Gets details of a specific LKE Kubernetes version for any tier",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "tier": {
-                    "type": "string",
-                    "description": "The LKE tier (required)",
-                },
-                "version": {
-                    "type": "string",
-                    "description": "The Kubernetes version (required)",
-                },
-            },
-            "required": ["tier", "version"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKETierVersionGetInput"),
     ), Capability.Read
 
 
@@ -544,6 +576,8 @@ async def handle_linode_lke_tier_version_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_lke_tier_version(tier, version)
+        return lke_tier_version_to_response_dict(
+            await client.get_lke_tier_version(tier, version)
+        )
 
     return await execute_tool(cfg, arguments, "get LKE tier version", _call)

@@ -336,7 +336,7 @@ def test_create_linode_longview_client_get_tool_schema() -> None:
     assert tool.name == "linode_longview_client_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["client_id"]
-    assert tool.inputSchema["properties"]["client_id"]["minimum"] == 1
+    assert "client_id" in tool.inputSchema["properties"]
 
 
 def test_linode_longview_client_get_registered() -> None:

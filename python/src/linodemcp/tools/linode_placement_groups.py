@@ -8,12 +8,56 @@ from mcp.types import Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from mcp.types import TextContent
 
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+def _pg_member_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw placement group member to proto-canonical form."""
+    return {
+        "linode_id": raw.get("linode_id", 0),
+        "is_compliant": raw.get("is_compliant", False),
+    }
+
+
+def _pg_migration_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw placement group migration to proto-canonical form."""
+    return {"linode_id": raw.get("linode_id", 0)}
+
+
+def _pg_migrations_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape raw placement group migrations to proto-canonical form."""
+    return {
+        "inbound": [_pg_migration_to_dict(m) for m in raw.get("inbound", [])],
+        "outbound": [_pg_migration_to_dict(m) for m in raw.get("outbound", [])],
+    }
+
+
+def placement_group_to_response_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw placement group API dict to proto-canonical form.
+
+    members is always emitted as a list; migrations is omitted when absent,
+    matching the proto linode.mcp.v1.PlacementGroup serialization.
+    """
+    body: dict[str, Any] = {
+        "id": raw.get("id", 0),
+        "label": raw.get("label", ""),
+        "region": raw.get("region", ""),
+        "placement_group_type": raw.get("placement_group_type", ""),
+        "placement_group_policy": raw.get("placement_group_policy", ""),
+        "is_compliant": raw.get("is_compliant", False),
+        "members": [_pg_member_to_dict(m) for m in raw.get("members", [])],
+    }
+    migrations = raw.get("migrations")
+    if migrations is not None:
+        body["migrations"] = _pg_migrations_to_dict(migrations)
+    return body
+
 
 _ENV_PROP: dict[str, Any] = {
     "type": "string",
@@ -97,14 +141,7 @@ def create_linode_placement_group_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_get",
         description="Gets a placement group",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "group_id": _GROUP_ID_PROP,
-            },
-            "required": ["group_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.PlacementGroupGetInput"),
     ), Capability.Read
 
 
@@ -117,6 +154,8 @@ async def handle_linode_placement_group_get(
         return group_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_placement_group(group_id)
+        return placement_group_to_response_dict(
+            await client.get_placement_group(group_id)
+        )
 
     return await execute_tool(cfg, arguments, "get placement group", _call)

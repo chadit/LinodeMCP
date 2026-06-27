@@ -23,6 +23,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -398,25 +399,60 @@ def _required_positive_int_argument(arguments: dict[str, Any], name: str) -> int
     return value
 
 
+def database_engine_to_response_dict(engine: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Managed Database engine API dict to proto-canonical form."""
+    return {
+        "id": engine.get("id") or "",
+        "engine": engine.get("engine") or "",
+        "version": engine.get("version") or "",
+    }
+
+
 def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_engine_get tool."""
     return Tool(
         name="linode_database_engine_get",
         description="Gets details for a Managed Databases engine.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "engine_id": {
-                    "type": "string",
-                    "description": (
-                        "Managed Databases engine ID, for example mysql/8.0.26"
-                    ),
-                },
-            },
-            "required": ["engine_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseEngineGetInput"),
     ), Capability.Read
+
+
+def database_type_engine_to_response_dict(engine: dict[str, Any]) -> dict[str, Any]:
+    """Shape one database type engine entry to proto-canonical form."""
+    price: dict[str, Any] = engine.get("price") or {}
+    return {
+        "quantity": engine.get("quantity", 0),
+        "price": {
+            "hourly": price.get("hourly", 0.0),
+            "monthly": price.get("monthly", 0.0),
+        },
+    }
+
+
+def database_type_to_response_dict(db_type: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Managed Database type API dict to proto-canonical form."""
+    engines: dict[str, Any] = db_type.get("engines") or {}
+    return {
+        "id": db_type.get("id", ""),
+        "label": db_type.get("label", ""),
+        "class": db_type.get("class", ""),
+        "disk": db_type.get("disk", 0),
+        "memory": db_type.get("memory", 0),
+        "vcpus": db_type.get("vcpus", 0),
+        "deprecated": db_type.get("deprecated", False),
+        "engines": {
+            "mysql": [
+                database_type_engine_to_response_dict(entry)
+                for entry in cast("list[dict[str, Any]]", engines.get("mysql") or [])
+            ],
+            "postgresql": [
+                database_type_engine_to_response_dict(entry)
+                for entry in cast(
+                    "list[dict[str, Any]]", engines.get("postgresql") or []
+                )
+            ],
+        },
+    }
 
 
 def create_linode_database_type_get_tool() -> tuple[Tool, Capability]:
@@ -424,32 +460,7 @@ def create_linode_database_type_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_type_get",
         description="Gets details for a Managed Databases type.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "type_id": {
-                    "type": "string",
-                    "description": (
-                        "Managed Databases type ID, for example g6-dedicated-2"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "Page of results to return when the API includes paginated data"
-                    ),
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["type_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseTypeGetInput"),
     ), Capability.Read
 
 
@@ -989,7 +1000,9 @@ async def handle_linode_database_engine_get(
         return error_response(error or "engine_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_engine(engine_id)
+        return database_engine_to_response_dict(
+            await client.get_database_engine(engine_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Managed Databases engine {engine_id}", _call
@@ -1011,7 +1024,9 @@ async def handle_linode_database_type_get(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_type(type_id, page=page, page_size=page_size)
+        return database_type_to_response_dict(
+            await client.get_database_type(type_id, page=page, page_size=page_size)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Managed Databases type {type_id}", _call
@@ -1102,23 +1117,17 @@ def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def database_ssl_to_response_dict(ssl: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Managed Database SSL API dict to proto-canonical form."""
+    return {"ca_certificate": ssl.get("ca_certificate") or ""}
+
+
 def create_linode_database_mysql_instance_ssl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_instance_ssl_get tool."""
     return Tool(
         name="linode_database_mysql_instance_ssl_get",
         description="Gets a MySQL Managed Database SSL certificate.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-            },
-            "required": ["instance_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceSSLGetInput"),
     ), Capability.Read
 
 
@@ -1131,7 +1140,9 @@ async def handle_linode_database_mysql_instance_ssl_get(
         return error_response(error or "instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_mysql_instance_ssl(instance_id)
+        return database_ssl_to_response_dict(
+            await client.get_database_mysql_instance_ssl(instance_id)
+        )
 
     return await execute_tool(
         cfg,
@@ -1302,18 +1313,7 @@ def create_linode_database_postgresql_instance_ssl_get_tool() -> tuple[
     return Tool(
         name="linode_database_postgresql_instance_ssl_get",
         description="Gets a PostgreSQL Managed Database SSL certificate.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-            },
-            "required": ["instance_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceSSLGetInput"),
     ), Capability.Read
 
 
@@ -2091,7 +2091,9 @@ async def handle_linode_database_postgresql_instance_ssl_get(
         return error_response(error or "instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_postgresql_instance_ssl(instance_id)
+        return database_ssl_to_response_dict(
+            await client.get_database_postgresql_instance_ssl(instance_id)
+        )
 
     return await execute_tool(
         cfg,

@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -69,20 +70,17 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 		ClientConnThrottle: clientConnThrottle,
 	}
 
-	nodeBalancer, err := client.CreateNodeBalancer(ctx, req)
+	nodeBalancer, err := client.CreateNodeBalancerProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create NodeBalancer: %v", err)), nil
 	}
 
-	response := struct {
-		Message      string               `json:"message"`
-		NodeBalancer *linode.NodeBalancer `json:"nodebalancer"`
-	}{
-		Message:      fmt.Sprintf("NodeBalancer '%s' (ID: %d) created successfully in %s", nodeBalancer.Label, nodeBalancer.ID, nodeBalancer.Region),
-		NodeBalancer: nodeBalancer,
+	response := &linodev1.NodeBalancerWriteResponse{
+		Message:      fmt.Sprintf("NodeBalancer '%s' (ID: %d) created successfully in %s", nodeBalancer.GetLabel(), nodeBalancer.GetId(), nodeBalancer.GetRegion()),
+		Nodebalancer: nodeBalancer,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.
@@ -151,20 +149,17 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 		req.ClientConnThrottle = &clientConnThrottle
 	}
 
-	nodeBalancer, err := client.UpdateNodeBalancer(ctx, nodeBalancerID, req)
+	nodeBalancer, err := client.UpdateNodeBalancerProto(ctx, nodeBalancerID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
 
-	response := struct {
-		Message      string               `json:"message"`
-		NodeBalancer *linode.NodeBalancer `json:"nodebalancer"`
-	}{
+	response := &linodev1.NodeBalancerWriteResponse{
 		Message:      fmt.Sprintf("NodeBalancer %d modified successfully", nodeBalancerID),
-		NodeBalancer: nodeBalancer,
+		Nodebalancer: nodeBalancer,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.

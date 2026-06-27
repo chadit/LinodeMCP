@@ -8,6 +8,7 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -109,22 +110,7 @@ def create_linode_region_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_region_get",
         description="Gets details for a specific Linode region",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region_id": {
-                    "type": "string",
-                    "description": "Region ID to retrieve (for example, 'us-east')",
-                },
-            },
-            "required": ["region_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.RegionGetInput"),
     ), Capability.Read
 
 

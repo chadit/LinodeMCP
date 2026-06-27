@@ -19,12 +19,13 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-    from linodemcp.linode import RetryableClient
+    from linodemcp.linode import UDF, RetryableClient, StackScript
 
 
 def create_linode_stackscript_list_tool() -> tuple[Tool, Capability]:
@@ -126,28 +127,45 @@ async def handle_linode_stackscript_list(
     return await execute_tool(cfg, arguments, "retrieve StackScripts", _call)
 
 
+def udf_to_response_dict(udf: UDF) -> dict[str, Any]:
+    """Shape a StackScript user-defined field to proto-canonical form."""
+    return {
+        "label": udf.label,
+        "name": udf.name,
+        "example": udf.example,
+        "oneof": udf.oneof,
+        "default": udf.default,
+    }
+
+
+def stackscript_to_response_dict(stackscript: StackScript) -> dict[str, Any]:
+    """Shape a StackScript dataclass to proto-canonical form."""
+    return {
+        "username": stackscript.username,
+        "user_gravatar_id": stackscript.user_gravatar_id,
+        "label": stackscript.label,
+        "description": stackscript.description,
+        "images": stackscript.images,
+        "created": stackscript.created,
+        "updated": stackscript.updated,
+        "script": stackscript.script,
+        "user_defined_fields": [
+            udf_to_response_dict(udf) for udf in stackscript.user_defined_fields
+        ],
+        "id": stackscript.id,
+        "deployments_total": stackscript.deployments_total,
+        "deployments_active": stackscript.deployments_active,
+        "is_public": stackscript.is_public,
+        "mine": stackscript.mine,
+    }
+
+
 def create_linode_stackscript_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_stackscript_get tool."""
     return Tool(
         name="linode_stackscript_get",
         description="Gets details for a specific StackScript.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "stackscript_id": {
-                    "type": "integer",
-                    "description": "StackScript ID to retrieve (required)",
-                    "minimum": 1,
-                },
-            },
-            "required": ["stackscript_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.StackScriptGetInput"),
     ), Capability.Read
 
 
@@ -173,22 +191,9 @@ async def handle_linode_stackscript_get(
         return error_response("stackscript_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        stackscript = await client.get_stackscript(stackscript_id)
-        return {
-            "id": stackscript.id,
-            "label": stackscript.label,
-            "username": stackscript.username,
-            "description": truncate_string(
-                stackscript.description, DESCRIPTION_TRUNCATE_LIMIT
-            ),
-            "images": stackscript.images,
-            "is_public": stackscript.is_public,
-            "mine": stackscript.mine,
-            "deployments_total": stackscript.deployments_total,
-            "deployments_active": stackscript.deployments_active,
-            "created": stackscript.created,
-            "updated": stackscript.updated,
-        }
+        return stackscript_to_response_dict(
+            await client.get_stackscript(stackscript_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve StackScript {stackscript_id}", _call

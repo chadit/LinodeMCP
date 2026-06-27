@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -157,22 +158,17 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 		Tag:      tag,
 	}
 
-	record, err := client.CreateDomainRecord(ctx, domainID, &req)
+	record, err := client.CreateDomainRecordProto(ctx, domainID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create domain record: %v", err)), nil
 	}
 
-	response := struct {
-		Message  string               `json:"message"`
-		DomainID int                  `json:"domain_id"`
-		Record   *linode.DomainRecord `json:"record"`
-	}{
-		Message:  fmt.Sprintf("%s record (ID: %d) created successfully", record.Type, record.ID),
-		DomainID: domainID,
-		Record:   record,
+	response := &linodev1.DomainRecordWriteResponse{
+		Message: fmt.Sprintf("%s record (ID: %d) created successfully", record.GetType(), record.GetId()),
+		Record:  record,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeDomainRecordUpdateTool creates a tool for updating a domain record.
@@ -288,22 +284,17 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 		TTLSec:   ttlSec,
 	}
 
-	record, err := client.UpdateDomainRecord(ctx, domainID, recordID, &req)
+	record, err := client.UpdateDomainRecordProto(ctx, domainID, recordID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify record %d: %v", recordID, err)), nil
 	}
 
-	response := struct {
-		Message  string               `json:"message"`
-		DomainID int                  `json:"domain_id"`
-		Record   *linode.DomainRecord `json:"record"`
-	}{
-		Message:  fmt.Sprintf("Record %d modified successfully", recordID),
-		DomainID: domainID,
-		Record:   record,
+	response := &linodev1.DomainRecordWriteResponse{
+		Message: fmt.Sprintf("Record %d modified successfully", recordID),
+		Record:  record,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeDomainRecordDeleteTool creates a tool for deleting a domain record.

@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "linode/mcp/v1/longview.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// BackupsAddon is the backups add-on pricing nested in a type's Addons.
+message BackupsAddon {
+  Price price = 1;
+}
+
+// Addons groups the optional add-ons available for an instance type.
+message Addons {
+  BackupsAddon backups = 1;
+}
+
+// InstanceType mirrors a Linode instance type (plan). successor is nullable
+// (omitted when unset).
+message InstanceType {
+  string id = 1;
+  string label = 2;
+  string class = 3;
+  int32 disk = 4;
+  int32 memory = 5;
+  int32 vcpus = 6;
+  int32 gpus = 7;
+  int32 network_out = 8;
+  int32 transfer = 9;
+  Price price = 10;
+  Addons addons = 11;
+  optional string successor = 12;
+}
+
+// InstanceTypeGetInput is the input contract for linode_type_get.
+message InstanceTypeGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the instance type to retrieve (required).
+  string type_id = 2;
+}

@@ -9,6 +9,7 @@ from mcp.types import TextContent, Tool
 from linodemcp.linode import instance_to_response_dict
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -19,24 +20,7 @@ def create_linode_instance_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_get",
         description="Retrieves details of a single Linode instance by its ID",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "string",
-                    "description": (
-                        "The ID of the Linode instance to retrieve (required)"
-                    ),
-                },
-            },
-            "required": ["instance_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceGetInput"),
     ), Capability.Read
 
 

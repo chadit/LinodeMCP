@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -42,18 +43,10 @@ func NewLinodeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, f
 
 // NewLinodeTypeGetTool creates a tool for getting one Linode instance type.
 func NewLinodeTypeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_type_get",
-		mcp.WithDescription("Gets one Linode instance type (plan) by type_id."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			paramTypeID,
-			mcp.Required(),
-			mcp.Description("Linode type ID, for example g6-standard-2."),
-		),
+		"Gets one Linode instance type (plan) by type_id.",
+		toolschemas.Schema("linode.mcp.v1.InstanceTypeGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -74,12 +67,12 @@ func handleLinodeTypeGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instanceType, err := client.GetType(ctx, typeID)
+	instanceType, err := client.GetTypeProto(ctx, typeID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode type: %v", err)), nil
 	}
 
-	return MarshalToolResponse(instanceType)
+	return MarshalProtoToolResponse(instanceType)
 }
 
 func validateTypeID(typeID string) (string, string) {

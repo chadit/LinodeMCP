@@ -3,7 +3,7 @@
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
 	python-build python-install-dev python-test python-lint python-fmt python-clean python-run python-check \
-	betterleaks trivy actionlint
+	betterleaks trivy actionlint proto generate
 
 CONTAINER_ENGINE ?= docker
 GO_IMAGE := linodemcp:go
@@ -15,13 +15,32 @@ help:
 	@echo ""
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //' | awk -F': ' '{printf "  make %-22s %s\n", $$1, $$2}'
 
+# --- Proto codegen ---
+# Generated code is gitignored; `make proto` regenerates it from proto/ via buf.
+# Stamp-gated so build/test only regenerate when the proto sources change, which
+# keeps offline builds working once the code has been generated once.
+PROTO_SRCS := $(shell find proto -name '*.proto') buf.yaml buf.gen.yaml $(wildcard buf.lock)
+PROTO_STAMP := .make/proto-generated
+
+## proto: Generate Go + Python types and MCP schemas from proto/ (needs buf)
+proto: $(PROTO_STAMP)
+
+## generate: Alias for proto
+generate: proto
+
+$(PROTO_STAMP): $(PROTO_SRCS)
+	@command -v buf >/dev/null 2>&1 || { echo "buf is required: https://buf.build/docs/installation"; exit 1; }
+	buf generate
+	@mkdir -p $(dir $@)
+	@touch $@
+
 # --- Top-level targets ---
 
 ## build: Build all language binaries (Go + Python) into each language's bin/
-build: go-build python-build
+build: proto go-build python-build
 
 ## check: Run all linters and tests (go-check + python-check + tool-parity)
-check: go-check python-check tool-parity
+check: proto go-check python-check tool-parity
 
 ## tool-parity: Verify Go/Python tool-surface parity (capability, params, required)
 # Runs the Go dumper (go run) and imports the Python registry (needs the venv),
@@ -31,10 +50,10 @@ tool-parity:
 	@python/.venv/bin/python scripts/verify_tool_parity.py
 
 ## lint: Run all linters (go-lint, python-lint, betterleaks, trivy, actionlint)
-lint: go-lint python-lint betterleaks trivy actionlint
+lint: proto go-lint python-lint betterleaks trivy actionlint
 
 ## test: Run all tests (go-test + python-test)
-test: go-test python-test
+test: proto go-test python-test
 
 ## install-hooks: Install commit and push hooks from .pre-commit-config.yaml
 install-hooks:
@@ -174,3 +193,4 @@ docker-clean:
 
 ## clean: Clean all build artifacts and container images
 clean: go-clean python-clean docker-clean
+	-rm -rf .make go/internal/genpb python/src/linodemcp/genpb

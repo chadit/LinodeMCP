@@ -166,8 +166,8 @@ func TestLinodeNetworkingIPGetToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyAddress]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyAddress)
+	if !strings.Contains(string(tool.RawInputSchema), keyAddress) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyAddress)
 	}
 
 	if handler == nil {

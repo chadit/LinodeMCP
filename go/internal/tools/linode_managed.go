@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -103,32 +104,30 @@ func NewLinodeManagedServiceCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 // NewLinodeManagedLinodeSettingsGetTool creates a tool for retrieving one Linode's Managed settings.
 func NewLinodeManagedLinodeSettingsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_linode_settings_get",
 		"Gets Managed service settings for one Linode by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedLinodeSettingsIDParam, mcp.Required(),
-				mcp.Description("Linode ID whose Managed settings should be retrieved.")),
-		},
-		handleLinodeManagedLinodeSettingsGetRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedLinodeSettingsGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedLinodeSettingsGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
 func NewLinodeManagedContactGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_contact_get",
 		"Gets one Linode Managed contact by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedContactGetIDParam, mcp.Required(),
-				mcp.Description("Managed contact ID to retrieve.")),
-		},
-		handleLinodeManagedContactGetRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedContactGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedContactGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -267,16 +266,15 @@ func NewLinodeManagedServiceEnableTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 // NewLinodeManagedServiceGetTool creates a tool for retrieving one Managed service.
 func NewLinodeManagedServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_service_get",
 		"Gets one service monitored by Linode Managed by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(),
-				mcp.Description("Managed service monitor ID to retrieve.")),
-		},
-		handleLinodeManagedServiceGetRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedServiceGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedServiceGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -325,16 +323,15 @@ func NewLinodeManagedServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 
 // NewLinodeManagedIssueGetTool creates a tool for retrieving one Managed issue.
 func NewLinodeManagedIssueGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_issue_get",
 		"Gets one issue detected by Linode Managed service monitors.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedIssueGetIDParam, mcp.Required(),
-				mcp.Description("Managed issue ID to retrieve.")),
-		},
-		handleLinodeManagedIssueGetRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedIssueGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedIssueGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -387,9 +384,9 @@ func handleLinodeManagedLinodeSettingsGetRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	settings, getFailure := client.GetManagedLinodeSettings(ctx, linodeID)
+	settings, getFailure := client.GetManagedLinodeSettingsProto(ctx, linodeID)
 	if getFailure == nil {
-		return MarshalToolResponse(settings)
+		return MarshalProtoToolResponse(settings)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_linode_settings_get: " + getFailure.Error()), nil
@@ -430,9 +427,9 @@ func handleLinodeManagedContactGetRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	contact, getFailure := client.GetManagedContact(ctx, contactID)
+	contact, getFailure := client.GetManagedContactProto(ctx, contactID)
 	if getFailure == nil {
-		return MarshalToolResponse(contact)
+		return MarshalProtoToolResponse(contact)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_contact_get: " + getFailure.Error()), nil
@@ -786,9 +783,9 @@ func handleLinodeManagedServiceGetRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	service, getFailure := client.GetManagedService(ctx, serviceID)
+	service, getFailure := client.GetManagedServiceProto(ctx, serviceID)
 	if getFailure == nil {
-		return MarshalToolResponse(service)
+		return MarshalProtoToolResponse(service)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_service_get: " + getFailure.Error()), nil
@@ -1092,9 +1089,9 @@ func handleLinodeManagedIssueGetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	issue, getFailure := client.GetManagedIssue(ctx, issueID)
+	issue, getFailure := client.GetManagedIssueProto(ctx, issueID)
 	if getFailure == nil {
-		return MarshalToolResponse(issue)
+		return MarshalProtoToolResponse(issue)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_issue_get: " + getFailure.Error()), nil

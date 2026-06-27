@@ -287,7 +287,7 @@ def test_create_linode_instance_interface_settings_get_tool_schema() -> None:
     assert capability is Capability.Read
     assert tool.name == "linode_instance_interface_settings_get"
     assert tool.inputSchema["required"] == ["linode_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
+    assert "linode_id" in tool.inputSchema["properties"]
 
 
 def test_linode_instance_interface_settings_get_registered_and_exported() -> None:

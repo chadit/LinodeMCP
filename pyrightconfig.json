@@ -1,5 +1,6 @@
 {
   "include": ["python/src/linodemcp", "python/tests"],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.*", "**/genpb"],
   "extraPaths": ["python/src"],
   "venvPath": "python",
   "venv": ".venv",

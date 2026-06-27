@@ -901,14 +901,11 @@ async def test_handle_linode_images_sharegroups_token_get_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {
-        "message": "Image share group token retrieved",
-        "token": {
-            "id": "sharegroup-record-1",
-            "token_uuid": token_uuid,
-            "created": "2026-01-01T00:00:00",
-        },
-    }
+    assert payload["token_uuid"] == token_uuid
+    assert payload["created"] == "2026-01-01T00:00:00"
+    assert payload["status"] == ""
+    assert "id" not in payload
+    assert "updated" not in payload
     mock_linode_client.get_image_sharegroup_token.assert_awaited_once_with(token_uuid)
 
 
@@ -1054,13 +1051,10 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_get_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {
-        "message": "Image share group retrieved",
-        "sharegroup": {
-            "uuid": "22222222-2222-4222-8222-222222222222",
-            "label": "shared-images",
-        },
-    }
+    assert payload["uuid"] == "22222222-2222-4222-8222-222222222222"
+    assert payload["label"] == "shared-images"
+    assert payload["id"] == 0
+    assert "description" not in payload
     mock_linode_client.get_image_sharegroup_by_token.assert_awaited_once_with(
         token_uuid
     )
@@ -1623,7 +1617,7 @@ def test_create_linode_images_sharegroup_member_token_get_tool_schema() -> None:
     sharegroup_schema = tool.inputSchema["properties"]["sharegroup_id"]
     token_schema = tool.inputSchema["properties"]["token_uuid"]
     assert sharegroup_schema["type"] == "integer"
-    assert "[0-9a-fA-F]{8}" in token_schema["pattern"]
+    assert token_schema["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -1646,12 +1640,10 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group member token retrieved",
-        "token": {
-            "id": "member-token-record-1",
-            "token_uuid": token_uuid,
-            "created": "2026-01-01T00:00:00",
-        },
+        "token_uuid": token_uuid,
+        "status": "",
+        "label": "",
+        "created": "2026-01-01T00:00:00",
     }
     mock_linode_client.get_image_sharegroup_member_token.assert_awaited_once_with(
         str(sharegroup_id), token_uuid

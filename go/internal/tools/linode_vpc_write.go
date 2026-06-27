@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -98,20 +99,17 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	vpc, err := client.CreateVPC(ctx, req)
+	vpc, err := client.CreateVPCProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create VPC: %v", err)), nil
 	}
 
-	response := struct {
-		Message string      `json:"message"`
-		VPC     *linode.VPC `json:"vpc"`
-	}{
-		Message: fmt.Sprintf("VPC '%s' (ID: %d) created in %s", vpc.Label, vpc.ID, vpc.Region),
-		VPC:     vpc,
+	response := &linodev1.VpcWriteResponse{
+		Message: fmt.Sprintf("VPC '%s' (ID: %d) created in %s", vpc.GetLabel(), vpc.GetId(), vpc.GetRegion()),
+		Vpc:     vpc,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVPCUpdateTool creates a tool for updating an existing VPC.
@@ -177,20 +175,17 @@ func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	vpc, err := client.UpdateVPC(ctx, vpcID, req)
+	vpc, err := client.UpdateVPCProto(ctx, vpcID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify VPC %d: %v", vpcID, err)), nil
 	}
 
-	response := struct {
-		Message string      `json:"message"`
-		VPC     *linode.VPC `json:"vpc"`
-	}{
+	response := &linodev1.VpcWriteResponse{
 		Message: fmt.Sprintf("VPC %d modified successfully", vpcID),
-		VPC:     vpc,
+		Vpc:     vpc,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVPCDeleteTool creates a tool for deleting a VPC.
@@ -310,20 +305,17 @@ func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	subnet, err := client.CreateVPCSubnet(ctx, vpcID, req)
+	subnet, err := client.CreateVPCSubnetProto(ctx, vpcID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create subnet in VPC %d: %v", vpcID, err)), nil
 	}
 
-	response := struct {
-		Message string            `json:"message"`
-		Subnet  *linode.VPCSubnet `json:"subnet"`
-	}{
-		Message: fmt.Sprintf("Subnet '%s' (ID: %d) created in VPC %d", subnet.Label, subnet.ID, vpcID),
+	response := &linodev1.VpcSubnetWriteResponse{
+		Message: fmt.Sprintf("Subnet '%s' (ID: %d) created in VPC %d", subnet.GetLabel(), subnet.GetId(), vpcID),
 		Subnet:  subnet,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVPCSubnetUpdateTool creates a tool for updating a subnet within a VPC.
@@ -399,20 +391,17 @@ func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	subnet, err := client.UpdateVPCSubnet(ctx, vpcID, subnetID, req)
+	subnet, err := client.UpdateVPCSubnetProto(ctx, vpcID, subnetID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify subnet %d in VPC %d: %v", subnetID, vpcID, err)), nil
 	}
 
-	response := struct {
-		Message string            `json:"message"`
-		Subnet  *linode.VPCSubnet `json:"subnet"`
-	}{
+	response := &linodev1.VpcSubnetWriteResponse{
 		Message: fmt.Sprintf("Subnet %d in VPC %d modified successfully", subnetID, vpcID),
 		Subnet:  subnet,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVPCSubnetDeleteTool creates a tool for deleting a subnet from a VPC.

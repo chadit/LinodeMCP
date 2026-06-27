@@ -6,10 +6,17 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-    from linodemcp.linode import RetryableClient
+    from linodemcp.linode import (
+        Firewall,
+        FirewallAddresses,
+        FirewallRule,
+        FirewallRules,
+        RetryableClient,
+    )
 
 
 def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
@@ -41,22 +48,54 @@ def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def _firewall_addresses_to_response_dict(
+    addresses: FirewallAddresses,
+) -> dict[str, Any]:
+    """Shape firewall rule addresses to proto-canonical form."""
+    return {"ipv4": addresses.ipv4 or [], "ipv6": addresses.ipv6 or []}
+
+
+def _firewall_rule_to_response_dict(rule: FirewallRule) -> dict[str, Any]:
+    """Shape one firewall rule to proto-canonical form."""
+    return {
+        "action": rule.action,
+        "protocol": rule.protocol,
+        "ports": rule.ports,
+        "addresses": _firewall_addresses_to_response_dict(rule.addresses),
+        "label": rule.label,
+        "description": rule.description,
+    }
+
+
+def _firewall_rules_to_response_dict(rules: FirewallRules) -> dict[str, Any]:
+    """Shape a firewall ruleset to proto-canonical form."""
+    return {
+        "inbound": [_firewall_rule_to_response_dict(rule) for rule in rules.inbound],
+        "inbound_policy": rules.inbound_policy,
+        "outbound": [_firewall_rule_to_response_dict(rule) for rule in rules.outbound],
+        "outbound_policy": rules.outbound_policy,
+    }
+
+
+def firewall_to_response_dict(firewall: Firewall) -> dict[str, Any]:
+    """Shape a Firewall dataclass to proto-canonical form (full rules, unwrapped)."""
+    return {
+        "id": firewall.id,
+        "label": firewall.label,
+        "status": firewall.status,
+        "rules": _firewall_rules_to_response_dict(firewall.rules),
+        "tags": firewall.tags or [],
+        "created": firewall.created,
+        "updated": firewall.updated,
+    }
+
+
 def create_linode_firewall_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_get tool."""
     return Tool(
         name="linode_firewall_get",
         description="Gets a Cloud Firewall by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": "The ID of the firewall to retrieve (required)",
-                },
-            },
-            "required": ["firewall_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallGetInput"),
     ), Capability.Read
 
 
@@ -69,19 +108,7 @@ async def handle_linode_firewall_get(
         return error_response("firewall_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        firewall = await client.get_firewall(int(firewall_id))
-        return {
-            "firewall": {
-                "id": firewall.id,
-                "label": firewall.label,
-                "status": firewall.status,
-                "rules_inbound_count": len(firewall.rules.inbound),
-                "rules_outbound_count": len(firewall.rules.outbound),
-                "created": firewall.created,
-                "updated": firewall.updated,
-                "tags": firewall.tags,
-            }
-        }
+        return firewall_to_response_dict(await client.get_firewall(int(firewall_id)))
 
     return await execute_tool(cfg, arguments, "retrieve firewall", _call)
 
@@ -91,19 +118,7 @@ def create_linode_firewall_rules_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_rules_get",
         description="Gets the rules for a Cloud Firewall by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": (
-                        "The ID of the firewall to retrieve rules for (required)"
-                    ),
-                },
-            },
-            "required": ["firewall_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallRulesGetInput"),
     ), Capability.Read
 
 
@@ -116,39 +131,9 @@ async def handle_linode_firewall_rules_get(
         return error_response("firewall_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        rules = await client.get_firewall_rules(int(firewall_id))
-        return {
-            "inbound": [
-                {
-                    "action": r.action,
-                    "protocol": r.protocol,
-                    "ports": r.ports,
-                    "addresses": {
-                        "ipv4": r.addresses.ipv4,
-                        "ipv6": r.addresses.ipv6,
-                    },
-                    "label": r.label,
-                    "description": r.description,
-                }
-                for r in rules.inbound
-            ],
-            "inbound_policy": rules.inbound_policy,
-            "outbound": [
-                {
-                    "action": r.action,
-                    "protocol": r.protocol,
-                    "ports": r.ports,
-                    "addresses": {
-                        "ipv4": r.addresses.ipv4,
-                        "ipv6": r.addresses.ipv6,
-                    },
-                    "label": r.label,
-                    "description": r.description,
-                }
-                for r in rules.outbound
-            ],
-            "outbound_policy": rules.outbound_policy,
-        }
+        return _firewall_rules_to_response_dict(
+            await client.get_firewall_rules(int(firewall_id))
+        )
 
     return await execute_tool(cfg, arguments, "retrieve firewall rules", _call)
 
@@ -287,26 +272,39 @@ def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def firewall_device_entity_to_response_dict(entity: dict[str, Any]) -> dict[str, Any]:
+    """Shape a firewall device entity to proto-canonical form.
+
+    parent_entity is a nullable self-reference, omitted when null.
+    """
+    result: dict[str, Any] = {
+        "id": entity.get("id", 0),
+        "label": entity.get("label", ""),
+        "type": entity.get("type", ""),
+        "url": entity.get("url", ""),
+    }
+    parent = entity.get("parent_entity")
+    if parent is not None:
+        result["parent_entity"] = firewall_device_entity_to_response_dict(parent)
+    return result
+
+
+def firewall_device_to_response_dict(device: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw firewall device API dict to proto-canonical form."""
+    return {
+        "id": device.get("id", 0),
+        "entity": firewall_device_entity_to_response_dict(device.get("entity") or {}),
+        "created": device.get("created", ""),
+        "updated": device.get("updated", ""),
+    }
+
+
 def create_linode_firewall_device_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_device_get tool."""
     return Tool(
         name="linode_firewall_device_get",
         description="Gets a specific device attached to a Cloud Firewall by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": ("The ID of the firewall (required)"),
-                },
-                "device_id": {
-                    "type": "integer",
-                    "description": ("The ID of the device (required)"),
-                },
-            },
-            "required": ["firewall_id", "device_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallDeviceGetInput"),
     ), Capability.Read
 
 
@@ -362,7 +360,9 @@ async def handle_linode_firewall_device_get(
     dev_id = int(device_id)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_firewall_device(fw_id, dev_id)
+        return firewall_device_to_response_dict(
+            await client.get_firewall_device(fw_id, dev_id)
+        )
 
     return await execute_tool(cfg, arguments, "retrieve firewall device", _call)
 

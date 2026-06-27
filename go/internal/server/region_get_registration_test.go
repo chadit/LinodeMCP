@@ -26,15 +26,15 @@ func TestRegionGetToolRegisteredAsRead(t *testing.T) {
 			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 		}
 
-		if _, ok := info.InputSchema.Properties["region_id"]; !ok {
+		if _, ok := toolSchemaProps(t, &info)["region_id"]; !ok {
 			t.Errorf("info.InputSchema.Properties missing key %v", "region_id")
 		}
 
-		if !slices.Contains(info.InputSchema.Required, "region_id") {
+		if !slices.Contains(toolSchemaRequired(t, &info), "region_id") {
 			t.Errorf("info.InputSchema.Required does not contain %v", "region_id")
 		}
 
-		if _, ok := info.InputSchema.Properties["confirm"]; ok {
+		if _, ok := toolSchemaProps(t, &info)["confirm"]; ok {
 			t.Errorf("info.InputSchema.Properties has unexpected key %v", "confirm")
 		}
 

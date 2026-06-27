@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -119,33 +120,25 @@ async def handle_linode_object_storage_bucket_by_region_list(
     )
 
 
+def object_storage_bucket_to_response_dict(bucket: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Object Storage bucket API dict to proto-canonical form."""
+    return {
+        "label": bucket.get("label", ""),
+        "region": bucket.get("region", ""),
+        "hostname": bucket.get("hostname", ""),
+        "created": bucket.get("created", ""),
+        "objects": bucket.get("objects", 0),
+        "size": bucket.get("size", 0),
+        "cluster": bucket.get("cluster", ""),
+    }
+
+
 def create_linode_object_storage_bucket_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_get tool."""
     return Tool(
         name="linode_object_storage_bucket_get",
         description="Gets details about a specific Object Storage bucket.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": (
-                        "The region/cluster ID where the bucket exists (required)"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The label/name of the bucket (required)",
-                },
-            },
-            "required": ["region", "label"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketGetInput"),
     ), Capability.Read
 
 
@@ -166,7 +159,9 @@ async def handle_linode_object_storage_bucket_get(
         return _error_response("label must be a valid bucket label")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_storage_bucket(region, label)
+        return object_storage_bucket_to_response_dict(
+            await client.get_object_storage_bucket(region, label)
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage bucket", _call)
 
@@ -418,27 +413,51 @@ async def handle_linode_object_storage_key_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage keys", _call)
 
 
+def _obj_key_bucket_access_to_dict(access: dict[str, Any]) -> dict[str, Any]:
+    """Shape a per-bucket access grant to proto-canonical form."""
+    return {
+        "bucket_name": access.get("bucket_name", ""),
+        "region": access.get("region", ""),
+        "permissions": access.get("permissions", ""),
+    }
+
+
+def _obj_key_region_to_dict(region: dict[str, Any]) -> dict[str, Any]:
+    """Shape a per-region key entry to proto-canonical form."""
+    return {
+        "id": region.get("id", ""),
+        "s3_endpoint": region.get("s3_endpoint", ""),
+    }
+
+
+def object_storage_key_to_response_dict(key: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Object Storage key API dict to proto-canonical form.
+
+    bucket_access and regions are always lists; secret_key coerces null to "".
+    """
+    return {
+        "label": key.get("label", ""),
+        "access_key": key.get("access_key", ""),
+        "secret_key": key.get("secret_key") or "",
+        "bucket_access": [
+            _obj_key_bucket_access_to_dict(a)
+            for a in cast("list[dict[str, Any]]", key.get("bucket_access") or [])
+        ],
+        "regions": [
+            _obj_key_region_to_dict(r)
+            for r in cast("list[dict[str, Any]]", key.get("regions") or [])
+        ],
+        "id": key.get("id", 0),
+        "limited": key.get("limited", False),
+    }
+
+
 def create_linode_object_storage_key_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_get tool."""
     return Tool(
         name="linode_object_storage_key_get",
         description="Gets details about a specific Object Storage access key by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "key_id": {
-                    "type": "integer",
-                    "description": "The ID of the access key to retrieve (required)",
-                },
-            },
-            "required": ["key_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyGetInput"),
     ), Capability.Read
 
 
@@ -452,7 +471,9 @@ async def handle_linode_object_storage_key_get(
         return _error_response("key_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_storage_key(int(key_id))
+        return object_storage_key_to_response_dict(
+            await client.get_object_storage_key(int(key_id))
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage key", _call)
 
@@ -620,6 +641,16 @@ async def handle_linode_object_storage_quota_usage_get(
     )
 
 
+def object_storage_bucket_access_to_response_dict(
+    access: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a raw bucket access API dict to proto-canonical form."""
+    return {
+        "acl": access.get("acl") or "",
+        "cors_enabled": bool(access.get("cors_enabled")),
+    }
+
+
 def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_access_get tool."""
     return Tool(
@@ -627,28 +658,7 @@ def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capabil
         description=(
             "Gets the ACL and CORS settings for a specific Object Storage bucket."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": (
-                        "The region/cluster ID where the bucket exists (required)"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The label/name of the bucket (required)",
-                },
-            },
-            "required": ["region", "label"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketAccessGetInput"),
     ), Capability.Read
 
 
@@ -665,7 +675,9 @@ async def handle_linode_object_storage_bucket_access_get(
         return _error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_storage_bucket_access(region, label)
+        return object_storage_bucket_access_to_response_dict(
+            await client.get_object_storage_bucket_access(region, label)
+        )
 
     return await execute_tool(cfg, arguments, "retrieve bucket access settings", _call)
 

@@ -6,10 +6,33 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+def nodebalancer_to_response_dict(nodebalancer: Any) -> dict[str, Any]:
+    """Shape a NodeBalancer dataclass to proto-canonical NodeBalancer form."""
+    transfer = nodebalancer.transfer
+    return {
+        "id": nodebalancer.id,
+        "label": nodebalancer.label,
+        "region": nodebalancer.region,
+        "hostname": nodebalancer.hostname,
+        "ipv4": nodebalancer.ipv4,
+        "ipv6": nodebalancer.ipv6,
+        "client_conn_throttle": nodebalancer.client_conn_throttle,
+        "transfer": {
+            "in": transfer.in_,
+            "out": transfer.out,
+            "total": transfer.total,
+        },
+        "tags": nodebalancer.tags or [],
+        "created": nodebalancer.created,
+        "updated": nodebalancer.updated,
+    }
 
 
 def create_linode_nodebalancer_type_list_tool() -> tuple[Tool, Capability]:
@@ -136,17 +159,7 @@ def create_linode_nodebalancer_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets detailed information about a specific NodeBalancer by its ID."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "description": "The ID of the NodeBalancer to retrieve (required)",
-                },
-            },
-            "required": ["nodebalancer_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerGetInput"),
     ), Capability.Read
 
 
@@ -183,25 +196,35 @@ async def handle_linode_nodebalancer_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         nb = await client.get_nodebalancer(nodebalancer_id)
-        return {
-            "id": nb.id,
-            "label": nb.label,
-            "region": nb.region,
-            "hostname": nb.hostname,
-            "ipv4": nb.ipv4,
-            "ipv6": nb.ipv6,
-            "client_conn_throttle": nb.client_conn_throttle,
-            "transfer": {
-                "in": nb.transfer.in_,
-                "out": nb.transfer.out,
-                "total": nb.transfer.total,
-            },
-            "tags": nb.tags,
-            "created": nb.created,
-            "updated": nb.updated,
-        }
+        return nodebalancer_to_response_dict(nb)
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer", _call)
+
+
+def nodebalancer_vpc_config_to_response_dict(
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a raw NodeBalancer VPC config API dict to proto-canonical form.
+
+    vpc_id, ipv4_range_id, ipv6_range_id, ipv4_range_auto_assign are nullable and
+    omitted when null, matching the proto optional fields.
+    """
+    body: dict[str, Any] = {
+        "id": config.get("id", 0),
+        "subnet_id": config.get("subnet_id", 0),
+        "ipv4_range": config.get("ipv4_range", ""),
+        "ipv6_range": config.get("ipv6_range", ""),
+        "nodebalancer_id": config.get("nodebalancer_id", 0),
+    }
+    if config.get("vpc_id") is not None:
+        body["vpc_id"] = config["vpc_id"]
+    if config.get("ipv4_range_id") is not None:
+        body["ipv4_range_id"] = config["ipv4_range_id"]
+    if config.get("ipv6_range_id") is not None:
+        body["ipv6_range_id"] = config["ipv6_range_id"]
+    if config.get("ipv4_range_auto_assign") is not None:
+        body["ipv4_range_auto_assign"] = config["ipv4_range_auto_assign"]
+    return body
 
 
 def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
@@ -209,25 +232,7 @@ def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_vpc_config_get",
         description="Gets a VPC configuration for a NodeBalancer.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "vpc_config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the NodeBalancer VPC configuration (required)"
-                    ),
-                },
-            },
-            "required": ["nodebalancer_id", "vpc_config_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerVPCConfigGetInput"),
     ), Capability.Read
 
 
@@ -299,7 +304,9 @@ async def handle_linode_nodebalancer_vpc_config_get(
         return error_response("vpc_config_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_nodebalancer_vpc_config(nodebalancer_id, vpc_config_id)
+        return nodebalancer_vpc_config_to_response_dict(
+            await client.get_nodebalancer_vpc_config(nodebalancer_id, vpc_config_id)
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve NodeBalancer VPC configuration", _call
@@ -450,28 +457,39 @@ async def handle_linode_nodebalancer_config_list(
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer configs", _call)
 
 
+def nodebalancer_config_to_response_dict(config: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw NodeBalancer config API dict to proto-canonical form."""
+    nodes_status: dict[str, Any] = config.get("nodes_status") or {}
+    return {
+        "id": config.get("id", 0),
+        "port": config.get("port", 0),
+        "protocol": config.get("protocol", ""),
+        "algorithm": config.get("algorithm", ""),
+        "stickiness": config.get("stickiness", ""),
+        "check": config.get("check", ""),
+        "check_interval": config.get("check_interval", 0),
+        "check_timeout": config.get("check_timeout", 0),
+        "check_attempts": config.get("check_attempts", 0),
+        "check_path": config.get("check_path", ""),
+        "check_body": config.get("check_body", ""),
+        "check_passive": config.get("check_passive", False),
+        "cipher_suite": config.get("cipher_suite", ""),
+        "ssl_commonname": config.get("ssl_commonname", ""),
+        "ssl_fingerprint": config.get("ssl_fingerprint", ""),
+        "nodebalancer_id": config.get("nodebalancer_id", 0),
+        "nodes_status": {
+            "up": nodes_status.get("up", 0),
+            "down": nodes_status.get("down", 0),
+        },
+    }
+
+
 def create_linode_nodebalancer_config_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_config_get tool."""
     return Tool(
         name="linode_nodebalancer_config_get",
         description="Gets a specific NodeBalancer config.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer config (required)",
-                },
-            },
-            "required": ["nodebalancer_id", "config_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigGetInput"),
     ), Capability.Read
 
 
@@ -488,7 +506,9 @@ async def handle_linode_nodebalancer_config_get(
         return error_response("config_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_nodebalancer_config(nodebalancer_id, config_id)
+        return nodebalancer_config_to_response_dict(
+            await client.get_nodebalancer_config(nodebalancer_id, config_id)
+        )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer config", _call)
 
@@ -557,6 +577,20 @@ async def handle_linode_nodebalancer_config_node_list(
     )
 
 
+def nodebalancer_config_node_to_response_dict(node: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw NodeBalancer config node API dict to proto-canonical form."""
+    return {
+        "id": node.get("id", 0),
+        "address": node.get("address", ""),
+        "label": node.get("label", ""),
+        "status": node.get("status", ""),
+        "weight": node.get("weight", 0),
+        "mode": node.get("mode", ""),
+        "nodebalancer_id": node.get("nodebalancer_id", 0),
+        "config_id": node.get("config_id", 0),
+    }
+
+
 def create_linode_nodebalancer_config_node_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_config_node_get tool."""
     return Tool(
@@ -564,28 +598,7 @@ def create_linode_nodebalancer_config_node_get_tool() -> tuple[Tool, Capability]
         description=(
             "Gets detailed information about a specific node in a NodeBalancer config."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer config (required)",
-                },
-                "node_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the node (required)",
-                },
-            },
-            "required": ["nodebalancer_id", "config_id", "node_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeGetInput"),
     ), Capability.Read
 
 
@@ -606,8 +619,10 @@ async def handle_linode_nodebalancer_config_node_get(
         return error_response("node_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_nodebalancer_config_node(
-            nodebalancer_id, config_id, node_id
+        return nodebalancer_config_node_to_response_dict(
+            await client.get_nodebalancer_config_node(
+                nodebalancer_id, config_id, node_id
+            )
         )
 
     return await execute_tool(

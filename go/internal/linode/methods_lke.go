@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -55,6 +57,70 @@ func (c *Client) httpGetLKECluster(ctx context.Context, clusterID int) (*LKEClus
 	}
 
 	return &cluster, nil
+}
+
+// httpGetLKEClusterProto retrieves an LKE cluster as a proto message.
+func (c *Client) httpGetLKEClusterProto(ctx context.Context, clusterID int) (*linodev1.LKECluster, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d", clusterID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKECluster", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	cluster := &linodev1.LKECluster{}
+	if err := c.handleProtoResponse(resp, cluster); err != nil {
+		return nil, err
+	}
+
+	return cluster, nil
+}
+
+// httpCreateLKEClusterProto creates an LKE cluster as a proto message.
+func (c *Client) httpCreateLKEClusterProto(ctx context.Context, req *CreateLKEClusterRequest) (*linodev1.LKECluster, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointLKEClusters, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateLKECluster", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	cluster := &linodev1.LKECluster{}
+	if err := c.handleProtoResponse(resp, cluster); err != nil {
+		return nil, err
+	}
+
+	return cluster, nil
+}
+
+// httpUpdateLKEClusterProto updates an LKE cluster as a proto message.
+func (c *Client) httpUpdateLKEClusterProto(ctx context.Context, clusterID int, req UpdateLKEClusterRequest) (*linodev1.LKECluster, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d", clusterID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateLKECluster", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	cluster := &linodev1.LKECluster{}
+	if err := c.handleProtoResponse(resp, cluster); err != nil {
+		return nil, err
+	}
+
+	return cluster, nil
 }
 
 // CreateLKECluster creates a new LKE cluster.
@@ -195,6 +261,28 @@ func (c *Client) httpGetLKENodePool(ctx context.Context, clusterID, poolID int) 
 	return &pool, nil
 }
 
+// httpGetLKENodePoolProto retrieves one LKE node pool as a proto message.
+func (c *Client) httpGetLKENodePoolProto(ctx context.Context, clusterID, poolID int) (*linodev1.LKENodePool, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools/%d", clusterID, poolID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKENodePool", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	pool := &linodev1.LKENodePool{}
+	if err := c.handleProtoResponse(resp, pool); err != nil {
+		return nil, err
+	}
+
+	return pool, nil
+}
+
 // CreateLKENodePool creates a new node pool for an LKE cluster.
 func (c *Client) httpCreateLKENodePool(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -295,6 +383,28 @@ func (c *Client) httpGetLKENode(ctx context.Context, clusterID int, nodeID strin
 	return &node, nil
 }
 
+// httpGetLKENodeProto retrieves one LKE cluster node as a proto message.
+func (c *Client) httpGetLKENodeProto(ctx context.Context, clusterID int, nodeID string) (*linodev1.LKENode, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/nodes/%s", clusterID, url.PathEscape(nodeID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKENode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	node := &linodev1.LKENode{}
+	if err := c.handleProtoResponse(resp, node); err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
 // DeleteLKENode deletes a specific node from an LKE cluster.
 func (c *Client) httpDeleteLKENode(ctx context.Context, clusterID int, nodeID string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -351,6 +461,29 @@ func (c *Client) httpGetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEK
 	return &kubeconfig, nil
 }
 
+// httpGetLKEKubeconfigProto retrieves an LKE cluster kubeconfig as a proto
+// message.
+func (c *Client) httpGetLKEKubeconfigProto(ctx context.Context, clusterID int) (*linodev1.LKEKubeconfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/kubeconfig", clusterID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKEKubeconfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	kubeconfig := &linodev1.LKEKubeconfig{}
+	if err := c.handleProtoResponse(resp, kubeconfig); err != nil {
+		return nil, err
+	}
+
+	return kubeconfig, nil
+}
+
 // DeleteLKEKubeconfig deletes and regenerates the kubeconfig for an LKE cluster.
 func (c *Client) httpDeleteLKEKubeconfig(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -388,6 +521,28 @@ func (c *Client) httpGetLKEDashboard(ctx context.Context, clusterID int) (*LKEDa
 	}
 
 	return &dashboard, nil
+}
+
+// httpGetLKEDashboardProto retrieves the LKE dashboard URL as a proto message.
+func (c *Client) httpGetLKEDashboardProto(ctx context.Context, clusterID int) (*linodev1.LKEDashboard, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/dashboard", clusterID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKEDashboard", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	dashboard := &linodev1.LKEDashboard{}
+	if err := c.handleProtoResponse(resp, dashboard); err != nil {
+		return nil, err
+	}
+
+	return dashboard, nil
 }
 
 // ListLKEAPIEndpoints retrieves the API endpoints for an LKE cluster.
@@ -534,6 +689,28 @@ func (c *Client) httpGetLKEVersion(ctx context.Context, versionID string) (*LKEV
 	return &version, nil
 }
 
+// httpGetLKEVersionProto retrieves one LKE Kubernetes version as a proto message.
+func (c *Client) httpGetLKEVersionProto(ctx context.Context, versionID string) (*linodev1.LKEVersion, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("%s/%s", endpointLKEVersions, url.PathEscape(versionID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKEVersion", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	version := &linodev1.LKEVersion{}
+	if err := c.handleProtoResponse(resp, version); err != nil {
+		return nil, err
+	}
+
+	return version, nil
+}
+
 // ListLKETypes retrieves all available node types for LKE clusters.
 func (c *Client) httpListLKETypes(ctx context.Context) ([]LKEType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -598,4 +775,27 @@ func (c *Client) httpGetLKETierVersion(ctx context.Context, tierID, versionID st
 	}
 
 	return &version, nil
+}
+
+// httpGetLKETierVersionProto retrieves one LKE tier Kubernetes version as a proto
+// message.
+func (c *Client) httpGetLKETierVersionProto(ctx context.Context, tierID, versionID string) (*linodev1.LKETierVersion, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("%s/%s/versions/%s", endpointLKETierVersions, url.PathEscape(tierID), url.PathEscape(versionID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKETierVersion", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	version := &linodev1.LKETierVersion{}
+	if err := c.handleProtoResponse(resp, version); err != nil {
+		return nil, err
+	}
+
+	return version, nil
 }

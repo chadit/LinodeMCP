@@ -126,9 +126,16 @@ ignore_missing_imports = true
 module = "yaml"
 ignore_missing_imports = true
 
+# Generated protobuf modules: strict typing does not apply to generated code.
+[[tool.mypy.overrides]]
+module = "linodemcp.genpb.*"
+ignore_errors = true
+
 [tool.ruff]
 target-version = "py313"
 line-length = 88
+# Generated protobuf code is excluded from linting.
+extend-exclude = ["src/linodemcp/genpb"]
 
 [tool.ruff.lint]
 select = [

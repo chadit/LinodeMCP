@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const endpointTags = "/tags"
@@ -70,6 +72,26 @@ func (c *Client) httpCreateTag(ctx context.Context, req *CreateTagRequest) (*Tag
 	}
 
 	return &tag, nil
+}
+
+// httpCreateTagProto creates a tag and decodes the response as a proto message.
+func (c *Client) httpCreateTagProto(ctx context.Context, req *CreateTagRequest) (*linodev1.Tag, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointTags, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateTag", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	tag := &linodev1.Tag{}
+	if err := c.handleProtoResponse(resp, tag); err != nil {
+		return nil, err
+	}
+
+	return tag, nil
 }
 
 // httpDeleteTag deletes the supplied tag label from all objects on the account.

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -115,6 +117,28 @@ func (c *Client) httpGetInstanceBackup(ctx context.Context, linodeID, backupID i
 	}
 
 	return &backup, nil
+}
+
+// httpGetInstanceBackupProto retrieves one instance backup as a proto message.
+func (c *Client) httpGetInstanceBackupProto(ctx context.Context, linodeID, backupID int) (*linodev1.InstanceBackup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/backups/%d", linodeID, backupID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceBackup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	backup := &linodev1.InstanceBackup{}
+	if err := c.handleProtoResponse(resp, backup); err != nil {
+		return nil, err
+	}
+
+	return backup, nil
 }
 
 // CreateInstanceBackup creates a manual snapshot for a Linode instance.
@@ -394,6 +418,34 @@ func (c *Client) httpGetInstanceConfigInterface(ctx context.Context, linodeID, c
 	return &configInterface, nil
 }
 
+// httpGetInstanceConfigInterfaceProto retrieves one config interface as a proto
+// message.
+func (c *Client) httpGetInstanceConfigInterfaceProto(ctx context.Context, linodeID, configID, interfaceID int) (*linodev1.ConfigInterfaceResponse, error) {
+	if err := validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces/" + encodedInterfaceID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	configInterface := &linodev1.ConfigInterfaceResponse{}
+	if err := c.handleProtoResponse(resp, configInterface); err != nil {
+		return nil, err
+	}
+
+	return configInterface, nil
+}
+
 // UpdateInstanceConfigInterface updates a network interface on a configuration profile.
 func (c *Client) httpUpdateInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int, req *UpdateConfigInterfaceRequest) (*ConfigInterfaceResponse, error) {
 	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrUpdateConfigInterfaceRequestRequired); err != nil {
@@ -472,6 +524,34 @@ func (c *Client) httpGetInstanceInterfaceSettings(ctx context.Context, linodeID 
 	}
 
 	return &settings, nil
+}
+
+// httpGetInstanceInterfaceSettingsProto retrieves a Linode's interface settings
+// as a proto message.
+func (c *Client) httpGetInstanceInterfaceSettingsProto(ctx context.Context, linodeID int) (*linodev1.InstanceInterfaceSettings, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/settings", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceInterfaceSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	settings := &linodev1.InstanceInterfaceSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
 }
 
 // UpdateInstanceInterfaceSettings updates interface settings for a Linode instance.
@@ -1047,6 +1127,28 @@ func (c *Client) httpGetInstanceDisk(ctx context.Context, linodeID, diskID int) 
 	return &disk, nil
 }
 
+// httpGetInstanceDiskProto retrieves one instance disk as a proto message.
+func (c *Client) httpGetInstanceDiskProto(ctx context.Context, linodeID, diskID int) (*linodev1.InstanceDisk, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/disks/%d", linodeID, diskID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceDisk", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	disk := &linodev1.InstanceDisk{}
+	if err := c.handleProtoResponse(resp, disk); err != nil {
+		return nil, err
+	}
+
+	return disk, nil
+}
+
 // CreateInstanceDisk creates a new disk for a Linode instance.
 func (c *Client) httpCreateInstanceDisk(ctx context.Context, linodeID int, req *CreateDiskRequest) (*InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1220,6 +1322,28 @@ func (c *Client) httpGetInstanceIP(ctx context.Context, linodeID int, address st
 	return &ip, nil
 }
 
+// httpGetInstanceIPProto retrieves one instance IP address as a proto message.
+func (c *Client) httpGetInstanceIPProto(ctx context.Context, linodeID int, address string) (*linodev1.IPAddress, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/ips/%s", linodeID, url.PathEscape(address))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ip := &linodev1.IPAddress{}
+	if err := c.handleProtoResponse(resp, ip); err != nil {
+		return nil, err
+	}
+
+	return ip, nil
+}
+
 // AllocateInstanceIP allocates a new IP address for a Linode instance.
 func (c *Client) httpAllocateInstanceIP(ctx context.Context, linodeID int, req AllocateIPRequest) (*IPAddress, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1302,6 +1426,29 @@ func (c *Client) httpCloneInstance(ctx context.Context, linodeID int, req *Clone
 	}
 
 	return &instance, nil
+}
+
+// httpCloneInstanceProto clones a Linode instance and decodes the response as a
+// proto message for the proto-backed write path.
+func (c *Client) httpCloneInstanceProto(ctx context.Context, linodeID int, req *CloneInstanceRequest) (*linodev1.Instance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/clone", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instance := &linodev1.Instance{}
+	if err := c.handleProtoResponse(resp, instance); err != nil {
+		return nil, err
+	}
+
+	return instance, nil
 }
 
 // MigrateInstance migrates a Linode instance to a new region.

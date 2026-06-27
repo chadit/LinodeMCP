@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Promo is an active promotion attached to an account.
+message Promo {
+  string description = 1;
+  string summary = 2;
+  string credit_monthly_cap = 3;
+  string credit_remaining = 4;
+  string expire_dt = 5;
+  string image_url = 6;
+  string service_type = 7;
+  string this_month_credit_remaining = 8;
+}
+
+// Account mirrors the Linode account object. capabilities and active_promotions
+// are repeated fields (emitted as []).
+message Account {
+  string first_name = 1;
+  string last_name = 2;
+  string email = 3;
+  string company = 4;
+  string address_1 = 5;
+  string address_2 = 6;
+  string city = 7;
+  string state = 8;
+  string zip = 9;
+  string country = 10;
+  string phone = 11;
+  double balance = 12;
+  double balance_uninvoiced = 13;
+  repeated string capabilities = 14;
+  string active_since = 15;
+  string euuid = 16;
+  string billing_source = 17;
+  repeated Promo active_promotions = 18;
+}
+
+// AccountWriteResponse is the {message, account} envelope the account update tool
+// returns.
+message AccountWriteResponse {
+  string message = 1;
+  Account account = 2;
+}
+
+// AccountGetInput is the input contract for linode_account_get (the singular
+// account, so no resource ID).
+message AccountGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// AccountSettings mirrors the account settings object. longview_subscription and
+// object_storage are nullable (omitted when unset).
+message AccountSettings {
+  bool backups_enabled = 1;
+  bool managed = 2;
+  bool network_helper = 3;
+  optional string longview_subscription = 4;
+  optional string object_storage = 5;
+  string interfaces_for_new_linodes = 6;
+  string maintenance_policy = 7;
+}
+
+// AccountSettingsGetInput is the input contract for linode_account_settings_get.
+message AccountSettingsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// AccountRegionTransfer is a per-region transfer entry nested in AccountTransfer.
+message AccountRegionTransfer {
+  string id = 1;
+  int32 billable = 2;
+  int32 quota = 3;
+  int32 used = 4;
+}
+
+// AccountTransfer mirrors the account network-transfer usage object.
+// region_transfers is repeated (emitted as []).
+message AccountTransfer {
+  int32 billable = 1;
+  int32 quota = 2;
+  int32 used = 3;
+  repeated AccountRegionTransfer region_transfers = 4;
+}
+
+// AccountTransferGetInput is the input contract for linode_account_transfer_get.
+message AccountTransferGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// AccountInvoice mirrors one Linode account invoice.
+message AccountInvoice {
+  int32 id = 1;
+  string date = 2;
+  string label = 3;
+  double total = 4;
+}
+
+// AccountInvoiceGetInput is the input contract for linode_account_invoice_get.
+message AccountInvoiceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the invoice to retrieve (required).
+  int32 invoice_id = 2;
+}
+
+// AccountLogin mirrors one Linode account login event.
+message AccountLogin {
+  string datetime = 1;
+  int32 id = 2;
+  string ip = 3;
+  bool restricted = 4;
+  string status = 5;
+  string username = 6;
+}
+
+// AccountLoginGetInput is the input contract for linode_account_login_get.
+message AccountLoginGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the login to retrieve (required).
+  int32 login_id = 2;
+}
+
+// ProfileLoginGetInput is the input contract for linode_profile_login_get (returns
+// a shared AccountLogin).
+message ProfileLoginGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the login to retrieve (required).
+  int32 login_id = 2;
+}
+
+// AccountPayment mirrors one payment made on the account.
+message AccountPayment {
+  int32 id = 1;
+  string date = 2;
+  double usd = 3;
+}
+
+// AccountPaymentGetInput is the input contract for linode_account_payment_get.
+message AccountPaymentGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the payment to retrieve (required).
+  int32 payment_id = 2;
+}
+
+// OAuthClient mirrors an OAuth client registered on the account (the secret is not
+// returned by the get).
+message OAuthClient {
+  string id = 1;
+  string label = 2;
+  bool public = 3;
+  string redirect_uri = 4;
+  string status = 5;
+  string thumbnail_url = 6;
+}
+
+// AccountOAuthClientGetInput is the input contract for
+// linode_account_oauth_client_get.
+message AccountOAuthClientGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the OAuth client to retrieve (required).
+  string client_id = 2;
+}

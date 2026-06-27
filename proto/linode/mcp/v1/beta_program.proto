@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// BetaProgram is one available Linode Beta program. description and ended are
+// nullable (omitted when unset).
+message BetaProgram {
+  string class = 1;
+  optional string description = 2;
+  optional string ended = 3;
+  bool greenlight_only = 4;
+  string id = 5;
+  string label = 6;
+  string more_info = 7;
+  string started = 8;
+}
+
+// BetaGetInput is the input contract for linode_beta_get.
+message BetaGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Beta program ID to retrieve (required).
+  string beta_id = 2;
+}

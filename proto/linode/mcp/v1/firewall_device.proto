@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// FirewallDeviceEntity is the resource a firewall device is attached to.
+// parent_entity is a nullable self-reference (omitted when unset).
+message FirewallDeviceEntity {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+  FirewallDeviceEntity parent_entity = 5;
+}
+
+// FirewallDevice mirrors one device attached to a Linode firewall.
+message FirewallDevice {
+  int32 id = 1;
+  FirewallDeviceEntity entity = 2;
+  string created = 3;
+  string updated = 4;
+}
+
+// FirewallDeviceGetInput is the input contract for linode_firewall_device_get.
+message FirewallDeviceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the firewall (required).
+  int32 firewall_id = 2;
+  // The ID of the firewall device to retrieve (required).
+  int32 device_id = 3;
+}

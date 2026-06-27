@@ -28,6 +28,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -237,6 +238,47 @@ _ACCOUNT_OAUTH_CLIENT_ID_PATTERN = re.compile(_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_T
 _USD_AMOUNT_PATTERN = re.compile(r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$")
 
 
+def _promo_to_response_dict(promo: Any) -> dict[str, Any]:
+    """Shape a Promo dataclass to proto-canonical Promo form."""
+    return {
+        "description": promo.description,
+        "summary": promo.summary,
+        "credit_monthly_cap": promo.credit_monthly_cap,
+        "credit_remaining": promo.credit_remaining,
+        "expire_dt": promo.expire_dt,
+        "image_url": promo.image_url,
+        "service_type": promo.service_type,
+        "this_month_credit_remaining": promo.this_month_credit_remaining,
+    }
+
+
+def account_to_response_dict(account: Any) -> dict[str, Any]:
+    """Shape an Account dataclass to proto-canonical Account form."""
+    return {
+        "first_name": account.first_name,
+        "last_name": account.last_name,
+        "email": account.email,
+        "company": account.company,
+        "address_1": account.address_1,
+        "address_2": account.address_2,
+        "city": account.city,
+        "state": account.state,
+        "zip": account.zip,
+        "country": account.country,
+        "phone": account.phone,
+        "balance": account.balance,
+        "balance_uninvoiced": account.balance_uninvoiced,
+        "capabilities": account.capabilities or [],
+        "active_since": account.active_since,
+        "euuid": account.euuid,
+        "billing_source": account.billing_source,
+        "active_promotions": [
+            _promo_to_response_dict(p)
+            for p in cast("list[dict[str, Any]]", account.active_promotions or [])
+        ],
+    }
+
+
 def create_linode_account_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_get tool."""
     return Tool(
@@ -245,10 +287,7 @@ def create_linode_account_get_tool() -> tuple[Tool, Capability]:
             "Retrieves the authenticated user's Linode account information "
             "including billing details and capabilities"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
-        },
+        inputSchema=schema("linode.mcp.v1.AccountGetInput"),
     ), Capability.Read
 
 
@@ -264,16 +303,7 @@ async def handle_linode_account_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         account = await client.get_account()
-        return {
-            "first_name": account.first_name,
-            "last_name": account.last_name,
-            "email": account.email,
-            "company": account.company,
-            "balance": account.balance,
-            "balance_uninvoiced": account.balance_uninvoiced,
-            "capabilities": account.capabilities,
-            "active_since": account.active_since,
-        }
+        return account_to_response_dict(account)
 
     return await execute_tool(cfg, arguments, "retrieve Linode account", _call)
 
@@ -560,15 +590,31 @@ async def handle_linode_account_user_list(
     return await execute_tool(cfg, arguments, "list Linode account users", _call)
 
 
+def account_settings_to_response_dict(settings: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account settings API dict to proto-canonical form.
+
+    longview_subscription and object_storage are omitted when null.
+    """
+    body: dict[str, Any] = {
+        "backups_enabled": settings.get("backups_enabled", False),
+        "managed": settings.get("managed", False),
+        "network_helper": settings.get("network_helper", False),
+    }
+    if settings.get("longview_subscription") is not None:
+        body["longview_subscription"] = settings["longview_subscription"]
+    if settings.get("object_storage") is not None:
+        body["object_storage"] = settings["object_storage"]
+    body["interfaces_for_new_linodes"] = settings.get("interfaces_for_new_linodes", "")
+    body["maintenance_policy"] = settings.get("maintenance_policy", "")
+    return body
+
+
 def create_linode_account_settings_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_settings_get tool."""
     return Tool(
         name="linode_account_settings_get",
         description="Gets settings for the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
-        },
+        inputSchema=schema("linode.mcp.v1.AccountSettingsGetInput"),
     ), Capability.Read
 
 
@@ -578,7 +624,7 @@ async def handle_linode_account_settings_get(
     """Handle linode_account_settings_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_settings()
+        return account_settings_to_response_dict(await client.get_account_settings())
 
     return await execute_tool(cfg, arguments, "get Linode account settings", _call)
 
@@ -633,15 +679,37 @@ async def handle_linode_account_settings_managed_enable(
     return await execute_tool(cfg, arguments, "enable Linode Managed", _call)
 
 
+def _account_region_transfer_to_dict(region: dict[str, Any]) -> dict[str, Any]:
+    """Shape a per-region transfer entry to proto-canonical form."""
+    return {
+        "id": region.get("id", ""),
+        "billable": region.get("billable", 0),
+        "quota": region.get("quota", 0),
+        "used": region.get("used", 0),
+    }
+
+
+def account_transfer_to_response_dict(transfer: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account transfer API dict to proto-canonical AccountTransfer form."""
+    return {
+        "billable": transfer.get("billable", 0),
+        "quota": transfer.get("quota", 0),
+        "used": transfer.get("used", 0),
+        "region_transfers": [
+            _account_region_transfer_to_dict(r)
+            for r in cast(
+                "list[dict[str, Any]]", transfer.get("region_transfers") or []
+            )
+        ],
+    }
+
+
 def create_linode_account_transfer_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_transfer_get tool."""
     return Tool(
         name="linode_account_transfer_get",
         description="Gets network transfer usage for the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
-        },
+        inputSchema=schema("linode.mcp.v1.AccountTransferGetInput"),
     ), Capability.Read
 
 
@@ -651,7 +719,7 @@ async def handle_linode_account_transfer_get(
     """Handle linode_account_transfer_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_transfer()
+        return account_transfer_to_response_dict(await client.get_account_transfer())
 
     return await execute_tool(cfg, arguments, "get Linode account transfer", _call)
 
@@ -1518,23 +1586,51 @@ async def handle_linode_account_invoice_item_list(
     )
 
 
+def _account_event_entity_to_response_dict(entity: dict[str, Any]) -> dict[str, Any]:
+    """Shape an account event entity. id is a passthrough (int or string)."""
+    return {
+        "id": entity.get("id"),
+        "label": entity.get("label", ""),
+        "type": entity.get("type", ""),
+        "url": entity.get("url", ""),
+    }
+
+
+def account_event_to_response_dict(event: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account event API dict to proto-canonical form.
+
+    duration, percent_complete, rate, and time_remaining are omitted when null;
+    entity and secondary_entity are omitted when null.
+    """
+    result: dict[str, Any] = {
+        "action": event.get("action", ""),
+        "created": event.get("created", ""),
+        "id": event.get("id", 0),
+        "message": event.get("message", ""),
+        "seen": event.get("seen", False),
+        "status": event.get("status", ""),
+        "username": event.get("username", ""),
+    }
+    for key in ("duration", "percent_complete", "rate", "time_remaining"):
+        if event.get(key) is not None:
+            result[key] = event[key]
+    entity = event.get("entity")
+    if entity is not None:
+        result["entity"] = _account_event_entity_to_response_dict(entity)
+    secondary_entity = event.get("secondary_entity")
+    if secondary_entity is not None:
+        result["secondary_entity"] = _account_event_entity_to_response_dict(
+            secondary_entity
+        )
+    return result
+
+
 def create_linode_account_event_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_event_get tool."""
     return Tool(
         name="linode_account_event_get",
         description="Gets a Linode account event by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "event_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Account event ID to retrieve",
-                },
-            },
-            "required": ["event_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountEventGetInput"),
     ), Capability.Read
 
 
@@ -1547,7 +1643,7 @@ async def handle_linode_account_event_get(
         return error_response("event_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_event(event_id)
+        return account_event_to_response_dict(await client.get_account_event(event_id))
 
     return await execute_tool(cfg, arguments, "get Linode account event", _call)
 
@@ -2489,19 +2585,7 @@ async def handle_linode_account_update(
         account = await client.update_account(**update_fields)
         return {
             "message": "Account updated successfully",
-            "account": {
-                "first_name": account.first_name,
-                "last_name": account.last_name,
-                "email": account.email,
-                "company": account.company,
-                "address_1": account.address_1,
-                "address_2": account.address_2,
-                "city": account.city,
-                "state": account.state,
-                "zip": account.zip,
-                "country": account.country,
-                "phone": account.phone,
-            },
+            "account": account_to_response_dict(account),
         }
 
     return await execute_tool(cfg, arguments, "update Linode account", _call)
@@ -2626,22 +2710,29 @@ def _optional_int_argument(
     return value
 
 
+def account_beta_program_to_response_dict(beta: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw enrolled account Beta program API dict to proto-canonical form.
+
+    description and ended are nullable and omitted when null.
+    """
+    body: dict[str, Any] = {
+        "enrolled": beta.get("enrolled") or "",
+        "id": beta.get("id") or "",
+        "label": beta.get("label") or "",
+        "started": beta.get("started") or "",
+    }
+    for key in ("description", "ended"):
+        if beta.get(key) is not None:
+            body[key] = beta[key]
+    return body
+
+
 def create_linode_account_beta_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_beta_get tool."""
     return Tool(
         name="linode_account_beta_get",
         description="Gets an enrolled Beta program on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "beta_id": {
-                    "type": "string",
-                    "description": "Beta program ID to retrieve",
-                },
-            },
-            "required": ["beta_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountBetaGetInput"),
     ), Capability.Read
 
 
@@ -2662,7 +2753,9 @@ async def handle_linode_account_beta_get(
         return error_response("beta_id must not contain '/', '?', or '..'")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_beta(beta_id)
+        return account_beta_program_to_response_dict(
+            await client.get_account_beta(beta_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account beta {beta_id}", _call
@@ -2776,22 +2869,40 @@ async def handle_linode_account_service_transfer_accept(
     )
 
 
+def _account_entity_transfer_entities_to_response_dict(
+    entities: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape account service transfer entities to proto-canonical form."""
+    return {"linodes": entities.get("linodes") or []}
+
+
+def account_entity_transfer_to_response_dict(
+    transfer: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a raw account service transfer API dict to proto-canonical form.
+
+    entities is omitted when null, matching the proto message presence.
+    """
+    body: dict[str, Any] = {
+        "created": transfer.get("created") or "",
+        "expiry": transfer.get("expiry") or "",
+        "is_sender": bool(transfer.get("is_sender")),
+        "status": transfer.get("status") or "",
+        "token": transfer.get("token") or "",
+        "updated": transfer.get("updated") or "",
+    }
+    entities = transfer.get("entities")
+    if entities is not None:
+        body["entities"] = _account_entity_transfer_entities_to_response_dict(entities)
+    return body
+
+
 def create_linode_account_service_transfer_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_service_transfer_get tool."""
     return Tool(
         name="linode_account_service_transfer_get",
         description="Gets an account service transfer request by token.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "token": {
-                    "type": "string",
-                    "description": "Service transfer token to retrieve",
-                },
-            },
-            "required": ["token"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountServiceTransferGetInput"),
     ), Capability.Read
 
 
@@ -2804,7 +2915,9 @@ async def handle_linode_account_service_transfer_get(
         return error_response(message or "token is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_service_transfer(token)
+        return account_entity_transfer_to_response_dict(
+            await client.get_account_service_transfer(token)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account service transfer {token}", _call
@@ -2877,22 +2990,26 @@ async def handle_linode_account_service_transfer_delete(
     )
 
 
+def account_oauth_client_to_response_dict(
+    oauth_client: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a raw OAuth client API dict to proto-canonical form."""
+    return {
+        "id": oauth_client.get("id", ""),
+        "label": oauth_client.get("label", ""),
+        "public": oauth_client.get("public", False),
+        "redirect_uri": oauth_client.get("redirect_uri", ""),
+        "status": oauth_client.get("status", ""),
+        "thumbnail_url": oauth_client.get("thumbnail_url", ""),
+    }
+
+
 def create_linode_account_oauth_client_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_oauth_client_get tool."""
     return Tool(
         name="linode_account_oauth_client_get",
         description="Gets an OAuth client by client ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "string",
-                    "description": "OAuth client ID to retrieve",
-                },
-            },
-            "required": ["client_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientGetInput"),
     ), Capability.Read
 
 
@@ -2905,7 +3022,9 @@ async def handle_linode_account_oauth_client_get(
         return error_response(error or "client_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_oauth_client(client_id)
+        return account_oauth_client_to_response_dict(
+            await client.get_account_oauth_client(client_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account OAuth client {client_id}", _call
@@ -3033,23 +3152,22 @@ async def handle_linode_account_oauth_client_thumbnail_get(
     )
 
 
+def account_invoice_to_response_dict(invoice: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account invoice API dict to proto-canonical form."""
+    return {
+        "id": invoice.get("id", 0),
+        "date": invoice.get("date", ""),
+        "label": invoice.get("label", ""),
+        "total": invoice.get("total", 0.0),
+    }
+
+
 def create_linode_account_invoice_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_invoice_get tool."""
     return Tool(
         name="linode_account_invoice_get",
         description="Gets an invoice on the Linode account by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "invoice_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Invoice ID to retrieve",
-                },
-            },
-            "required": ["invoice_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountInvoiceGetInput"),
     ), Capability.Read
 
 
@@ -3066,11 +3184,22 @@ async def handle_linode_account_invoice_get(
         return error_response("invoice_id must be at least 1")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_invoice(raw_invoice_id)
+        return account_invoice_to_response_dict(
+            await client.get_account_invoice(raw_invoice_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account invoice {raw_invoice_id}", _call
     )
+
+
+def account_payment_to_response_dict(payment: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account payment API dict to proto-canonical form."""
+    return {
+        "id": payment.get("id", 0),
+        "date": payment.get("date", ""),
+        "usd": payment.get("usd", 0.0),
+    }
 
 
 def create_linode_account_payment_get_tool() -> tuple[Tool, Capability]:
@@ -3078,18 +3207,7 @@ def create_linode_account_payment_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_get",
         description="Gets a payment on the Linode account by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "payment_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Payment ID to retrieve",
-                },
-            },
-            "required": ["payment_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentGetInput"),
     ), Capability.Read
 
 
@@ -3106,7 +3224,9 @@ async def handle_linode_account_payment_get(
         return error_response("payment_id must be at least 1")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_payment(raw_payment_id)
+        return account_payment_to_response_dict(
+            await client.get_account_payment(raw_payment_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account payment {raw_payment_id}", _call
@@ -3235,23 +3355,24 @@ async def handle_linode_account_payment_method_make_default(
     )
 
 
+def account_login_to_response_dict(login: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account login API dict to proto-canonical form."""
+    return {
+        "datetime": login.get("datetime", ""),
+        "id": login.get("id", 0),
+        "ip": login.get("ip", ""),
+        "restricted": login.get("restricted", False),
+        "status": login.get("status", ""),
+        "username": login.get("username", ""),
+    }
+
+
 def create_linode_account_login_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_login_get tool."""
     return Tool(
         name="linode_account_login_get",
         description="Gets an account login by login ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "login_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Login ID to retrieve",
-                },
-            },
-            "required": ["login_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountLoginGetInput"),
     ), Capability.Read
 
 
@@ -3268,7 +3389,9 @@ async def handle_linode_account_login_get(
         return error_response("login_id must be at least 1")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_login(raw_login_id)
+        return account_login_to_response_dict(
+            await client.get_account_login(raw_login_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account login {raw_login_id}", _call
@@ -3362,23 +3485,45 @@ async def handle_linode_account_user_delete(
     )
 
 
+def _account_user_last_login_to_response_dict(
+    last_login: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape an account user last login to proto-canonical form."""
+    return {
+        "login_datetime": last_login.get("login_datetime") or "",
+        "status": last_login.get("status") or "",
+    }
+
+
+def account_user_to_response_dict(user: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw account user API dict to proto-canonical form.
+
+    last_login is omitted when null; password_created and verified_phone_number
+    are omitted when null; ssh_keys is always a list.
+    """
+    body: dict[str, Any] = {
+        "email": user.get("email") or "",
+        "restricted": bool(user.get("restricted")),
+        "ssh_keys": user.get("ssh_keys") or [],
+        "tfa_enabled": bool(user.get("tfa_enabled")),
+        "user_type": user.get("user_type") or "",
+        "username": user.get("username") or "",
+    }
+    last_login = user.get("last_login")
+    if last_login is not None:
+        body["last_login"] = _account_user_last_login_to_response_dict(last_login)
+    for key in ("password_created", "verified_phone_number"):
+        if user.get(key) is not None:
+            body[key] = user[key]
+    return body
+
+
 def create_linode_account_user_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_user_get tool."""
     return Tool(
         name="linode_account_user_get",
         description="Gets an account user by username.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "username": {
-                    "type": "string",
-                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
-                    "description": "Username to retrieve",
-                },
-            },
-            "required": ["username"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserGetInput"),
     ), Capability.Read
 
 
@@ -3401,7 +3546,7 @@ async def handle_linode_account_user_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_user(username)
+        return account_user_to_response_dict(await client.get_account_user(username))
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account user {username}", _call
@@ -3495,6 +3640,17 @@ async def handle_linode_account_availability_list(
     return await execute_tool(cfg, arguments, "list Linode account availability", _call)
 
 
+def account_availability_to_response_dict(
+    availability: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a raw account availability API dict to proto-canonical form."""
+    return {
+        "available": availability.get("available") or [],
+        "region": availability.get("region") or "",
+        "unavailable": availability.get("unavailable") or [],
+    }
+
+
 def create_linode_account_availability_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_availability_get tool."""
     return Tool(
@@ -3502,17 +3658,7 @@ def create_linode_account_availability_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets available Linode services for the account in a specific region."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "region_id": {
-                    "type": "string",
-                    "description": "Region ID to check (for example, 'us-east')",
-                },
-            },
-            "required": ["region_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountAvailabilityGetInput"),
     ), Capability.Read
 
 
@@ -3536,7 +3682,9 @@ async def handle_linode_account_availability_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_availability(region_id)
+        return account_availability_to_response_dict(
+            await client.get_account_availability(region_id)
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account availability for {region_id}", _call
@@ -3947,6 +4095,21 @@ def _optional_int_list_argument(
     return values
 
 
+def tag_to_response_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw tag API dict to proto-canonical linode.mcp.v1.Tag form.
+
+    The entity-ID lists are always emitted as lists, matching the proto Tag
+    serialization (vs the API / Go-struct omitempty behavior).
+    """
+    return {
+        "label": raw.get("label", ""),
+        "domains": raw.get("domains") or [],
+        "linodes": raw.get("linodes") or [],
+        "nodebalancers": raw.get("nodebalancers") or [],
+        "volumes": raw.get("volumes") or [],
+    }
+
+
 async def handle_linode_tag_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -3980,7 +4143,10 @@ async def handle_linode_tag_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         tag = await client.create_tag(label.strip(), **resource_ids)
-        return {"message": f"Tag '{label.strip()}' created successfully", "tag": tag}
+        return {
+            "message": f"Tag '{label.strip()}' created successfully",
+            "tag": tag_to_response_dict(tag),
+        }
 
     return await execute_tool(cfg, arguments, "create Linode tag", _call)
 
@@ -4231,6 +4397,15 @@ async def handle_linode_support_ticket_create(
     return await execute_tool(cfg, arguments, "open Linode support ticket", _call)
 
 
+def managed_credential_to_response_dict(credential: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Managed credential API dict to proto-canonical form."""
+    return {
+        "id": credential.get("id", 0),
+        "label": credential.get("label", ""),
+        "last_decrypted": credential.get("last_decrypted", ""),
+    }
+
+
 def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_credential_get tool."""
     return Tool(
@@ -4240,19 +4415,7 @@ def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
             "managed credential metadata requires admin capability. Pass "
             "dry_run=true to preview the request without retrieving it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "credential_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed credential ID to retrieve",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["credential_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedCredentialGetInput"),
     ), Capability.Admin
 
 
@@ -4280,7 +4443,9 @@ async def handle_linode_managed_credential_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_credential(validated_credential_id)
+        return managed_credential_to_response_dict(
+            await client.get_managed_credential(validated_credential_id)
+        )
 
     return await execute_tool(cfg, arguments, "get Linode Managed credential", _call)
 
@@ -5211,23 +5376,38 @@ async def handle_linode_managed_service_delete(
     return await execute_tool(cfg, arguments, "delete Managed service monitor", _call)
 
 
+def managed_service_to_response_dict(svc: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Managed service API dict to proto-canonical form.
+
+    body, notes, and region are omitted when null; credentials is always a list.
+    """
+    result: dict[str, Any] = {
+        "id": svc.get("id", 0),
+        "label": svc.get("label", ""),
+        "service_type": svc.get("service_type", ""),
+        "status": svc.get("status", ""),
+        "address": svc.get("address", ""),
+    }
+    if svc.get("body") is not None:
+        result["body"] = svc["body"]
+    result["consultation_group"] = svc.get("consultation_group", "")
+    result["created"] = svc.get("created", "")
+    result["credentials"] = svc.get("credentials") or []
+    if svc.get("notes") is not None:
+        result["notes"] = svc["notes"]
+    if svc.get("region") is not None:
+        result["region"] = svc["region"]
+    result["timeout"] = svc.get("timeout", 0)
+    result["updated"] = svc.get("updated", "")
+    return result
+
+
 def create_linode_managed_service_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_service_get tool."""
     return Tool(
         name="linode_managed_service_get",
         description="Gets a Linode Managed service monitor by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "service_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed service monitor ID to retrieve",
-                },
-            },
-            "required": ["service_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceGetInput"),
     ), Capability.Read
 
 
@@ -5245,7 +5425,9 @@ async def handle_linode_managed_service_get(
     validated_service_id = service_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_service(validated_service_id)
+        return managed_service_to_response_dict(
+            await client.get_managed_service(validated_service_id)
+        )
 
     return await execute_tool(
         cfg, arguments, "get Linode Managed service monitor", _call
@@ -5926,23 +6108,36 @@ async def handle_linode_managed_stats_get(
     return await execute_tool(cfg, arguments, "list Linode Managed statistics", _call)
 
 
+def managed_linode_settings_to_response_dict(
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape a raw Managed Linode settings API dict to proto-canonical form.
+
+    ssh.port and ssh.user are omitted when null.
+    """
+    ssh: dict[str, Any] = settings.get("ssh") or {}
+    ssh_out: dict[str, Any] = {
+        "access": ssh.get("access", False),
+        "ip": ssh.get("ip", ""),
+    }
+    if ssh.get("port") is not None:
+        ssh_out["port"] = ssh["port"]
+    if ssh.get("user") is not None:
+        ssh_out["user"] = ssh["user"]
+    return {
+        "id": settings.get("id", 0),
+        "label": settings.get("label", ""),
+        "group": settings.get("group", ""),
+        "ssh": ssh_out,
+    }
+
+
 def create_linode_managed_linode_settings_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_linode_settings_get tool."""
     return Tool(
         name="linode_managed_linode_settings_get",
         description="Gets Managed settings for a Linode.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Linode ID whose Managed settings to retrieve",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedLinodeSettingsGetInput"),
     ), Capability.Read
 
 
@@ -5955,7 +6150,9 @@ async def handle_linode_managed_linode_settings_get(
         return error_response("linode_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_linode_settings(linode_id)
+        return managed_linode_settings_to_response_dict(
+            await client.get_managed_linode_settings(linode_id)
+        )
 
     return await execute_tool(cfg, arguments, "get Linode Managed settings", _call)
 
@@ -6001,23 +6198,33 @@ async def handle_linode_managed_service_list(
     return await execute_tool(cfg, arguments, "list Linode Managed services", _call)
 
 
+def _managed_issue_entity_to_response_dict(entity: dict[str, Any]) -> dict[str, Any]:
+    """Shape a managed issue entity to proto-canonical form."""
+    return {
+        "id": entity.get("id", 0),
+        "label": entity.get("label", ""),
+        "type": entity.get("type", ""),
+        "url": entity.get("url", ""),
+    }
+
+
+def managed_issue_to_response_dict(issue: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw managed issue API dict to proto-canonical form."""
+    entity: dict[str, Any] = issue.get("entity") or {}
+    return {
+        "id": issue.get("id", 0),
+        "created": issue.get("created", ""),
+        "services": issue.get("services") or [],
+        "entity": _managed_issue_entity_to_response_dict(entity),
+    }
+
+
 def create_linode_managed_issue_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_issue_get tool."""
     return Tool(
         name="linode_managed_issue_get",
         description="Gets a Linode Managed issue by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "issue_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed issue ID to retrieve",
-                },
-            },
-            "required": ["issue_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedIssueGetInput"),
     ), Capability.Read
 
 
@@ -6031,9 +6238,35 @@ async def handle_linode_managed_issue_get(
     validated_issue_id = issue_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_issue(validated_issue_id)
+        return managed_issue_to_response_dict(
+            await client.get_managed_issue(validated_issue_id)
+        )
 
     return await execute_tool(cfg, arguments, "get Linode Managed issue", _call)
+
+
+def managed_contact_to_response_dict(contact: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Managed contact API dict to proto-canonical form.
+
+    group is omitted when null; phone.primary and phone.secondary are omitted when
+    null.
+    """
+    phone: dict[str, Any] = contact.get("phone") or {}
+    phone_out: dict[str, Any] = {}
+    if phone.get("primary") is not None:
+        phone_out["primary"] = phone["primary"]
+    if phone.get("secondary") is not None:
+        phone_out["secondary"] = phone["secondary"]
+    result: dict[str, Any] = {
+        "id": contact.get("id", 0),
+        "name": contact.get("name", ""),
+        "email": contact.get("email", ""),
+    }
+    if contact.get("group") is not None:
+        result["group"] = contact["group"]
+    result["phone"] = phone_out
+    result["updated"] = contact.get("updated", "")
+    return result
 
 
 def create_linode_managed_contact_get_tool() -> tuple[Tool, Capability]:
@@ -6041,18 +6274,7 @@ def create_linode_managed_contact_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_contact_get",
         description="Gets a Linode Managed contact by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "contact_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed contact ID to retrieve",
-                },
-            },
-            "required": ["contact_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedContactGetInput"),
     ), Capability.Read
 
 
@@ -6070,7 +6292,9 @@ async def handle_linode_managed_contact_get(
     validated_contact_id = contact_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_contact(validated_contact_id)
+        return managed_contact_to_response_dict(
+            await client.get_managed_contact(validated_contact_id)
+        )
 
     return await execute_tool(cfg, arguments, "get Linode Managed contact", _call)
 
@@ -6116,23 +6340,59 @@ async def handle_linode_support_ticket_list(
     return await execute_tool(cfg, arguments, "list Linode support tickets", _call)
 
 
+def support_ticket_attachment_to_response_dict(
+    attachment: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape one support ticket attachment to proto-canonical form."""
+    return {
+        "filename": attachment.get("filename", ""),
+        "id": attachment.get("id", 0),
+        "size": attachment.get("size", 0),
+    }
+
+
+def support_ticket_to_response_dict(ticket: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw support ticket API dict to proto-canonical form.
+
+    closed and entity are omitted when null; attachments is always a list.
+    """
+    result: dict[str, Any] = {
+        "attachments": [
+            support_ticket_attachment_to_response_dict(attachment)
+            for attachment in cast(
+                "list[dict[str, Any]]", ticket.get("attachments") or []
+            )
+        ],
+        "closable": ticket.get("closable", False),
+    }
+    if ticket.get("closed") is not None:
+        result["closed"] = ticket["closed"]
+    result["description"] = ticket.get("description", "")
+    entity = ticket.get("entity")
+    if entity is not None:
+        result["entity"] = {
+            "id": entity.get("id"),
+            "label": entity.get("label", ""),
+            "type": entity.get("type", ""),
+            "url": entity.get("url", ""),
+        }
+    result["gravatar_id"] = ticket.get("gravatar_id", "")
+    result["id"] = ticket.get("id", 0)
+    result["opened"] = ticket.get("opened", "")
+    result["opened_by"] = ticket.get("opened_by", "")
+    result["status"] = ticket.get("status", "")
+    result["summary"] = ticket.get("summary", "")
+    result["updated"] = ticket.get("updated", "")
+    result["updated_by"] = ticket.get("updated_by", "")
+    return result
+
+
 def create_linode_support_ticket_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_support_ticket_get tool."""
     return Tool(
         name="linode_support_ticket_get",
         description="Gets a Linode support ticket by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "ticket_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Support ticket ID to retrieve",
-                },
-            },
-            "required": ["ticket_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketGetInput"),
     ), Capability.Read
 
 
@@ -6145,7 +6405,9 @@ async def handle_linode_support_ticket_get(
         return error_response("ticket_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_support_ticket(ticket_id)
+        return support_ticket_to_response_dict(
+            await client.get_support_ticket(ticket_id)
+        )
 
     return await execute_tool(cfg, arguments, "get Linode support ticket", _call)
 

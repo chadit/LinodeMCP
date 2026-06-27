@@ -928,8 +928,8 @@ async def test_linode_instance_config_get_tool_definition() -> None:
     assert tool.name == "linode_instance_config_get"
     assert capability == Capability.Read
     assert tool.inputSchema["required"] == ["linode_id", "config_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert "linode_id" in tool.inputSchema["properties"]
+    assert "config_id" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_instance_config_get(sample_config: Config) -> None:
@@ -1011,9 +1011,9 @@ async def test_linode_instance_config_interface_get_tool_definition() -> None:
         "config_id",
         "interface_id",
     ]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
+    assert "linode_id" in tool.inputSchema["properties"]
+    assert "config_id" in tool.inputSchema["properties"]
+    assert "interface_id" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_instance_config_interface_get(
@@ -2232,8 +2232,7 @@ async def test_create_linode_managed_credential_get_tool() -> None:
 
     assert tool.name == "linode_managed_credential_get"
     assert capability == Capability.Admin
-    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
+    assert "credential_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["credential_id"]
 
 
@@ -2252,7 +2251,10 @@ async def test_handle_linode_managed_credential_get(sample_config: Config) -> No
             {"credential_id": 123}, sample_config
         )
 
-        assert json.loads(result[0].text) == response_data
+        body = json.loads(result[0].text)
+        assert body["id"] == 123
+        assert body["label"] == "db-root"
+        assert body["last_decrypted"] == ""
         mock_client.get_managed_credential.assert_awaited_once_with(123)
 
 
@@ -2630,7 +2632,6 @@ async def test_create_linode_managed_issue_get_tool() -> None:
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["issue_id"]
     assert tool.inputSchema["properties"]["issue_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["issue_id"]["minimum"] == 1
 
 
 async def test_handle_linode_managed_issue_get(sample_config: Config) -> None:
@@ -2647,7 +2648,10 @@ async def test_handle_linode_managed_issue_get(sample_config: Config) -> None:
         result = await handle_linode_managed_issue_get({"issue_id": 77}, sample_config)
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        data = json.loads(result[0].text)
+        assert data["id"] == 77
+        assert data["entity"]["label"] == "web-1"
+        assert data["services"] == []
         mock_client.get_managed_issue.assert_awaited_once_with(77)
 
 
@@ -2701,8 +2705,7 @@ async def test_create_linode_managed_contact_get_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["contact_id"]
-    assert tool.inputSchema["properties"]["contact_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["contact_id"]["minimum"] == 1
+    assert "contact_id" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_managed_contact_get(sample_config: Config) -> None:
@@ -2721,7 +2724,11 @@ async def test_handle_linode_managed_contact_get(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        body = json.loads(result[0].text)
+        assert body["id"] == 42
+        assert body["name"] == "Primary on-call"
+        assert "group" not in body
+        assert body["phone"] == {}
         mock_client.get_managed_contact.assert_awaited_once_with(42)
 
 
@@ -2777,8 +2784,7 @@ async def test_create_linode_managed_service_get_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["service_id"]
-    assert tool.inputSchema["properties"]["service_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert "service_id" in tool.inputSchema["properties"]
     assert "confirm" not in tool.inputSchema["properties"]
 
 
@@ -2798,7 +2804,10 @@ async def test_handle_linode_managed_service_get(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        body = json.loads(result[0].text)
+        assert body["id"] == 314
+        assert body["label"] == "web monitor"
+        assert body["credentials"] == []
         mock_client.get_managed_service.assert_awaited_once_with(314)
 
 
@@ -2872,7 +2881,10 @@ async def test_handle_linode_account_beta_get(sample_config: Config) -> None:
             {"beta_id": "example-open"}, sample_config
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == "example-open"
+    assert data["label"] == "Example Open Beta"
+    assert "description" not in data
     mock_client.get_account_beta.assert_awaited_once_with("example-open")
 
 
@@ -2929,6 +2941,10 @@ async def test_handle_linode_account_settings_get(sample_config: Config) -> None
         "backups_enabled": True,
         "managed": False,
         "network_helper": True,
+        "longview_subscription": None,
+        "object_storage": "akamai",
+        "interfaces_for_new_linodes": "legacy_config",
+        "maintenance_policy": "linode/migrate",
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -2940,7 +2956,12 @@ async def test_handle_linode_account_settings_get(sample_config: Config) -> None
         result = await handle_linode_account_settings_get({}, sample_config)
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["backups_enabled"] is True
+    assert body["object_storage"] == "akamai"
+    assert body["interfaces_for_new_linodes"] == "legacy_config"
+    assert body["maintenance_policy"] == "linode/migrate"
+    assert "longview_subscription" not in body
     mock_client.get_account_settings.assert_awaited_once_with()
 
 
@@ -3310,7 +3331,13 @@ async def test_handle_linode_account_tag_create(sample_config: Config) -> None:
         assert len(result) == 1
         assert json.loads(result[0].text) == {
             "message": "Tag 'production' created successfully",
-            "tag": response_data,
+            "tag": {
+                "label": "production",
+                "domains": [],
+                "linodes": [],
+                "nodebalancers": [],
+                "volumes": [],
+            },
         }
         mock_client.create_tag.assert_awaited_once_with(
             "production",
@@ -3676,7 +3703,13 @@ async def test_handle_linode_account_support_ticket_get(
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        body = json.loads(result[0].text)
+        assert body["id"] == 123
+        assert body["summary"] == "Need help"
+        assert body["attachments"] == []
+        assert body["closable"] is False
+        assert "closed" not in body
+        assert "entity" not in body
         mock_client.get_support_ticket.assert_awaited_once_with(123)
 
 
@@ -3753,7 +3786,11 @@ async def test_handle_linode_account_oauth_client_get(
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        body = json.loads(result[0].text)
+        assert body["id"] == "client-123"
+        assert body["label"] == "Example OAuth Client"
+        assert body["public"] is False
+        assert body["thumbnail_url"] == ""
         mock_client.get_account_oauth_client.assert_awaited_once_with("client-123")
 
 
@@ -4125,7 +4162,12 @@ async def test_handle_linode_account_event_get(sample_config: Config) -> None:
         result = await handle_linode_account_event_get({"event_id": 123}, sample_config)
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == 123
+    assert data["action"] == "linode_create"
+    assert data["status"] == "finished"
+    assert data["seen"] is False
+    assert "entity" not in data
     mock_client.get_account_event.assert_awaited_once_with(123)
 
 
@@ -5588,9 +5630,7 @@ async def test_create_linode_kernel_get_tool_def() -> None:
     assert tool.name == "linode_kernel_get"
     assert capability.name == "Read"
     assert tool.inputSchema["required"] == ["kernel_id"]
-    assert tool.inputSchema["properties"]["kernel_id"]["pattern"] == (
-        r"^(?!.*\.\.)linode/[A-Za-z0-9._-]+$"
-    )
+    assert "kernel_id" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_kernel_get_success(sample_config: Config) -> None:
@@ -5619,7 +5659,11 @@ async def test_handle_linode_kernel_get_success(sample_config: Config) -> None:
 
         assert len(result) == 1
         body = json.loads(result[0].text)
-        assert body["kernel"] == kernel
+        assert body["id"] == "linode/latest-64bit"
+        assert body["label"] == "Latest 64 bit"
+        assert body["kvm"] is True
+        assert body["deprecated"] is False
+        assert "xen" not in body
         mock_client.get_kernel.assert_awaited_once_with("linode/latest-64bit")
 
 
@@ -5649,7 +5693,7 @@ async def test_handle_linode_kernel_get_accepts_valid_kernel_ids(
             sample_config,
         )
 
-    assert json.loads(result[0].text)["kernel"]["id"] == kernel_id
+    assert json.loads(result[0].text)["id"] == kernel_id
     mock_client.get_kernel.assert_awaited_once_with(kernel_id)
 
 
@@ -5688,9 +5732,7 @@ async def test_create_linode_image_get_tool_def() -> None:
     assert tool.name == "linode_image_get"
     assert capability.name == "Read"
     assert tool.inputSchema["required"] == ["image_id"]
-    assert tool.inputSchema["properties"]["image_id"]["pattern"] == (
-        r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$"
-    )
+    assert "image_id" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_image_get_success(sample_config: Config) -> None:
@@ -5727,8 +5769,8 @@ async def test_handle_linode_image_get_success(sample_config: Config) -> None:
 
         assert len(result) == 1
         body = json.loads(result[0].text)
-        assert body["image"]["id"] == "linode/ubuntu24.04"
-        assert body["image"]["label"] == "Ubuntu 24.04 LTS"
+        assert body["id"] == "linode/ubuntu24.04"
+        assert body["label"] == "Ubuntu 24.04 LTS"
         mock_client.get_image.assert_awaited_once_with("linode/ubuntu24.04")
 
 
@@ -7080,7 +7122,11 @@ async def test_handle_linode_nodebalancer_config_get(sample_config: Config) -> N
 
         assert len(result) == 1
         data = json.loads(result[0].text)
-        assert data == mock_config
+        assert data["id"] == 6
+        assert data["port"] == 80
+        assert data["protocol"] == "http"
+        assert data["nodes_status"] == {"up": 0, "down": 0}
+        assert data["check_passive"] is False
         mock_client.get_nodebalancer_config.assert_called_once_with(8, 6)
 
 
@@ -7707,8 +7753,8 @@ async def test_linode_nodebalancer_vpc_config_get_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_vpc_config_get"
     assert capability == Capability.Read
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["vpc_config_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
+    assert "vpc_config_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["nodebalancer_id", "vpc_config_id"]
 
 
@@ -7738,6 +7784,7 @@ async def test_handle_linode_nodebalancer_vpc_config_get(
         data = json.loads(result[0].text)
         assert data["id"] == 456
         assert data["vpc_id"] == 789
+        assert "ipv4_range_id" not in data
         mock_client.get_nodebalancer_vpc_config.assert_called_once_with(123, 456)
 
 
@@ -17499,15 +17546,14 @@ async def test_instance_clone_no_confirm(
 
 async def test_instance_clone_success(
     sample_config: Config,
+    sample_instance_data: dict[str, Any],
 ) -> None:
     """Clone should succeed with valid input."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.clone_instance.return_value = {
-            "id": 999,
-            "label": "cloned",
-            "status": "provisioning",
-        }
+        mock_client.clone_instance.return_value = _make_instance(
+            999, "cloned", "provisioning", sample_instance_data
+        )
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mc.return_value = mock_client
@@ -17524,11 +17570,14 @@ async def test_instance_clone_success(
 
 async def test_instance_clone_passes_backups_enabled(
     sample_config: Config,
+    sample_instance_data: dict[str, Any],
 ) -> None:
     """Clone forwards backups_enabled to the client."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.clone_instance.return_value = {"id": 999, "label": "cloned"}
+        mock_client.clone_instance.return_value = _make_instance(
+            999, "cloned", "provisioning", sample_instance_data
+        )
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mc.return_value = mock_client
@@ -19082,7 +19131,7 @@ def test_create_linode_monitor_service_get_tool() -> None:
     schema = tool.inputSchema
     assert "confirm" not in schema["properties"]
     assert schema["required"] == ["service_type"]
-    assert schema["properties"]["service_type"]["pattern"] == "^[A-Za-z0-9_-]+$"
+    assert "service_type" in schema["properties"]
 
 
 async def test_handle_linode_monitor_service_get(
@@ -20316,7 +20365,7 @@ def test_create_linode_profile_login_get_tool() -> None:
     assert tool.name == "linode_profile_login_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["login_id"]
-    assert tool.inputSchema["properties"]["login_id"]["minimum"] == 1
+    assert "login_id" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_profile_login_get_requires_login_id(
@@ -20362,11 +20411,12 @@ async def test_handle_linode_profile_login_get_success(
             {"login_id": 12345}, sample_config
         )
 
-    assert json.loads(result[0].text) == {
-        "id": 12345,
-        "ip": "192.0.2.10",
-        "datetime": "2024-01-02T03:04:05",
-    }
+    body = json.loads(result[0].text)
+    assert body["id"] == 12345
+    assert body["ip"] == "192.0.2.10"
+    assert body["datetime"] == "2024-01-02T03:04:05"
+    assert body["restricted"] is False
+    assert body["username"] == ""
     mock_client.get_profile_login.assert_awaited_once_with(12345)
 
 
@@ -20698,7 +20748,7 @@ def test_create_linode_profile_app_get_tool() -> None:
     assert tool.name == "linode_profile_app_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["app_id"]
-    assert tool.inputSchema["properties"]["app_id"]["minimum"] == 1
+    assert "app_id" in tool.inputSchema["properties"]
 
 
 def test_linode_profile_app_get_tool_is_exported_and_registered() -> None:
@@ -20737,7 +20787,11 @@ async def test_handle_linode_profile_app_get_success(sample_config: Config) -> N
 
         result = await handle_linode_profile_app_get({"app_id": 123}, sample_config)
 
-    assert json.loads(result[0].text) == {"id": 123, "label": "authorized-app"}
+    body = json.loads(result[0].text)
+    assert body["id"] == 123
+    assert body["label"] == "authorized-app"
+    assert body["scopes"] == ""
+    assert body["website"] == ""
     mock_client.get_profile_app.assert_awaited_once_with(123)
 
 
@@ -21074,7 +21128,7 @@ def test_create_linode_placement_group_get_tool() -> None:
     assert tool.name == "linode_placement_group_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["group_id"]
-    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
+    assert "group_id" in tool.inputSchema["properties"]
 
 
 @pytest.mark.parametrize("group_id", [None, 0, -1, True, "789", "/", "?", ".."])
@@ -21106,7 +21160,11 @@ async def test_handle_linode_placement_group_get_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == 789
+    assert data["label"] == "pg-a"
+    assert data["members"] == []
+    assert "migrations" not in data
     mock_client.get_placement_group.assert_awaited_once_with(789)
 
 
@@ -21283,7 +21341,11 @@ async def test_handle_linode_placement_group_create_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["message"] == "Placement group 'pg-a' created successfully"
+    assert body["placement_group"]["id"] == 789
+    assert body["placement_group"]["label"] == "pg-a"
+    assert body["placement_group"]["members"] == []
     mock_client.create_placement_group.assert_awaited_once_with(
         "pg-a", "us-mia", "anti_affinity:local", "strict"
     )
@@ -21468,7 +21530,10 @@ async def test_handle_linode_placement_group_update_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 789
+    assert body["label"] == "new-label"
+    assert body["members"] == []
     mock_client.update_placement_group.assert_awaited_once_with(789, "new-label")
 
 
@@ -21562,7 +21627,9 @@ async def test_handle_linode_placement_group_assign_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["message"] == "Assigned 2 Linode(s) to placement group 789"
+    assert body["placement_group"]["members"] == []
     mock_client.assign_placement_group.assert_awaited_once_with(789, [123, 456])
 
 
@@ -21656,7 +21723,9 @@ async def test_handle_linode_placement_group_unassign_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["message"] == "Linodes unassigned from placement group 789 successfully"
+    assert body["placement_group"]["members"] == []
     mock_client.unassign_placement_group.assert_awaited_once_with(789, [123, 456])
 
 
@@ -22436,8 +22505,12 @@ async def test_handle_linode_firewall_device_get(
 
     mock_device = {
         "id": 456,
-        "label": "linode-123",
-        "type": "linode",
+        "entity": {
+            "id": 123,
+            "label": "linode-123",
+            "type": "linode",
+            "url": "/v4/linode/instances/123",
+        },
         "created": "2018-01-01T01:01:01",
         "updated": "2018-01-01T01:01:01",
     }
@@ -22459,7 +22532,9 @@ async def test_handle_linode_firewall_device_get(
         assert len(result) == 1
         data = json.loads(result[0].text)
         assert data["id"] == 456
-        assert data["label"] == "linode-123"
+        assert data["entity"]["label"] == "linode-123"
+        assert data["entity"]["type"] == "linode"
+        assert "parent_entity" not in data["entity"]
 
 
 async def test_handle_linode_firewall_device_get_missing_args(

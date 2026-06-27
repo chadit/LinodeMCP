@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Domain mirrors the Linode DNS domain object. master_ips, axfr_ips, and tags are
+// repeated fields, emitted as [] when empty.
+message Domain {
+  int32 id = 1;
+  string domain = 2;
+  string type = 3;
+  string status = 4;
+  string soa_email = 5;
+  string description = 6;
+  int32 retry_sec = 7;
+  repeated string master_ips = 8;
+  repeated string axfr_ips = 9;
+  int32 expire_sec = 10;
+  int32 refresh_sec = 11;
+  int32 ttl_sec = 12;
+  repeated string tags = 13;
+  string created = 14;
+  string updated = 15;
+  string group = 16;
+}
+
+// DomainWriteResponse is the {message, domain} envelope the domain create/update
+// tools return.
+message DomainWriteResponse {
+  string message = 1;
+  Domain domain = 2;
+}
+
+// DomainGetInput is the input contract for linode_domain_get.
+message DomainGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the domain to retrieve (required).
+  int32 domain_id = 2;
+}
+
+// DomainRecord mirrors a Linode DNS record within a domain.
+message DomainRecord {
+  int32 id = 1;
+  string type = 2;
+  string name = 3;
+  string target = 4;
+  int32 priority = 5;
+  int32 weight = 6;
+  int32 port = 7;
+  string service = 8;
+  string protocol = 9;
+  int32 ttl_sec = 10;
+  string tag = 11;
+  string created = 12;
+  string updated = 13;
+}
+
+// DomainRecordWriteResponse is the {message, record} envelope the domain record
+// create/update tools return.
+message DomainRecordWriteResponse {
+  string message = 1;
+  DomainRecord record = 2;
+}
+
+// DomainRecordGetInput is the input contract for linode_domain_record_get.
+message DomainRecordGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the domain (required).
+  int32 domain_id = 2;
+  // The ID of the domain record to retrieve (required).
+  int32 record_id = 3;
+}

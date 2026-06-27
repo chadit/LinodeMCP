@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// PlacementGroup mirrors the Linode placement group object. members is a repeated
+// field (emitted as [] when empty, vs the Go struct's omitempty); migrations is an
+// optional message, omitted when the group is not migrating.
+message PlacementGroup {
+  int32 id = 1;
+  string label = 2;
+  string region = 3;
+  string placement_group_type = 4;
+  string placement_group_policy = 5;
+  bool is_compliant = 6;
+  repeated PlacementGroupMember members = 7;
+  optional PlacementGroupMigrations migrations = 8;
+}
+
+// PlacementGroupMember is a Linode assigned to a placement group.
+message PlacementGroupMember {
+  int32 linode_id = 1;
+  bool is_compliant = 2;
+}
+
+// PlacementGroupMigrations lists in-progress migrations into and out of a group.
+message PlacementGroupMigrations {
+  repeated PlacementGroupMigration inbound = 1;
+  repeated PlacementGroupMigration outbound = 2;
+}
+
+// PlacementGroupMigration is a single Linode migration in a placement group.
+message PlacementGroupMigration {
+  int32 linode_id = 1;
+}
+
+// PlacementGroupGetInput is the input contract for linode_placement_group_get.
+message PlacementGroupGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the placement group to retrieve (required).
+  int32 group_id = 2;
+}
+
+// PlacementGroupWriteResponse is the {message, placement_group} envelope the
+// placement group create tool returns.
+message PlacementGroupWriteResponse {
+  string message = 1;
+  PlacementGroup placement_group = 2;
+}

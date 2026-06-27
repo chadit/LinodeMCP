@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -365,20 +366,17 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 		req.Booted = &booted
 	}
 
-	instance, err := client.CreateInstance(ctx, &req)
+	instance, err := client.CreateInstanceProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create instance: %v", err)), nil
 	}
 
-	response := struct {
-		Message  string           `json:"message"`
-		Instance *linode.Instance `json:"instance"`
-	}{
-		Message:  fmt.Sprintf("Instance '%s' (ID: %d) created successfully in %s", instance.Label, instance.ID, instance.Region),
+	response := &linodev1.InstanceWriteResponse{
+		Message:  fmt.Sprintf("Instance '%s' (ID: %d) created successfully in %s", instance.GetLabel(), instance.GetId(), instance.GetRegion()),
 		Instance: instance,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // buildDefaultRoute returns a default-route struct only when at least one
@@ -459,42 +457,19 @@ func handleLinodeInstanceUpdateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instance, err := client.UpdateInstance(ctx, instanceID, req)
+	instance, err := client.UpdateInstanceProto(ctx, instanceID, req)
 	if err != nil {
 		msg := fmt.Sprint("instance ", instanceID, " update failed: ", err)
 
 		return mcp.NewToolResultError(msg), nil
 	}
 
-	response := struct {
-		Message  string                `json:"message"`
-		Instance instanceUpdateSummary `json:"instance"`
-	}{
-		Message: fmt.Sprintf("Instance %d updated successfully", instance.ID),
-		Instance: instanceUpdateSummary{
-			ID:              instance.ID,
-			Label:           instance.Label,
-			Status:          instance.Status,
-			Type:            instance.Type,
-			Region:          instance.Region,
-			Tags:            instance.Tags,
-			WatchdogEnabled: instance.WatchdogEnabled,
-		},
+	response := &linodev1.InstanceWriteResponse{
+		Message:  fmt.Sprintf("Instance %d updated successfully", instance.GetId()),
+		Instance: instance,
 	}
 
-	return MarshalToolResponse(response)
-}
-
-// instanceUpdateSummary is the condensed instance view linode_instance_update
-// returns, matching the Python implementation's response shape for this tool.
-type instanceUpdateSummary struct {
-	ID              int      `json:"id"`
-	Label           string   `json:"label"`
-	Status          string   `json:"status"`
-	Type            string   `json:"type"`
-	Region          string   `json:"region"`
-	Tags            []string `json:"tags"`
-	WatchdogEnabled bool     `json:"watchdog_enabled"`
+	return MarshalProtoToolResponse(response)
 }
 
 // instanceUpdateRequestFromTool builds the UpdateInstanceRequest from the tool

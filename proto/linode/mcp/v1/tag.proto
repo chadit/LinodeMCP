@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Tag mirrors the Linode tag object. The entity-ID lists are repeated fields,
+// emitted as [] when empty (vs the Go struct's omitempty).
+message Tag {
+  string label = 1;
+  repeated int32 domains = 2;
+  repeated int32 linodes = 3;
+  repeated int32 nodebalancers = 4;
+  repeated int32 volumes = 5;
+}
+
+// TagWriteResponse is the {message, tag} envelope the linode_tag_create tool
+// returns.
+message TagWriteResponse {
+  string message = 1;
+  Tag tag = 2;
+}

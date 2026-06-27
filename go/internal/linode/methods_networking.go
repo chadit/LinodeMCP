@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -177,6 +179,33 @@ func (c *Client) httpListFirewallRules(ctx context.Context, firewallID int) (*Fi
 	}
 
 	return &rules, nil
+}
+
+// httpListFirewallRulesProto retrieves a firewall's ruleset as a proto message.
+func (c *Client) httpListFirewallRulesProto(ctx context.Context, firewallID int) (*linodev1.FirewallRules, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/rules"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListFirewallRules", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	rules := &linodev1.FirewallRules{}
+	if err := c.handleProtoResponse(resp, rules); err != nil {
+		return nil, err
+	}
+
+	return rules, nil
 }
 
 // UpdateFirewallRules replaces the rules for a Cloud Firewall.
@@ -374,6 +403,38 @@ func (c *Client) httpGetFirewallDevice(ctx context.Context, firewallID, deviceID
 	return &device, nil
 }
 
+// httpGetFirewallDeviceProto retrieves one firewall device as a proto message.
+func (c *Client) httpGetFirewallDeviceProto(ctx context.Context, firewallID, deviceID int) (*linodev1.FirewallDevice, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	if deviceID <= 0 {
+		return nil, ErrFirewallDeviceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	encodedDeviceID := url.PathEscape(strconv.Itoa(deviceID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/devices/" + encodedDeviceID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetFirewallDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	device := &linodev1.FirewallDevice{}
+	if err := c.handleProtoResponse(resp, device); err != nil {
+		return nil, err
+	}
+
+	return device, nil
+}
+
 // DeleteFirewallDevice removes one device assignment from a Cloud Firewall.
 func (c *Client) httpDeleteFirewallDevice(ctx context.Context, firewallID, deviceID int) error {
 	if firewallID <= 0 {
@@ -544,6 +605,28 @@ func (c *Client) httpGetFirewall(ctx context.Context, firewallID int) (*Firewall
 	return &firewall, nil
 }
 
+// httpGetFirewallProto retrieves one Cloud Firewall as a proto message.
+func (c *Client) httpGetFirewallProto(ctx context.Context, firewallID int) (*linodev1.Firewall, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointFirewalls+"/%d", firewallID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetFirewall", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	firewall := &linodev1.Firewall{}
+	if err := c.handleProtoResponse(resp, firewall); err != nil {
+		return nil, err
+	}
+
+	return firewall, nil
+}
+
 // CreateFirewall creates a new Cloud Firewall.
 func (c *Client) httpCreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -657,6 +740,32 @@ func (c *Client) httpGetNetworkingIP(ctx context.Context, address string) (*IPAd
 	return &ip, nil
 }
 
+// httpGetNetworkingIPProto retrieves a networking IP as a proto message.
+func (c *Client) httpGetNetworkingIPProto(ctx context.Context, address string) (*linodev1.IPAddress, error) {
+	if err := validateNetworkingIPAddress(address); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingIPs + "/" + url.PathEscape(address)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNetworkingIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ip := &linodev1.IPAddress{}
+	if err := c.handleProtoResponse(resp, ip); err != nil {
+		return nil, err
+	}
+
+	return ip, nil
+}
+
 // UpdateNetworkingIP updates reverse DNS for an account-level IP address.
 func (c *Client) httpUpdateNetworkingIP(ctx context.Context, address string, req UpdateNetworkingIPRequest) (*IPAddress, error) {
 	if err := validateNetworkingIPAddress(address); err != nil {
@@ -685,6 +794,37 @@ func (c *Client) httpUpdateNetworkingIP(ctx context.Context, address string, req
 	}
 
 	return &ip, nil
+}
+
+// httpUpdateNetworkingIPProto updates a networking IP and decodes the response as
+// a proto message.
+func (c *Client) httpUpdateNetworkingIPProto(ctx context.Context, address string, req UpdateNetworkingIPRequest) (*linodev1.IPAddress, error) {
+	if err := validateNetworkingIPAddress(address); err != nil {
+		return nil, err
+	}
+
+	if req.RDNS == "" {
+		return nil, ErrRDNSRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingIPs + "/" + url.PathEscape(address)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNetworkingIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ip := &linodev1.IPAddress{}
+	if err := c.handleProtoResponse(resp, ip); err != nil {
+		return nil, err
+	}
+
+	return ip, nil
 }
 
 // AllocateNetworkingIP allocates an account-level IP address.
@@ -1060,6 +1200,39 @@ func (c *Client) httpGetNodeBalancerVPCConfig(ctx context.Context, nodeBalancerI
 	return &config, nil
 }
 
+// httpGetNodeBalancerVPCConfigProto retrieves one NodeBalancer VPC config as a
+// proto message.
+func (c *Client) httpGetNodeBalancerVPCConfigProto(ctx context.Context, nodeBalancerID, vpcConfigID int) (*linodev1.NodeBalancerVPCConfig, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if vpcConfigID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedVPCConfigID := url.PathEscape(strconv.Itoa(vpcConfigID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/vpcs/" + encodedVPCConfigID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancerVPCConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	config := &linodev1.NodeBalancerVPCConfig{}
+	if err := c.handleProtoResponse(resp, config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
 // ListNodeBalancerConfigs retrieves configs for a NodeBalancer by its ID.
 func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID, page, pageSize int) ([]NodeBalancerConfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1196,6 +1369,31 @@ func (c *Client) httpGetNodeBalancerConfig(ctx context.Context, nodeBalancerID, 
 	return &config, nil
 }
 
+// httpGetNodeBalancerConfigProto retrieves one NodeBalancer config as a proto
+// message.
+func (c *Client) httpGetNodeBalancerConfigProto(ctx context.Context, nodeBalancerID, configID int) (*linodev1.NodeBalancerConfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancerConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	config := &linodev1.NodeBalancerConfig{}
+	if err := c.handleProtoResponse(resp, config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
 // GetNodeBalancerConfigNode retrieves a single node for a NodeBalancer config.
 func (c *Client) httpGetNodeBalancerConfigNode(ctx context.Context, nodeBalancerID, configID, nodeID int) (*NodeBalancerConfigNode, error) {
 	if nodeBalancerID <= 0 {
@@ -1231,6 +1429,44 @@ func (c *Client) httpGetNodeBalancerConfigNode(ctx context.Context, nodeBalancer
 	}
 
 	return &node, nil
+}
+
+// httpGetNodeBalancerConfigNodeProto retrieves one NodeBalancer config node as a
+// proto message.
+func (c *Client) httpGetNodeBalancerConfigNodeProto(ctx context.Context, nodeBalancerID, configID, nodeID int) (*linodev1.NodeBalancerConfigNode, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	if nodeID <= 0 {
+		return nil, ErrNodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	encodedNodeID := url.PathEscape(strconv.Itoa(nodeID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID + "/nodes/" + encodedNodeID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancerConfigNode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	node := &linodev1.NodeBalancerConfigNode{}
+	if err := c.handleProtoResponse(resp, node); err != nil {
+		return nil, err
+	}
+
+	return node, nil
 }
 
 // DeleteNodeBalancerConfigNode deletes a node from a NodeBalancer config.
@@ -1503,6 +1739,70 @@ func (c *Client) httpUpdateNodeBalancer(ctx context.Context, nodeBalancerID int,
 	}
 
 	return &nodeBalancer, nil
+}
+
+// httpGetNodeBalancerProto retrieves a NodeBalancer as a proto message.
+func (c *Client) httpGetNodeBalancerProto(ctx context.Context, nodeBalancerID int) (*linodev1.NodeBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointNodeBalancers+"/%d", nodeBalancerID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancer", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	nodeBalancer := &linodev1.NodeBalancer{}
+	if err := c.handleProtoResponse(resp, nodeBalancer); err != nil {
+		return nil, err
+	}
+
+	return nodeBalancer, nil
+}
+
+// httpCreateNodeBalancerProto creates a NodeBalancer as a proto message.
+func (c *Client) httpCreateNodeBalancerProto(ctx context.Context, req CreateNodeBalancerRequest) (*linodev1.NodeBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNodeBalancers, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateNodeBalancer", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	nodeBalancer := &linodev1.NodeBalancer{}
+	if err := c.handleProtoResponse(resp, nodeBalancer); err != nil {
+		return nil, err
+	}
+
+	return nodeBalancer, nil
+}
+
+// httpUpdateNodeBalancerProto updates a NodeBalancer as a proto message.
+func (c *Client) httpUpdateNodeBalancerProto(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*linodev1.NodeBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointNodeBalancers+"/%d", nodeBalancerID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNodeBalancer", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	nodeBalancer := &linodev1.NodeBalancer{}
+	if err := c.handleProtoResponse(resp, nodeBalancer); err != nil {
+		return nil, err
+	}
+
+	return nodeBalancer, nil
 }
 
 // DeleteNodeBalancer deletes a NodeBalancer.

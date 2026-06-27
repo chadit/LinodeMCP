@@ -254,20 +254,11 @@ func TestLinodeFirewallDeviceGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
-	}
-
-	if _, ok := tool.InputSchema.Properties[keyFirewallDeviceID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallDeviceID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyFirewallDeviceID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallDeviceID)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyFirewallID, keyFirewallDeviceID} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 

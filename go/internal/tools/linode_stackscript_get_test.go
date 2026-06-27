@@ -36,12 +36,13 @@ func TestLinodeStackScriptGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyStackScriptID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyStackScriptID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyStackScriptID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyStackScriptID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {

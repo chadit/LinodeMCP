@@ -1,0 +1,320 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Instance mirrors the Linode instance object returned by
+// GET /linode/instances/{linodeId}. Field order and JSON names match the
+// shape both implementations emit today, so the generated protojson output is
+// byte-compatible with the existing tool response.
+message Instance {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  string type = 4;
+  string region = 5;
+  string image = 6;
+  repeated string ipv4 = 7;
+  string ipv6 = 8;
+  string hypervisor = 9;
+  Specs specs = 10;
+  Alerts alerts = 11;
+  Backups backups = 12;
+  string created = 13;
+  string updated = 14;
+  string group = 15;
+  repeated string tags = 16;
+  bool watchdog_enabled = 17;
+  // omitempty today: dropped when empty.
+  optional string interface_generation = 18;
+  repeated InstanceInterface interfaces = 19;
+}
+
+message Specs {
+  int32 disk = 1;
+  int32 memory = 2;
+  int32 vcpus = 3;
+  int32 gpus = 4;
+  int32 transfer = 5;
+}
+
+message Alerts {
+  int32 cpu = 1;
+  int32 network_in = 2;
+  int32 network_out = 3;
+  int32 transfer_quota = 4;
+  int32 io = 5;
+}
+
+message Backups {
+  Schedule schedule = 1;
+  // Today the Go tag has no omitempty, so this serializes as null when absent.
+  // protojson omits unpopulated message fields by default; the serialization
+  // decision for this field is tracked in the proto-contract spec.
+  Backup last_successful = 2;
+  bool enabled = 3;
+  bool available = 4;
+}
+
+message Schedule {
+  string day = 1;
+  string window = 2;
+}
+
+message Backup {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  string type = 4;
+  string region = 5;
+  string created = 6;
+  string updated = 7;
+  string finished = 8;
+}
+
+// InstanceInterface is one network interface under the current Interfaces
+// generation. Exactly one of public, vpc, or vlan is set, so they live in a
+// oneof; protojson serializes only the set arm, matching today's omitempty
+// pointers.
+message InstanceInterface {
+  int32 id = 1;
+  oneof config {
+    InterfacePublicConfig public = 2;
+    InterfaceVpcConfig vpc = 3;
+    InterfaceVlanConfig vlan = 4;
+  }
+  InterfaceDefaultRoute default_route = 5;
+  optional int32 firewall_id = 6;
+  optional string mac_address = 7;
+  optional string created = 8;
+  optional string updated = 9;
+  optional int32 version = 10;
+}
+
+// Interface sub-configs under the current Interfaces generation. Exactly one of
+// public, vpc, or vlan is set on an InstanceInterface.
+
+message InterfacePublicConfig {
+  InterfacePublicIpv4 ipv4 = 1;
+  InterfacePublicIpv6 ipv6 = 2;
+}
+
+message InterfacePublicIpv4 {
+  repeated InterfaceIpv4Address addresses = 1;
+}
+
+message InterfacePublicIpv6 {
+  repeated InterfaceIpv6Range ranges = 1;
+}
+
+message InterfaceIpv4Address {
+  string address = 1;
+  optional bool primary = 2;
+}
+
+message InterfaceIpv6Range {
+  string range = 1;
+}
+
+message InterfaceVpcConfig {
+  int32 subnet_id = 1;
+  InterfaceVpcIpv4 ipv4 = 2;
+}
+
+message InterfaceVpcIpv4 {
+  repeated InterfaceIpv4Address addresses = 1;
+}
+
+message InterfaceVlanConfig {
+  string vlan_label = 1;
+  string ipam_address = 2;
+}
+
+message InterfaceDefaultRoute {
+  optional bool ipv4 = 1;
+  optional bool ipv6 = 2;
+}
+
+// InstanceInterfaceSettings is the network interface settings for a Linode
+// instance. default_route is omitted when unset; network_helper is nullable.
+message InstanceInterfaceSettings {
+  InterfaceDefaultRoute default_route = 1;
+  optional bool network_helper = 2;
+}
+
+// InstanceInterfaceSettingsGetInput is the input contract for
+// linode_instance_interface_settings_get.
+message InstanceInterfaceSettingsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// ===== Instance config profiles (GET /linode/instances/{id}/configs) =====
+
+message ConfigDevice {
+  optional int32 disk_id = 1;
+  optional int32 volume_id = 2;
+}
+
+message ConfigHelpers {
+  optional bool devtmpfs_automount = 1;
+  optional bool distro = 2;
+  optional bool modules_dep = 3;
+  optional bool network = 4;
+  optional bool updatedb_disabled = 5;
+}
+
+message ConfigInterfaceIpv4 {
+  optional string nat_1_1 = 1;
+  optional string vpc = 2;
+}
+
+message ConfigInterfaceResponse {
+  int32 id = 1;
+  bool active = 2;
+  string purpose = 3;
+  optional string label = 4;
+  optional string ipam_address = 5;
+  bool primary = 6;
+  optional int32 subnet_id = 7;
+  optional int32 vpc_id = 8;
+  ConfigInterfaceIpv4 ipv4 = 9;
+  repeated string ip_ranges = 10;
+}
+
+message InstanceConfig {
+  int32 id = 1;
+  string label = 2;
+  string kernel = 3;
+  string comments = 4;
+  int32 memory_limit = 5;
+  string root_device = 6;
+  string run_level = 7;
+  string virt_mode = 8;
+  map<string, ConfigDevice> devices = 9;
+  ConfigHelpers helpers = 10;
+  repeated ConfigInterfaceResponse interfaces = 11;
+  string created = 12;
+  string updated = 13;
+}
+
+// ===== Instance disks (GET /linode/instances/{id}/disks) =====
+
+message InstanceDisk {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  int32 size = 4;
+  string filesystem = 5;
+  string created = 6;
+  string updated = 7;
+}
+
+// ===== Instance backups (GET /linode/instances/{id}/backups) =====
+
+message InstanceBackupDisk {
+  string label = 1;
+  int32 size = 2;
+  string filesystem = 3;
+}
+
+message InstanceBackup {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  string type = 4;
+  string created = 5;
+  string updated = 6;
+  string finished = 7;
+  string region = 8;
+  bool available = 9;
+  repeated string configs = 10;
+  repeated InstanceBackupDisk disks = 11;
+}
+
+message InstanceBackupSnapshots {
+  InstanceBackup current = 1;
+  InstanceBackup in_progress = 2;
+}
+
+// InstanceBackupGetInput is the input contract for linode_instance_backup_get.
+message InstanceBackupGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the backup to retrieve (required).
+  int32 backup_id = 3;
+}
+
+// InstanceConfigInterfaceGetInput is the input contract for
+// linode_instance_config_interface_get.
+message InstanceConfigInterfaceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+  // The ID of the configuration profile interface (required).
+  int32 interface_id = 4;
+}
+
+message InstanceBackupsResponse {
+  repeated InstanceBackup automatic = 1;
+  InstanceBackupSnapshots snapshot = 2;
+}
+
+// ===== Instance interface history (current Interfaces generation) =====
+
+message InstanceInterfaceHistory {
+  int32 interface_history_id = 1;
+  int32 interface_id = 2;
+  int32 linode_id = 3;
+  int32 version = 4;
+  string created = 5;
+  // interface_data is a free-form snapshot of the interface at that version.
+  google.protobuf.Struct interface_data = 6;
+}
+
+// InstanceListResponse mirrors the linode_instance_list wrapper: a count, an
+// optional filter echo, and the instances. This is the project's own envelope,
+// not the Linode {data,page,pages,results} list shape.
+message InstanceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Instance instances = 3;
+}
+
+// InstanceWriteResponse is the {message, instance} envelope the instance write
+// tools (create, update, clone) return: a human-readable confirmation plus the
+// affected instance.
+message InstanceWriteResponse {
+  string message = 1;
+  Instance instance = 2;
+}
+
+// InstanceGetInput is the input contract for linode_instance_get. The generated
+// JSON Schema becomes the tool's MCP inputSchema. A plain (non-optional) field
+// is required in the schema; an optional field is not. No external validation
+// annotation is needed.
+message InstanceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to retrieve (required).
+  string instance_id = 2;
+}
+
+// InstanceListInput is the input contract for linode_instance_list. Both fields
+// are optional, so the generated schema has no required entries.
+message InstanceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter instances by status (running, stopped, etc.).
+  optional string status = 2;
+}

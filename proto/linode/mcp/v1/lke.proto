@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// LKEControlPlane is the control-plane configuration nested in an LKE cluster.
+message LKEControlPlane {
+  bool high_availability = 1;
+}
+
+// LKECluster mirrors the Linode Kubernetes Engine cluster object.
+message LKECluster {
+  int32 id = 1;
+  string label = 2;
+  string region = 3;
+  string k8s_version = 4;
+  string status = 5;
+  repeated string tags = 6;
+  string created = 7;
+  string updated = 8;
+  LKEControlPlane control_plane = 9;
+}
+
+// LKEClusterWriteResponse is the {message, cluster} envelope the LKE cluster
+// create/update tools return.
+message LKEClusterWriteResponse {
+  string message = 1;
+  LKECluster cluster = 2;
+}
+
+// LKEClusterGetInput is the input contract for linode_lke_cluster_get.
+message LKEClusterGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster to retrieve (required).
+  string cluster_id = 2;
+}

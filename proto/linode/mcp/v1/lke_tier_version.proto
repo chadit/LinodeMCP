@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// LKETierVersion is one Kubernetes version available for a specific LKE tier.
+message LKETierVersion {
+  string id = 1;
+  string tier = 2;
+}
+
+// LKETierVersionGetInput is the input contract for linode_lke_tier_version_get.
+message LKETierVersionGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The LKE tier ID, standard or enterprise (required).
+  string tier = 2;
+  // The Kubernetes version ID (required).
+  string version = 3;
+}

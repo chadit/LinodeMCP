@@ -47,13 +47,13 @@ func TestLinodeManagedCredentialGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[managedCredentialIDParam]; !ok {
-		t.Errorf("props missing key %v", managedCredentialIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, managedCredentialIDParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", managedCredentialIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

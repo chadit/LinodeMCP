@@ -17,6 +17,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -35,7 +36,6 @@ _CONFIRM_PROP: dict[str, Any] = {
     "type": "boolean",
     "description": "Set true to confirm this mutating operation.",
 }
-_SENSITIVE_LONGVIEW_CLIENT_FIELDS = frozenset({"api_key", "install_code"})
 
 
 def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
@@ -60,24 +60,26 @@ def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def longview_subscription_to_response_dict(sub: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Longview subscription API dict to proto-canonical form."""
+    price: dict[str, Any] = sub.get("price") or {}
+    return {
+        "clients_included": sub.get("clients_included", 0),
+        "id": sub.get("id", ""),
+        "label": sub.get("label", ""),
+        "price": {
+            "hourly": price.get("hourly", 0.0),
+            "monthly": price.get("monthly", 0.0),
+        },
+    }
+
+
 def create_linode_longview_subscription_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_longview_subscription_get tool."""
     return Tool(
         name="linode_longview_subscription_get",
         description="Gets details for a single Longview subscription by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "subscription_id": {
-                    "type": "string",
-                    "description": (
-                        "Longview subscription ID to retrieve, for example longview-10"
-                    ),
-                },
-            },
-            "required": ["subscription_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LongviewSubscriptionGetInput"),
     ), Capability.Read
 
 
@@ -134,23 +136,28 @@ def create_linode_longview_client_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def longview_client_to_response_dict(client: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Longview client API dict to proto-canonical form."""
+    apps: dict[str, Any] = client.get("apps") or {}
+    return {
+        "apps": {
+            "apache": apps.get("apache", False),
+            "mysql": apps.get("mysql", False),
+            "nginx": apps.get("nginx", False),
+        },
+        "created": client.get("created", ""),
+        "id": client.get("id", 0),
+        "label": client.get("label", ""),
+        "updated": client.get("updated", ""),
+    }
+
+
 def create_linode_longview_client_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_longview_client_get tool."""
     return Tool(
         name="linode_longview_client_get",
         description="Gets a Longview client by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Longview client ID to retrieve",
-                },
-            },
-            "required": ["client_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.LongviewClientGetInput"),
     ), Capability.Read
 
 
@@ -270,15 +277,6 @@ def _longview_client_id_error(value: object) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         return "client_id must be a positive integer"
     return None
-
-
-def _sanitize_longview_client_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return Longview client data without credential-like fields."""
-    return {
-        key: value
-        for key, value in payload.items()
-        if key not in _SENSITIVE_LONGVIEW_CLIENT_FIELDS
-    }
 
 
 def _longview_client_update_body(arguments: dict[str, Any]) -> dict[str, str]:
@@ -444,7 +442,7 @@ async def handle_linode_longview_client_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         payload = await client.get_longview_client(client_id)
-        return _sanitize_longview_client_payload(payload)
+        return longview_client_to_response_dict(payload)
 
     return await execute_tool(cfg, arguments, "retrieve Longview client", _call)
 
@@ -592,7 +590,7 @@ async def handle_linode_longview_subscription_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         subscription = await client.get_longview_subscription(subscription_id)
-        return {"subscription": subscription}
+        return longview_subscription_to_response_dict(subscription)
 
     return await execute_tool(
         cfg,

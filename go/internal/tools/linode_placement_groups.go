@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
@@ -116,9 +117,9 @@ func handlePlacementGroupUpdateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(prepareFailure.Error()), nil
 	}
 
-	placementGroup, updateFailure := client.UpdatePlacementGroup(ctx, groupID, updateRequest)
+	placementGroup, updateFailure := client.UpdatePlacementGroupProto(ctx, groupID, updateRequest)
 	if updateFailure == nil {
-		return MarshalToolResponse(placementGroup)
+		return MarshalProtoToolResponse(placementGroup)
 	}
 
 	return mcp.NewToolResultError("Failed to update linode_placement_group_update: " + updateFailure.Error()), nil
@@ -234,20 +235,17 @@ func handleLinodePlacementGroupCreateRequest(ctx context.Context, request *mcp.C
 		PlacementGroupPolicy: placementGroupPolicy,
 	}
 
-	placementGroup, err := client.CreatePlacementGroup(ctx, &req)
+	placementGroup, err := client.CreatePlacementGroupProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create placement group: %v", err)), nil
 	}
 
-	response := struct {
-		Message        string                 `json:"message"`
-		PlacementGroup *linode.PlacementGroup `json:"placement_group"`
-	}{
-		Message:        fmt.Sprintf("Placement group '%s' created successfully", placementGroup.Label),
+	response := &linodev1.PlacementGroupWriteResponse{
+		Message:        fmt.Sprintf("Placement group '%s' created successfully", placementGroup.GetLabel()),
 		PlacementGroup: placementGroup,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format placement group response: %v", err)), nil
 	}
@@ -325,20 +323,17 @@ func handleLinodePlacementGroupUnassignRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	placementGroup, err := client.UnassignPlacementGroup(ctx, groupID, &req)
+	placementGroup, err := client.UnassignPlacementGroupProto(ctx, groupID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to unassign placement group %d: %v", groupID, err)), nil
 	}
 
-	response := struct {
-		Message        string                 `json:"message"`
-		PlacementGroup *linode.PlacementGroup `json:"placement_group"`
-	}{
+	response := &linodev1.PlacementGroupWriteResponse{
 		Message:        fmt.Sprintf("Linodes unassigned from placement group %d successfully", groupID),
 		PlacementGroup: placementGroup,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format placement group response: %v", err)), nil
 	}

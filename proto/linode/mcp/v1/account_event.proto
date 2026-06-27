@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+
+// AccountEventEntity is the resource an account event is about. id is a
+// passthrough value (the API returns an int or string depending on entity type).
+message AccountEventEntity {
+  google.protobuf.Value id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// AccountEvent mirrors one account event. duration, percent_complete, rate, and
+// time_remaining are nullable (omitted when unset); entity and secondary_entity
+// are omitted when unset.
+message AccountEvent {
+  string action = 1;
+  string created = 2;
+  optional double duration = 3;
+  AccountEventEntity entity = 4;
+  int32 id = 5;
+  string message = 6;
+  optional int32 percent_complete = 7;
+  optional string rate = 8;
+  AccountEventEntity secondary_entity = 9;
+  bool seen = 10;
+  string status = 11;
+  optional string time_remaining = 12;
+  string username = 13;
+}
+
+// AccountEventGetInput is the input contract for linode_account_event_get.
+message AccountEventGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the account event to retrieve (required).
+  int32 event_id = 2;
+}

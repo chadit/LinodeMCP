@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// IPAddress mirrors a Linode networking IP address. vpc_nat_1_1 is nullable
+// (omitted when unset).
+message IPAddress {
+  string address = 1;
+  string gateway = 2;
+  string subnet_mask = 3;
+  int32 prefix = 4;
+  string type = 5;
+  bool public = 6;
+  string rdns = 7;
+  int32 linode_id = 8;
+  string region = 9;
+  optional string vpc_nat_1_1 = 10;
+}
+
+// IPAddressWriteResponse is the {message, ip} envelope the networking IP update
+// tool returns.
+message IPAddressWriteResponse {
+  string message = 1;
+  IPAddress ip = 2;
+}
+
+// IPAddressGetInput is the input contract for linode_networking_ip_get.
+message IPAddressGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The IP address to retrieve (required).
+  string address = 2;
+}
+
+// InstanceIPGetInput is the input contract for linode_instance_ip_get (returns a
+// shared IPAddress).
+message InstanceIPGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The IP address to retrieve (required).
+  string address = 3;
+}

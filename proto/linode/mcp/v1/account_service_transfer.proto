@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// AccountEntityTransferEntities is the set of entities included in a service
+// transfer.
+message AccountEntityTransferEntities {
+  repeated int32 linodes = 1;
+}
+
+// AccountEntityTransfer mirrors one Linode account service transfer.
+message AccountEntityTransfer {
+  string created = 1;
+  AccountEntityTransferEntities entities = 2;
+  string expiry = 3;
+  bool is_sender = 4;
+  string status = 5;
+  string token = 6;
+  string updated = 7;
+}
+
+// AccountServiceTransferGetInput is the input contract for
+// linode_account_service_transfer_get.
+message AccountServiceTransferGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The service transfer token to retrieve (required).
+  string token = 2;
+}

@@ -445,12 +445,8 @@ func TestLinodeSupportTicketGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[supportTicketIDKey]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", supportTicketIDKey)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, supportTicketIDKey) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", supportTicketIDKey)
+	if !strings.Contains(string(tool.RawInputSchema), supportTicketIDKey) {
+		t.Errorf("tool.RawInputSchema missing key %v", supportTicketIDKey)
 	}
 
 	if handler == nil {

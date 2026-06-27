@@ -9,8 +9,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -58,16 +60,15 @@ func handleLinodeNetworkingIPListRequest(ctx context.Context, request *mcp.CallT
 
 // NewLinodeNetworkingIPGetTool creates a tool for retrieving one account-level IP address.
 func NewLinodeNetworkingIPGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ip_get",
 		"Gets details for one account-level IP address.",
-		[]mcp.ToolOption{
-			mcp.WithString(paramAddress, mcp.Required(),
-				mcp.Description("The IPv4 or IPv6 address to retrieve.")),
-		},
-		handleLinodeNetworkingIPGetRequest,
+		toolschemas.Schema("linode.mcp.v1.IPAddressGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -83,12 +84,12 @@ func handleLinodeNetworkingIPGetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ipAddr, err := client.GetNetworkingIP(ctx, address)
+	ipAddr, err := client.GetNetworkingIPProto(ctx, address)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve networking IP %s: %v", address, err)), nil
 	}
 
-	return MarshalToolResponse(ipAddr)
+	return MarshalProtoToolResponse(ipAddr)
 }
 
 // NewLinodeNetworkingIPUpdateRDNSTool creates a tool for updating account-level IP reverse DNS.
@@ -155,17 +156,14 @@ func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(failureMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string            `json:"message"`
-		IP      *linode.IPAddress `json:"ip"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.IPAddressWriteResponse{
 		Message: fmt.Sprintf("Networking IP %s RDNS updated", address),
-		IP:      ipAddr,
+		Ip:      ipAddr,
 	})
 }
 
-func updateNetworkingIPRDNS(ctx context.Context, client *linode.Client, address, rdns string) (*linode.IPAddress, string) {
-	ipAddr, err := client.UpdateNetworkingIP(ctx, address, linode.UpdateNetworkingIPRequest{RDNS: rdns})
+func updateNetworkingIPRDNS(ctx context.Context, client *linode.Client, address, rdns string) (*linodev1.IPAddress, string) {
+	ipAddr, err := client.UpdateNetworkingIPProto(ctx, address, linode.UpdateNetworkingIPRequest{RDNS: rdns})
 	if err != nil {
 		return nil, "Failed to update networking IP " + address + " RDNS: " + err.Error()
 	}

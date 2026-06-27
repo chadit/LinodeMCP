@@ -23,6 +23,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -266,35 +267,40 @@ def create_linode_instance_config_interface_delete_tool() -> tuple[Tool, Capabil
     ), Capability.Destroy
 
 
+def _config_interface_ipv4_to_response_dict(ipv4: dict[str, Any]) -> dict[str, Any]:
+    """Shape a config interface ipv4. nat_1_1/vpc nullable, omitted when null."""
+    body: dict[str, Any] = {}
+    if ipv4.get("nat_1_1") is not None:
+        body["nat_1_1"] = ipv4["nat_1_1"]
+    if ipv4.get("vpc") is not None:
+        body["vpc"] = ipv4["vpc"]
+    return body
+
+
+def config_interface_to_response_dict(interface: dict[str, Any]) -> dict[str, Any]:
+    """Shape one config interface to proto-canonical form."""
+    body: dict[str, Any] = {
+        "id": interface.get("id", 0),
+        "active": bool(interface.get("active")),
+        "purpose": interface.get("purpose", ""),
+        "primary": bool(interface.get("primary")),
+        "ip_ranges": interface.get("ip_ranges") or [],
+    }
+    for key in ("label", "ipam_address", "subnet_id", "vpc_id"):
+        if interface.get(key) is not None:
+            body[key] = interface[key]
+    ipv4: dict[str, Any] | None = interface.get("ipv4")
+    if ipv4 is not None:
+        body["ipv4"] = _config_interface_ipv4_to_response_dict(ipv4)
+    return body
+
+
 def create_linode_instance_config_interface_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_interface_get tool."""
     return Tool(
         name="linode_instance_config_interface_get",
         description="Gets an interface for a Linode instance configuration profile.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the configuration profile interface (required)"
-                    ),
-                },
-            },
-            "required": ["linode_id", "config_id", "interface_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceGetInput"),
     ), Capability.Read
 
 
@@ -351,23 +357,40 @@ def create_linode_instance_interface_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def _interface_default_route_to_response_dict(
+    default_route: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape an interface default route. ipv4/ipv6 omitted when unset."""
+    body: dict[str, Any] = {}
+    if default_route.get("ipv4") is not None:
+        body["ipv4"] = default_route["ipv4"]
+    if default_route.get("ipv6") is not None:
+        body["ipv6"] = default_route["ipv6"]
+    return body
+
+
+def instance_interface_settings_to_response_dict(
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    """Shape raw instance interface settings to proto-canonical form.
+
+    default_route is omitted when null; network_helper is omitted when null.
+    """
+    body: dict[str, Any] = {}
+    default_route = settings.get("default_route")
+    if default_route is not None:
+        body["default_route"] = _interface_default_route_to_response_dict(default_route)
+    if settings.get("network_helper") is not None:
+        body["network_helper"] = settings["network_helper"]
+    return body
+
+
 def create_linode_instance_interface_settings_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_interface_settings_get tool."""
     return Tool(
         name="linode_instance_interface_settings_get",
         description="Lists interface settings for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceSettingsGetInput"),
     ), Capability.Read
 
 
@@ -595,23 +618,7 @@ def create_linode_instance_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_list",
         description="Lists Linode instances with optional filtering by status",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "status": {
-                    "type": "string",
-                    "description": (
-                        "Filter instances by status (running, stopped, etc.)"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceListInput"),
     ), Capability.Read
 
 
@@ -1225,8 +1232,10 @@ async def handle_linode_instance_config_interface_get(
         return error_response("interface_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_config_interface(
-            linode_id, config_id, interface_id
+        return config_interface_to_response_dict(
+            await client.get_instance_config_interface(
+                linode_id, config_id, interface_id
+            )
         )
 
     return await execute_tool(
@@ -1302,7 +1311,9 @@ async def handle_linode_instance_interface_settings_get(
         return error_response("linode_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_interface_settings(linode_id)
+        return instance_interface_settings_to_response_dict(
+            await client.get_instance_interface_settings(linode_id)
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance interface settings", _call

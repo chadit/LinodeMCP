@@ -20,6 +20,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -100,18 +101,7 @@ def create_linode_instance_ip_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_get",
         description=("Gets details of a specific IP for an instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "address": {
-                    "type": "string",
-                    "description": ("The IP address to look up (required)"),
-                },
-            },
-            "required": ["linode_id", "address"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceIPGetInput"),
     ), Capability.Read
 
 
@@ -130,7 +120,7 @@ async def handle_linode_instance_ip_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.get_instance_ip(iid, address)
+        return ip_address_to_response_dict(await client.get_instance_ip(iid, address))
 
     return await execute_tool(cfg, arguments, "get instance IP", _call)
 
@@ -149,22 +139,34 @@ def _parse_ip_address_argument(arguments: dict[str, Any]) -> str | list[TextCont
     return address
 
 
+def ip_address_to_response_dict(ip: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw networking IP API dict to proto-canonical IPAddress form.
+
+    vpc_nat_1_1 is omitted when null; other null scalars coerce to the zero value
+    to match the Go struct decoding.
+    """
+    body: dict[str, Any] = {
+        "address": ip.get("address") or "",
+        "gateway": ip.get("gateway") or "",
+        "subnet_mask": ip.get("subnet_mask") or "",
+        "prefix": ip.get("prefix") or 0,
+        "type": ip.get("type") or "",
+        "public": ip.get("public") or False,
+        "rdns": ip.get("rdns") or "",
+        "linode_id": ip.get("linode_id") or 0,
+        "region": ip.get("region") or "",
+    }
+    if ip.get("vpc_nat_1_1") is not None:
+        body["vpc_nat_1_1"] = ip["vpc_nat_1_1"]
+    return body
+
+
 def create_linode_networking_ip_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_networking_ip_get tool."""
     return Tool(
         name="linode_networking_ip_get",
         description=("Gets details of a networking-level IP address"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "address": {
-                    "type": "string",
-                    "description": ("The IP address to look up (required)"),
-                },
-            },
-            "required": ["address"],
-        },
+        inputSchema=schema("linode.mcp.v1.IPAddressGetInput"),
     ), Capability.Read
 
 
@@ -179,7 +181,7 @@ async def handle_linode_networking_ip_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.get_networking_ip(address)
+        return ip_address_to_response_dict(await client.get_networking_ip(address))
 
     return await execute_tool(cfg, arguments, "get networking IP", _call)
 
@@ -428,7 +430,11 @@ async def handle_linode_networking_ip_update(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.update_networking_ip(address, rdns)
+        ip = await client.update_networking_ip(address, rdns)
+        return {
+            "message": f"Networking IP {address} RDNS updated",
+            "ip": ip_address_to_response_dict(ip),
+        }
 
     return await execute_tool(cfg, arguments, "update networking IP", _call)
 

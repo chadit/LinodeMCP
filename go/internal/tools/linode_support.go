@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -21,15 +22,15 @@ const (
 
 // NewLinodeSupportTicketGetTool creates a tool for retrieving one support ticket.
 func NewLinodeSupportTicketGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		supportTicketGetToolName,
 		"Gets one support ticket by ticket_id.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(supportTicketIDParam, mcp.Required(), mcp.Description("Numeric support ticket ID to retrieve.")),
-		},
-		handleLinodeSupportTicketGetRequest,
+		toolschemas.Schema("linode.mcp.v1.SupportTicketGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSupportTicketGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -45,25 +46,16 @@ func handleLinodeSupportTicketGetRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ticket, getFailureMessage := getSupportTicket(ctx, client, ticketID)
-	if getFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve " + supportTicketGetToolName + ": " + getFailureMessage), nil
+	ticket, getFailure := client.GetSupportTicketProto(ctx, ticketID)
+	if getFailure == nil {
+		return MarshalProtoToolResponse(ticket)
 	}
 
-	return MarshalToolResponse(ticket)
+	return mcp.NewToolResultError("Failed to retrieve " + supportTicketGetToolName + ": " + getFailure.Error()), nil
 }
 
 func supportTicketIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredPositiveIntArgument(request, supportTicketIDParam, errSupportTicketIDMissing, errSupportTicketIDPositive)
-}
-
-func getSupportTicket(ctx context.Context, client *linode.Client, ticketID int) (linode.SupportTicket, string) {
-	ticket, err := client.GetSupportTicket(ctx, ticketID)
-	if err != nil {
-		return linode.SupportTicket{}, err.Error()
-	}
-
-	return ticket, ""
 }
 
 // NewLinodeSupportTicketsTool creates a tool for listing support tickets.

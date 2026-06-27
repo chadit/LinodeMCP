@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// NodeBalancerNodesStatus is the up/down node count nested in a NodeBalancer
+// config.
+message NodeBalancerNodesStatus {
+  int32 up = 1;
+  int32 down = 2;
+}
+
+// NodeBalancerConfig mirrors one port configuration of a NodeBalancer.
+message NodeBalancerConfig {
+  int32 id = 1;
+  int32 port = 2;
+  string protocol = 3;
+  string algorithm = 4;
+  string stickiness = 5;
+  string check = 6;
+  int32 check_interval = 7;
+  int32 check_timeout = 8;
+  int32 check_attempts = 9;
+  string check_path = 10;
+  string check_body = 11;
+  bool check_passive = 12;
+  string cipher_suite = 13;
+  string ssl_commonname = 14;
+  string ssl_fingerprint = 15;
+  int32 nodebalancer_id = 16;
+  NodeBalancerNodesStatus nodes_status = 17;
+}
+
+// NodeBalancerConfigGetInput is the input contract for
+// linode_nodebalancer_config_get.
+message NodeBalancerConfigGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer (required).
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config to retrieve (required).
+  int32 config_id = 3;
+}

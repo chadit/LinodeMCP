@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeDomainListTool creates a tool for listing domains.
@@ -35,18 +36,10 @@ func NewLinodeDomainListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 
 // NewLinodeDomainGetTool creates a tool for getting a single domain.
 func NewLinodeDomainGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_get",
-		mcp.WithDescription("Gets detailed information about a specific domain by its ID."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"domain_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain to retrieve"),
-		),
+		"Gets detailed information about a specific domain by its ID.",
+		toolschemas.Schema("linode.mcp.v1.DomainGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -68,28 +61,20 @@ func handleLinodeDomainGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	domain, err := client.GetDomain(ctx, domainID)
+	domain, err := client.GetDomainProto(ctx, domainID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve domain %d: %v", domainID, err)), nil
 	}
 
-	return MarshalToolResponse(domain)
+	return MarshalProtoToolResponse(domain)
 }
 
 // NewLinodeDomainZoneFileGetTool creates a tool for getting a domain zone file.
 func NewLinodeDomainZoneFileGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_zone_file_get",
-		mcp.WithDescription("Gets the rendered zone file for a specific domain by its ID."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"domain_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain whose zone file should be retrieved"),
-		),
+		"Gets the rendered zone file for a specific domain by its ID.",
+		toolschemas.Schema("linode.mcp.v1.DomainZoneFileGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -111,33 +96,20 @@ func handleLinodeDomainZoneFileGetRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	zoneFile, err := client.GetDomainZoneFile(ctx, domainID)
+	zoneFile, err := client.GetDomainZoneFileProto(ctx, domainID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve zone file for domain %d: %v", domainID, err)), nil
 	}
 
-	return MarshalToolResponse(zoneFile)
+	return MarshalProtoToolResponse(zoneFile)
 }
 
 // NewLinodeDomainRecordGetTool creates a tool for getting a single domain record.
 func NewLinodeDomainRecordGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_record_get",
-		mcp.WithDescription("Gets detailed information about a specific DNS record within a domain."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"domain_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain that owns the record"),
-		),
-		mcp.WithNumber(
-			"record_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain record to retrieve"),
-		),
+		"Gets detailed information about a specific DNS record within a domain.",
+		toolschemas.Schema("linode.mcp.v1.DomainRecordGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -164,12 +136,12 @@ func handleLinodeDomainRecordGetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	record, err := client.GetDomainRecord(ctx, domainID, recordID)
+	record, err := client.GetDomainRecordProto(ctx, domainID, recordID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve domain record %d for domain %d: %v", recordID, domainID, err)), nil
 	}
 
-	return MarshalToolResponse(record)
+	return MarshalProtoToolResponse(record)
 }
 
 // NewLinodeDomainRecordListTool creates a tool for listing domain records.

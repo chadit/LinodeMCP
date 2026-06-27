@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// UDF is one user-defined field declared by a StackScript.
+message UDF {
+  string label = 1;
+  string name = 2;
+  string example = 3;
+  string oneof = 4;
+  string default = 5;
+}
+
+// StackScript mirrors a Linode StackScript. images and user_defined_fields are
+// repeated (emitted as []).
+message StackScript {
+  string username = 1;
+  string user_gravatar_id = 2;
+  string label = 3;
+  string description = 4;
+  repeated string images = 5;
+  string created = 6;
+  string updated = 7;
+  string script = 8;
+  repeated UDF user_defined_fields = 9;
+  int32 id = 10;
+  int32 deployments_total = 11;
+  int32 deployments_active = 12;
+  bool is_public = 13;
+  bool mine = 14;
+}
+
+// StackScriptGetInput is the input contract for linode_stackscript_get.
+message StackScriptGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the StackScript to retrieve (required).
+  int32 stackscript_id = 2;
+}

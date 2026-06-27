@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -18,6 +18,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -116,20 +117,41 @@ async def handle_linode_instance_backup_list(
     return await execute_tool(cfg, arguments, "list instance backups", _call)
 
 
+def _instance_backup_disk_to_response_dict(disk: dict[str, Any]) -> dict[str, Any]:
+    """Shape one instance backup disk to proto-canonical form."""
+    return {
+        "label": disk.get("label") or "",
+        "size": disk.get("size") or 0,
+        "filesystem": disk.get("filesystem") or "",
+    }
+
+
+def instance_backup_to_response_dict(backup: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw instance backup API dict to proto-canonical form."""
+    return {
+        "id": backup.get("id") or 0,
+        "label": backup.get("label") or "",
+        "status": backup.get("status") or "",
+        "type": backup.get("type") or "",
+        "created": backup.get("created") or "",
+        "updated": backup.get("updated") or "",
+        "finished": backup.get("finished") or "",
+        "region": backup.get("region") or "",
+        "available": bool(backup.get("available")),
+        "configs": backup.get("configs") or [],
+        "disks": [
+            _instance_backup_disk_to_response_dict(disk)
+            for disk in cast("list[dict[str, Any]]", backup.get("disks") or [])
+        ],
+    }
+
+
 def create_linode_instance_backup_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backup_get tool."""
     return Tool(
         name="linode_instance_backup_get",
         description=("Gets details of a specific backup for an instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "backup_id": _BACKUP_ID_PROP,
-            },
-            "required": ["linode_id", "backup_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBackupGetInput"),
     ), Capability.Read
 
 
@@ -145,7 +167,9 @@ async def handle_linode_instance_backup_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.get_instance_backup(linode_id, backup_id)
+        return instance_backup_to_response_dict(
+            await client.get_instance_backup(linode_id, backup_id)
+        )
 
     return await execute_tool(cfg, arguments, "get instance backup", _call)
 

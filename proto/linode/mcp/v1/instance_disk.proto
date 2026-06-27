@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// InstanceDiskGetInput is the input contract for linode_instance_disk_get. The
+// InstanceDisk response message is defined in instance.proto.
+message InstanceDiskGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the disk to retrieve (required).
+  int32 disk_id = 3;
+}

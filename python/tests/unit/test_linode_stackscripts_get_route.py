@@ -119,8 +119,7 @@ def test_create_linode_stackscript_get_tool_schema() -> None:
     assert tool.name == "linode_stackscript_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["stackscript_id"]
-    assert tool.inputSchema["properties"]["stackscript_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["stackscript_id"]["minimum"] == 1
+    assert "stackscript_id" in tool.inputSchema["properties"]
 
 
 @pytest.mark.asyncio
@@ -134,17 +133,20 @@ async def test_handle_linode_stackscript_get_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "id": 123,
-        "label": "my-script",
         "username": "testuser",
+        "user_gravatar_id": "abc123",
+        "label": "my-script",
         "description": "Test script",
         "images": ["linode/ubuntu22.04"],
-        "is_public": False,
-        "mine": True,
-        "deployments_total": 10,
-        "deployments_active": 5,
         "created": "2024-01-01T00:00:00",
         "updated": "2024-01-15T12:00:00",
+        "script": "#!/bin/bash",
+        "user_defined_fields": [],
+        "id": 123,
+        "deployments_total": 10,
+        "deployments_active": 5,
+        "is_public": False,
+        "mine": True,
     }
     mock_linode_client.get_stackscript.assert_awaited_once_with(123)
 

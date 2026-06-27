@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // boolTrue and boolFalse are used for boolean string comparison in filter functions.
@@ -35,18 +38,10 @@ const (
 
 // NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
 func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_get",
-		mcp.WithDescription("Retrieves details of a single Linode instance by its ID"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"instance_id",
-			mcp.Description("The ID of the Linode instance to retrieve (required)"),
-			mcp.Required(),
-		),
+		"Retrieves details of a single Linode instance by its ID",
+		toolschemas.Schema("linode.mcp.v1.InstanceGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -102,27 +97,20 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instance, err := client.GetInstance(ctx, instanceID)
+	instance, err := client.GetInstanceProto(ctx, instanceID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instance: %v", err)), nil
 	}
 
-	return MarshalToolResponse(instance)
+	return MarshalProtoToolResponse(instance)
 }
 
 // NewLinodeInstanceListTool creates a tool for listing Linode instances.
 func NewLinodeInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_list",
-		mcp.WithDescription("Lists Linode instances with optional filtering by status"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"status",
-			mcp.Description("Filter instances by status (running, stopped, etc.)"),
-		),
+		"Lists Linode instances with optional filtering by status",
+		toolschemas.Schema("linode.mcp.v1.InstanceListInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -140,18 +128,31 @@ func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instances, err := client.ListInstances(ctx)
+	instances, err := client.ListInstancesProto(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instances: %v", err)), nil
 	}
 
 	if statusFilter != "" {
-		instances = FilterByField(instances, statusFilter, func(inst linode.Instance) string {
-			return inst.Status
+		instances = FilterByField(instances, statusFilter, func(inst *linodev1.Instance) string {
+			return inst.GetStatus()
 		})
 	}
 
-	return formatInstancesResponse(instances, statusFilter)
+	response := &linodev1.InstanceListResponse{
+		Instances: instances,
+	}
+
+	if count := len(instances); count <= math.MaxInt32 {
+		response.Count = int32(count)
+	}
+
+	if statusFilter != "" {
+		filter := "status=" + statusFilter
+		response.Filter = &filter
+	}
+
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeInstanceStatsByYearMonthTool creates a tool for retrieving monthly Linode statistics.
@@ -503,16 +504,15 @@ func formatDeleteInstanceInterfaceError(linodeID, interfaceID int, err error) st
 
 // NewLinodeInstanceInterfaceSettingsGetTool creates a tool for retrieving Linode interface settings.
 func NewLinodeInstanceInterfaceSettingsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_settings_get",
 		"Retrieves interface settings for a specific Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-		},
-		handleInstanceInterfaceSettingsGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceSettingsGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceInterfaceSettingsGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -528,12 +528,12 @@ func handleInstanceInterfaceSettingsGetRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	settings, err := client.GetInstanceInterfaceSettings(ctx, linodeID)
+	settings, err := client.GetInstanceInterfaceSettingsProto(ctx, linodeID)
 	if err != nil {
 		return mcp.NewToolResultError(formatInstanceInterfaceSettingsError("retrieve", linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(settings)
+	return MarshalProtoToolResponse(settings)
 }
 
 // NewLinodeInstanceInterfaceSettingsUpdateTool creates a tool for updating Linode interface settings.
@@ -1019,21 +1019,4 @@ func parseInstanceID(raw string) (int, error) {
 	}
 
 	return instanceID, nil
-}
-
-func formatInstancesResponse(instances []linode.Instance, statusFilter string) (*mcp.CallToolResult, error) {
-	response := struct {
-		Count     int               `json:"count"`
-		Filter    string            `json:"filter,omitempty"`
-		Instances []linode.Instance `json:"instances"`
-	}{
-		Count:     len(instances),
-		Instances: instances,
-	}
-
-	if statusFilter != "" {
-		response.Filter = "status=" + statusFilter
-	}
-
-	return MarshalToolResponse(response)
 }

@@ -39,13 +39,11 @@ func TestLinodeNodeBalancerVPCConfigGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyNodeBalancerID]; !ok {
-		t.Errorf("props missing key %v", keyNodeBalancerID)
-	}
-
-	if _, ok := props[keyVPCConfigID]; !ok {
-		t.Errorf("props missing key %v", keyVPCConfigID)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyNodeBalancerID, keyVPCConfigID} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -153,20 +151,25 @@ func TestLinodeNodeBalancerVPCConfigGetToolSuccess(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "\"id\": 456") {
-		t.Errorf("textContent.Text does not contain %v", "\"id\": 456")
+	var out map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
 	}
 
-	if !strings.Contains(textContent.Text, "\"vpc_id\": 789") {
-		t.Errorf("textContent.Text does not contain %v", "\"vpc_id\": 789")
+	if out["id"] != float64(456) {
+		t.Errorf("id = %v, want 456", out["id"])
 	}
 
-	if !strings.Contains(textContent.Text, "\"nodebalancer_id\": 123") {
-		t.Errorf("textContent.Text does not contain %v", "\"nodebalancer_id\": 123")
+	if out["vpc_id"] != float64(789) {
+		t.Errorf("vpc_id = %v, want 789", out["vpc_id"])
 	}
 
-	if !strings.Contains(textContent.Text, "\"ipv4_range\": \"10.100.5.100/30\"") {
-		t.Errorf("textContent.Text does not contain %v", "\"ipv4_range\": \"10.100.5.100/30\"")
+	if out["nodebalancer_id"] != float64(123) {
+		t.Errorf("nodebalancer_id = %v, want 123", out["nodebalancer_id"])
+	}
+
+	if out["ipv4_range"] != "10.100.5.100/30" {
+		t.Errorf("ipv4_range = %v, want 10.100.5.100/30", out["ipv4_range"])
 	}
 }
 

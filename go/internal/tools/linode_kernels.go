@@ -9,6 +9,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -37,11 +38,10 @@ func NewLinodeKernelListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 
 // NewLinodeKernelGetTool creates a tool for retrieving one Linode kernel.
 func NewLinodeKernelGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_kernel_get",
-		mcp.WithDescription("Gets one Linode kernel by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("kernel_id", mcp.Required(), mcp.Description("Kernel ID, such as linode/latest-64bit.")),
+		"Gets one Linode kernel by ID.",
+		toolschemas.Schema("linode.mcp.v1.KernelGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -81,12 +81,12 @@ func handleKernelGetRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	kernel, err := client.GetKernel(ctx, kernelID)
+	kernel, err := client.GetKernelProto(ctx, kernelID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve kernel: %v", err)), nil
 	}
 
-	return MarshalToolResponse(kernel)
+	return MarshalProtoToolResponse(kernel)
 }
 
 func kernelsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

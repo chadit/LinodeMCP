@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -49,18 +50,15 @@ func handleInstanceBackupsListRequest(ctx context.Context, request *mcp.CallTool
 
 // NewLinodeInstanceBackupGetTool creates a tool for retrieving a specific backup for a Linode instance.
 func NewLinodeInstanceBackupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_backup_get",
 		"Retrieves details of a specific backup for a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("backup_id", mcp.Required(),
-				mcp.Description("The ID of the backup to retrieve")),
-		},
-		handleInstanceBackupGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceBackupGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceBackupGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -81,12 +79,12 @@ func handleInstanceBackupGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	backup, err := client.GetInstanceBackup(ctx, linodeID, backupID)
+	backup, err := client.GetInstanceBackupProto(ctx, linodeID, backupID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve backup %d for instance %d: %v", backupID, linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(backup)
+	return MarshalProtoToolResponse(backup)
 }
 
 // NewLinodeInstanceBackupCreateTool creates a tool for taking a manual snapshot of a Linode instance.

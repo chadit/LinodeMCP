@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// FirewallAddresses is the IPv4/IPv6 address list a firewall rule matches.
+message FirewallAddresses {
+  repeated string ipv4 = 1;
+  repeated string ipv6 = 2;
+}
+
+// FirewallRule is one inbound or outbound rule in a firewall ruleset.
+message FirewallRule {
+  string action = 1;
+  string protocol = 2;
+  string ports = 3;
+  FirewallAddresses addresses = 4;
+  string label = 5;
+  string description = 6;
+}
+
+// FirewallRules is the inbound/outbound ruleset of a firewall. fingerprint and
+// version are intentionally omitted: the Python client dataclass does not carry
+// them, so the canonical shape is the intersection.
+message FirewallRules {
+  repeated FirewallRule inbound = 1;
+  string inbound_policy = 2;
+  repeated FirewallRule outbound = 3;
+  string outbound_policy = 4;
+}
+
+// Firewall mirrors a Linode Cloud Firewall.
+message Firewall {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  FirewallRules rules = 4;
+  repeated string tags = 5;
+  string created = 6;
+  string updated = 7;
+}
+
+// FirewallGetInput is the input contract for linode_firewall_get.
+message FirewallGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the firewall to retrieve (required).
+  int32 firewall_id = 2;
+}
+
+// FirewallRulesGetInput is the input contract for linode_firewall_rules_get.
+message FirewallRulesGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the firewall whose rules to retrieve (required).
+  int32 firewall_id = 2;
+}

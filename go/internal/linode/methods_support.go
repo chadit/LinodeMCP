@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const endpointSupportTickets = "/support/tickets"
@@ -46,6 +48,28 @@ func (c *Client) httpGetSupportTicket(ctx context.Context, ticketID int) (Suppor
 	var ticket SupportTicket
 	if err := c.handleResponse(resp, &ticket); err != nil {
 		return SupportTicket{}, err
+	}
+
+	return ticket, nil
+}
+
+// httpGetSupportTicketProto retrieves one support ticket as a proto message.
+func (c *Client) httpGetSupportTicketProto(ctx context.Context, ticketID int) (*linodev1.SupportTicket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetSupportTicket", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ticket := &linodev1.SupportTicket{}
+	if err := c.handleProtoResponse(resp, ticket); err != nil {
+		return nil, err
 	}
 
 	return ticket, nil

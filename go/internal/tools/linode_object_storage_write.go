@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -99,20 +100,17 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 		req.CORSEnabled = &corsEnabled
 	}
 
-	bucket, err := client.CreateObjectStorageBucket(ctx, req)
+	bucket, err := client.CreateObjectStorageBucketProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create bucket: %v", err)), nil
 	}
 
-	response := struct {
-		Message string                      `json:"message"`
-		Bucket  *linode.ObjectStorageBucket `json:"bucket"`
-	}{
-		Message: fmt.Sprintf("Bucket '%s' created successfully in %s", bucket.Label, bucket.Region),
+	response := &linodev1.ObjectStorageBucketWriteResponse{
+		Message: fmt.Sprintf("Bucket '%s' created successfully in %s", bucket.GetLabel(), bucket.GetRegion()),
 		Bucket:  bucket,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketDeleteTool creates a tool for deleting an Object Storage bucket.
@@ -516,22 +514,18 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallT
 		BucketAccess: bucketAccess,
 	}
 
-	key, err := client.CreateObjectStorageKey(ctx, req)
+	key, err := client.CreateObjectStorageKeyProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create access key: %v", err)), nil
 	}
 
-	response := struct {
-		Warning string                   `json:"warning"`
-		Message string                   `json:"message"`
-		Key     *linode.ObjectStorageKey `json:"key"`
-	}{
+	response := &linodev1.ObjectStorageKeyWriteResponse{
 		Warning: "IMPORTANT: The secret_key below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
-		Message: fmt.Sprintf("Access key '%s' created successfully (ID: %d)", key.Label, key.ID),
+		Message: fmt.Sprintf("Access key '%s' created successfully (ID: %d)", key.GetLabel(), key.GetId()),
 		Key:     key,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyUpdateTool creates a tool for updating an Object Storage access key.

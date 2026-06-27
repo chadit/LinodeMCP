@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, instance_to_response_dict
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -713,15 +713,7 @@ async def handle_linode_instance_create(
                 f"Instance '{instance.label}' (ID: {instance.id}) "
                 f"created successfully in {instance.region}"
             ),
-            "instance": {
-                "id": instance.id,
-                "label": instance.label,
-                "status": instance.status,
-                "type": instance.type,
-                "region": instance.region,
-                "ipv4": instance.ipv4,
-                "ipv6": instance.ipv6,
-            },
+            "instance": instance_to_response_dict(instance),
         }
 
     return await execute_tool(cfg, arguments, "create instance", _call)
@@ -839,15 +831,7 @@ async def handle_linode_instance_update(
         instance = await client.update_instance(int(instance_id), **update_fields)
         return {
             "message": f"Instance {instance.id} updated successfully",
-            "instance": {
-                "id": instance.id,
-                "label": instance.label,
-                "status": instance.status,
-                "type": instance.type,
-                "region": instance.region,
-                "tags": instance.tags,
-                "watchdog_enabled": instance.watchdog_enabled,
-            },
+            "instance": instance_to_response_dict(instance),
         }
 
     return await execute_tool(cfg, arguments, "update instance", _call)

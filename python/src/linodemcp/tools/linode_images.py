@@ -23,6 +23,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -32,6 +33,33 @@ if TYPE_CHECKING:
 
 _IMAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+/[A-Za-z0-9._-]+$")
 _SHARED_IMAGE_ID_PATTERN = re.compile(r"^shared/[1-9]\d*$")
+
+
+def image_to_response_dict(image: Any) -> dict[str, Any]:
+    """Shape an Image dataclass to proto-canonical linode.mcp.v1.Image form.
+
+    expiry and eol are omitted when None; capabilities and tags are always lists.
+    """
+    body: dict[str, Any] = {
+        "id": image.id,
+        "label": image.label,
+        "description": image.description,
+        "type": image.type,
+        "vendor": image.vendor,
+        "status": image.status,
+        "created": image.created,
+        "created_by": image.created_by,
+    }
+    if image.expiry is not None:
+        body["expiry"] = image.expiry
+    if image.eol is not None:
+        body["eol"] = image.eol
+    body["capabilities"] = image.capabilities or []
+    body["tags"] = image.tags or []
+    body["size"] = image.size
+    body["is_public"] = image.is_public
+    body["deprecated"] = image.deprecated
+    return body
 
 
 def _optional_int_argument(
@@ -89,26 +117,7 @@ def create_linode_image_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_get",
         description="Gets a single Linode image by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "image_id": {
-                    "type": "string",
-                    "pattern": r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$",
-                    "description": (
-                        "Image ID such as linode/ubuntu24.04 or private/12345 "
-                        "(required)"
-                    ),
-                },
-            },
-            "required": ["image_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageGetInput"),
     ), Capability.Read
 
 
@@ -290,28 +299,32 @@ def create_linode_image_sharegroup_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def image_sharegroup_to_response_dict(sharegroup: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw image share group API dict to proto-canonical form.
+
+    description, updated, and expiry are nullable and omitted when null.
+    """
+    body: dict[str, Any] = {
+        "id": sharegroup.get("id", 0),
+        "uuid": sharegroup.get("uuid", ""),
+        "label": sharegroup.get("label", ""),
+        "is_suspended": bool(sharegroup.get("is_suspended")),
+        "created": sharegroup.get("created", ""),
+        "images_count": sharegroup.get("images_count", 0),
+        "members_count": sharegroup.get("members_count", 0),
+    }
+    for key in ("description", "updated", "expiry"):
+        if sharegroup.get(key) is not None:
+            body[key] = sharegroup[key]
+    return body
+
+
 def create_linode_image_sharegroup_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_sharegroup_get tool."""
     return Tool(
         name="linode_image_sharegroup_get",
         description="Gets a single image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-            },
-            "required": ["sharegroup_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupGetInput"),
     ), Capability.Read
 
 
@@ -387,37 +400,29 @@ def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
+def image_sharegroup_member_to_response_dict(member: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw image share group member API dict to proto-canonical form.
+
+    updated and expiry are nullable and omitted when null.
+    """
+    body: dict[str, Any] = {
+        "token_uuid": member.get("token_uuid") or "",
+        "status": member.get("status") or "",
+        "label": member.get("label") or "",
+        "created": member.get("created") or "",
+    }
+    for key in ("updated", "expiry"):
+        if member.get(key) is not None:
+            body[key] = member[key]
+    return body
+
+
 def create_linode_image_sharegroup_member_token_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_sharegroup_member_token_get tool."""
     return Tool(
         name="linode_image_sharegroup_member_token_get",
         description="Gets a membership token from an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "pattern": (
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-                        "[0-9a-fA-F]{12}$"
-                    ),
-                    "description": "Membership token UUID (required)",
-                },
-            },
-            "required": ["sharegroup_id", "token_uuid"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberTokenGetInput"),
     ), Capability.Read
 
 
@@ -784,27 +789,33 @@ def create_linode_image_sharegroup_token_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def image_sharegroup_token_to_response_dict(token: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw image share group token API dict to proto-canonical form.
+
+    updated and expiry are nullable and omitted when null.
+    """
+    body: dict[str, Any] = {
+        "token": token.get("token") or "",
+        "token_uuid": token.get("token_uuid") or "",
+        "status": token.get("status") or "",
+        "label": token.get("label") or "",
+        "created": token.get("created") or "",
+        "valid_for_sharegroup_uuid": token.get("valid_for_sharegroup_uuid") or "",
+        "sharegroup_uuid": token.get("sharegroup_uuid") or "",
+        "sharegroup_label": token.get("sharegroup_label") or "",
+    }
+    for key in ("updated", "expiry"):
+        if token.get(key) is not None:
+            body[key] = token[key]
+    return body
+
+
 def create_linode_image_sharegroup_token_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_sharegroup_token_get tool."""
     return Tool(
         name="linode_image_sharegroup_token_get",
         description="Gets a single image share group token by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "description": "Image share group token UUID (required)",
-                },
-            },
-            "required": ["token_uuid"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenGetInput"),
     ), Capability.Read
 
 
@@ -813,22 +824,7 @@ def create_linode_image_sharegroup_by_token_get_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_by_token_get",
         description="Gets the image share group associated with a token UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "description": "Image share group token UUID (required)",
-                },
-            },
-            "required": ["token_uuid"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupByTokenGetInput"),
     ), Capability.Read
 
 
@@ -1529,16 +1525,7 @@ async def handle_linode_image_create(
         )
         return {
             "message": f"Image '{image.label}' ({image.id}) created successfully",
-            "image": {
-                "id": image.id,
-                "label": image.label,
-                "description": image.description,
-                "type": image.type,
-                "status": image.status,
-                "size": image.size,
-                "is_public": image.is_public,
-                "created": image.created,
-            },
+            "image": image_to_response_dict(image),
         }
 
     return await execute_tool(cfg, arguments, "create Linode image", _call)
@@ -1861,11 +1848,9 @@ async def handle_linode_image_sharegroup_get(
     sharegroup_id_str = str(cast("int", sharegroup_id))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        sharegroup = await client.get_image_sharegroup(sharegroup_id_str)
-        return {
-            "message": "Image share group retrieved",
-            "sharegroup": sharegroup,
-        }
+        return image_sharegroup_to_response_dict(
+            await client.get_image_sharegroup(sharegroup_id_str)
+        )
 
     return await execute_tool(cfg, arguments, "get image share group", _call)
 
@@ -1956,13 +1941,11 @@ async def handle_linode_image_sharegroup_member_token_get(
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        token = await client.get_image_sharegroup_member_token(
-            sharegroup_id_str, token_uuid_str
+        return image_sharegroup_member_to_response_dict(
+            await client.get_image_sharegroup_member_token(
+                sharegroup_id_str, token_uuid_str
+            )
         )
-        return {
-            "message": "Image share group member token retrieved",
-            "token": token,
-        }
 
     return await execute_tool(
         cfg, arguments, "get image share group member token", _call
@@ -2320,11 +2303,9 @@ async def handle_linode_image_sharegroup_token_get(
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        token = await client.get_image_sharegroup_token(token_uuid_str)
-        return {
-            "message": "Image share group token retrieved",
-            "token": token,
-        }
+        return image_sharegroup_token_to_response_dict(
+            await client.get_image_sharegroup_token(token_uuid_str)
+        )
 
     return await execute_tool(cfg, arguments, "get image share group token", _call)
 
@@ -2341,11 +2322,9 @@ async def handle_linode_image_sharegroup_by_token_get(
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        sharegroup = await client.get_image_sharegroup_by_token(token_uuid_str)
-        return {
-            "message": "Image share group retrieved",
-            "sharegroup": sharegroup,
-        }
+        return image_sharegroup_to_response_dict(
+            await client.get_image_sharegroup_by_token(token_uuid_str)
+        )
 
     return await execute_tool(cfg, arguments, "get image share group by token", _call)
 
@@ -2522,17 +2501,8 @@ async def handle_linode_image_update(
             tags=cast("list[str] | None", payload.get("tags")),
         )
         return {
-            "message": f"Image '{image.label}' ({image.id}) updated successfully",
-            "image": {
-                "id": image.id,
-                "label": image.label,
-                "description": image.description,
-                "type": image.type,
-                "status": image.status,
-                "size": image.size,
-                "is_public": image.is_public,
-                "created": image.created,
-            },
+            "message": f"Image '{image.id}' updated successfully",
+            "image": image_to_response_dict(image),
         }
 
     return await execute_tool(cfg, arguments, "update Linode image", _call)
@@ -2575,25 +2545,7 @@ async def handle_linode_image_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         image = await client.get_image(image_id_str)
-        return {
-            "image": {
-                "id": image.id,
-                "label": image.label,
-                "description": image.description,
-                "type": image.type,
-                "status": image.status,
-                "is_public": image.is_public,
-                "deprecated": image.deprecated,
-                "size": image.size,
-                "vendor": image.vendor,
-                "created": image.created,
-                "created_by": image.created_by,
-                "expiry": image.expiry,
-                "eol": image.eol,
-                "capabilities": image.capabilities,
-                "tags": image.tags,
-            }
-        }
+        return image_to_response_dict(image)
 
     return await execute_tool(cfg, arguments, "retrieve Linode image", _call)
 

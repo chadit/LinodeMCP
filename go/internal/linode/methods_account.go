@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url" // path parameter escaping
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -77,6 +79,26 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	}
 
 	return &profile, nil
+}
+
+// httpGetProfileProto retrieves the profile as a proto message.
+func (c *Client) httpGetProfileProto(ctx context.Context) (*linodev1.Profile, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfile, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfile", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	profile := &linodev1.Profile{}
+	if err := c.handleProtoResponse(resp, profile); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
 }
 
 // httpCreateProfileToken creates a personal access token for the authenticated profile.
@@ -398,6 +420,29 @@ func (c *Client) httpGetProfileLogin(ctx context.Context, loginID int) (*Account
 	return &login, nil
 }
 
+// httpGetProfileLoginProto retrieves one profile login as a proto message (shared
+// AccountLogin shape).
+func (c *Client) httpGetProfileLoginProto(ctx context.Context, loginID int) (*linodev1.AccountLogin, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfileLogin", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	login := &linodev1.AccountLogin{}
+	if err := c.handleProtoResponse(resp, login); err != nil {
+		return nil, err
+	}
+
+	return login, nil
+}
+
 // httpGetProfileApp retrieves one authorized OAuth app from the profile.
 func (c *Client) httpGetProfileApp(ctx context.Context, appID int) (*ProfileApp, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -418,6 +463,28 @@ func (c *Client) httpGetProfileApp(ctx context.Context, appID int) (*ProfileApp,
 	}
 
 	return &app, nil
+}
+
+// httpGetProfileAppProto retrieves one authorized OAuth app as a proto message.
+func (c *Client) httpGetProfileAppProto(ctx context.Context, appID int) (*linodev1.ProfileApp, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileApps + "/" + url.PathEscape(strconv.Itoa(appID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfileApp", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	app := &linodev1.ProfileApp{}
+	if err := c.handleProtoResponse(resp, app); err != nil {
+		return nil, err
+	}
+
+	return app, nil
 }
 
 // httpDeleteProfileApp revokes access for one OAuth app authorized on the profile.
@@ -611,6 +678,46 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	return &account, nil
 }
 
+// httpGetAccountProto retrieves the account as a proto message.
+func (c *Client) httpGetAccountProto(ctx context.Context) (*linodev1.Account, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccount, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccount", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	account := &linodev1.Account{}
+	if err := c.handleProtoResponse(resp, account); err != nil {
+		return nil, err
+	}
+
+	return account, nil
+}
+
+// httpUpdateAccountProto updates the account as a proto message.
+func (c *Client) httpUpdateAccountProto(ctx context.Context, req *UpdateAccountRequest) (*linodev1.Account, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccount, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateAccount", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	account := &linodev1.Account{}
+	if err := c.handleProtoResponse(resp, account); err != nil {
+		return nil, err
+	}
+
+	return account, nil
+}
+
 // httpGetAccountTransfer retrieves the authenticated account's network transfer usage.
 func (c *Client) httpGetAccountTransfer(ctx context.Context) (*AccountTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -631,6 +738,26 @@ func (c *Client) httpGetAccountTransfer(ctx context.Context) (*AccountTransfer, 
 	return &transfer, nil
 }
 
+// httpGetAccountTransferProto retrieves account transfer usage as a proto message.
+func (c *Client) httpGetAccountTransferProto(ctx context.Context) (*linodev1.AccountTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountTransfer, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	transfer := &linodev1.AccountTransfer{}
+	if err := c.handleProtoResponse(resp, transfer); err != nil {
+		return nil, err
+	}
+
+	return transfer, nil
+}
+
 // httpGetAccountSettings retrieves account-wide settings from the Linode API.
 func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -649,6 +776,26 @@ func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, 
 	}
 
 	return &settings, nil
+}
+
+// httpGetAccountSettingsProto retrieves the account settings as a proto message.
+func (c *Client) httpGetAccountSettingsProto(ctx context.Context) (*linodev1.AccountSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountSettings, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	settings := &linodev1.AccountSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
 }
 
 // httpUpdateAccountSettings updates account-wide settings via PUT /v4/account/settings.
@@ -818,6 +965,28 @@ func (c *Client) httpGetManagedCredential(ctx context.Context, credentialID int)
 	return &credential, nil
 }
 
+// httpGetManagedCredentialProto retrieves a Managed credential as a proto message.
+func (c *Client) httpGetManagedCredentialProto(ctx context.Context, credentialID int) (*linodev1.ManagedCredential, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedCredential", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	credential := &linodev1.ManagedCredential{}
+	if err := c.handleProtoResponse(resp, credential); err != nil {
+		return nil, err
+	}
+
+	return credential, nil
+}
+
 // httpRevokeManagedCredential revokes one stored managed credential.
 func (c *Client) httpRevokeManagedCredential(ctx context.Context, credentialID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -947,6 +1116,29 @@ func (c *Client) httpGetAccountAvailability(ctx context.Context, regionID string
 	return &availability, nil
 }
 
+// httpGetAccountAvailabilityProto retrieves one region's account availability as a
+// proto message.
+func (c *Client) httpGetAccountAvailabilityProto(ctx context.Context, regionID string) (*linodev1.AccountAvailability, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountAvailability + "/" + url.PathEscape(regionID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountAvailability", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	availability := &linodev1.AccountAvailability{}
+	if err := c.handleProtoResponse(resp, availability); err != nil {
+		return nil, err
+	}
+
+	return availability, nil
+}
+
 func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountAvailability], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -1010,6 +1202,28 @@ func (c *Client) httpGetBeta(ctx context.Context, betaID string) (*BetaProgram, 
 	}
 
 	return &beta, nil
+}
+
+// httpGetBetaProto retrieves one available beta program as a proto message.
+func (c *Client) httpGetBetaProto(ctx context.Context, betaID string) (*linodev1.BetaProgram, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointBetas + "/" + url.PathEscape(betaID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetBeta", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	beta := &linodev1.BetaProgram{}
+	if err := c.handleProtoResponse(resp, beta); err != nil {
+		return nil, err
+	}
+
+	return beta, nil
 }
 
 // httpListAccountBetas retrieves enrolled account beta programs.
@@ -1236,6 +1450,28 @@ func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string)
 	return &client, nil
 }
 
+// httpGetAccountOAuthClientProto retrieves one OAuth client as a proto message.
+func (c *Client) httpGetAccountOAuthClientProto(ctx context.Context, clientID string) (*linodev1.OAuthClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountOAuthClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	oauthClient := &linodev1.OAuthClient{}
+	if err := c.handleProtoResponse(resp, oauthClient); err != nil {
+		return nil, err
+	}
+
+	return oauthClient, nil
+}
+
 // httpUpdateOAuthClient updates one OAuth client by ID.
 func (c *Client) httpUpdateOAuthClient(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*OAuthClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1416,6 +1652,28 @@ func (c *Client) httpGetAccountUser(ctx context.Context, username string) (*Acco
 	return &user, nil
 }
 
+// httpGetAccountUserProto retrieves one account user as a proto message.
+func (c *Client) httpGetAccountUserProto(ctx context.Context, username string) (*linodev1.AccountUser, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountUser", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	user := &linodev1.AccountUser{}
+	if err := c.handleProtoResponse(resp, user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 // httpGetAccountUserGrants retrieves one account user's grants by username.
 func (c *Client) httpGetAccountUserGrants(ctx context.Context, username string) (*Grants, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1563,6 +1821,28 @@ func (c *Client) httpGetAccountLogin(ctx context.Context, loginID int) (*Account
 	return &login, nil
 }
 
+// httpGetAccountLoginProto retrieves one account login as a proto message.
+func (c *Client) httpGetAccountLoginProto(ctx context.Context, loginID int) (*linodev1.AccountLogin, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountLogin", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	login := &linodev1.AccountLogin{}
+	if err := c.handleProtoResponse(resp, login); err != nil {
+		return nil, err
+	}
+
+	return login, nil
+}
+
 func (c *Client) httpListAccountInvoices(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountInvoice], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -1628,6 +1908,28 @@ func (c *Client) httpGetAccountPayment(ctx context.Context, paymentID int) (*Acc
 	return &payment, nil
 }
 
+// httpGetAccountPaymentProto retrieves one account payment as a proto message.
+func (c *Client) httpGetAccountPaymentProto(ctx context.Context, paymentID int) (*linodev1.AccountPayment, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountPayments + "/" + url.PathEscape(strconv.Itoa(paymentID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountPayment", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	payment := &linodev1.AccountPayment{}
+	if err := c.handleProtoResponse(resp, payment); err != nil {
+		return nil, err
+	}
+
+	return payment, nil
+}
+
 // httpCreateAccountPayment makes a payment on the account.
 func (c *Client) httpCreateAccountPayment(ctx context.Context, req *CreateAccountPaymentRequest) (*AccountPayment, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1668,6 +1970,28 @@ func (c *Client) httpGetAccountInvoice(ctx context.Context, invoiceID int) (*Acc
 	}
 
 	return &invoice, nil
+}
+
+// httpGetAccountInvoiceProto retrieves one account invoice as a proto message.
+func (c *Client) httpGetAccountInvoiceProto(ctx context.Context, invoiceID int) (*linodev1.AccountInvoice, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountInvoices + "/" + strconv.Itoa(invoiceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountInvoice", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	invoice := &linodev1.AccountInvoice{}
+	if err := c.handleProtoResponse(resp, invoice); err != nil {
+		return nil, err
+	}
+
+	return invoice, nil
 }
 
 // httpListAccountInvoiceItems retrieves items for one account invoice.
@@ -1757,6 +2081,29 @@ func (c *Client) httpGetAccountServiceTransfer(ctx context.Context, token string
 	return &transfer, nil
 }
 
+// httpGetAccountServiceTransferProto retrieves one account service transfer as a
+// proto message.
+func (c *Client) httpGetAccountServiceTransferProto(ctx context.Context, token string) (*linodev1.AccountEntityTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountServiceTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	transfer := &linodev1.AccountEntityTransfer{}
+	if err := c.handleProtoResponse(resp, transfer); err != nil {
+		return nil, err
+	}
+
+	return transfer, nil
+}
+
 // httpDeleteAccountServiceTransfer cancels one account service transfer by token.
 func (c *Client) httpDeleteAccountServiceTransfer(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1831,6 +2178,28 @@ func (c *Client) httpGetAccountEvent(ctx context.Context, eventID int) (*Account
 	}
 
 	return &event, nil
+}
+
+// httpGetAccountEventProto retrieves one account event as a proto message.
+func (c *Client) httpGetAccountEventProto(ctx context.Context, eventID int) (*linodev1.AccountEvent, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountEvents + "/" + url.PathEscape(strconv.Itoa(eventID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountEvent", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	event := &linodev1.AccountEvent{}
+	if err := c.handleProtoResponse(resp, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 // httpMarkAccountEventSeen marks one account event as seen by ID.
@@ -1934,6 +2303,29 @@ func (c *Client) httpGetAccountBeta(ctx context.Context, betaID string) (*Accoun
 	}
 
 	return &beta, nil
+}
+
+// httpGetAccountBetaProto retrieves one enrolled account beta program as a proto
+// message.
+func (c *Client) httpGetAccountBetaProto(ctx context.Context, betaID string) (*linodev1.AccountBetaProgram, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountBetas + "/" + url.PathEscape(betaID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountBeta", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	beta := &linodev1.AccountBetaProgram{}
+	if err := c.handleProtoResponse(resp, beta); err != nil {
+		return nil, err
+	}
+
+	return beta, nil
 }
 
 // httpEnrollAccountBeta enrolls the account in a beta program via POST /v4/account/betas.

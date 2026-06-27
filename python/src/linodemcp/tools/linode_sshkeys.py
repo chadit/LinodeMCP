@@ -9,10 +9,21 @@ from linodemcp.tools.helpers import (
     SSH_KEY_TRUNCATE_LIMIT,
     execute_tool,
 )
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-    from linodemcp.linode import RetryableClient
+    from linodemcp.linode import RetryableClient, SSHKey
+
+
+def ssh_key_to_response_dict(key: SSHKey) -> dict[str, Any]:
+    """Shape an SSH key dataclass to proto-canonical form."""
+    return {
+        "id": key.id,
+        "label": key.label,
+        "ssh_key": key.ssh_key,
+        "created": key.created,
+    }
 
 
 def create_linode_sshkey_get_tool() -> tuple[Tool, Capability]:
@@ -20,22 +31,7 @@ def create_linode_sshkey_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_sshkey_get",
         description="Gets one SSH key associated with your Linode profile.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "ssh_key_id": {
-                    "type": "integer",
-                    "description": "The ID of the SSH key to retrieve (required)",
-                },
-            },
-            "required": ["ssh_key_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.SSHKeyGetInput"),
     ), Capability.Read
 
 
@@ -50,14 +46,7 @@ async def handle_linode_sshkey_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         key = await client.get_ssh_key(int(ssh_key_id))
-        return {
-            "ssh_key": {
-                "id": key.id,
-                "label": key.label,
-                "ssh_key": truncate_string(key.ssh_key, SSH_KEY_TRUNCATE_LIMIT),
-                "created": key.created,
-            },
-        }
+        return ssh_key_to_response_dict(key)
 
     return await execute_tool(cfg, arguments, "retrieve SSH key", _call)
 

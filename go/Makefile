@@ -60,7 +60,7 @@ lint: _ensure-hooks
 	@golangci-lint run --allow-parallel-runners --max-issues-per-linter=0 --max-same-issues=0 ./...
 	@echo "Running gosec..."
 	@if command -v gosec >/dev/null 2>&1; then \
-		gosec -quiet ./...; \
+		gosec -quiet -exclude-generated ./...; \
 	else \
 		echo "[warn] gosec not installed, skipping security scan"; \
 	fi

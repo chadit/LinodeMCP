@@ -16,6 +16,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -844,20 +845,15 @@ func formatReorderConfigInterfacesError(linodeID, configID int, err error) strin
 
 // NewLinodeInstanceConfigInterfaceGetTool creates a tool for retrieving a configuration profile interface.
 func NewLinodeInstanceConfigInterfaceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_interface_get",
 		"Retrieves a network interface from a Linode configuration profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
-			mcp.WithNumber("interface_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile interface")),
-		},
-		handleInstanceConfigInterfaceGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigInterfaceGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigInterfaceGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -883,12 +879,12 @@ func handleInstanceConfigInterfaceGetRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	configInterface, err := client.GetInstanceConfigInterface(ctx, linodeID, configID, interfaceID)
+	configInterface, err := client.GetInstanceConfigInterfaceProto(ctx, linodeID, configID, interfaceID)
 	if err != nil {
 		return mcp.NewToolResultError(formatGetConfigInterfaceError(linodeID, configID, interfaceID, err)), nil
 	}
 
-	return MarshalToolResponse(configInterface)
+	return MarshalProtoToolResponse(configInterface)
 }
 
 func formatGetConfigInterfaceError(linodeID, configID, interfaceID int, err error) string {

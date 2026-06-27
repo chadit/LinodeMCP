@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Image mirrors the Linode image object. expiry and eol are nullable on the wire
+// (omitted when unset); capabilities and tags are repeated (emitted as []).
+message Image {
+  string id = 1;
+  string label = 2;
+  string description = 3;
+  string type = 4;
+  string vendor = 5;
+  string status = 6;
+  string created = 7;
+  string created_by = 8;
+  optional string expiry = 9;
+  optional string eol = 10;
+  repeated string capabilities = 11;
+  repeated string tags = 12;
+  int32 size = 13;
+  bool is_public = 14;
+  bool deprecated = 15;
+}
+
+// ImageWriteResponse is the {message, image} envelope the image create/update
+// tools return.
+message ImageWriteResponse {
+  string message = 1;
+  Image image = 2;
+}
+
+// ImageGetInput is the input contract for linode_image_get.
+message ImageGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The image ID to retrieve (required), such as linode/debian11 or private/123.
+  string image_id = 2;
+}

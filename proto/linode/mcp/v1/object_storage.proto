@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// ObjectStorageKeyBucketAccess is a per-bucket grant nested in an Object Storage
+// key.
+message ObjectStorageKeyBucketAccess {
+  string bucket_name = 1;
+  string region = 2;
+  string permissions = 3;
+}
+
+// ObjectStorageKeyRegion is a per-region entry nested in an Object Storage key.
+message ObjectStorageKeyRegion {
+  string id = 1;
+  string s3_endpoint = 2;
+}
+
+// ObjectStorageKey mirrors a Linode Object Storage key. bucket_access and regions
+// are repeated (emitted as []).
+message ObjectStorageKey {
+  string label = 1;
+  string access_key = 2;
+  string secret_key = 3;
+  repeated ObjectStorageKeyBucketAccess bucket_access = 4;
+  repeated ObjectStorageKeyRegion regions = 5;
+  int32 id = 6;
+  bool limited = 7;
+}
+
+// ObjectStorageKeyWriteResponse is the {message, key} envelope the Object Storage
+// key create tool returns. warning carries the secret-shown-once notice on create.
+message ObjectStorageKeyWriteResponse {
+  string message = 1;
+  ObjectStorageKey key = 2;
+  string warning = 3;
+}
+
+// ObjectStorageKeyGetInput is the input contract for linode_object_storage_key_get.
+message ObjectStorageKeyGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Object Storage key to retrieve (required).
+  int32 key_id = 2;
+}
+
+// ObjectStorageBucket mirrors a Linode Object Storage bucket.
+message ObjectStorageBucket {
+  string label = 1;
+  string region = 2;
+  string hostname = 3;
+  string created = 4;
+  int32 objects = 5;
+  int32 size = 6;
+  string cluster = 7;
+}
+
+// ObjectStorageBucketWriteResponse is the {message, bucket} envelope the Object
+// Storage bucket create tool returns.
+message ObjectStorageBucketWriteResponse {
+  string message = 1;
+  ObjectStorageBucket bucket = 2;
+}
+
+// ObjectStorageBucketGetInput is the input contract for
+// linode_object_storage_bucket_get.
+message ObjectStorageBucketGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (required).
+  string region = 2;
+  // The bucket label (required).
+  string label = 3;
+}

@@ -883,12 +883,12 @@ func TestLinodeAccountTransferToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[canRunKeyEnv]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", canRunKeyEnv)
+	if !strings.Contains(string(tool.RawInputSchema), canRunKeyEnv) {
+		t.Errorf("tool.RawInputSchema missing key %v", canRunKeyEnv)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(string(tool.RawInputSchema), keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -2472,13 +2472,13 @@ func TestLinodeBetaGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyBetaIDPath]; !ok {
-		t.Errorf("props missing key %v", keyBetaIDPath)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyBetaIDPath) {
+		t.Errorf("RawInputSchema missing key %v", keyBetaIDPath)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -5822,13 +5822,13 @@ func TestLinodeProfileLoginGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLoginID]; !ok {
-		t.Errorf("props missing key %v", keyLoginID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLoginID) {
+		t.Errorf("rawSchema missing key %v", keyLoginID)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -6023,13 +6023,13 @@ func TestLinodeAccountLoginGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLoginID]; !ok {
-		t.Errorf("props missing key %v", keyLoginID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLoginID) {
+		t.Errorf("rawSchema missing key %v", keyLoginID)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -7218,12 +7218,12 @@ func TestLinodeProfileAppGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyAppID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyAppID)
+	if !strings.Contains(string(tool.RawInputSchema), keyAppID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyAppID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(string(tool.RawInputSchema), keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -7416,8 +7416,8 @@ func TestLinodeAccountOAuthClientGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyClientID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyClientID)
+	if !strings.Contains(string(tool.RawInputSchema), keyClientID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyClientID)
 	}
 }
 
@@ -10599,13 +10599,13 @@ func TestLinodeAccountPaymentGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPaymentID]; !ok {
-		t.Errorf("props missing key %v", keyPaymentID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPaymentID) {
+		t.Errorf("rawSchema missing key %v", keyPaymentID)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -11254,13 +11254,13 @@ func TestLinodeAccountEventGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyEventID]; !ok {
-		t.Errorf("props missing key %v", keyEventID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyEventID) {
+		t.Errorf("RawInputSchema missing key %v", keyEventID)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -11694,13 +11694,13 @@ func TestLinodeAccountServiceTransferGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyToken]; !ok {
-		t.Errorf("props missing key %v", keyToken)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyToken) {
+		t.Errorf("RawInputSchema missing key %v", keyToken)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -12697,13 +12697,13 @@ func TestLinodeAccountBetaGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyBetaIDPath]; !ok {
-		t.Errorf("props missing key %v", keyBetaIDPath)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyBetaIDPath) {
+		t.Errorf("RawInputSchema missing key %v", keyBetaIDPath)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -16152,8 +16152,8 @@ func TestLinodeDomainZoneFileGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyDomainID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDomainID)
+	if !strings.Contains(string(tool.RawInputSchema), keyDomainID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDomainID)
 	}
 }
 
@@ -16286,8 +16286,14 @@ func TestLinodeDomainZoneFileGetToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"zone_file": [`) {
-		t.Errorf("textContent.Text does not contain %v", `"zone_file": [`)
+	var out map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+
+	zoneLines, isArray := out["zone_file"].([]any)
+	if !isArray || len(zoneLines) != 2 {
+		t.Errorf("zone_file not a 2-element array: %v", out["zone_file"])
 	}
 
 	if !strings.Contains(textContent.Text, "; example.com [123]") {
@@ -16550,16 +16556,21 @@ func TestLinodeDomainRecordGetToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"id": 456`) {
-		t.Errorf("textContent.Text does not contain %v", `"id": 456`)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
 	}
 
-	if !strings.Contains(textContent.Text, hostWWW) {
-		t.Errorf("textContent.Text does not contain %v", hostWWW)
+	if body[keyID] != float64(456) {
+		t.Errorf("body[%q] = %v, want 456", keyID, body[keyID])
 	}
 
-	if !strings.Contains(textContent.Text, testNetIPv4AddressOne) {
-		t.Errorf("textContent.Text does not contain %v", testNetIPv4AddressOne)
+	if body[keyName] != hostWWW {
+		t.Errorf("body[%q] = %v, want %v", keyName, body[keyName], hostWWW)
+	}
+
+	if body[keyTarget] != testNetIPv4AddressOne {
+		t.Errorf("body[%q] = %v, want %v", keyTarget, body[keyTarget], testNetIPv4AddressOne)
 	}
 }
 

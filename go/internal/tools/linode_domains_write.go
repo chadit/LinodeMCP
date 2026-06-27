@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -71,20 +72,17 @@ func handleLinodeDomainImportRequest(ctx context.Context, request *mcp.CallToolR
 		RemoteNameserver: remoteNameserver,
 	}
 
-	importedDomain, err := client.ImportDomain(ctx, &req)
+	importedDomain, err := client.ImportDomainProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to import domain: %v", err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Domain  *linode.Domain `json:"domain"`
-	}{
-		Message: fmt.Sprintf("Domain '%s' (ID: %d) imported successfully", importedDomain.Domain, importedDomain.ID),
+	response := &linodev1.DomainWriteResponse{
+		Message: fmt.Sprintf("Domain '%s' (ID: %d) imported successfully", importedDomain.GetDomain(), importedDomain.GetId()),
 		Domain:  importedDomain,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeDomainCloneTool creates a tool for cloning a domain.
@@ -143,20 +141,17 @@ func handleLinodeDomainCloneRequest(ctx context.Context, request *mcp.CallToolRe
 
 	req := linode.CloneDomainRequest{Domain: domain}
 
-	clonedDomain, err := client.CloneDomain(ctx, domainID, &req)
+	clonedDomain, err := client.CloneDomainProto(ctx, domainID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to clone domain %d: %v", domainID, err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Domain  *linode.Domain `json:"domain"`
-	}{
-		Message: fmt.Sprintf("Domain %d cloned as '%s' (ID: %d)", domainID, clonedDomain.Domain, clonedDomain.ID),
+	response := &linodev1.DomainWriteResponse{
+		Message: fmt.Sprintf("Domain %d cloned as '%s' (ID: %d)", domainID, clonedDomain.GetDomain(), clonedDomain.GetId()),
 		Domain:  clonedDomain,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeDomainCreateTool creates a tool for creating a domain.
@@ -252,20 +247,17 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 		TTLSec:      ttlSec,
 	}
 
-	createdDomain, err := client.CreateDomain(ctx, &req)
+	createdDomain, err := client.CreateDomainProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create domain: %v", err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Domain  *linode.Domain `json:"domain"`
-	}{
-		Message: fmt.Sprintf("Domain '%s' (ID: %d) created successfully", createdDomain.Domain, createdDomain.ID),
+	response := &linodev1.DomainWriteResponse{
+		Message: fmt.Sprintf("Domain '%s' (ID: %d) created successfully", createdDomain.GetDomain(), createdDomain.GetId()),
 		Domain:  createdDomain,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.
@@ -325,20 +317,17 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		TTLSec:      ttlSec,
 	}
 
-	updatedDomain, err := client.UpdateDomain(ctx, domainID, &req)
+	updatedDomain, err := client.UpdateDomainProto(ctx, domainID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify domain %d: %v", domainID, err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Domain  *linode.Domain `json:"domain"`
-	}{
+	response := &linodev1.DomainWriteResponse{
 		Message: fmt.Sprintf("Domain %d modified successfully", domainID),
 		Domain:  updatedDomain,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // handleLinodeDomainUpdateDryRun fetches the current domain state and

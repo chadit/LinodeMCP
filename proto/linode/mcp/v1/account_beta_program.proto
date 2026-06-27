@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// AccountBetaProgram is one beta program the account is enrolled in. description
+// and ended are nullable (omitted when unset).
+message AccountBetaProgram {
+  optional string description = 1;
+  optional string ended = 2;
+  string enrolled = 3;
+  string id = 4;
+  string label = 5;
+  string started = 6;
+}
+
+// AccountBetaGetInput is the input contract for linode_account_beta_get.
+message AccountBetaGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Beta program ID to retrieve (required).
+  string beta_id = 2;
+}

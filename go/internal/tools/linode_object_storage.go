@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const defaultPresignedExpiry = 3600
@@ -145,23 +146,10 @@ func isSafeObjectStorageQuotaID(quotaID string) bool {
 
 // NewLinodeObjectStorageBucketGetTool creates a tool for getting a specific bucket.
 func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_object_storage_bucket_get",
-		mcp.WithDescription("Gets details about a specific Object Storage bucket by region and label"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("The bucket label (name)"),
-		),
+		"Gets details about a specific Object Storage bucket by region and label",
+		toolschemas.Schema("linode.mcp.v1.ObjectStorageBucketGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -188,12 +176,12 @@ func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	bucket, err := client.GetObjectStorageBucket(ctx, region, label)
+	bucket, err := client.GetObjectStorageBucketProto(ctx, region, label)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return MarshalToolResponse(bucket)
+	return MarshalProtoToolResponse(bucket)
 }
 
 // NewLinodeObjectStorageBucketContentsTool creates a tool for listing objects in a bucket.
@@ -478,18 +466,10 @@ func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeObjectStorageKeyGetTool creates a tool for getting a specific access key.
 func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_object_storage_key_get",
-		mcp.WithDescription("Gets details about a specific Object Storage access key by ID"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"key_id",
-			mcp.Required(),
-			mcp.Description("The ID of the access key to retrieve"),
-		),
+		"Gets details about a specific Object Storage access key by ID",
+		toolschemas.Schema("linode.mcp.v1.ObjectStorageKeyGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -514,12 +494,12 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	key, err := client.GetObjectStorageKey(ctx, keyID)
+	key, err := client.GetObjectStorageKeyProto(ctx, keyID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve access key %d: %v", keyID, err)), nil
 	}
 
-	return MarshalToolResponse(key)
+	return MarshalProtoToolResponse(key)
 }
 
 // NewLinodeObjectStorageQuotaUsageTool creates a tool for getting Object Storage quota usage.
@@ -649,23 +629,10 @@ func handleObjectStorageQuotaGetRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeObjectStorageBucketAccessGetTool creates a tool for getting bucket ACL/CORS settings.
 func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_object_storage_bucket_access_get",
-		mcp.WithDescription("Gets the ACL and CORS settings for a specific Object Storage bucket"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("The bucket label (name)"),
-		),
+		"Gets the ACL and CORS settings for a specific Object Storage bucket",
+		toolschemas.Schema("linode.mcp.v1.ObjectStorageBucketAccessGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -692,12 +659,12 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	access, err := client.GetObjectStorageBucketAccess(ctx, region, label)
+	access, err := client.GetObjectStorageBucketAccessProto(ctx, region, label)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket access for '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return MarshalToolResponse(access)
+	return MarshalProtoToolResponse(access)
 }
 
 // NewLinodeObjectStoragePresignedURLTool creates a tool for generating presigned URLs for objects.
@@ -791,28 +758,10 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.Ca
 
 // NewLinodeObjectStorageObjectACLGetTool creates a tool for getting an object's ACL.
 func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_object_storage_object_acl_get",
-		mcp.WithDescription("Gets the Access Control List (ACL) for a specific object in an Object Storage bucket"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("The bucket label (name)"),
-		),
-		mcp.WithString(
-			"name",
-			mcp.Required(),
-			mcp.Description("The object key (path/filename within the bucket)"),
-		),
+		"Gets the Access Control List (ACL) for a specific object in an Object Storage bucket",
+		toolschemas.Schema("linode.mcp.v1.ObjectACLGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -844,33 +793,20 @@ func handleObjectStorageObjectACLGetRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	acl, err := client.GetObjectACL(ctx, region, label, name)
+	acl, err := client.GetObjectACLProto(ctx, region, label, name)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	return MarshalToolResponse(acl)
+	return MarshalProtoToolResponse(acl)
 }
 
 // NewLinodeObjectStorageSSLGetTool creates a tool for checking a bucket's SSL certificate status.
 func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_object_storage_ssl_get",
-		mcp.WithDescription("Checks whether an Object Storage bucket has an SSL/TLS certificate installed"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("The bucket label (name)"),
-		),
+		"Checks whether an Object Storage bucket has an SSL/TLS certificate installed",
+		toolschemas.Schema("linode.mcp.v1.BucketSSLGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -897,10 +833,10 @@ func handleObjectStorageSSLGetRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ssl, err := client.GetBucketSSL(ctx, region, label)
+	ssl, err := client.GetBucketSSLProto(ctx, region, label)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve SSL status for bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return MarshalToolResponse(ssl)
+	return MarshalProtoToolResponse(ssl)
 }

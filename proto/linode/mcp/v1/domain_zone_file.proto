@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// DomainZoneFile is the rendered DNS zone file lines for a domain.
+message DomainZoneFile {
+  repeated string zone_file = 1;
+}
+
+// DomainZoneFileGetInput is the input contract for linode_domain_zone_file_get.
+message DomainZoneFileGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the domain whose zone file to retrieve (required).
+  int32 domain_id = 2;
+}

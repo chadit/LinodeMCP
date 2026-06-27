@@ -12,6 +12,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -86,17 +87,10 @@ func NewLinodeDatabaseTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 
 // NewLinodeDatabaseTypeGetTool creates a tool for getting one Managed Database node type.
 func NewLinodeDatabaseTypeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_database_type_get",
-		mcp.WithDescription("Retrieves a single Managed Database node type by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			paramDatabaseTypeID,
-			mcp.Description("The Managed Database type ID to retrieve, for example g6-dedicated-1 (required)."),
-			mcp.Required(),
-		),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Retrieves a single Managed Database node type by ID.",
+		toolschemas.Schema("linode.mcp.v1.DatabaseTypeGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -223,11 +217,10 @@ func NewLinodeDatabasePostgreSQLInstanceGetTool(cfg *config.Config) (mcp.Tool, p
 
 // NewLinodeDatabaseInstanceSSLGetTool creates a tool for getting a MySQL Managed Database SSL CA certificate.
 func NewLinodeDatabaseInstanceSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_database_mysql_instance_ssl_get",
-		mcp.WithDescription("Retrieves the SSL CA certificate for a MySQL Managed Database instance by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID whose SSL CA certificate to retrieve.")),
+		"Retrieves the SSL CA certificate for a MySQL Managed Database instance by ID.",
+		toolschemas.Schema("linode.mcp.v1.DatabaseMySQLInstanceSSLGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -239,11 +232,10 @@ func NewLinodeDatabaseInstanceSSLGetTool(cfg *config.Config) (mcp.Tool, profiles
 
 // NewLinodeDatabasePostgreSQLInstanceSSLGetTool creates a tool for getting a PostgreSQL Managed Database SSL CA certificate.
 func NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_database_postgresql_instance_ssl_get",
-		mcp.WithDescription("Retrieves the SSL CA certificate for a PostgreSQL Managed Database instance by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID whose SSL CA certificate to retrieve.")),
+		"Retrieves the SSL CA certificate for a PostgreSQL Managed Database instance by ID.",
+		toolschemas.Schema("linode.mcp.v1.DatabasePostgreSQLInstanceSSLGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -606,15 +598,10 @@ func NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg *config.Config) (mcp.Tool
 
 // NewLinodeDatabaseEngineGetTool creates a tool for getting one Managed Database engine.
 func NewLinodeDatabaseEngineGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_database_engine_get",
-		mcp.WithDescription("Retrieves a single Managed Database engine by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			paramDatabaseEngineID,
-			mcp.Description("The Managed Database engine ID to retrieve, for example mysql/8.0.26 (required)."),
-			mcp.Required(),
-		),
+		"Retrieves a single Managed Database engine by ID.",
+		toolschemas.Schema("linode.mcp.v1.DatabaseEngineGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -635,12 +622,12 @@ func handleDatabaseEngineGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	engine, err := client.GetDatabaseEngine(ctx, engineID)
+	engine, err := client.GetDatabaseEngineProto(ctx, engineID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database engine: %v", err)), nil
 	}
 
-	return MarshalToolResponse(engine)
+	return MarshalProtoToolResponse(engine)
 }
 
 func handleDatabaseMySQLConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -720,12 +707,12 @@ func handleDatabaseInstanceSSLGetRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ssl, err := client.GetDatabaseInstanceSSL(ctx, instanceID)
+	ssl, err := client.GetDatabaseInstanceSSLProto(ctx, instanceID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database SSL certificate: %v", err)), nil
 	}
 
-	return MarshalToolResponse(ssl)
+	return MarshalProtoToolResponse(ssl)
 }
 
 func handleDatabasePostgreSQLInstanceSSLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -739,12 +726,12 @@ func handleDatabasePostgreSQLInstanceSSLGetRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ssl, err := client.GetDatabasePostgreSQLInstanceSSL(ctx, instanceID)
+	ssl, err := client.GetDatabasePostgreSQLInstanceSSLProto(ctx, instanceID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database SSL certificate: %v", err)), nil
 	}
 
-	return MarshalToolResponse(ssl)
+	return MarshalProtoToolResponse(ssl)
 }
 
 func handleDatabaseCredentialsGet(
@@ -938,12 +925,12 @@ func handleDatabaseTypeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	databaseType, err := client.GetDatabaseType(ctx, typeID, page, pageSize)
+	databaseType, err := client.GetDatabaseTypeProto(ctx, typeID, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database type: %v", err)), nil
 	}
 
-	return MarshalToolResponse(databaseType)
+	return MarshalProtoToolResponse(databaseType)
 }
 
 func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// SSHKey mirrors a Linode profile SSH key.
+message SSHKey {
+  int32 id = 1;
+  string label = 2;
+  string ssh_key = 3;
+  string created = 4;
+}
+
+// SSHKeyGetInput is the input contract for linode_sshkey_get.
+message SSHKeyGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the SSH key to retrieve (required).
+  int32 ssh_key_id = 2;
+}

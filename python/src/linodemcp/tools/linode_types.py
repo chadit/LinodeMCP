@@ -8,6 +8,7 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -89,24 +90,7 @@ def create_linode_type_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_type_get",
         description="Gets details for a specific Linode instance type (plan).",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "type_id": {
-                    "type": "string",
-                    "description": (
-                        "Linode type ID to retrieve (for example, 'g6-nanode-1')"
-                    ),
-                },
-            },
-            "required": ["type_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceTypeGetInput"),
     ), Capability.Read
 
 
@@ -123,7 +107,7 @@ async def handle_linode_type_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         type_ = await client.get_type(type_id)
-        return {
+        result: dict[str, Any] = {
             "id": type_.id,
             "label": type_.label,
             "class": type_.class_,
@@ -142,7 +126,9 @@ async def handle_linode_type_get(
                     }
                 }
             },
-            "successor": type_.successor,
         }
+        if type_.successor is not None:
+            result["successor"] = type_.successor
+        return result
 
     return await execute_tool(cfg, arguments, f"retrieve Linode type {type_id}", _call)

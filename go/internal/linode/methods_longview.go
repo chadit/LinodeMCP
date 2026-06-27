@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 // httpGetLongviewPlan retrieves the account Longview subscription plan.
@@ -110,6 +112,28 @@ func (c *Client) httpGetLongviewClient(ctx context.Context, clientID string) (*L
 	return &client, nil
 }
 
+// httpGetLongviewClientProto retrieves a Longview client as a proto message.
+func (c *Client) httpGetLongviewClientProto(ctx context.Context, clientID string) (*linodev1.LongviewClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointLongviewClients + "/" + url.PathEscape(clientID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLongviewClient", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	client := &linodev1.LongviewClient{}
+	if err := c.handleProtoResponse(resp, client); err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
 // httpGetLongviewSubscription retrieves one Longview subscription by ID.
 func (c *Client) httpGetLongviewSubscription(ctx context.Context, subscriptionID string) (*LongviewSubscription, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -130,6 +154,29 @@ func (c *Client) httpGetLongviewSubscription(ctx context.Context, subscriptionID
 	}
 
 	return &subscription, nil
+}
+
+// httpGetLongviewSubscriptionProto retrieves a Longview subscription as a proto
+// message.
+func (c *Client) httpGetLongviewSubscriptionProto(ctx context.Context, subscriptionID string) (*linodev1.LongviewSubscription, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointLongviewSubscriptions + "/" + url.PathEscape(subscriptionID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLongviewSubscription", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	subscription := &linodev1.LongviewSubscription{}
+	if err := c.handleProtoResponse(resp, subscription); err != nil {
+		return nil, err
+	}
+
+	return subscription, nil
 }
 
 // httpUpdateLongviewPlan updates the account Longview subscription plan.

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -82,6 +84,29 @@ func (c *Client) httpGetDatabaseType(ctx context.Context, typeID string, page, p
 	}
 
 	return &databaseType, nil
+}
+
+// httpGetDatabaseTypeProto retrieves one Managed Database type as a proto message.
+func (c *Client) httpGetDatabaseTypeProto(ctx context.Context, typeID string, page, pageSize int) (*linodev1.DatabaseType, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseTypes + "/" + url.PathEscape(typeID)
+	endpoint = withPaginationQuery(endpoint, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseType", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	databaseType := &linodev1.DatabaseType{}
+	if err := c.handleProtoResponse(resp, databaseType); err != nil {
+		return nil, err
+	}
+
+	return databaseType, nil
 }
 
 // ListAllDatabaseInstances retrieves Managed Database instances across
@@ -219,6 +244,29 @@ func (c *Client) httpGetDatabaseInstanceSSL(ctx context.Context, instanceID int)
 	return &ssl, nil
 }
 
+// httpGetDatabaseInstanceSSLProto retrieves a MySQL database SSL certificate as a
+// proto message.
+func (c *Client) httpGetDatabaseInstanceSSLProto(ctx context.Context, instanceID int) (*linodev1.DatabaseSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/ssl"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseInstanceSSL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ssl := &linodev1.DatabaseSSL{}
+	if err := c.handleProtoResponse(resp, ssl); err != nil {
+		return nil, err
+	}
+
+	return ssl, nil
+}
+
 // GetDatabasePostgreSQLInstanceSSL retrieves the SSL CA certificate for a PostgreSQL Managed Database instance.
 func (c *Client) httpGetDatabasePostgreSQLInstanceSSL(ctx context.Context, instanceID int) (*DatabaseSSL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -239,6 +287,29 @@ func (c *Client) httpGetDatabasePostgreSQLInstanceSSL(ctx context.Context, insta
 	}
 
 	return &ssl, nil
+}
+
+// httpGetDatabasePostgreSQLInstanceSSLProto retrieves a PostgreSQL database SSL
+// certificate as a proto message.
+func (c *Client) httpGetDatabasePostgreSQLInstanceSSLProto(ctx context.Context, instanceID int) (*linodev1.DatabaseSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/ssl"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstanceSSL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ssl := &linodev1.DatabaseSSL{}
+	if err := c.handleProtoResponse(resp, ssl); err != nil {
+		return nil, err
+	}
+
+	return ssl, nil
 }
 
 // GetDatabaseInstanceCredentials retrieves MySQL Managed Database credentials.
@@ -604,4 +675,27 @@ func (c *Client) httpGetDatabaseEngine(ctx context.Context, engineID string) (*D
 	}
 
 	return &engine, nil
+}
+
+// httpGetDatabaseEngineProto retrieves one Managed Database engine as a proto
+// message.
+func (c *Client) httpGetDatabaseEngineProto(ctx context.Context, engineID string) (*linodev1.DatabaseEngine, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseEngines + "/" + url.PathEscape(engineID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseEngine", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	engine := &linodev1.DatabaseEngine{}
+	if err := c.handleProtoResponse(resp, engine); err != nil {
+		return nil, err
+	}
+
+	return engine, nil
 }

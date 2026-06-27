@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -76,6 +78,29 @@ func (c *Client) httpGetVolume(ctx context.Context, volumeID int) (*Volume, erro
 	return &volume, nil
 }
 
+// httpGetVolumeProto retrieves a single volume and decodes it as a proto message
+// for the proto-backed read path.
+func (c *Client) httpGetVolumeProto(ctx context.Context, volumeID int) (*linodev1.Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	volume := &linodev1.Volume{}
+	if err := c.handleProtoResponse(resp, volume); err != nil {
+		return nil, err
+	}
+
+	return volume, nil
+}
+
 // CreateVolume creates a new block storage volume.
 func (c *Client) httpCreateVolume(ctx context.Context, req *CreateVolumeRequest) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -94,6 +119,27 @@ func (c *Client) httpCreateVolume(ctx context.Context, req *CreateVolumeRequest)
 	}
 
 	return &volume, nil
+}
+
+// httpCreateVolumeProto creates a volume and decodes the response as a proto
+// message for the proto-backed write path.
+func (c *Client) httpCreateVolumeProto(ctx context.Context, req *CreateVolumeRequest) (*linodev1.Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointVolumes, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	volume := &linodev1.Volume{}
+	if err := c.handleProtoResponse(resp, volume); err != nil {
+		return nil, err
+	}
+
+	return volume, nil
 }
 
 // CloneVolume clones an existing block storage volume.
@@ -118,6 +164,29 @@ func (c *Client) httpCloneVolume(ctx context.Context, volumeID int, req CloneVol
 	return &volume, nil
 }
 
+// httpCloneVolumeProto clones a volume and decodes the response as a proto
+// message for the proto-backed write path.
+func (c *Client) httpCloneVolumeProto(ctx context.Context, volumeID int, req CloneVolumeRequest) (*linodev1.Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/clone", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	volume := &linodev1.Volume{}
+	if err := c.handleProtoResponse(resp, volume); err != nil {
+		return nil, err
+	}
+
+	return volume, nil
+}
+
 // AttachVolume attaches a volume to a Linode instance.
 func (c *Client) httpAttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -138,6 +207,29 @@ func (c *Client) httpAttachVolume(ctx context.Context, volumeID int, req AttachV
 	}
 
 	return &volume, nil
+}
+
+// httpAttachVolumeProto attaches a volume and decodes the response as a proto
+// message for the proto-backed write path.
+func (c *Client) httpAttachVolumeProto(ctx context.Context, volumeID int, req AttachVolumeRequest) (*linodev1.Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/attach", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AttachVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	volume := &linodev1.Volume{}
+	if err := c.handleProtoResponse(resp, volume); err != nil {
+		return nil, err
+	}
+
+	return volume, nil
 }
 
 // DetachVolume detaches a volume from a Linode instance.
@@ -180,6 +272,30 @@ func (c *Client) httpResizeVolume(ctx context.Context, volumeID, size int) (*Vol
 	return &volume, nil
 }
 
+// httpResizeVolumeProto resizes a volume and decodes the response as a proto
+// message for the proto-backed write path.
+func (c *Client) httpResizeVolumeProto(ctx context.Context, volumeID, size int) (*linodev1.Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/resize", volumeID)
+	payload := map[string]int{"size": size}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, payload)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ResizeVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	volume := &linodev1.Volume{}
+	if err := c.handleProtoResponse(resp, volume); err != nil {
+		return nil, err
+	}
+
+	return volume, nil
+}
+
 // DeleteVolume deletes a block storage volume.
 func (c *Client) httpDeleteVolume(ctx context.Context, volumeID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -217,6 +333,29 @@ func (c *Client) httpUpdateVolume(ctx context.Context, volumeID int, req *Update
 	}
 
 	return &volume, nil
+}
+
+// httpUpdateVolumeProto updates a volume and decodes the response as a proto
+// message for the proto-backed write path.
+func (c *Client) httpUpdateVolumeProto(ctx context.Context, volumeID int, req *UpdateVolumeRequest) (*linodev1.Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	volume := &linodev1.Volume{}
+	if err := c.handleProtoResponse(resp, volume); err != nil {
+		return nil, err
+	}
+
+	return volume, nil
 }
 
 // ListSSHKeys retrieves all SSH keys from the authenticated user's profile.
@@ -260,6 +399,28 @@ func (c *Client) httpGetSSHKey(ctx context.Context, sshKeyID int) (*SSHKey, erro
 	}
 
 	return &sshKey, nil
+}
+
+// httpGetSSHKeyProto retrieves one SSH key as a proto message.
+func (c *Client) httpGetSSHKeyProto(ctx context.Context, sshKeyID int) (*linodev1.SSHKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetSSHKey", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	sshKey := &linodev1.SSHKey{}
+	if err := c.handleProtoResponse(resp, sshKey); err != nil {
+		return nil, err
+	}
+
+	return sshKey, nil
 }
 
 // CreateSSHKey creates a new SSH key in the user's profile.

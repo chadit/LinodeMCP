@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Volume mirrors the Linode block storage volume object. Field order and JSON
+// names match what both implementations emit today, so protojson output is
+// byte-compatible with the existing tool response.
+message Volume {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  int32 size = 4;
+  string region = 5;
+  // linode_id and linode_label are nullable on the wire; under EmitDefaultValues
+  // they are omitted when unset (the API sends null when the volume is detached).
+  optional int32 linode_id = 6;
+  optional string linode_label = 7;
+  string filesystem_path = 8;
+  repeated string tags = 9;
+  string created = 10;
+  string updated = 11;
+  string hardware_type = 12;
+}
+
+// VolumeGetResponse wraps a single volume under "volume", matching the existing
+// linode_volume_get output shape.
+message VolumeGetResponse {
+  Volume volume = 1;
+}
+
+// VolumeWriteResponse is the {message, volume} envelope the volume write tools
+// (create, update, resize, clone, attach) return: a human-readable confirmation
+// plus the affected volume. For attach, the attached Linode is available on the
+// volume itself (volume.linode_id), so no separate field is echoed.
+message VolumeWriteResponse {
+  string message = 1;
+  Volume volume = 2;
+}
+
+// VolumeGetInput is the input contract for linode_volume_get.
+message VolumeGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the volume to retrieve (required).
+  int32 volume_id = 2;
+}

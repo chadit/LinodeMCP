@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -49,16 +50,15 @@ func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 
 // NewLinodeFirewallGetTool creates a tool for retrieving a single Cloud Firewall by ID.
 func NewLinodeFirewallGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_get",
 		"Gets a Cloud Firewall by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall to retrieve (required)")),
-		},
-		handleLinodeFirewallGetRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -74,45 +74,12 @@ func handleLinodeFirewallGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	firewall, err := client.GetFirewall(ctx, firewallID)
+	firewall, err := client.GetFirewallProto(ctx, firewallID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve firewall %d: %v", firewallID, err)), nil
 	}
 
-	// Summary shape (rule counts instead of full rule bodies) matches the
-	// Python implementation's response for this tool; the full rules are
-	// available via linode_firewall_rules_get.
-	return MarshalToolResponse(firewallGetResponse{
-		Firewall: firewallSummary{
-			ID:                 firewall.ID,
-			Label:              firewall.Label,
-			Status:             firewall.Status,
-			RulesInboundCount:  len(firewall.Rules.Inbound),
-			RulesOutboundCount: len(firewall.Rules.Outbound),
-			Created:            firewall.Created,
-			Updated:            firewall.Updated,
-			Tags:               firewall.Tags,
-		},
-	})
-}
-
-// firewallGetResponse wraps the firewall summary under a "firewall" key to
-// match the Python implementation's response shape for linode_firewall_get.
-type firewallGetResponse struct {
-	Firewall firewallSummary `json:"firewall"`
-}
-
-// firewallSummary is the condensed firewall view linode_firewall_get returns:
-// identity, status, rule counts, and timestamps without the full rule bodies.
-type firewallSummary struct {
-	ID                 int      `json:"id"`
-	Label              string   `json:"label"`
-	Status             string   `json:"status"`
-	RulesInboundCount  int      `json:"rules_inbound_count"`
-	RulesOutboundCount int      `json:"rules_outbound_count"`
-	Created            string   `json:"created"`
-	Updated            string   `json:"updated"`
-	Tags               []string `json:"tags"`
+	return MarshalProtoToolResponse(firewall)
 }
 
 // NewLinodeVLANsListTool creates a tool for listing VLANs.
@@ -244,16 +211,15 @@ func vlanPathParamFromTool(request *mcp.CallToolRequest, name string) (string, s
 
 // NewLinodeFirewallRulesListTool creates a tool for listing rules for a Cloud Firewall.
 func NewLinodeFirewallRulesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_rules_get",
 		"Lists rules for a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall whose rules should be listed.")),
-		},
-		handleLinodeFirewallRulesListRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallRulesGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallRulesListRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -274,12 +240,12 @@ func handleLinodeFirewallRulesListRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	rules, err := client.ListFirewallRules(ctx, firewallID)
+	rules, err := client.ListFirewallRulesProto(ctx, firewallID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_rules_get: %v", err)), nil
 	}
 
-	return MarshalToolResponse(rules)
+	return MarshalProtoToolResponse(rules)
 }
 
 // NewLinodeFirewallRulesUpdateTool creates a tool for replacing rules for a Cloud Firewall.
@@ -534,18 +500,15 @@ func handleLinodeFirewallDevicesListRequest(ctx context.Context, request *mcp.Ca
 
 // NewLinodeFirewallDeviceGetTool creates a tool for retrieving one device assigned to a Cloud Firewall.
 func NewLinodeFirewallDeviceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_device_get",
 		"Gets one device assigned to a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall whose assigned device should be retrieved.")),
-			mcp.WithNumber(paramFirewallDeviceID, mcp.Required(),
-				mcp.Description("The ID of the firewall device assignment to retrieve.")),
-		},
-		handleLinodeFirewallDeviceGetRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallDeviceGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallDeviceGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -566,12 +529,12 @@ func handleLinodeFirewallDeviceGetRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	device, err := client.GetFirewallDevice(ctx, firewallID, deviceID)
+	device, err := client.GetFirewallDeviceProto(ctx, firewallID, deviceID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_device_get: %v", err)), nil
 	}
 
-	return MarshalToolResponse(device)
+	return MarshalProtoToolResponse(device)
 }
 
 // NewLinodeFirewallDeviceCreateTool creates a tool for assigning a device to a Cloud Firewall.

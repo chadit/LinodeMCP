@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// LKENode mirrors one node within an LKE cluster node pool.
+message LKENode {
+  string id = 1;
+  int32 instance_id = 2;
+  string status = 3;
+}
+
+// LKENodeGetInput is the input contract for linode_lke_node_get.
+message LKENodeGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster (required).
+  string cluster_id = 2;
+  // The ID of the node to retrieve (required).
+  string node_id = 3;
+}

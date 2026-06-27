@@ -10,15 +10,15 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeStackScriptGetTool creates a tool for retrieving one StackScript.
 func NewLinodeStackScriptGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_stackscript_get",
-		mcp.WithDescription("Gets one StackScript by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("stackscript_id", mcp.Required(), mcp.Description("StackScript ID to retrieve.")),
+		"Gets one StackScript by ID.",
+		toolschemas.Schema("linode.mcp.v1.StackScriptGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -69,12 +69,12 @@ func handleLinodeStackScriptGetRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	script, err := client.GetStackScript(ctx, stackScriptID)
+	script, err := client.GetStackScriptProto(ctx, stackScriptID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve StackScript: %v", err)), nil
 	}
 
-	return MarshalToolResponse(script)
+	return MarshalProtoToolResponse(script)
 }
 
 func stackScriptIDFromTool(request *mcp.CallToolRequest) (int, string) {

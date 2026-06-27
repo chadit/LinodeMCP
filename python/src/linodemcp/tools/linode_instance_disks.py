@@ -19,6 +19,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -340,20 +341,25 @@ async def handle_linode_instance_firewall_list(
     return await execute_tool(cfg, arguments, "list instance firewalls", _call)
 
 
+def instance_disk_to_response_dict(disk: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw instance disk API dict to proto-canonical form."""
+    return {
+        "id": disk.get("id", 0),
+        "label": disk.get("label", ""),
+        "status": disk.get("status", ""),
+        "size": disk.get("size", 0),
+        "filesystem": disk.get("filesystem", ""),
+        "created": disk.get("created", ""),
+        "updated": disk.get("updated", ""),
+    }
+
+
 def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_get tool."""
     return Tool(
         name="linode_instance_disk_get",
         description=("Gets details of a specific disk on an instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "disk_id": _DISK_ID_PROP,
-            },
-            "required": ["linode_id", "disk_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskGetInput"),
     ), Capability.Read
 
 
@@ -369,7 +375,9 @@ async def handle_linode_instance_disk_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.get_instance_disk(linode_id, disk_id)
+        return instance_disk_to_response_dict(
+            await client.get_instance_disk(linode_id, disk_id)
+        )
 
     return await execute_tool(cfg, arguments, "get instance disk", _call)
 

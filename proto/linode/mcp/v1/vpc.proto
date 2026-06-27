@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Vpc mirrors the Linode Virtual Private Cloud object. Field order and JSON names
+// match what both implementations emit today.
+message Vpc {
+  int32 id = 1;
+  string label = 2;
+  string description = 3;
+  string region = 4;
+  repeated VpcSubnet subnets = 5;
+  string created = 6;
+  string updated = 7;
+}
+
+// VpcSubnet is a subnet within a VPC.
+message VpcSubnet {
+  int32 id = 1;
+  string label = 2;
+  string ipv4 = 3;
+  repeated VpcSubnetLinode linodes = 4;
+  string created = 5;
+  string updated = 6;
+}
+
+// VpcSubnetLinode is a Linode assigned to a VPC subnet.
+message VpcSubnetLinode {
+  int32 id = 1;
+  repeated VpcSubnetLinodeInterface interfaces = 2;
+}
+
+// VpcSubnetLinodeInterface is a network interface on a Linode within a subnet.
+message VpcSubnetLinodeInterface {
+  int32 id = 1;
+  bool active = 2;
+  int32 config_id = 3;
+}
+
+// VpcWriteResponse is the {message, vpc} envelope the VPC write tools (create,
+// update) return.
+message VpcWriteResponse {
+  string message = 1;
+  Vpc vpc = 2;
+}
+
+// VpcGetInput is the input contract for linode_vpc_get.
+message VpcGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the VPC to retrieve (required).
+  string vpc_id = 2;
+}
+
+// VpcSubnetWriteResponse is the {message, subnet} envelope the VPC subnet write
+// tools (create, update) return.
+message VpcSubnetWriteResponse {
+  string message = 1;
+  VpcSubnet subnet = 2;
+}
+
+// VpcSubnetGetInput is the input contract for linode_vpc_subnet_get.
+message VpcSubnetGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the VPC (required).
+  string vpc_id = 2;
+  // The ID of the subnet to retrieve (required).
+  string subnet_id = 3;
+}

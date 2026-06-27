@@ -11,6 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeLKEClusterListTool creates a tool for listing all LKE clusters.
@@ -34,15 +35,10 @@ func NewLinodeLKEClusterListTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 
 // NewLinodeLKEClusterGetTool creates a tool for getting a single LKE cluster by ID.
 func NewLinodeLKEClusterGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_cluster_get",
-		mcp.WithDescription("Retrieves details of a single LKE cluster by its ID"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"cluster_id",
-			mcp.Required(),
-			mcp.Description("The ID of the LKE cluster to retrieve"),
-		),
+		"Retrieves details of a single LKE cluster by its ID",
+		toolschemas.Schema("linode.mcp.v1.LKEClusterGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -63,12 +59,12 @@ func handleLKEClusterGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cluster, err := client.GetLKECluster(ctx, clusterID)
+	cluster, err := client.GetLKEClusterProto(ctx, clusterID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE cluster: %v", err)), nil
 	}
 
-	return MarshalToolResponse(cluster)
+	return MarshalProtoToolResponse(cluster)
 }
 
 // NewLinodeLKEPoolListTool creates a tool for listing node pools in an LKE cluster.
@@ -120,20 +116,10 @@ func handleLKEPoolsListRequest(ctx context.Context, request *mcp.CallToolRequest
 
 // NewLinodeLKEPoolGetTool creates a tool for getting a specific node pool.
 func NewLinodeLKEPoolGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_pool_get",
-		mcp.WithDescription("Retrieves details of a specific node pool within an LKE cluster"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"cluster_id",
-			mcp.Required(),
-			mcp.Description("The ID of the LKE cluster"),
-		),
-		mcp.WithString(
-			"pool_id",
-			mcp.Required(),
-			mcp.Description("The ID of the node pool to retrieve"),
-		),
+		"Retrieves details of a specific node pool within an LKE cluster",
+		toolschemas.Schema("linode.mcp.v1.LKENodePoolGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -159,30 +145,20 @@ func handleLKEPoolGetRequest(ctx context.Context, request *mcp.CallToolRequest, 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	pool, err := client.GetLKENodePool(ctx, clusterID, poolID)
+	pool, err := client.GetLKENodePoolProto(ctx, clusterID, poolID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve node pool %d for cluster %d: %v", poolID, clusterID, err)), nil
 	}
 
-	return MarshalToolResponse(pool)
+	return MarshalProtoToolResponse(pool)
 }
 
 // NewLinodeLKENodeGetTool creates a tool for getting a specific node in an LKE cluster.
 func NewLinodeLKENodeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_node_get",
-		mcp.WithDescription("Retrieves details of a specific node within an LKE cluster"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"cluster_id",
-			mcp.Required(),
-			mcp.Description("The ID of the LKE cluster"),
-		),
-		mcp.WithString(
-			"node_id",
-			mcp.Required(),
-			mcp.Description("The ID of the node to retrieve (string format)"),
-		),
+		"Retrieves details of a specific node within an LKE cluster",
+		toolschemas.Schema("linode.mcp.v1.LKENodeGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -208,25 +184,20 @@ func handleLKENodeGetRequest(ctx context.Context, request *mcp.CallToolRequest, 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	node, err := client.GetLKENode(ctx, clusterID, nodeID)
+	node, err := client.GetLKENodeProto(ctx, clusterID, nodeID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve node '%s' for cluster %d: %v", nodeID, clusterID, err)), nil
 	}
 
-	return MarshalToolResponse(node)
+	return MarshalProtoToolResponse(node)
 }
 
 // NewLinodeLKEKubeconfigGetTool creates a tool for retrieving the kubeconfig of an LKE cluster.
 func NewLinodeLKEKubeconfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_kubeconfig_get",
-		mcp.WithDescription("Retrieves the kubeconfig file for an LKE cluster (base64-encoded)"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"cluster_id",
-			mcp.Required(),
-			mcp.Description("The ID of the LKE cluster"),
-		),
+		"Retrieves the kubeconfig file for an LKE cluster (base64-encoded)",
+		toolschemas.Schema("linode.mcp.v1.LKEKubeconfigGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -247,25 +218,20 @@ func handleLKEKubeconfigGetRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	kubeconfig, err := client.GetLKEKubeconfig(ctx, clusterID)
+	kubeconfig, err := client.GetLKEKubeconfigProto(ctx, clusterID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve kubeconfig for cluster %d: %v", clusterID, err)), nil
 	}
 
-	return MarshalToolResponse(kubeconfig)
+	return MarshalProtoToolResponse(kubeconfig)
 }
 
 // NewLinodeLKEDashboardGetTool creates a tool for retrieving the dashboard URL of an LKE cluster.
 func NewLinodeLKEDashboardGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_dashboard_get",
-		mcp.WithDescription("Retrieves the Kubernetes dashboard URL for an LKE cluster"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"cluster_id",
-			mcp.Required(),
-			mcp.Description("The ID of the LKE cluster"),
-		),
+		"Retrieves the Kubernetes dashboard URL for an LKE cluster",
+		toolschemas.Schema("linode.mcp.v1.LKEDashboardGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -286,12 +252,12 @@ func handleLKEDashboardGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	dashboard, err := client.GetLKEDashboard(ctx, clusterID)
+	dashboard, err := client.GetLKEDashboardProto(ctx, clusterID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve dashboard URL for cluster %d: %v", clusterID, err)), nil
 	}
 
-	return MarshalToolResponse(dashboard)
+	return MarshalProtoToolResponse(dashboard)
 }
 
 // NewLinodeLKEAPIEndpointListTool creates a tool for listing API endpoints of an LKE cluster.
@@ -398,15 +364,10 @@ func NewLinodeLKEVersionListTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 
 // NewLinodeLKEVersionGetTool creates a tool for getting a specific Kubernetes version.
 func NewLinodeLKEVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_version_get",
-		mcp.WithDescription("Retrieves details of a specific Kubernetes version available for LKE"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"version",
-			mcp.Required(),
-			mcp.Description("The Kubernetes version ID (e.g., '1.31')"),
-		),
+		"Retrieves details of a specific Kubernetes version available for LKE",
+		toolschemas.Schema("linode.mcp.v1.LKEVersionGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -427,12 +388,12 @@ func handleLKEVersionGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	version, err := client.GetLKEVersion(ctx, versionID)
+	version, err := client.GetLKEVersionProto(ctx, versionID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE version '%s': %v", versionID, err)), nil
 	}
 
-	return MarshalToolResponse(version)
+	return MarshalProtoToolResponse(version)
 }
 
 func validateLKEVersionID(versionID string) string {
@@ -499,20 +460,10 @@ func handleLKETierVersionList(ctx context.Context, request *mcp.CallToolRequest,
 
 // NewLinodeLKETierVersionGetTool creates a tool for getting a specific Kubernetes version for an LKE tier.
 func NewLinodeLKETierVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_tier_version_get",
-		mcp.WithDescription("Retrieves details of a specific Kubernetes version for an LKE tier"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"tier",
-			mcp.Required(),
-			mcp.Description("The LKE tier ID: standard or enterprise."),
-		),
-		mcp.WithString(
-			"version",
-			mcp.Required(),
-			mcp.Description("The Kubernetes version ID (for example, '1.31')"),
-		),
+		"Retrieves details of a specific Kubernetes version for an LKE tier",
+		toolschemas.Schema("linode.mcp.v1.LKETierVersionGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -538,12 +489,12 @@ func handleLKETierVersionGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	version, err := client.GetLKETierVersion(ctx, tier, versionID)
+	version, err := client.GetLKETierVersionProto(ctx, tier, versionID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE tier version '%s' for tier '%s': %v", versionID, tier, err)), nil
 	}
 
-	return MarshalToolResponse(version)
+	return MarshalProtoToolResponse(version)
 }
 
 func validateLKETierVersionID(raw string) (string, string) {

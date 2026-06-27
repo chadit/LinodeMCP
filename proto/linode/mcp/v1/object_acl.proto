@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// ObjectACL is the access control list for one object in an Object Storage
+// bucket.
+message ObjectACL {
+  string acl = 1;
+  string acl_xml = 2;
+}
+
+// ObjectACLGetInput is the input contract for
+// linode_object_storage_object_acl_get.
+message ObjectACLGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (required).
+  string region = 2;
+  // The bucket label (required).
+  string label = 3;
+  // The object key within the bucket (required).
+  string name = 4;
+}

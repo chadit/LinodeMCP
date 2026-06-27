@@ -8,6 +8,7 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -121,19 +122,63 @@ def _filter_vpcs(
     return vpcs, applied
 
 
+def _vpc_subnet_linode_interface_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw VPC subnet-linode interface to proto-canonical form."""
+    return {
+        "id": raw.get("id", 0),
+        "active": raw.get("active", False),
+        "config_id": raw.get("config_id", 0),
+    }
+
+
+def _vpc_subnet_linode_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw VPC subnet-linode to proto-canonical form."""
+    return {
+        "id": raw.get("id", 0),
+        "interfaces": [
+            _vpc_subnet_linode_interface_to_dict(iface)
+            for iface in raw.get("interfaces", [])
+        ],
+    }
+
+
+def vpc_subnet_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw VPC subnet to proto-canonical form."""
+    return {
+        "id": raw.get("id", 0),
+        "label": raw.get("label", ""),
+        "ipv4": raw.get("ipv4", ""),
+        "linodes": [
+            _vpc_subnet_linode_to_dict(linode) for linode in raw.get("linodes", [])
+        ],
+        "created": raw.get("created", ""),
+        "updated": raw.get("updated", ""),
+    }
+
+
+def vpc_to_response_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw VPC API dict to proto-canonical linode.mcp.v1.Vpc form.
+
+    Selects only the proto-modeled fields and always emits the repeated fields
+    (subnets, linodes, interfaces) as lists, matching Go's protojson output.
+    """
+    return {
+        "id": raw.get("id", 0),
+        "label": raw.get("label", ""),
+        "description": raw.get("description", ""),
+        "region": raw.get("region", ""),
+        "subnets": [vpc_subnet_to_dict(subnet) for subnet in raw.get("subnets", [])],
+        "created": raw.get("created", ""),
+        "updated": raw.get("updated", ""),
+    }
+
+
 def create_linode_vpc_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_get tool."""
     return Tool(
         name="linode_vpc_get",
         description="Gets details of a specific VPC by ID",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-            },
-            "required": ["vpc_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcGetInput"),
     ), Capability.Read
 
 
@@ -150,7 +195,7 @@ async def handle_linode_vpc_get(
         return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_vpc(vpc_id)
+        return vpc_to_response_dict(await client.get_vpc(vpc_id))
 
     return await execute_tool(cfg, arguments, "get VPC", _call)
 
@@ -373,15 +418,7 @@ def create_linode_vpc_subnet_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_get",
         description="Gets details of a specific VPC subnet",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-                "subnet_id": _SUBNET_ID_PROP,
-            },
-            "required": ["vpc_id", "subnet_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcSubnetGetInput"),
     ), Capability.Read
 
 
@@ -422,6 +459,6 @@ async def handle_linode_vpc_subnet_get(
     vpc_id, subnet_id = ids
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_vpc_subnet(vpc_id, subnet_id)
+        return vpc_subnet_to_dict(await client.get_vpc_subnet(vpc_id, subnet_id))
 
     return await execute_tool(cfg, arguments, "get VPC subnet", _call)

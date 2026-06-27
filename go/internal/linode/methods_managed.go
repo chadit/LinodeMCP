@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -37,6 +39,29 @@ func (c *Client) httpGetManagedLinodeSettings(ctx context.Context, linodeID int)
 	return &settings, nil
 }
 
+// httpGetManagedLinodeSettingsProto retrieves Managed Linode settings as a proto
+// message.
+func (c *Client) httpGetManagedLinodeSettingsProto(ctx context.Context, linodeID int) (*linodev1.ManagedLinodeSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedLinodeSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	settings := &linodev1.ManagedLinodeSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
 // httpGetManagedContact retrieves one managed contact by ID.
 func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -57,6 +82,28 @@ func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*Man
 	}
 
 	return &contact, nil
+}
+
+// httpGetManagedContactProto retrieves a Managed contact as a proto message.
+func (c *Client) httpGetManagedContactProto(ctx context.Context, contactID int) (*linodev1.ManagedContact, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedContact", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	contact := &linodev1.ManagedContact{}
+	if err := c.handleProtoResponse(resp, contact); err != nil {
+		return nil, err
+	}
+
+	return contact, nil
 }
 
 // httpDeleteManagedContact deletes one Managed contact.
@@ -184,6 +231,28 @@ func (c *Client) httpGetManagedService(ctx context.Context, serviceID int) (*Man
 	return &service, nil
 }
 
+// httpGetManagedServiceProto retrieves a Managed service as a proto message.
+func (c *Client) httpGetManagedServiceProto(ctx context.Context, serviceID int) (*linodev1.ManagedService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	service := &linodev1.ManagedService{}
+	if err := c.handleProtoResponse(resp, service); err != nil {
+		return nil, err
+	}
+
+	return service, nil
+}
+
 // httpUpdateManagedService updates one Managed service monitor.
 func (c *Client) httpUpdateManagedService(ctx context.Context, serviceID int, req *UpdateManagedServiceRequest) (*ManagedService, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -299,6 +368,28 @@ func (c *Client) httpGetManagedIssue(ctx context.Context, issueID int) (*Managed
 	}
 
 	return &issue, nil
+}
+
+// httpGetManagedIssueProto retrieves one Managed issue as a proto message.
+func (c *Client) httpGetManagedIssueProto(ctx context.Context, issueID int) (*linodev1.ManagedIssue, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedIssues + "/" + url.PathEscape(strconv.Itoa(issueID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedIssue", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	issue := &linodev1.ManagedIssue{}
+	if err := c.handleProtoResponse(resp, issue); err != nil {
+		return nil, err
+	}
+
+	return issue, nil
 }
 
 // httpListManagedIssues retrieves Managed issues.

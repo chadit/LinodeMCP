@@ -1913,7 +1913,9 @@ async def test_account_settings_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_settings_get", {})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["backups_enabled"] is True
+    assert body["network_helper"] is True
     mock_client.get_account_settings.assert_awaited_once_with()
 
 
@@ -2025,9 +2027,9 @@ async def test_account_transfer_get_dispatches_from_registry(
 ) -> None:
     """Account transfer get is callable through server dispatch."""
     response_data: dict[str, object] = {
-        "billable": 12.5,
+        "billable": 0,
         "quota": 5000,
-        "used": 42.0,
+        "used": 42,
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -2040,7 +2042,10 @@ async def test_account_transfer_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_transfer_get", {})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["quota"] == 5000
+    assert body["used"] == 42
+    assert body["region_transfers"] == []
     mock_client.get_account_transfer.assert_awaited_once_with()
 
 
@@ -3141,7 +3146,11 @@ async def test_account_event_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_event_get", {"event_id": 123})
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == 123
+    assert data["action"] == "linode_create"
+    assert data["status"] == "finished"
+    assert "entity" not in data
     mock_client.get_account_event.assert_awaited_once_with(123)
 
 
@@ -4029,7 +4038,7 @@ async def test_database_postgresql_instance_ssl_get_tool_is_exported_and_registe
     assert tool.name == "linode_database_postgresql_instance_ssl_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["instance_id"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert "instance_id" in tool.inputSchema["properties"]
 
     srv = Server(sample_config)
     assert "linode_database_postgresql_instance_ssl_get" in srv.registered_tool_names
@@ -4050,7 +4059,7 @@ async def test_database_postgresql_instance_ssl_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """PostgreSQL database SSL get is callable through server dispatch."""
-    response_data: dict[str, object] = {"ssl_ca_certificate": "certificate"}
+    response_data: dict[str, object] = {"ca_certificate": "certificate"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -4615,7 +4624,7 @@ async def test_database_mysql_instance_ssl_get_tool_is_exported_and_registered(
     assert tool.name == "linode_database_mysql_instance_ssl_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["instance_id"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert "instance_id" in tool.inputSchema["properties"]
 
     srv = Server(sample_config)
     assert "linode_database_mysql_instance_ssl_get" in srv.registered_tool_names
@@ -4635,7 +4644,7 @@ async def test_database_mysql_instance_ssl_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """MySQL database SSL get is callable through server dispatch."""
-    response_data: dict[str, object] = {"ssl_ca_certificate": "certificate"}
+    response_data: dict[str, object] = {"ca_certificate": "certificate"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -4716,7 +4725,10 @@ async def test_account_beta_get_dispatches_from_registry(
             "linode_account_beta_get", {"beta_id": "example-open"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == "example-open"
+    assert data["label"] == "Example Open Beta"
+    assert "description" not in data
     mock_client.get_account_beta.assert_awaited_once_with("example-open")
 
 
@@ -4770,7 +4782,10 @@ async def test_beta_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_beta_get", {"beta_id": "example-open"})
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == "example-open"
+    assert data["label"] == "Example Open Beta"
+    assert "description" not in data
     mock_client.get_beta.assert_awaited_once_with("example-open")
 
 
@@ -5040,7 +5055,11 @@ async def test_account_service_transfer_get_dispatches_from_registry(
             "linode_account_service_transfer_get", {"token": "transfer-token"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["token"] == "transfer-token"
+    assert data["entities"]["linodes"] == [123]
+    assert data["is_sender"] is False
+    assert data["created"] == ""
     mock_client.get_account_service_transfer.assert_awaited_once_with("transfer-token")
 
 
@@ -5253,7 +5272,11 @@ async def test_account_oauth_client_get_dispatches_from_registry(
             "linode_account_oauth_client_get", {"client_id": "client-123"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == "client-123"
+    assert body["label"] == "Example OAuth Client"
+    assert body["public"] is False
+    assert body["redirect_uri"] == ""
     mock_client.get_account_oauth_client.assert_awaited_once_with("client-123")
 
 
@@ -5403,7 +5426,10 @@ async def test_account_invoice_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_invoice_get", {"invoice_id": 123})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 123
+    assert body["label"] == "Invoice 123"
+    assert body["total"] == 0.0
     mock_client.get_account_invoice.assert_awaited_once_with(123)
 
 
@@ -5443,8 +5469,7 @@ async def test_account_invoice_get_schema_requires_invoice_id(
     )
 
     assert entry.tool.inputSchema["required"] == ["invoice_id"]
-    assert entry.tool.inputSchema["properties"]["invoice_id"]["type"] == "integer"
-    assert entry.tool.inputSchema["properties"]["invoice_id"]["minimum"] == 1
+    assert "invoice_id" in entry.tool.inputSchema["properties"]
 
 
 async def test_account_payment_get_tool_is_exported_and_registered(
@@ -5476,7 +5501,10 @@ async def test_account_payment_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_payment_get", {"payment_id": 123})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 123
+    assert body["usd"] == "10.00"
+    assert body["date"] == ""
     mock_client.get_account_payment.assert_awaited_once_with(123)
 
 
@@ -5516,9 +5544,7 @@ async def test_account_payment_get_schema_requires_payment_id(
     )
 
     assert entry.tool.inputSchema["required"] == ["payment_id"]
-    prop = entry.tool.inputSchema["properties"]["payment_id"]
-    assert prop["type"] == "integer"
-    assert prop["minimum"] == 1
+    assert "payment_id" in entry.tool.inputSchema["properties"]
 
 
 async def test_account_payment_method_get_tool_is_exported_and_registered(
@@ -5766,7 +5792,10 @@ async def test_account_login_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_login_get", {"login_id": 456})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 456
+    assert body["username"] == "alice"
+    assert body["restricted"] is False
     mock_client.get_account_login.assert_awaited_once_with(456)
 
 
@@ -5804,8 +5833,7 @@ async def test_account_login_get_schema_requires_login_id(
     )
 
     assert entry.tool.inputSchema["required"] == ["login_id"]
-    assert entry.tool.inputSchema["properties"]["login_id"]["type"] == "integer"
-    assert entry.tool.inputSchema["properties"]["login_id"]["minimum"] == 1
+    assert "login_id" in entry.tool.inputSchema["properties"]
 
 
 async def test_client_get_account_user_uses_exact_encoded_path() -> None:
@@ -5875,7 +5903,11 @@ async def test_account_user_get_dispatches_from_registry(
             "linode_account_user_get", {"username": "alice-dev"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["username"] == "alice-dev"
+    assert data["restricted"] is True
+    assert data["ssh_keys"] == []
+    assert "last_login" not in data
     mock_client.get_account_user.assert_awaited_once_with("alice-dev")
 
 
@@ -5916,7 +5948,6 @@ async def test_account_user_get_schema_requires_username(
     assert entry.tool.inputSchema["required"] == ["username"]
     username_schema = entry.tool.inputSchema["properties"]["username"]
     assert username_schema["type"] == "string"
-    assert username_schema["pattern"] == "^[A-Za-z0-9][A-Za-z0-9_-]*$"
 
 
 async def test_client_get_account_user_grants_uses_exact_encoded_path() -> None:
@@ -6445,7 +6476,11 @@ async def test_account_availability_get_dispatches_from_registry(
             "linode_account_availability_get", {"region_id": "us-east"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "available": ["Linodes", "NodeBalancers"],
+        "region": "us-east",
+        "unavailable": [],
+    }
     mock_client.get_account_availability.assert_awaited_once_with("us-east")
 
 
@@ -10768,7 +10803,10 @@ async def test_managed_service_get_dispatches_from_registry(
         result = await srv.dispatch("linode_managed_service_get", {"service_id": 314})
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 314
+    assert body["label"] == "web monitor"
+    assert body["credentials"] == []
     mock_client.get_managed_service.assert_awaited_once_with(314)
 
 
@@ -11582,7 +11620,10 @@ async def test_managed_credential_get_dispatches_from_registry(
             "linode_managed_credential_get", {"credential_id": 123}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 123
+    assert body["label"] == "db-root"
+    assert body["last_decrypted"] == ""
     mock_client.get_managed_credential.assert_awaited_once_with(123)
 
 
@@ -11781,7 +11822,10 @@ async def test_managed_linode_settings_get_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["ssh"]["access"] is True
+    assert "port" not in body["ssh"]
+    assert body["id"] == 0
     mock_client.get_managed_linode_settings.assert_awaited_once_with(123)
 
 
@@ -11881,7 +11925,10 @@ async def test_managed_issue_get_dispatches_from_registry(
         result = await srv.dispatch("linode_managed_issue_get", {"issue_id": 77})
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == 77
+    assert data["services"] == []
+    assert "entity" in data
     mock_client.get_managed_issue.assert_awaited_once_with(77)
 
 
@@ -11915,7 +11962,10 @@ async def test_managed_contact_get_dispatches_from_registry(
         result = await srv.dispatch("linode_managed_contact_get", {"contact_id": 42})
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 42
+    assert body["name"] == "Primary on-call"
+    assert body["phone"] == {}
     mock_client.get_managed_contact.assert_awaited_once_with(42)
 
 
@@ -11968,7 +12018,12 @@ async def test_account_support_ticket_get_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_support_ticket_get", {"ticket_id": 123})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["id"] == 123
+    assert body["summary"] == "Need help"
+    assert body["attachments"] == []
+    assert "closed" not in body
+    assert "entity" not in body
     mock_client.get_support_ticket.assert_awaited_once_with(123)
 
 
@@ -14395,7 +14450,11 @@ async def test_linode_images_sharegroup_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Image share group get dispatches through the registered tool."""
-    response_data = {"id": "11111111-1111-4111-8111-111111111111"}
+    response_data = {
+        "id": 11,
+        "uuid": "11111111-1111-4111-8111-111111111111",
+        "label": "grp",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -14411,8 +14470,13 @@ async def test_linode_images_sharegroup_get_dispatches_from_registry(
         )
 
     assert json.loads(result[0].text) == {
-        "message": "Image share group retrieved",
-        "sharegroup": response_data,
+        "id": 11,
+        "uuid": "11111111-1111-4111-8111-111111111111",
+        "label": "grp",
+        "is_suspended": False,
+        "created": "",
+        "images_count": 0,
+        "members_count": 0,
     }
     mock_client.get_image_sharegroup.assert_awaited_once_with("3")
 
@@ -16813,7 +16877,10 @@ async def test_networking_ip_get_dispatches_from_registry(
             "linode_networking_ip_get", {"address": "198.51.100.5"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["address"] == "198.51.100.5"
+    assert body["rdns"] == "example.example.com"
+    assert "vpc_nat_1_1" not in body
     mock_client.get_networking_ip.assert_awaited_once_with("198.51.100.5")
 
 

@@ -8,8 +8,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodePlacementGroupAssignTool creates a tool for assigning Linodes to a placement group.
@@ -71,20 +73,17 @@ func handlePlacementGroupAssignRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	group, err := client.AssignPlacementGroupLinodes(ctx, groupID, &req)
+	group, err := client.AssignPlacementGroupLinodesProto(ctx, groupID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to assign Linodes to placement group %d: %v", groupID, err)), nil
 	}
 
-	response := struct {
-		Message string                 `json:"message"`
-		Group   *linode.PlacementGroup `json:"placement_group"`
-	}{
-		Message: fmt.Sprintf("Assigned %d Linode(s) to placement group %d", len(linodes), groupID),
-		Group:   group,
+	response := &linodev1.PlacementGroupWriteResponse{
+		Message:        fmt.Sprintf("Assigned %d Linode(s) to placement group %d", len(linodes), groupID),
+		PlacementGroup: group,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func parsePlacementGroupLinodes(request *mcp.CallToolRequest) ([]int, string) {
@@ -147,19 +146,15 @@ func NewLinodePlacementGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 // NewLinodePlacementGroupGetTool creates a tool for retrieving a single placement group by ID.
 func NewLinodePlacementGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_placement_group_get",
 		"Retrieves details of a single placement group by its ID",
-		[]mcp.ToolOption{
-			mcp.WithNumber(
-				"group_id",
-				mcp.Required(),
-				mcp.Description("The ID of the placement group to retrieve"),
-			),
-		},
-		handlePlacementGroupGetRequest,
+		toolschemas.Schema("linode.mcp.v1.PlacementGroupGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handlePlacementGroupGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -175,12 +170,12 @@ func handlePlacementGroupGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	group, err := client.GetPlacementGroup(ctx, groupID)
+	group, err := client.GetPlacementGroupProto(ctx, groupID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve placement group %d: %v", groupID, err)), nil
 	}
 
-	return MarshalToolResponse(group)
+	return MarshalProtoToolResponse(group)
 }
 
 func handlePlacementGroupDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

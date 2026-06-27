@@ -1,0 +1,14 @@
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    out: go/internal/genpb
+    opt: paths=source_relative
+  - remote: buf.build/protocolbuffers/python:v33.0
+    out: python/src/linodemcp/genpb
+  - remote: buf.build/protocolbuffers/pyi:v33.0
+    out: python/src/linodemcp/genpb
+  - remote: buf.build/bufbuild/protoschema-jsonschema
+    out: go/internal/toolschemas/data
+  - remote: buf.build/bufbuild/protoschema-jsonschema
+    out: python/src/linodemcp/genpb/schemas

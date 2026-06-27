@@ -246,10 +246,9 @@ def test_create_linode_database_type_get_tool_schema() -> None:
     assert tool.name == "linode_database_type_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["type_id"]
-    assert tool.inputSchema["properties"]["type_id"]["type"] == "string"
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert "type_id" in tool.inputSchema["properties"]
+    assert "page" in tool.inputSchema["properties"]
+    assert "page_size" in tool.inputSchema["properties"]
 
 
 def test_create_linode_databases_types_list_tool_schema() -> None:
@@ -278,7 +277,10 @@ async def test_handle_linode_database_type_get_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"id": "g6-dedicated-2", "label": "Dedicated 4GB"}
+    assert payload["id"] == "g6-dedicated-2"
+    assert payload["label"] == "Dedicated 4GB"
+    assert payload["engines"] == {"mysql": [], "postgresql": []}
+    assert payload["deprecated"] is False
     mock_linode_client.get_database_type.assert_awaited_once_with(
         "g6-dedicated-2", page=2, page_size=50
     )

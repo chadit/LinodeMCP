@@ -66,13 +66,7 @@ func main() {
 	dumps := make([]toolDump, 0, len(infos))
 
 	for _, info := range infos {
-		params := make(map[string]string, len(info.InputSchema.Properties))
-
-		for name, raw := range info.InputSchema.Properties {
-			params[name] = schemaType(raw)
-		}
-
-		required := append([]string(nil), info.InputSchema.Required...)
+		params, required := schemaParams(&info)
 		sort.Strings(required)
 
 		dumps = append(dumps, toolDump{
@@ -92,6 +86,36 @@ func main() {
 		fmt.Fprintf(os.Stderr, "encode: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// schemaParams returns the param-name to JSON-Schema-type map and the required
+// list for a tool. Tools built with NewToolWithRawSchema carry their schema in
+// RawInputSchema and leave the structured InputSchema empty, so prefer the raw
+// schema when present and fall back to the structured one otherwise.
+func schemaParams(info *server.ToolInfo) (map[string]string, []string) {
+	if len(info.RawInputSchema) > 0 {
+		var raw struct {
+			Properties map[string]map[string]any `json:"properties"`
+			Required   []string                  `json:"required"`
+		}
+
+		if err := json.Unmarshal(info.RawInputSchema, &raw); err == nil {
+			params := make(map[string]string, len(raw.Properties))
+			for name, prop := range raw.Properties {
+				typ, _ := prop["type"].(string)
+				params[name] = typ
+			}
+
+			return params, raw.Required
+		}
+	}
+
+	params := make(map[string]string, len(info.InputSchema.Properties))
+	for name, prop := range info.InputSchema.Properties {
+		params[name] = schemaType(prop)
+	}
+
+	return params, append([]string(nil), info.InputSchema.Required...)
 }
 
 // schemaType returns the JSON-Schema "type" of a property, or "" when the

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, instance_to_response_dict
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -135,7 +135,7 @@ async def handle_linode_instance_clone(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.clone_instance(
+        instance = await client.clone_instance(
             iid,
             region=arguments.get("region"),
             instance_type=arguments.get("type"),
@@ -144,6 +144,13 @@ async def handle_linode_instance_clone(
             disks=arguments.get("disks"),
             configs=arguments.get("configs"),
         )
+        return {
+            "message": (
+                f"Instance {iid} cloned as '{instance.label}' "
+                f"(ID: {instance.id}) in {instance.region}"
+            ),
+            "instance": instance_to_response_dict(instance),
+        }
 
     return await execute_tool(cfg, arguments, "clone instance", _call)
 

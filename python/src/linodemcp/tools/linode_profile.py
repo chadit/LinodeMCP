@@ -18,6 +18,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 
 PROFILE_TOKEN_LABEL_MAX_LENGTH = 100
 PROFILE_TOKEN_SECRET_FIELDS = frozenset({"token", "access_token", "secret"})
@@ -32,22 +33,26 @@ def _redact_profile_token(token: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def profile_to_response_dict(profile: Any) -> dict[str, Any]:
+    """Shape a Profile dataclass to proto-canonical Profile form."""
+    return {
+        "username": profile.username,
+        "email": profile.email,
+        "timezone": profile.timezone,
+        "uid": profile.uid,
+        "email_notifications": profile.email_notifications,
+        "restricted": profile.restricted,
+        "two_factor_auth": profile.two_factor_auth,
+        "scopes": profile.scopes,
+    }
+
+
 def create_linode_profile_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_get tool."""
     return Tool(
         name="linode_profile_get",
         description="Retrieves Linode user account profile information",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileGetInput"),
     ), Capability.Read
 
 
@@ -63,15 +68,7 @@ async def handle_linode_profile_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         profile = await client.get_profile()
-        return {
-            "username": profile.username,
-            "email": profile.email,
-            "timezone": profile.timezone,
-            "email_notifications": profile.email_notifications,
-            "restricted": profile.restricted,
-            "two_factor_auth": profile.two_factor_auth,
-            "uid": profile.uid,
-        }
+        return profile_to_response_dict(profile)
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
 
@@ -940,23 +937,24 @@ async def handle_linode_profile_device_list(
     )
 
 
+def profile_login_to_response_dict(login: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw profile login API dict to proto-canonical AccountLogin form."""
+    return {
+        "datetime": login.get("datetime", ""),
+        "id": login.get("id", 0),
+        "ip": login.get("ip", ""),
+        "restricted": login.get("restricted", False),
+        "status": login.get("status", ""),
+        "username": login.get("username", ""),
+    }
+
+
 def create_linode_profile_login_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_login_get tool."""
     return Tool(
         name="linode_profile_login_get",
         description="Retrieves a Linode profile login by login ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "login_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the profile login to retrieve",
-                },
-            },
-            "required": ["login_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileLoginGetInput"),
     ), Capability.Read
 
 
@@ -969,7 +967,7 @@ async def handle_linode_profile_login_get(
         return error_response("login_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_profile_login(login_id)
+        return profile_login_to_response_dict(await client.get_profile_login(login_id))
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile login", _call)
 
@@ -1117,6 +1115,16 @@ async def handle_linode_profile_app_list(
     )
 
 
+def profile_app_to_response_dict(app: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw profile OAuth app dict to proto-canonical form."""
+    return {
+        "id": app.get("id", 0),
+        "label": app.get("label", ""),
+        "scopes": app.get("scopes", ""),
+        "website": app.get("website", ""),
+    }
+
+
 def create_linode_profile_app_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_app_get tool."""
     return Tool(
@@ -1124,18 +1132,7 @@ def create_linode_profile_app_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Retrieves an OAuth app authorization from the Linode profile by app ID."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "app_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the OAuth app authorization to retrieve",
-                },
-            },
-            "required": ["app_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileAppGetInput"),
     ), Capability.Read
 
 
@@ -1148,7 +1145,7 @@ async def handle_linode_profile_app_get(
         return error_response("app_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_profile_app(app_id)
+        return profile_app_to_response_dict(await client.get_profile_app(app_id))
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode profile OAuth app authorization", _call

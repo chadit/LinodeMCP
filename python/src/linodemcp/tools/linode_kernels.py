@@ -9,6 +9,7 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -86,23 +87,26 @@ def _validated_kernel_id(value: object) -> tuple[str | None, str | None]:
     return kernel_id, None
 
 
+def kernel_to_response_dict(kernel: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Linode kernel API dict to proto-canonical form."""
+    return {
+        "id": kernel.get("id", ""),
+        "label": kernel.get("label", ""),
+        "version": kernel.get("version", ""),
+        "kvm": kernel.get("kvm", False),
+        "architecture": kernel.get("architecture", ""),
+        "pvops": kernel.get("pvops", False),
+        "deprecated": kernel.get("deprecated", False),
+        "built": kernel.get("built", ""),
+    }
+
+
 def create_linode_kernel_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_kernel_get tool."""
     return Tool(
         name="linode_kernel_get",
         description="Gets a single Linode kernel by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "kernel_id": {
-                    "type": "string",
-                    "pattern": _KERNEL_ID_PATTERN.pattern,
-                    "description": ("Kernel ID such as linode/latest-64bit (required)"),
-                },
-            },
-            "required": ["kernel_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.KernelGetInput"),
     ), Capability.Read
 
 
@@ -116,6 +120,6 @@ async def handle_linode_kernel_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         kernel = await client.get_kernel(kernel_id)
-        return {"kernel": kernel}
+        return kernel_to_response_dict(kernel)
 
     return await execute_tool(cfg, arguments, "retrieve Linode kernel", _call)

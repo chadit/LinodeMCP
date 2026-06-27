@@ -7,22 +7,23 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeVolumeGetTool creates a tool for retrieving a single block storage volume by ID.
 func NewLinodeVolumeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_get",
 		"Gets details for a single block storage volume by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("volume_id", mcp.Required(),
-				mcp.Description("The ID of the volume to retrieve (required)")),
-		},
-		handleLinodeVolumeGetRequest,
+		toolschemas.Schema("linode.mcp.v1.VolumeGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeVolumeGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -38,16 +39,14 @@ func handleLinodeVolumeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	volume, err := client.GetVolume(ctx, volumeID)
+	volume, err := client.GetVolumeProto(ctx, volumeID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve volume %d: %v", volumeID, err)), nil
 	}
 
 	// Wrapped under a "volume" key to match the Python implementation's
 	// response shape for this tool.
-	return MarshalToolResponse(struct {
-		Volume *linode.Volume `json:"volume"`
-	}{Volume: volume})
+	return MarshalProtoToolResponse(&linodev1.VolumeGetResponse{Volume: volume})
 }
 
 // NewLinodeVolumeListTool creates a tool for listing Linode block storage volumes.

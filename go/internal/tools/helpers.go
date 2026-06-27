@@ -8,9 +8,11 @@ import (
 	"sync/atomic"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // Common MCP tool parameter names and descriptions used across all tools.
@@ -182,6 +184,33 @@ func newSimpleGetTool(
 		}
 
 		return MarshalToolResponse(result)
+	}
+
+	return tool, handler
+}
+
+// newSimpleProtoGetTool is the proto-canonical sibling of newSimpleGetTool: it
+// builds a no-id get tool whose input schema comes from the proto contract and
+// whose response is serialized through MarshalProtoToolResponse.
+func newSimpleProtoGetTool(
+	cfg *config.Config,
+	toolName, description, schemaName string,
+	apiCall func(context.Context, *linode.Client) (proto.Message, error),
+) (mcp.Tool, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		result, err := apiCall(ctx, client)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve %s: %v", toolName, err)), nil
+		}
+
+		return MarshalProtoToolResponse(result)
 	}
 
 	return tool, handler

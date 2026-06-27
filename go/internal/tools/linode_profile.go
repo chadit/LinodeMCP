@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
@@ -19,11 +20,12 @@ const (
 
 // NewLinodeProfileTool creates a tool for retrieving Linode profile info.
 func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newSimpleGetTool(
+	tool, handler := newSimpleProtoGetTool(
 		cfg, "linode_profile_get",
 		"Retrieves Linode user account profile information",
-		func(ctx context.Context, client *linode.Client) (any, error) {
-			return client.GetProfile(ctx)
+		"linode.mcp.v1.ProfileGetInput",
+		func(ctx context.Context, client *linode.Client) (proto.Message, error) {
+			return client.GetProfileProto(ctx)
 		},
 	)
 

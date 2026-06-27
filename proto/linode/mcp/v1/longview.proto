@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// LongviewApps is the set of detected applications nested in a Longview client.
+message LongviewApps {
+  bool apache = 1;
+  bool mysql = 2;
+  bool nginx = 3;
+}
+
+// LongviewClient mirrors a Linode Longview client (secret install fields excluded).
+message LongviewClient {
+  LongviewApps apps = 1;
+  string created = 2;
+  int32 id = 3;
+  string label = 4;
+  string updated = 5;
+}
+
+// LongviewClientGetInput is the input contract for linode_longview_client_get.
+message LongviewClientGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Longview client ID to retrieve (required).
+  int32 client_id = 2;
+}
+
+// Price is the hourly/monthly price summary attached to billable resources.
+message Price {
+  double hourly = 1;
+  double monthly = 2;
+}
+
+// LongviewSubscription mirrors a Linode Longview subscription plan.
+message LongviewSubscription {
+  int32 clients_included = 1;
+  string id = 2;
+  string label = 3;
+  Price price = 4;
+}
+
+// LongviewSubscriptionGetInput is the input contract for
+// linode_longview_subscription_get.
+message LongviewSubscriptionGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Longview subscription ID to retrieve (required).
+  string subscription_id = 2;
+}

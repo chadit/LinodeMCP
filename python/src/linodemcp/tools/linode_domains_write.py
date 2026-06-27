@@ -24,6 +24,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_domains import domain_to_response_dict
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -116,13 +117,7 @@ async def handle_linode_domain_import(
             "message": (
                 f"Domain '{domain.domain}' (ID: {domain.id}) imported successfully"
             ),
-            "domain": {
-                "id": domain.id,
-                "domain": domain.domain,
-                "type": domain.type,
-                "status": domain.status,
-                "created": domain.created,
-            },
+            "domain": domain_to_response_dict(domain),
         }
 
     return await execute_tool(cfg, arguments, "import domain", _call)
@@ -206,15 +201,9 @@ async def handle_linode_domain_clone(
         domain = await client.clone_domain(domain_id=domain_id, domain=domain_name)
         return {
             "message": (
-                f"Domain '{domain.domain}' (ID: {domain.id}) cloned successfully"
+                f"Domain {domain_id} cloned as '{domain.domain}' (ID: {domain.id})"
             ),
-            "domain": {
-                "id": domain.id,
-                "domain": domain.domain,
-                "type": domain.type,
-                "status": domain.status,
-                "created": domain.created,
-            },
+            "domain": domain_to_response_dict(domain),
         }
 
     return await execute_tool(cfg, arguments, "clone domain", _call)
@@ -306,13 +295,7 @@ async def handle_linode_domain_create(
             "message": (
                 f"Domain '{domain.domain}' (ID: {domain.id}) created successfully"
             ),
-            "domain": {
-                "id": domain.id,
-                "domain": domain.domain,
-                "type": domain.type,
-                "status": domain.status,
-                "created": domain.created,
-            },
+            "domain": domain_to_response_dict(domain),
         }
 
     return await execute_tool(cfg, arguments, "create domain", _call)
@@ -442,14 +425,8 @@ async def handle_linode_domain_update(
             ttl_sec=arguments.get("ttl_sec"),
         )
         return {
-            "message": f"Domain {domain_id} updated successfully",
-            "domain": {
-                "id": domain.id,
-                "domain": domain.domain,
-                "type": domain.type,
-                "status": domain.status,
-                "updated": domain.updated,
-            },
+            "message": f"Domain {domain_id} modified successfully",
+            "domain": domain_to_response_dict(domain),
         }
 
     return await execute_tool(cfg, arguments, "update domain", _call)

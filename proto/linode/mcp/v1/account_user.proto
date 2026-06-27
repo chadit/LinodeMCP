@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// AccountUserLastLogin is the most recent login for an account user.
+message AccountUserLastLogin {
+  string login_datetime = 1;
+  string status = 2;
+}
+
+// AccountUser mirrors one account user. last_login is omitted when null;
+// password_created and verified_phone_number are nullable (omitted when unset);
+// ssh_keys is repeated (always emitted as a list).
+message AccountUser {
+  string email = 1;
+  AccountUserLastLogin last_login = 2;
+  optional string password_created = 3;
+  bool restricted = 4;
+  repeated string ssh_keys = 5;
+  bool tfa_enabled = 6;
+  string user_type = 7;
+  string username = 8;
+  optional string verified_phone_number = 9;
+}
+
+// AccountUserGetInput is the input contract for linode_account_user_get.
+message AccountUserGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The account username to retrieve (required).
+  string username = 2;
+}

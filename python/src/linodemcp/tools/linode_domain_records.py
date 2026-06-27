@@ -21,12 +21,32 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+def domain_record_to_response_dict(record: Any) -> dict[str, Any]:
+    """Shape a DomainRecord dataclass to proto-canonical DomainRecord form."""
+    return {
+        "id": record.id,
+        "type": record.type,
+        "name": record.name,
+        "target": record.target,
+        "priority": record.priority,
+        "weight": record.weight,
+        "port": record.port,
+        "service": record.service,
+        "protocol": record.protocol,
+        "ttl_sec": record.ttl_sec,
+        "tag": record.tag,
+        "created": record.created,
+        "updated": record.updated,
+    }
 
 
 def create_linode_domain_record_list_tool() -> tuple[Tool, Capability]:
@@ -71,21 +91,7 @@ def create_linode_domain_record_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_record_get",
         description="Gets a specific DNS record for a domain.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain (required)",
-                },
-                "record_id": {
-                    "type": "integer",
-                    "description": "The ID of the record to retrieve (required)",
-                },
-            },
-            "required": ["domain_id", "record_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainRecordGetInput"),
     ), Capability.Read
 
 
@@ -103,17 +109,7 @@ async def handle_linode_domain_record_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         record = await client.get_domain_record(int(domain_id), int(record_id))
-        return {
-            "domain_id": domain_id,
-            "record": {
-                "id": record.id,
-                "type": record.type,
-                "name": record.name,
-                "target": record.target,
-                "priority": record.priority,
-                "ttl_sec": record.ttl_sec,
-            },
-        }
+        return domain_record_to_response_dict(record)
 
     return await execute_tool(cfg, arguments, "retrieve domain record", _call)
 
@@ -303,17 +299,8 @@ async def handle_linode_domain_record_create(
             tag=arguments.get("tag"),
         )
         return {
-            "message": (
-                f"DNS record (ID: {record.id}) created successfully "
-                f"for domain {domain_id}"
-            ),
-            "record": {
-                "id": record.id,
-                "type": record.type,
-                "name": record.name,
-                "target": record.target,
-                "ttl_sec": record.ttl_sec,
-            },
+            "message": (f"{record.type} record (ID: {record.id}) created successfully"),
+            "record": domain_record_to_response_dict(record),
         }
 
     return await execute_tool(cfg, arguments, "create DNS record", _call)
@@ -454,14 +441,8 @@ async def handle_linode_domain_record_update(
             ttl_sec=arguments.get("ttl_sec"),
         )
         return {
-            "message": f"DNS record {record_id} updated successfully",
-            "record": {
-                "id": record.id,
-                "type": record.type,
-                "name": record.name,
-                "target": record.target,
-                "ttl_sec": record.ttl_sec,
-            },
+            "message": f"Record {record_id} modified successfully",
+            "record": domain_record_to_response_dict(record),
         }
 
     return await execute_tool(cfg, arguments, "update DNS record", _call)

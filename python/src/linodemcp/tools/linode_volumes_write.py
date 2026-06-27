@@ -20,6 +20,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_volumes import volume_to_dict
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -130,14 +131,7 @@ async def handle_linode_volume_create(
                 f"Volume '{volume.label}' (ID: {volume.id}) "
                 f"created successfully in {volume.region}"
             ),
-            "volume": {
-                "id": volume.id,
-                "label": volume.label,
-                "size": volume.size,
-                "region": volume.region,
-                "status": volume.status,
-                "filesystem_path": volume.filesystem_path,
-            },
+            "volume": volume_to_dict(volume),
         }
 
     return await execute_tool(cfg, arguments, "create volume", _call)
@@ -231,18 +225,8 @@ async def handle_linode_volume_clone(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume = await client.clone_volume(int(volume_id), label)
         return {
-            "message": (
-                f"Volume {volume_id} cloned successfully as "
-                f"'{volume.label}' (ID: {volume.id})"
-            ),
-            "volume": {
-                "id": volume.id,
-                "label": volume.label,
-                "size": volume.size,
-                "region": volume.region,
-                "status": volume.status,
-                "filesystem_path": volume.filesystem_path,
-            },
+            "message": (f'Volume {volume_id} cloned successfully as "{volume.label}"'),
+            "volume": volume_to_dict(volume),
         }
 
     return await execute_tool(cfg, arguments, "clone volume", _call)
@@ -349,12 +333,7 @@ async def handle_linode_volume_attach(
             "message": (
                 f"Volume {volume_id} attached to Linode {linode_id} successfully"
             ),
-            "volume": {
-                "id": volume.id,
-                "label": volume.label,
-                "linode_id": volume.linode_id,
-                "filesystem_path": volume.filesystem_path,
-            },
+            "volume": volume_to_dict(volume),
         }
 
     return await execute_tool(cfg, arguments, "attach volume", _call)
@@ -557,12 +536,10 @@ async def handle_linode_volume_resize(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume = await client.resize_volume(int(volume_id), int(size))
         return {
-            "message": f"Volume {volume_id} resized to {size}GB successfully",
-            "volume": {
-                "id": volume.id,
-                "label": volume.label,
-                "size": volume.size,
-            },
+            "message": (
+                f"Volume {volume_id} resize to {size} GB initiated successfully"
+            ),
+            "volume": volume_to_dict(volume),
         }
 
     return await execute_tool(cfg, arguments, "resize volume", _call)
@@ -686,11 +663,7 @@ async def handle_linode_volume_update(
         )
         return {
             "message": f"Volume {volume_id} updated successfully",
-            "volume": {
-                "id": volume.id,
-                "label": volume.label,
-                "tags": volume.tags,
-            },
+            "volume": volume_to_dict(volume),
         }
 
     return await execute_tool(cfg, arguments, "update volume", _call)

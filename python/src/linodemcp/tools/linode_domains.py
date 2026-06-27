@@ -6,10 +6,37 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+def domain_to_response_dict(domain: Any) -> dict[str, Any]:
+    """Shape a Domain dataclass to proto-canonical linode.mcp.v1.Domain form.
+
+    Field order follows the proto field numbers; master_ips, axfr_ips, and tags
+    are always emitted as lists.
+    """
+    return {
+        "id": domain.id,
+        "domain": domain.domain,
+        "type": domain.type,
+        "status": domain.status,
+        "soa_email": domain.soa_email,
+        "description": domain.description,
+        "retry_sec": domain.retry_sec,
+        "master_ips": domain.master_ips or [],
+        "axfr_ips": domain.axfr_ips or [],
+        "expire_sec": domain.expire_sec,
+        "refresh_sec": domain.refresh_sec,
+        "ttl_sec": domain.ttl_sec,
+        "tags": domain.tags or [],
+        "created": domain.created,
+        "updated": domain.updated,
+        "group": domain.group,
+    }
 
 
 def create_linode_domain_list_tool() -> tuple[Tool, Capability]:
@@ -101,17 +128,7 @@ def create_linode_domain_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_get",
         description="Gets detailed information about a specific domain by its ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain to retrieve (required)",
-                },
-            },
-            "required": ["domain_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainGetInput"),
     ), Capability.Read
 
 
@@ -126,17 +143,7 @@ async def handle_linode_domain_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         domain = await client.get_domain(int(domain_id))
-        return {
-            "id": domain.id,
-            "domain": domain.domain,
-            "type": domain.type,
-            "status": domain.status,
-            "soa_email": domain.soa_email,
-            "description": domain.description,
-            "tags": domain.tags,
-            "created": domain.created,
-            "updated": domain.updated,
-        }
+        return domain_to_response_dict(domain)
 
     return await execute_tool(cfg, arguments, "retrieve domain", _call)
 
@@ -146,20 +153,7 @@ def create_linode_domain_zone_file_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_zone_file_get",
         description="Gets the generated zone file for a specific domain by its ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the domain zone file to retrieve (required)"
-                    ),
-                },
-            },
-            "required": ["domain_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainZoneFileGetInput"),
     ), Capability.Read
 
 
@@ -173,6 +167,6 @@ async def handle_linode_domain_zone_file_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         zone_file = await client.get_domain_zone_file(domain_id)
-        return {"zone_file": zone_file.zone_file}
+        return {"zone_file": zone_file.zone_file or []}
 
     return await execute_tool(cfg, arguments, "retrieve domain zone file", _call)

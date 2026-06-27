@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeVPCListTool creates a tool for listing all VPCs with optional label and region filtering.
@@ -35,19 +36,15 @@ func NewLinodeVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 
 // NewLinodeVPCGetTool creates a tool for getting a single VPC by ID.
 func NewLinodeVPCGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_get",
 		"Retrieves details of a single VPC by its ID",
-		[]mcp.ToolOption{
-			mcp.WithString(
-				"vpc_id",
-				mcp.Required(),
-				mcp.Description("The ID of the VPC to retrieve"),
-			),
-		},
-		handleVPCGetRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -63,12 +60,12 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	vpc, err := client.GetVPC(ctx, vpcID)
+	vpc, err := client.GetVPCProto(ctx, vpcID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve VPC %d: %v", vpcID, err)), nil
 	}
 
-	return MarshalToolResponse(vpc)
+	return MarshalProtoToolResponse(vpc)
 }
 
 // NewLinodeVPCIPsListTool creates a tool for listing all VPC IP addresses across all VPCs.
@@ -181,24 +178,15 @@ func handleVPCSubnetsListRequest(ctx context.Context, request *mcp.CallToolReque
 
 // NewLinodeVPCSubnetGetTool creates a tool for getting a specific subnet within a VPC.
 func NewLinodeVPCSubnetGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_subnet_get",
 		"Retrieves details of a specific subnet within a VPC",
-		[]mcp.ToolOption{
-			mcp.WithString(
-				"vpc_id",
-				mcp.Required(),
-				mcp.Description("The ID of the VPC"),
-			),
-			mcp.WithString(
-				"subnet_id",
-				mcp.Required(),
-				mcp.Description("The ID of the subnet to retrieve"),
-			),
-		},
-		handleVPCSubnetGetRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcSubnetGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCSubnetGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -219,12 +207,12 @@ func handleVPCSubnetGetRequest(ctx context.Context, request *mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	subnet, err := client.GetVPCSubnet(ctx, vpcID, subnetID)
+	subnet, err := client.GetVPCSubnetProto(ctx, vpcID, subnetID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve subnet %d for VPC %d: %v", subnetID, vpcID, err)), nil
 	}
 
-	return MarshalToolResponse(subnet)
+	return MarshalProtoToolResponse(subnet)
 }
 
 // parseVPCID validates and converts the VPC ID string to an integer.

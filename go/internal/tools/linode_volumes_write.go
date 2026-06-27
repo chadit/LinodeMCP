@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -135,20 +136,17 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 		req.LinodeID = &linodeID
 	}
 
-	volume, err := client.CreateVolume(ctx, &req)
+	volume, err := client.CreateVolumeProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create volume: %v", err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Volume  *linode.Volume `json:"volume"`
-	}{
-		Message: fmt.Sprintf("Volume '%s' (ID: %d) created successfully in %s", volume.Label, volume.ID, volume.Region),
+	response := &linodev1.VolumeWriteResponse{
+		Message: fmt.Sprintf("Volume '%s' (ID: %d) created successfully in %s", volume.GetLabel(), volume.GetId(), volume.GetRegion()),
 		Volume:  volume,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVolumeCloneTool creates a tool for cloning a volume.
@@ -199,20 +197,17 @@ func handleLinodeVolumeCloneRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	volume, err := client.CloneVolume(ctx, volumeID, linode.CloneVolumeRequest{Label: label})
+	volume, err := client.CloneVolumeProto(ctx, volumeID, linode.CloneVolumeRequest{Label: label})
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to clone volume %d: %v", volumeID, err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Volume  *linode.Volume `json:"volume"`
-	}{
-		Message: fmt.Sprintf("Volume %d cloned successfully as %q", volumeID, volume.Label),
+	response := &linodev1.VolumeWriteResponse{
+		Message: fmt.Sprintf("Volume %d cloned successfully as %q", volumeID, volume.GetLabel()),
 		Volume:  volume,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVolumeAttachTool creates a tool for attaching a volume to a Linode.
@@ -285,22 +280,17 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 		req.ConfigID = &configID
 	}
 
-	volume, err := client.AttachVolume(ctx, volumeID, req)
+	volume, err := client.AttachVolumeProto(ctx, volumeID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to attach volume %d to Linode %d: %v", volumeID, linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string         `json:"message"`
-		LinodeID int            `json:"linode_id"`
-		Volume   *linode.Volume `json:"volume"`
-	}{
-		Message:  fmt.Sprintf("Volume %d attached to Linode %d successfully", volumeID, linodeID),
-		LinodeID: linodeID,
-		Volume:   volume,
+	response := &linodev1.VolumeWriteResponse{
+		Message: fmt.Sprintf("Volume %d attached to Linode %d successfully", volumeID, linodeID),
+		Volume:  volume,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVolumeDetachTool creates a tool for detaching a volume from a Linode.
@@ -437,20 +427,17 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	volume, err := client.ResizeVolume(ctx, volumeID, size)
+	volume, err := client.ResizeVolumeProto(ctx, volumeID, size)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to resize volume %d: %v", volumeID, err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Volume  *linode.Volume `json:"volume"`
-	}{
+	response := &linodev1.VolumeWriteResponse{
 		Message: fmt.Sprintf("Volume %d resize to %d GB initiated successfully", volumeID, size),
 		Volume:  volume,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVolumeUpdateTool creates a tool for updating a volume's label or tags.
@@ -543,22 +530,19 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	volume, err := client.UpdateVolume(ctx, volumeID, &req)
+	volume, err := client.UpdateVolumeProto(ctx, volumeID, &req)
 	if err != nil {
 		msg := fmt.Sprint("volume ", volumeID, " update failed: ", err)
 
 		return mcp.NewToolResultError(msg), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Volume  *linode.Volume `json:"volume"`
-	}{
+	response := &linodev1.VolumeWriteResponse{
 		Message: fmt.Sprintf("Volume %d updated successfully", volumeID),
 		Volume:  volume,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeVolumeDeleteTool creates a tool for deleting a volume.

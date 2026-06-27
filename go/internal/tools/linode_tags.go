@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -188,20 +189,17 @@ func handleLinodeTagCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	tag, err := client.CreateTag(ctx, req)
+	tag, err := client.CreateTagProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create tag: %v", err)), nil
 	}
 
-	response := struct {
-		Message string      `json:"message"`
-		Tag     *linode.Tag `json:"tag"`
-	}{
-		Message: fmt.Sprintf("Tag '%s' created successfully", tag.Label),
+	response := &linodev1.TagWriteResponse{
+		Message: fmt.Sprintf("Tag '%s' created successfully", tag.GetLabel()),
 		Tag:     tag,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func createTagRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateTagRequest, string) {

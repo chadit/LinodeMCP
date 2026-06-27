@@ -7855,9 +7855,9 @@ async def test_parse_instance_interface_parses_public_vpc_vlan_subconfigs(
 async def test_instance_to_response_dict_matches_go_interface_shape(
     sample_instance_data: dict[str, Any],
 ) -> None:
-    """instance_to_response_dict emits the Go MarshalToolResponse shape: the
-    full struct in field order, with interface_generation and the deep
-    interface subtree present and Go's omitempty applied per field.
+    """instance_to_response_dict emits the proto-canonical shape: the full message
+    in field order, with interface_generation and the deep interface subtree
+    present, last_successful omitted when absent, and interfaces always present.
     """
     response_data = {
         **sample_instance_data,
@@ -7920,7 +7920,6 @@ async def test_instance_to_response_dict_matches_go_interface_shape(
     }
     assert list(result["backups"].keys()) == [
         "schedule",
-        "last_successful",
         "enabled",
         "available",
     ]
@@ -7929,13 +7928,14 @@ async def test_instance_to_response_dict_matches_go_interface_shape(
 async def test_instance_to_response_dict_omits_empty_interface_fields(
     sample_instance_data: dict[str, Any],
 ) -> None:
-    """With no interfaces, interface_generation and interfaces are omitted like
-    Go's omitempty, while the always-present struct fields stay.
+    """With no interfaces, interface_generation is omitted (proto optional), while
+    interfaces is always present as an empty list (proto repeated under
+    EmitDefaultValues), and the always-present struct fields stay.
     """
     instance = await _instance_from_response(dict(sample_instance_data))
     result = instance_to_response_dict(instance)
 
-    assert "interfaces" not in result
+    assert result["interfaces"] == []
     assert "interface_generation" not in result
     assert "watchdog_enabled" in result
     assert "specs" in result
@@ -20597,9 +20597,10 @@ async def test_handle_linode_longview_subscription_get_success(
             {"subscription_id": "longview-10"}, sample_config
         )
 
-    assert json.loads(result[0].text) == {
-        "subscription": {"id": "longview-10", "label": "Longview Pro"}
-    }
+    body = json.loads(result[0].text)
+    assert body["id"] == "longview-10"
+    assert body["label"] == "Longview Pro"
+    assert body["price"] == {"hourly": 0.0, "monthly": 0.0}
     mock_client.get_longview_subscription.assert_awaited_once_with("longview-10")
 
 

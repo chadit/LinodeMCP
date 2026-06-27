@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeRegionListTool creates a tool for listing Linode regions.
@@ -44,11 +45,10 @@ func NewLinodeRegionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 
 // NewLinodeRegionGetTool creates a tool for retrieving one Linode region.
 func NewLinodeRegionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_region_get",
-		mcp.WithDescription("Gets one Linode region by region ID"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("region_id", mcp.Required(), mcp.Description("Region ID (for example, us-east)")),
+		"Gets one Linode region by region ID",
+		toolschemas.Schema("linode.mcp.v1.RegionGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -62,12 +62,12 @@ func NewLinodeRegionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		region, getErr := client.GetRegion(ctx, regionID)
+		region, getErr := client.GetRegionProto(ctx, regionID)
 		if getErr != nil {
 			return regionGetToolFailure(getErr)
 		}
 
-		return MarshalToolResponse(region)
+		return MarshalProtoToolResponse(region)
 	}
 
 	return tool, profiles.CapRead, handler

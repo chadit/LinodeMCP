@@ -15,6 +15,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -58,30 +59,20 @@ def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def monitor_service_to_response_dict(service: dict[str, Any]) -> dict[str, Any]:
+    """Shape a raw Monitor service API dict to proto-canonical form."""
+    return {
+        "label": service.get("label", ""),
+        "service_type": service.get("service_type", ""),
+    }
+
+
 def create_linode_monitor_service_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_get tool."""
     return Tool(
         name="linode_monitor_service_get",
         description="Gets details for a supported Linode Metrics service type.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-            },
-            "required": ["service_type"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceGetInput"),
     ), Capability.Read
 
 
@@ -541,11 +532,7 @@ async def handle_linode_monitor_service_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.get_monitor_service(service_type)
-        return {
-            "message": f"Monitor service '{service_type}' retrieved",
-            "service_type": service_type,
-            "service": data,
-        }
+        return monitor_service_to_response_dict(data)
 
     return await execute_tool(cfg, arguments, "get monitor service", _call)
 

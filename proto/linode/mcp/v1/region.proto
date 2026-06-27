@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Resolver is the DNS resolver block nested in a Region.
+message Resolver {
+  string ipv4 = 1;
+  string ipv6 = 2;
+}
+
+// Region mirrors a Linode region (datacenter). capabilities is repeated (emitted
+// as []).
+message Region {
+  string id = 1;
+  string label = 2;
+  string country = 3;
+  repeated string capabilities = 4;
+  string status = 5;
+  Resolver resolvers = 6;
+  string site_type = 7;
+}
+
+// RegionGetInput is the input contract for linode_region_get.
+message RegionGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the region to retrieve, such as us-east (required).
+  string region_id = 2;
+}

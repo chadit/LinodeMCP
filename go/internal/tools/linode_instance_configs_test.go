@@ -578,21 +578,15 @@ func TestLinodeInstanceConfigInterfaceGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyLinodeID, keyConfigID, keyInterfaceID} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 
-	if _, ok := props[keyConfigID]; !ok {
-		t.Errorf("props missing key %v", keyConfigID)
-	}
-
-	if _, ok := props[keyInterfaceID]; !ok {
-		t.Errorf("props missing key %v", keyInterfaceID)
-	}
-
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

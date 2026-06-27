@@ -10,6 +10,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -91,15 +92,15 @@ func listMonitorServices(ctx context.Context, client *linode.Client) (*linode.Pa
 
 // NewLinodeMonitorServiceGetTool creates a tool for retrieving one supported monitoring service type.
 func NewLinodeMonitorServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		monitorServiceGetToolName,
 		"Gets details for one supported monitoring service type by service_type.",
-		[]mcp.ToolOption{
-			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug to retrieve.")),
-		},
-		handleLinodeMonitorServiceGetRequest,
+		toolschemas.Schema("linode.mcp.v1.MonitorServiceGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeMonitorServiceGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -115,12 +116,12 @@ func handleLinodeMonitorServiceGetRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	service, getFailureMessage := getMonitorService(ctx, client, serviceType)
-	if getFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceGetToolName + ": " + getFailureMessage), nil
+	service, getFailure := client.GetMonitorServiceProto(ctx, serviceType)
+	if getFailure == nil {
+		return MarshalProtoToolResponse(service)
 	}
 
-	return MarshalToolResponse(service)
+	return mcp.NewToolResultError("Failed to retrieve " + monitorServiceGetToolName + ": " + getFailure.Error()), nil
 }
 
 func monitorServiceTypeFromTool(request *mcp.CallToolRequest) (string, string) {
@@ -151,15 +152,6 @@ func isMonitorServiceTypeSlug(value string) bool {
 	}
 
 	return true
-}
-
-func getMonitorService(ctx context.Context, client *linode.Client, serviceType string) (linode.MonitorService, string) {
-	service, err := client.GetMonitorService(ctx, serviceType)
-	if err != nil {
-		return linode.MonitorService{}, err.Error()
-	}
-
-	return service, ""
 }
 
 // NewLinodeMonitorServiceMetricDefinitionsTool creates a tool for listing metric definitions for one supported monitoring service type.

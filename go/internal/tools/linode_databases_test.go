@@ -569,13 +569,13 @@ func TestLinodeDatabaseTypeGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseTypeIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseTypeIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseTypeIDParam) {
+		t.Errorf("rawSchema missing key %v", databaseTypeIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -1928,13 +1928,13 @@ func TestLinodeDatabaseInstanceSSLGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
+		t.Errorf("RawInputSchema missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -2139,13 +2139,13 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
+		t.Errorf("RawInputSchema missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -6238,13 +6238,13 @@ func TestLinodeDatabaseEngineGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseEngineIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseEngineIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseEngineIDParam) {
+		t.Errorf("RawInputSchema missing key %v", databaseEngineIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

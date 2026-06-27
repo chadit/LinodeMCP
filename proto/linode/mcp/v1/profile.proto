@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Profile mirrors the authenticated user's Linode profile.
+message Profile {
+  string username = 1;
+  string email = 2;
+  string timezone = 3;
+  int32 uid = 4;
+  bool email_notifications = 5;
+  bool restricted = 6;
+  bool two_factor_auth = 7;
+  string scopes = 8;
+}
+
+// ProfileGetInput is the input contract for linode_profile_get (the singular
+// authenticated profile, so no resource ID).
+message ProfileGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ProfileApp mirrors one OAuth app authorization on the profile.
+message ProfileApp {
+  int32 id = 1;
+  string label = 2;
+  string scopes = 3;
+  string website = 4;
+}
+
+// ProfileAppGetInput is the input contract for linode_profile_app_get.
+message ProfileAppGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the authorized app to retrieve (required).
+  int32 app_id = 2;
+}

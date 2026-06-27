@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// NodeBalancerVPCConfig mirrors one VPC configuration attached to a NodeBalancer.
+// The range/vpc id fields are nullable (omitted when unset).
+message NodeBalancerVPCConfig {
+  int32 id = 1;
+  optional int32 vpc_id = 2;
+  int32 subnet_id = 3;
+  string ipv4_range = 4;
+  string ipv6_range = 5;
+  optional int32 ipv4_range_id = 6;
+  optional int32 ipv6_range_id = 7;
+  optional bool ipv4_range_auto_assign = 8;
+  int32 nodebalancer_id = 9;
+}
+
+// NodeBalancerVPCConfigGetInput is the input contract for
+// linode_nodebalancer_vpc_config_get.
+message NodeBalancerVPCConfigGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer (required).
+  int32 nodebalancer_id = 2;
+  // The ID of the VPC configuration to retrieve (required).
+  int32 vpc_config_id = 3;
+}

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// SupportTicketAttachment is one file attached to a support ticket.
+message SupportTicketAttachment {
+  string filename = 1;
+  int32 id = 2;
+  int32 size = 3;
+}
+
+// SupportTicketEntity is the resource a support ticket is about. id is a
+// passthrough value (the API returns an int or string depending on entity type).
+message SupportTicketEntity {
+  google.protobuf.Value id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// SupportTicket mirrors a Linode support ticket. attachments is repeated (emitted
+// as []); closed is nullable (omitted when unset); entity is omitted when unset.
+message SupportTicket {
+  repeated SupportTicketAttachment attachments = 1;
+  bool closable = 2;
+  optional string closed = 3;
+  string description = 4;
+  SupportTicketEntity entity = 5;
+  string gravatar_id = 6;
+  int32 id = 7;
+  string opened = 8;
+  string opened_by = 9;
+  string status = 10;
+  string summary = 11;
+  string updated = 12;
+  string updated_by = 13;
+}
+
+// SupportTicketGetInput is the input contract for linode_support_ticket_get.
+message SupportTicketGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the support ticket to retrieve (required).
+  int32 ticket_id = 2;
+}

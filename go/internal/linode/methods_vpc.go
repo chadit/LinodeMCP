@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 const (
@@ -93,6 +95,70 @@ func (c *Client) httpUpdateVPC(ctx context.Context, vpcID int, req UpdateVPCRequ
 	}
 
 	return &vpc, nil
+}
+
+// httpGetVPCProto retrieves a VPC and decodes it as a proto message.
+func (c *Client) httpGetVPCProto(ctx context.Context, vpcID int) (*linodev1.Vpc, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetVPC", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	vpc := &linodev1.Vpc{}
+	if err := c.handleProtoResponse(resp, vpc); err != nil {
+		return nil, err
+	}
+
+	return vpc, nil
+}
+
+// httpCreateVPCProto creates a VPC and decodes it as a proto message.
+func (c *Client) httpCreateVPCProto(ctx context.Context, req CreateVPCRequest) (*linodev1.Vpc, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointVPCs, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateVPC", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	vpc := &linodev1.Vpc{}
+	if err := c.handleProtoResponse(resp, vpc); err != nil {
+		return nil, err
+	}
+
+	return vpc, nil
+}
+
+// httpUpdateVPCProto updates a VPC and decodes it as a proto message.
+func (c *Client) httpUpdateVPCProto(ctx context.Context, vpcID int, req UpdateVPCRequest) (*linodev1.Vpc, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateVPC", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	vpc := &linodev1.Vpc{}
+	if err := c.handleProtoResponse(resp, vpc); err != nil {
+		return nil, err
+	}
+
+	return vpc, nil
 }
 
 // DeleteVPC deletes a VPC.
@@ -243,6 +309,72 @@ func (c *Client) httpUpdateVPCSubnet(ctx context.Context, vpcID, subnetID int, r
 	}
 
 	return &subnet, nil
+}
+
+// httpGetVPCSubnetProto retrieves a subnet as a proto message.
+func (c *Client) httpGetVPCSubnetProto(ctx context.Context, vpcID, subnetID int) (*linodev1.VpcSubnet, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetVPCSubnet", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	subnet := &linodev1.VpcSubnet{}
+	if err := c.handleProtoResponse(resp, subnet); err != nil {
+		return nil, err
+	}
+
+	return subnet, nil
+}
+
+// httpCreateVPCSubnetProto creates a subnet as a proto message.
+func (c *Client) httpCreateVPCSubnetProto(ctx context.Context, vpcID int, req CreateSubnetRequest) (*linodev1.VpcSubnet, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateVPCSubnet", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	subnet := &linodev1.VpcSubnet{}
+	if err := c.handleProtoResponse(resp, subnet); err != nil {
+		return nil, err
+	}
+
+	return subnet, nil
+}
+
+// httpUpdateVPCSubnetProto updates a subnet as a proto message.
+func (c *Client) httpUpdateVPCSubnetProto(ctx context.Context, vpcID, subnetID int, req UpdateSubnetRequest) (*linodev1.VpcSubnet, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateVPCSubnet", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	subnet := &linodev1.VpcSubnet{}
+	if err := c.handleProtoResponse(resp, subnet); err != nil {
+		return nil, err
+	}
+
+	return subnet, nil
 }
 
 // DeleteVPCSubnet deletes a subnet from a VPC.

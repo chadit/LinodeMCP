@@ -34,12 +34,12 @@ func TestLinodeImageGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyImageID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyImageID)
+	if !strings.Contains(string(tool.RawInputSchema), keyImageID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyImageID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(string(tool.RawInputSchema), keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {

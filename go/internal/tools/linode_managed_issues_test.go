@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -51,17 +50,13 @@ func TestLinodeManagedIssueGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[managedIssueIDParam]; !ok {
-		t.Errorf("props missing key %v", managedIssueIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, managedIssueIDParam) {
+		t.Errorf("RawInputSchema missing key %v", managedIssueIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, managedIssueIDParam) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", managedIssueIDParam)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

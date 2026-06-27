@@ -6,27 +6,34 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
 
-def _volume_to_dict(volume: Any) -> dict[str, Any]:
-    return {
+def volume_to_dict(volume: Any) -> dict[str, Any]:
+    # Proto-canonical shape (linode.mcp.v1.Volume): linode_id and linode_label are
+    # optional message fields, so they are omitted when unset (the API sends null
+    # when the volume is detached). Field order follows the proto field numbers.
+    body: dict[str, Any] = {
         "id": volume.id,
         "label": volume.label,
         "status": volume.status,
         "size": volume.size,
         "region": volume.region,
-        "linode_id": volume.linode_id,
-        "linode_label": volume.linode_label,
-        "filesystem_path": volume.filesystem_path,
-        "tags": volume.tags,
-        "created": volume.created,
-        "updated": volume.updated,
-        "hardware_type": volume.hardware_type,
     }
+    if volume.linode_id is not None:
+        body["linode_id"] = volume.linode_id
+    if volume.linode_label is not None:
+        body["linode_label"] = volume.linode_label
+    body["filesystem_path"] = volume.filesystem_path
+    body["tags"] = volume.tags
+    body["created"] = volume.created
+    body["updated"] = volume.updated
+    body["hardware_type"] = volume.hardware_type
+    return body
 
 
 def create_linode_volume_get_tool() -> tuple[Tool, Capability]:
@@ -34,22 +41,7 @@ def create_linode_volume_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_get",
         description="Gets details for a single block storage volume by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to retrieve (required)",
-                },
-            },
-            "required": ["volume_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeGetInput"),
     ), Capability.Read
 
 
@@ -63,7 +55,7 @@ async def handle_linode_volume_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume = await client.get_volume(int(volume_id))
-        return {"volume": _volume_to_dict(volume)}
+        return {"volume": volume_to_dict(volume)}
 
     return await execute_tool(cfg, arguments, "retrieve Linode volume", _call)
 
@@ -148,7 +140,7 @@ async def handle_linode_volume_list(
         if label_contains:
             volumes = [v for v in volumes if label_contains.lower() in v.label.lower()]
 
-        volumes_data = [_volume_to_dict(v) for v in volumes]
+        volumes_data = [volume_to_dict(v) for v in volumes]
 
         response: dict[str, Any] = {
             "count": len(volumes),

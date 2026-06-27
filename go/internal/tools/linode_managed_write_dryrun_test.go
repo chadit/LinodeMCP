@@ -591,8 +591,8 @@ func TestLinodeManagedCredentialGetToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeManagedCredentialGetTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

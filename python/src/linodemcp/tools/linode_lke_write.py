@@ -24,6 +24,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.linode_lke import lke_cluster_to_response_dict
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -161,7 +162,7 @@ async def handle_linode_lke_cluster_create(
     control_plane = arguments.get("control_plane")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_lke_cluster(
+        cluster = await client.create_lke_cluster(
             label=label,
             region=region,
             k8s_version=k8s_version,
@@ -169,6 +170,15 @@ async def handle_linode_lke_cluster_create(
             tags=tags,
             control_plane=control_plane,
         )
+        return {
+            "message": (
+                f"LKE cluster '{cluster.get('label', '')}' "
+                f"(ID: {cluster.get('id', 0)}) created in "
+                f"{cluster.get('region', '')} with Kubernetes "
+                f"{cluster.get('k8s_version', '')}"
+            ),
+            "cluster": lke_cluster_to_response_dict(cluster),
+        }
 
     return await execute_tool(cfg, arguments, "create LKE cluster", _call)
 
@@ -273,13 +283,17 @@ async def handle_linode_lke_cluster_update(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_lke_cluster(
+        cluster = await client.update_lke_cluster(
             cluster_id=cluster_id,
             label=arguments.get("label"),
             k8s_version=arguments.get("k8s_version"),
             tags=arguments.get("tags"),
             control_plane=arguments.get("control_plane"),
         )
+        return {
+            "message": f"LKE cluster {cluster_id} modified successfully",
+            "cluster": lke_cluster_to_response_dict(cluster),
+        }
 
     return await execute_tool(cfg, arguments, "update LKE cluster", _call)
 

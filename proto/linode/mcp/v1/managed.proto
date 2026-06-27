@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// ManagedService mirrors a Linode Managed monitored service. body, notes, and
+// region are nullable (omitted when unset); credentials is repeated (emitted as []).
+message ManagedService {
+  int32 id = 1;
+  string label = 2;
+  string service_type = 3;
+  string status = 4;
+  string address = 5;
+  optional string body = 6;
+  string consultation_group = 7;
+  string created = 8;
+  repeated int32 credentials = 9;
+  optional string notes = 10;
+  optional string region = 11;
+  int32 timeout = 12;
+  string updated = 13;
+}
+
+// ManagedServiceGetInput is the input contract for linode_managed_service_get.
+message ManagedServiceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Managed service to retrieve (required).
+  int32 service_id = 2;
+}
+
+// ManagedLinodeSettingsSSH is the SSH access block nested in Managed Linode
+// settings. port and user are nullable (omitted when unset).
+message ManagedLinodeSettingsSSH {
+  bool access = 1;
+  string ip = 2;
+  optional int32 port = 3;
+  optional string user = 4;
+}
+
+// ManagedLinodeSettings mirrors the Linode Managed settings for one Linode.
+message ManagedLinodeSettings {
+  int32 id = 1;
+  string label = 2;
+  string group = 3;
+  ManagedLinodeSettingsSSH ssh = 4;
+}
+
+// ManagedLinodeSettingsGetInput is the input contract for
+// linode_managed_linode_settings_get.
+message ManagedLinodeSettingsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode whose Managed settings to retrieve (required).
+  int32 linode_id = 2;
+}
+
+// ManagedContactPhone is the phone block nested in a Managed contact. primary and
+// secondary are nullable (omitted when unset).
+message ManagedContactPhone {
+  optional string primary = 1;
+  optional string secondary = 2;
+}
+
+// ManagedContact mirrors a Linode Managed contact. group is nullable (omitted when
+// unset).
+message ManagedContact {
+  int32 id = 1;
+  string name = 2;
+  string email = 3;
+  optional string group = 4;
+  ManagedContactPhone phone = 5;
+  string updated = 6;
+}
+
+// ManagedContactGetInput is the input contract for linode_managed_contact_get.
+message ManagedContactGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Managed contact to retrieve (required).
+  int32 contact_id = 2;
+}
+
+// ManagedCredential mirrors a Linode Managed credential (the secret is write-only
+// and never returned).
+message ManagedCredential {
+  int32 id = 1;
+  string label = 2;
+  string last_decrypted = 3;
+}
+
+// ManagedCredentialGetInput is the input contract for linode_managed_credential_get.
+message ManagedCredentialGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Managed credential to retrieve (required).
+  int32 credential_id = 2;
+  // Preview the request without retrieving it (optional).
+  optional bool dry_run = 3;
+}

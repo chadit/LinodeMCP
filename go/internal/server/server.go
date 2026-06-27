@@ -343,9 +343,10 @@ func parseRequiredScopes(stored []string) []profiles.Scope {
 // minimal; this accessor lives on Server so tests in package server_test can
 // inspect the capability tag without widening the public contract.
 type ToolInfo struct {
-	Name        string
-	Capability  profiles.Capability
-	InputSchema mcp.ToolInputSchema
+	Name           string
+	Capability     profiles.Capability
+	InputSchema    mcp.ToolInputSchema
+	RawInputSchema json.RawMessage
 }
 
 // ToolInfos returns one entry per registered tool, exposing the capability
@@ -364,9 +365,10 @@ func (s *Server) ToolInfos() []ToolInfo {
 		}
 
 		out = append(out, ToolInfo{
-			Name:        wrapper.tool.Name,
-			Capability:  wrapper.capability,
-			InputSchema: wrapper.tool.InputSchema,
+			Name:           wrapper.tool.Name,
+			Capability:     wrapper.capability,
+			InputSchema:    wrapper.tool.InputSchema,
+			RawInputSchema: wrapper.tool.RawInputSchema,
 		})
 	}
 
@@ -384,9 +386,10 @@ func (s *Server) AllToolInfos() []ToolInfo {
 
 	for i := range s.allEntries {
 		out = append(out, ToolInfo{
-			Name:        s.allEntries[i].tool.Name,
-			Capability:  s.allEntries[i].capability,
-			InputSchema: s.allEntries[i].tool.InputSchema,
+			Name:           s.allEntries[i].tool.Name,
+			Capability:     s.allEntries[i].capability,
+			InputSchema:    s.allEntries[i].tool.InputSchema,
+			RawInputSchema: s.allEntries[i].tool.RawInputSchema,
 		})
 	}
 

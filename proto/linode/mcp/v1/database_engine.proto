@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// DatabaseEngine is one Managed Database engine version.
+message DatabaseEngine {
+  string id = 1;
+  string engine = 2;
+  string version = 3;
+}
+
+// DatabaseEngineGetInput is the input contract for linode_database_engine_get.
+message DatabaseEngineGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Managed Database engine ID, for example mysql/8.0.26 (required).
+  string engine_id = 2;
+}

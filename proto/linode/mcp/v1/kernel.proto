@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Kernel mirrors a Linode kernel.
+message Kernel {
+  string id = 1;
+  string label = 2;
+  string version = 3;
+  bool kvm = 4;
+  string architecture = 5;
+  bool pvops = 6;
+  bool deprecated = 7;
+  string built = 8;
+}
+
+// KernelGetInput is the input contract for linode_kernel_get.
+message KernelGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the kernel to retrieve, such as linode/latest-64bit (required).
+  string kernel_id = 2;
+}

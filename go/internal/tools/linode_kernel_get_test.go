@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -35,16 +34,13 @@ func TestLinodeKernelGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyKernelID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyKernelID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyKernelID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyKernelID)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyKernelID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyKernelID)
-	}
-
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// NodeBalancerConfigNode mirrors one backend node of a NodeBalancer config.
+message NodeBalancerConfigNode {
+  int32 id = 1;
+  string address = 2;
+  string label = 3;
+  string status = 4;
+  int32 weight = 5;
+  string mode = 6;
+  int32 nodebalancer_id = 7;
+  int32 config_id = 8;
+}
+
+// NodeBalancerConfigNodeGetInput is the input contract for
+// linode_nodebalancer_config_node_get.
+message NodeBalancerConfigNodeGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer (required).
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config (required).
+  int32 config_id = 3;
+  // The ID of the config node to retrieve (required).
+  int32 node_id = 4;
+}

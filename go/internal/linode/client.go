@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 	"github.com/chadit/LinodeMCP/go/internal/config"
 )
@@ -222,6 +225,32 @@ func (c *Client) handleResponse(resp *http.Response, target any) error {
 		if err := json.Unmarshal(body, target); err != nil {
 			return fmt.Errorf("failed to unmarshal response: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// handleProtoResponse reads the body and decodes it into a proto message with
+// protojson, discarding fields the message does not model (the Linode API may
+// return more fields than a message declares). It mirrors handleResponse's read
+// and error handling for the proto-backed read path.
+func (c *Client) handleProtoResponse(resp *http.Response, msg proto.Message) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode >= httpBadRequest {
+		apiErr := c.handleErrorResponse(resp.StatusCode, body, resp)
+		if typed, ok := errors.AsType[*APIError](apiErr); ok && resp.Request != nil {
+			typed.Method = resp.Request.Method
+		}
+
+		return apiErr
+	}
+
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, msg); err != nil {
+		return fmt.Errorf("failed to unmarshal proto response: %w", err)
 	}
 
 	return nil

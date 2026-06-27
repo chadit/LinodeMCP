@@ -35,12 +35,12 @@ func TestLinodeVolumeGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyVolumeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyVolumeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyVolumeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyVolumeID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(string(tool.RawInputSchema), keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {

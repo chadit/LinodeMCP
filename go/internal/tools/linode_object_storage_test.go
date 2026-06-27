@@ -3905,17 +3905,11 @@ func TestLinodeObjectStorageObjectACLGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["name"]; !ok {
-		t.Errorf("props missing key %v", "name")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keySupportTicketRegion, monitorAlertDefinitionLabelParam, managedContactNameParam} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -4213,13 +4207,11 @@ func TestLinodeObjectStorageSSLGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keySupportTicketRegion, monitorAlertDefinitionLabelParam} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 

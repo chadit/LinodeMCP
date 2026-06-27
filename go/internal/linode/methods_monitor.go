@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 // httpListMonitorServices retrieves supported monitoring service types.
@@ -44,6 +46,28 @@ func (c *Client) httpGetMonitorService(ctx context.Context, serviceType string) 
 	var service MonitorService
 	if err := c.handleResponse(resp, &service); err != nil {
 		return MonitorService{}, err
+	}
+
+	return service, nil
+}
+
+// httpGetMonitorServiceProto retrieves a Monitor service as a proto message.
+func (c *Client) httpGetMonitorServiceProto(ctx context.Context, serviceType string) (*linodev1.MonitorService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetMonitorService", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	service := &linodev1.MonitorService{}
+	if err := c.handleProtoResponse(resp, service); err != nil {
+		return nil, err
 	}
 
 	return service, nil

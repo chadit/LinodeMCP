@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// ManagedIssueEntity is the support ticket entity attached to a managed issue.
+message ManagedIssueEntity {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// ManagedIssue mirrors one Managed service issue.
+message ManagedIssue {
+  int32 id = 1;
+  string created = 2;
+  repeated int32 services = 3;
+  ManagedIssueEntity entity = 4;
+}
+
+// ManagedIssueGetInput is the input contract for linode_managed_issue_get.
+message ManagedIssueGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the managed issue to retrieve (required).
+  int32 issue_id = 2;
+}

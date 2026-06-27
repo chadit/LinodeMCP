@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// MonitorService mirrors a Linode Monitor supported service type.
+message MonitorService {
+  string label = 1;
+  string service_type = 2;
+}
+
+// MonitorServiceGetInput is the input contract for linode_monitor_service_get.
+message MonitorServiceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The monitoring service type to retrieve (required).
+  string service_type = 2;
+}

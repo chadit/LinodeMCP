@@ -34,12 +34,13 @@ func TestLinodeImageShareGroupByTokenGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyTokenUUID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyTokenUUID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyTokenUUID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyTokenUUID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {

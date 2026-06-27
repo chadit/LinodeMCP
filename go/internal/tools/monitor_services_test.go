@@ -54,8 +54,8 @@ func TestLinodeMonitorServiceGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, monitorServiceTypeParam) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", monitorServiceTypeParam)
+	if !strings.Contains(string(tool.RawInputSchema), monitorServiceTypeParam) {
+		t.Errorf("tool.RawInputSchema does not contain %v", monitorServiceTypeParam)
 	}
 
 	if handler == nil {

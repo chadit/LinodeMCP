@@ -41,12 +41,12 @@ func TestLinodeLongviewSubscriptionGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLongviewSubscriptionID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLongviewSubscriptionID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLongviewSubscriptionID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLongviewSubscriptionID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(string(tool.RawInputSchema), keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

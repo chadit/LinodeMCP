@@ -9,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -57,18 +58,15 @@ func handleInstanceDisksListRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeInstanceDiskGetTool creates a tool for retrieving a specific disk on a Linode instance.
 func NewLinodeInstanceDiskGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_get",
 		"Retrieves details of a specific disk on a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("disk_id", mcp.Required(),
-				mcp.Description("The ID of the disk to retrieve")),
-		},
-		handleInstanceDiskGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -89,12 +87,12 @@ func handleInstanceDiskGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	disk, err := client.GetInstanceDisk(ctx, linodeID, diskID)
+	disk, err := client.GetInstanceDiskProto(ctx, linodeID, diskID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve disk %d for instance %d: %v", diskID, linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(disk)
+	return MarshalProtoToolResponse(disk)
 }
 
 // NewLinodeInstanceDiskCreateTool creates a tool for adding a new disk to a Linode instance.
