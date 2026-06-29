@@ -816,7 +816,7 @@ wheels = [
 
 [[package]]
 name = "opentelemetry-instrumentation-mcp"
-version = "0.61.0"
+version = "0.62.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -824,9 +824,9 @@ dependencies = [
     { name = "opentelemetry-semantic-conventions" },
     { name = "opentelemetry-semantic-conventions-ai" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bd/22/ae0d1fa0c7d16bcaa2924f72989fb4f9d67f503a2918284b3b0c4499ed47/opentelemetry_instrumentation_mcp-0.61.0.tar.gz", hash = "sha256:53406c765b2eda859fd4aeb6429ddcfa0d50344098351f720567b26d39df6e43", size = 120547, upload-time = "2026-05-31T07:28:46.644Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/8d/faa4ae935f8a6b90ec786a08f2e5fc71bb491c513a814f0efd2e05d1cdce/opentelemetry_instrumentation_mcp-0.62.1.tar.gz", hash = "sha256:109c8ef1b5340725e93ed61f21a1a1298bffce77b22dfb5861db36044678d11f", size = 120553, upload-time = "2026-06-28T12:12:24.019Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/ed/8c7618d5888a36a8e7ce8b4f4941d1baa34da35435299303217575b4deb7/opentelemetry_instrumentation_mcp-0.61.0-py3-none-any.whl", hash = "sha256:30db132e0ce6ab597f3b85c60591ee3534c1008e58cd129f2fefba149281babd", size = 10472, upload-time = "2026-05-31T07:28:11.419Z" },
+    { url = "https://files.pythonhosted.org/packages/21/32/95042450a28a8c7607e4fad2fce2435ffb9e8c4664309180b7dc01c84f13/opentelemetry_instrumentation_mcp-0.62.1-py3-none-any.whl", hash = "sha256:7ffeee0dbca9002ad8a2364ffeb638f7d66facdf7d2dbbc364dc21af748e4625", size = 10476, upload-time = "2026-06-28T12:11:51.91Z" },
 ]
 
 [[package]]
